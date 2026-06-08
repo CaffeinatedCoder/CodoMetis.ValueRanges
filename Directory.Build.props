@@ -1,0 +1,11 @@
+<Project>
+    <PropertyGroup>
+        <Version>1.0.0</Version>
+        <Authors>CaffeinatedCoder</Authors>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageProjectUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</RepositoryUrl>
+    </PropertyGroup>
+</Project>
