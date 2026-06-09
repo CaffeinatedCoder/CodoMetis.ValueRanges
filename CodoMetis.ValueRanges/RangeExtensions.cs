@@ -1,5 +1,8 @@
 namespace CodoMetis.ValueRanges;
 
+/// <summary>
+/// Extension methods providing query and set operations on <see cref="IRange{T}"/> instances.
+/// </summary>
 public static class RangeExtensions
 {
     // True when lhs-end and rhs-start touch and at least one is inclusive,
@@ -98,6 +101,14 @@ public static class RangeExtensions
 
     extension<T>(IRange<T> range) where T : struct, IComparable<T>, IEquatable<T>
     {
+        /// <summary>
+        /// Determines whether <paramref name="value"/> is contained in the range.
+        /// </summary>
+        /// <param name="value">The value to test.</param>
+        /// <returns>
+        /// <see langword="true"/> if <paramref name="value"/> satisfies the range's boundary conditions;
+        /// <see langword="false"/> for the empty range or when the value lies outside the bounds.
+        /// </returns>
         public bool Contains(T value) =>
             range switch
             {
@@ -111,6 +122,15 @@ public static class RangeExtensions
                 _ => false
             };
 
+        /// <summary>
+        /// Determines whether <paramref name="other"/> is entirely contained within this range.
+        /// </summary>
+        /// <param name="other">The range to test.</param>
+        /// <returns>
+        /// <see langword="true"/> if every value in <paramref name="other"/> also belongs to this range.
+        /// Always <see langword="false"/> when <paramref name="other"/> extends in a direction that
+        /// this range does not bound, or when this range is <see cref="IEmptyRange{T}"/>.
+        /// </returns>
         public bool Contains(IRange<T> other) =>
             range switch
             {
@@ -150,6 +170,15 @@ public static class RangeExtensions
                 _ => false
             };
 
+        /// <summary>
+        /// Determines whether this range and <paramref name="other"/> share at least one common value.
+        /// </summary>
+        /// <param name="other">The range to test against.</param>
+        /// <returns>
+        /// <see langword="true"/> if the ranges overlap.
+        /// <see langword="false"/> if either range is <see cref="IEmptyRange{T}"/> or the ranges are disjoint.
+        /// Two ranges that touch at a single boundary point overlap only when both are inclusive at that point.
+        /// </returns>
         public bool Overlaps(IRange<T> other) =>
             range switch
             {
@@ -193,8 +222,17 @@ public static class RangeExtensions
                 _ => false
             };
 
-        // range lies entirely to the left of other with no shared point.
-        // At a touching boundary: strictly left iff not (both inclusive).
+        /// <summary>
+        /// Determines whether this range ends strictly before <paramref name="other"/> begins,
+        /// with no shared point between them.
+        /// </summary>
+        /// <param name="other">The range to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if the upper bound of this range is less than the lower bound of
+        /// <paramref name="other"/>, or if they meet at a single point but at least one side is exclusive there.
+        /// Always <see langword="false"/> when this range is <see cref="IOpenEndRange{T}"/>,
+        /// <see cref="IOpenStartRange{T}"/>, or <see cref="IEmptyRange{T}"/>.
+        /// </returns>
         public bool IsStrictlyLeftOf(IRange<T> other) =>
             range switch
             {
@@ -212,15 +250,42 @@ public static class RangeExtensions
                 _ => false
             };
 
+        /// <summary>
+        /// Determines whether this range begins strictly after <paramref name="other"/> ends,
+        /// with no shared point between them.
+        /// Equivalent to <c>other.IsStrictlyLeftOf(this)</c>.
+        /// </summary>
+        /// <param name="other">The range to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if <paramref name="other"/> is strictly left of this range.
+        /// </returns>
         public bool IsStrictlyRightOf(IRange<T> other) => other.IsStrictlyLeftOf(range);
 
+        /// <summary>
+        /// Determines whether this range is entirely contained within <paramref name="other"/>.
+        /// Equivalent to <c>other.Contains(this)</c>.
+        /// </summary>
+        /// <param name="other">The range that should contain this range.</param>
+        /// <returns>
+        /// <see langword="true"/> if every value in this range also belongs to <paramref name="other"/>.
+        /// </returns>
         public bool IsContainedBy(IRange<T> other) => other.Contains(range);
 
-        // range does not extend to the right of other (&< in Postgres).
-        // The receiver's upper bound must be ≤ other's upper bound.
-        // An IOpenEndRange has no upper bound, so it always extends right — returns false.
-        // An IOpenStartRange has no upper bound constraint from the type, but its UpperBound
-        // field is the finite cap, so we compare it against other's upper bound normally.
+        /// <summary>
+        /// Determines whether this range does not extend to the right of <paramref name="other"/>.
+        /// Corresponds to the PostgreSQL <c>&amp;&lt;</c> operator.
+        /// </summary>
+        /// <remarks>
+        /// The upper bound of this range must be less than or equal to the upper bound of
+        /// <paramref name="other"/>. When the upper bounds are equal, this range must not be inclusive
+        /// where <paramref name="other"/> is exclusive at that point.
+        /// An <see cref="IOpenEndRange{T}"/> has no finite upper bound and always returns <see langword="false"/>.
+        /// </remarks>
+        /// <param name="other">The range to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if the upper bound of this range does not exceed that of <paramref name="other"/>;
+        /// always <see langword="false"/> for <see cref="IOpenEndRange{T}"/>.
+        /// </returns>
         public bool DoesNotExtendRightOf(IRange<T> other) =>
             range switch
             {
@@ -255,9 +320,21 @@ public static class RangeExtensions
                 _ => false
             };
 
-        // range does not extend to the left of other (&> in Postgres).
-        // The receiver's lower bound must be ≥ other's lower bound.
-        // An IOpenStartRange has no lower bound, so it always extends left — returns false.
+        /// <summary>
+        /// Determines whether this range does not extend to the left of <paramref name="other"/>.
+        /// Corresponds to the PostgreSQL <c>&amp;&gt;</c> operator.
+        /// </summary>
+        /// <remarks>
+        /// The lower bound of this range must be greater than or equal to the lower bound of
+        /// <paramref name="other"/>. When the lower bounds are equal, this range must not be inclusive
+        /// where <paramref name="other"/> is exclusive at that point.
+        /// An <see cref="IOpenStartRange{T}"/> has no finite lower bound and always returns <see langword="false"/>.
+        /// </remarks>
+        /// <param name="other">The range to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if the lower bound of this range is not less than that of <paramref name="other"/>;
+        /// always <see langword="false"/> for <see cref="IOpenStartRange{T}"/>.
+        /// </returns>
         public bool DoesNotExtendLeftOf(IRange<T> other) =>
             range switch
             {
@@ -292,9 +369,30 @@ public static class RangeExtensions
                 _ => false
             };
 
-        // Adjacent means no gap and no overlap between the ranges — their union
-        // would form a single contiguous range. Exactly one of the two possible
-        // boundary meetings (b.End→o.Start or o.End→b.Start) must hold.
+        /// <summary>
+        /// Determines whether this range and <paramref name="other"/> are contiguous —
+        /// no gap and no overlap — such that their union forms a single range.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// For discrete types (<see cref="IDiscreteRange{T}"/>), two ranges whose boundaries are
+        /// exactly one step apart are also considered adjacent. For example, <c>[1, 5]</c> and
+        /// <c>[6, 10]</c> are adjacent for <see cref="int"/>.
+        /// </para>
+        /// <para>
+        /// For continuous types, adjacency requires the ranges to touch at exactly one point with
+        /// complementary inclusiveness: one side must claim the boundary point and the other must not.
+        /// </para>
+        /// <para>
+        /// Only <see cref="IFiniteRange{T}"/> instances can be adjacent to other ranges;
+        /// <see cref="IOpenEndRange{T}"/> and <see cref="IOpenStartRange{T}"/> always return
+        /// <see langword="false"/>.
+        /// </para>
+        /// </remarks>
+        /// <param name="other">The range to test against.</param>
+        /// <returns>
+        /// <see langword="true"/> if the ranges are contiguous with no gap and no overlap.
+        /// </returns>
         public bool IsAdjacentTo(IRange<T> other)
         {
             var discrete = range as IDiscreteRange<T>;
@@ -340,8 +438,20 @@ public static class RangeExtensions
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
-        // Returns the largest range contained by both ranges.
-        // Returns null when the ranges do not overlap.
+        /// <summary>
+        /// Returns the largest range contained by both this range and <paramref name="other"/>.
+        /// </summary>
+        /// <remarks>
+        /// All combinations of <see cref="IFiniteRange{T}"/>, <see cref="IOpenStartRange{T}"/>, and
+        /// <see cref="IOpenEndRange{T}"/> are handled and produce the appropriately shaped result type.
+        /// For example, intersecting two <see cref="IOpenStartRange{T}"/> instances yields an
+        /// <see cref="IOpenStartRange{T}"/> at the more restrictive upper bound.
+        /// </remarks>
+        /// <param name="other">The range to intersect with.</param>
+        /// <returns>
+        /// The intersection of this range and <paramref name="other"/>,
+        /// or <see langword="null"/> if the ranges do not overlap.
+        /// </returns>
         public TRange? Intersect(IRange<T> other)
         {
             if (!range.Overlaps(other)) return default;
@@ -460,9 +570,21 @@ public static class RangeExtensions
                    };
         }
 
-        // Returns the smallest range that contains both ranges.
-        // Returns null when the ranges are neither overlapping nor adjacent —
-        // their union would not form a single contiguous range.
+        /// <summary>
+        /// Returns the smallest range that contains both this range and <paramref name="other"/>.
+        /// </summary>
+        /// <remarks>
+        /// The result type reflects the most general bounds of the two operands: merging an
+        /// <see cref="IOpenEndRange{T}"/> with a <see cref="IFiniteRange{T}"/> yields an
+        /// <see cref="IOpenEndRange{T}"/>, and so on. Merging an <see cref="IOpenStartRange{T}"/>
+        /// with an <see cref="IOpenEndRange{T}"/> would span the entire domain and cannot be expressed
+        /// as a single range type — this case returns <see langword="null"/>.
+        /// </remarks>
+        /// <param name="other">The range to merge with.</param>
+        /// <returns>
+        /// The merged range, or <see langword="null"/> if the ranges are neither overlapping nor adjacent,
+        /// or if their union would require a range unbounded on both sides.
+        /// </returns>
         public TRange? Merge(IRange<T> other)
         {
             if (!range.Overlaps(other) && !range.IsAdjacentTo(other))
@@ -561,21 +683,54 @@ public static class RangeExtensions
                    };
         }
 
-        // Union is identical to Merge in semantics. Provided as a named alias
-        // matching Npgsql's surface for callers who prefer the set-operation vocabulary.
+        /// <summary>
+        /// Returns the smallest range that contains both this range and <paramref name="other"/>.
+        /// Identical to <see cref="Merge"/>.
+        /// </summary>
+        /// <param name="other">The range to compute the union with.</param>
+        /// <returns>
+        /// The union of this range and <paramref name="other"/>, or <see langword="null"/> if the ranges
+        /// are neither overlapping nor adjacent, or if their union would require a range unbounded on both sides.
+        /// </returns>
         public TRange? Union(IRange<T> other) =>
             range.Merge(other);
 
-        // Returns what remains of range after removing the overlap with other.
-        //
-        // Return value semantics:
-        //   null                  — range is fully contained by other; nothing remains
-        //   (remainder, null)     — one-sided trim or no overlap; Left is the remaining range
-        //   (left, right)         — other was strictly interior to range; range is split in two
-        //
-        // The boundary flip on trim: when other removes the left side of range, the new lower
-        // bound is other's upper bound with flipped inclusiveness — the point that other ends
-        // at is no longer covered by other, so range now starts there with the opposite flag.
+        /// <summary>
+        /// Returns what remains of this range after removing the portion that overlaps with <paramref name="other"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Boundary inclusiveness is inverted at the cut point: the new boundary at the edge of the
+        /// removed region takes the opposite inclusiveness of <paramref name="other"/>'s bound at that
+        /// point, ensuring no value is lost or counted twice.
+        /// </para>
+        /// <para>
+        /// Return value semantics:
+        /// <list type="bullet">
+        ///   <item>
+        ///     <term><see langword="null"/></term>
+        ///     <description>This range is fully contained by <paramref name="other"/>; nothing remains.</description>
+        ///   </item>
+        ///   <item>
+        ///     <term><c>(Left, null)</c></term>
+        ///     <description>
+        ///     A one-sided trim or no overlap; <c>Left</c> holds the unaffected portion.
+        ///     </description>
+        ///   </item>
+        ///   <item>
+        ///     <term><c>(Left, Right)</c></term>
+        ///     <description>
+        ///     <paramref name="other"/> was strictly interior to this range; the result is split in two.
+        ///     </description>
+        ///   </item>
+        /// </list>
+        /// </para>
+        /// </remarks>
+        /// <param name="other">The range whose overlap should be subtracted from this range.</param>
+        /// <returns>
+        /// A tuple containing the remaining range pieces, or <see langword="null"/> if this range is
+        /// fully consumed by <paramref name="other"/>.
+        /// </returns>
         public (TRange Left, TRange? Right)? Except(IRange<T> other)
         {
             // No overlap — range is entirely unaffected
@@ -602,7 +757,7 @@ public static class RangeExtensions
                                    : (TRange.Closed(b.LowerBound, o.LowerBound, b.LowerBoundInclusive, !o.LowerBoundInclusive),
                                       (TRange?)default),
 
-                       // OpenStart split by Finite interior: left part stays OpenStart, right part is Finite  
+                       // OpenStart split by Finite interior: left part stays OpenStart, right part is Finite
                        (IOpenStartRange<T> s, IFiniteRange<T> o)
                            when OuterEndCoversInnerEnd(s.UpperBound, s.UpperBoundInclusive, o.UpperBound, o.UpperBoundInclusive) =>
                            (TRange.WithOpenStart(o.LowerBound, !o.LowerBoundInclusive),
