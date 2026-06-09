@@ -34,22 +34,22 @@ public class RangeIntersectTests
     }
 
     [TestMethod]
-    public void Intersect_TwoFiniteRanges_NoOverlap_ReturnsNull()
+    public void Intersect_TwoFiniteRanges_NoOverlap_ReturnsEmpty()
     {
         var r1 = Int32Range.CreateFinite(1, 5);
         var r2 = Int32Range.CreateFinite(6, 10);
 
-        Assert.IsNull(r1.Intersect(r2));
-        Assert.IsNull(r2.Intersect(r1));
+        Assert.IsInstanceOfType<IEmptyRange<int>>(r1.Intersect(r2));
+        Assert.IsInstanceOfType<IEmptyRange<int>>(r2.Intersect(r1));
     }
 
     [TestMethod]
-    public void Intersect_TwoFiniteRanges_TouchingExclusively_ReturnsNull()
+    public void Intersect_TwoFiniteRanges_TouchingExclusively_ReturnsEmpty()
     {
         var r1 = Int32Range.CreateFinite(1, 5,  true,  false); // [1, 5)
         var r2 = Int32Range.CreateFinite(5, 10, false, true);  // (5, 10]
 
-        Assert.IsNull(r1.Intersect(r2));
+        Assert.IsInstanceOfType<IEmptyRange<int>>(r1.Intersect(r2));
     }
 
     [TestMethod]

@@ -65,6 +65,11 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     private sealed record OpenEnd(DateTime LowerBound, bool LowerBoundInclusive) : DateTimeRange, IOpenEndRange<DateTime>;
 
     /// <summary>
+    /// Represents a <see cref="DateTimeRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
+    /// </summary>
+    private sealed record Infinity : DateTimeRange, IInfinityRange<DateTime>;
+
+    /// <summary>
     /// Creates a <see cref="DateTimeRange"/> unbounded on the left.
     /// </summary>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
@@ -87,6 +92,12 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
     public static DateTimeRange CreateOpenEnd(DateTime lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
+
+    /// <summary>
+    /// Creates a <see cref="DateTimeRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
+    /// </summary>
+    /// <returns>An <see cref="Infinity"/> range covering all timestamp values.</returns>
+    public static DateTimeRange Infinite { get; } = new Infinity();
 
     /// <summary>
     /// Returns an empty <see cref="DateTimeRange"/> that contains no values.

@@ -11,27 +11,32 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        Assert.AreEqual(range, result.Value.Left);
-        Assert.IsNull(result.Value.Right);
+        Assert.AreEqual(range, result.Left);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
-    public void Except_OtherFullyContainsRange_ReturnsNull()
+    public void Except_OtherFullyContainsRange_ReturnsEmpty()
     {
         var range = Int32Range.CreateFinite(3, 8,  true, true); // [3, 8]
         var other = Int32Range.CreateFinite(1, 10, true, true); // [1, 10]
 
-        Assert.IsNull(range.Except(other));
+        var result = range.Except(other);
+
+        Assert.IsInstanceOfType<IEmptyRange<int>>(result.Left);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
-    public void Except_OtherEqualsRange_ReturnsNull()
+    public void Except_OtherEqualsRange_ReturnsEmpty()
     {
         var range = Int32Range.CreateFinite(1, 10, true, true);
         var other = Int32Range.CreateFinite(1, 10, true, true);
 
-        Assert.IsNull(range.Except(other));
+        var result = range.Except(other);
+
+        Assert.IsInstanceOfType<IEmptyRange<int>>(result.Left);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
@@ -43,14 +48,13 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left = result.Value.Left as IFiniteRange<int>;
+        var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(5,  left.LowerBound);
         Assert.AreEqual(10, left.UpperBound);
         Assert.IsFalse(left.LowerBoundInclusive); // flipped from other's upper inclusive
         Assert.IsTrue(left.UpperBoundInclusive);
-        Assert.IsNull(result.Value.Right);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
@@ -62,8 +66,7 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left = result.Value.Left as IFiniteRange<int>;
+        var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(5, left.LowerBound);
         Assert.IsTrue(left.LowerBoundInclusive); // flipped from other's upper exclusive
@@ -78,14 +81,13 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left = result.Value.Left as IFiniteRange<int>;
+        var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(1, left.LowerBound);
         Assert.AreEqual(6, left.UpperBound);
         Assert.IsTrue(left.LowerBoundInclusive);
         Assert.IsFalse(left.UpperBoundInclusive); // flipped from other's lower inclusive
-        Assert.IsNull(result.Value.Right);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
@@ -97,9 +99,8 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left  = result.Value.Left as IFiniteRange<int>;
-        var right = result.Value.Right as IFiniteRange<int>;
+        var left  = result.Left as IFiniteRange<int>;
+        var right = result.Right as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 
@@ -123,9 +124,8 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left  = result.Value.Left as IFiniteRange<int>;
-        var right = result.Value.Right as IFiniteRange<int>;
+        var left  = result.Left as IFiniteRange<int>;
+        var right = result.Right as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 
@@ -144,9 +144,8 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        Assert.AreEqual(range, result.Value.Left);
-        Assert.IsNull(result.Value.Right);
+        Assert.AreEqual(range, result.Left);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
@@ -158,12 +157,11 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left = result.Value.Left as IOpenStartRange<int>;
+        var left = result.Left as IOpenStartRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(7, left.UpperBound);
         Assert.IsFalse(left.UpperBoundInclusive); // flipped from other's inclusive lower
-        Assert.IsNull(result.Value.Right);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
@@ -175,8 +173,7 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left = result.Value.Left as IOpenStartRange<int>;
+        var left = result.Left as IOpenStartRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(7, left.UpperBound);
         Assert.IsTrue(left.UpperBoundInclusive); // flipped from other's exclusive lower
@@ -191,9 +188,8 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left  = result.Value.Left as IOpenStartRange<int>;
-        var right = result.Value.Right as IFiniteRange<int>;
+        var left  = result.Left as IOpenStartRange<int>;
+        var right = result.Right as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 
@@ -216,9 +212,8 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        Assert.AreEqual(range, result.Value.Left);
-        Assert.IsNull(result.Value.Right);
+        Assert.AreEqual(range, result.Left);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
@@ -230,12 +225,11 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left = result.Value.Left as IOpenEndRange<int>;
+        var left = result.Left as IOpenEndRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(8, left.LowerBound);
         Assert.IsFalse(left.LowerBoundInclusive); // flipped from other's inclusive upper
-        Assert.IsNull(result.Value.Right);
+        Assert.IsNull(result.Right);
     }
 
     [TestMethod]
@@ -247,9 +241,8 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        Assert.IsNotNull(result);
-        var left  = result.Value.Left as IFiniteRange<int>;
-        var right = result.Value.Right as IOpenEndRange<int>;
+        var left  = result.Left as IFiniteRange<int>;
+        var right = result.Right as IOpenEndRange<int>;
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 

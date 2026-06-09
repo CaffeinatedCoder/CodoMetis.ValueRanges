@@ -63,6 +63,11 @@ public abstract record Int32Range : IDiscreteRange<int>, IRangeFactory<Int32Rang
     private sealed record OpenEnd(int LowerBound, bool LowerBoundInclusive) : Int32Range, IOpenEndRange<int>;
 
     /// <summary>
+    /// Represents an <see cref="Int32Range"/> unbounded on both sides: <c>(-∞, +∞)</c>.
+    /// </summary>
+    private sealed record Infinity : Int32Range, IInfinityRange<int>;
+
+    /// <summary>
     /// Creates an <see cref="Int32Range"/> unbounded on the left.
     /// </summary>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
@@ -85,6 +90,12 @@ public abstract record Int32Range : IDiscreteRange<int>, IRangeFactory<Int32Rang
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
     public static Int32Range CreateOpenEnd(int lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
+
+    /// <summary>
+    /// Creates an <see cref="Int32Range"/> that spans the entire domain: <c>(-∞, +∞)</c>.
+    /// </summary>
+    /// <returns>An <see cref="Infinity"/> range covering all integer values.</returns>
+    public static Int32Range Infinite { get; } = new Infinity();
 
     /// <summary>
     /// Returns an empty <see cref="Int32Range"/> that contains no values.

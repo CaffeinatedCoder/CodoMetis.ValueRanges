@@ -62,13 +62,13 @@ public class RangeMergeTests
     }
 
     [TestMethod]
-    public void Merge_Disjoint_NonAdjacent_ReturnsNull()
+    public void Merge_Disjoint_NonAdjacent_ReturnsEmpty()
     {
         var r1 = Int32Range.CreateFinite(1, 5);
         var r2 = Int32Range.CreateFinite(7, 10);
 
-        Assert.IsNull(r1.Merge(r2));
-        Assert.IsNull(r2.Merge(r1));
+        Assert.IsInstanceOfType<IEmptyRange<int>>(r1.Merge(r2));
+        Assert.IsInstanceOfType<IEmptyRange<int>>(r2.Merge(r1));
     }
 
     [TestMethod]
@@ -124,14 +124,13 @@ public class RangeMergeTests
     }
 
     [TestMethod]
-    public void Merge_OpenStartAndOpenEnd_ReturnsNull_CannotExpressUnbounded()
+    public void Merge_OpenStartAndOpenEnd_ReturnsInfinity()
     {
-        // The union would cover the entire number line; the type system cannot represent this
         var openStart = Int32Range.CreateOpenStart(5, true);
         var openEnd   = Int32Range.CreateOpenEnd(3, true);
 
-        Assert.IsNull(openStart.Merge(openEnd));
-        Assert.IsNull(openEnd.Merge(openStart));
+        Assert.IsInstanceOfType<IInfinityRange<int>>(openStart.Merge(openEnd));
+        Assert.IsInstanceOfType<IInfinityRange<int>>(openEnd.Merge(openStart));
     }
 
     [TestMethod]

@@ -64,6 +64,11 @@ public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateR
     private sealed record OpenEnd(DateOnly LowerBound, bool LowerBoundInclusive) : DateRange, IOpenEndRange<DateOnly>;
 
     /// <summary>
+    /// Represents a <see cref="DateRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
+    /// </summary>
+    private sealed record Infinity : DateRange, IInfinityRange<DateOnly>;
+
+    /// <summary>
     /// Creates a <see cref="DateRange"/> unbounded on the left.
     /// </summary>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
@@ -86,6 +91,12 @@ public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateR
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
     public static DateRange CreateOpenEnd(DateOnly lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
+
+    /// <summary>
+    /// Creates a <see cref="DateRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
+    /// </summary>
+    /// <returns>An <see cref="Infinity"/> range covering all date values.</returns>
+    public static DateRange Infinite { get; } = new Infinity();
 
     /// <summary>
     /// Returns an empty <see cref="DateRange"/> that contains no values.

@@ -67,6 +67,11 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
         : DateTimeOffsetRange, IOpenEndRange<DateTimeOffset>;
 
     /// <summary>
+    /// Represents a <see cref="DateTimeOffsetRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
+    /// </summary>
+    private sealed record Infinity : DateTimeOffsetRange, IInfinityRange<DateTimeOffset>;
+
+    /// <summary>
     /// Creates a <see cref="DateTimeOffsetRange"/> unbounded on the left.
     /// </summary>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
@@ -89,6 +94,12 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
     public static DateTimeOffsetRange CreateOpenEnd(DateTimeOffset lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
+
+    /// <summary>
+    /// Creates a <see cref="DateTimeOffsetRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
+    /// </summary>
+    /// <returns>An <see cref="Infinity"/> range covering all timestamp-with-offset values.</returns>
+    public static DateTimeOffsetRange Infinite { get; } = new Infinity();
 
     /// <summary>
     /// Returns an empty <see cref="DateTimeOffsetRange"/> that contains no values.

@@ -46,6 +46,11 @@ public interface IRangeFactory<out TRange, in T>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
     /// <param name="upperBoundInclusive"><see langword="true"/> to include <paramref name="upperBound"/> in the range.</param>
     abstract static TRange CreateOpenStart(T upperBound, bool upperBoundInclusive);
+
+    /// <summary>
+    /// Creates a range that is unbounded on both sides: <c>(-∞, +∞)</c> — the entire domain.
+    /// </summary>
+    abstract static TRange Infinite { get; }
 }
 
 /// <summary>
@@ -116,3 +121,10 @@ public interface IOpenStartRange<out T> : IRange<T> where T : struct, IComparabl
 /// </summary>
 /// <typeparam name="T">The element type of the range.</typeparam>
 public interface IEmptyRange<out T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>;
+
+/// <summary>
+/// Marker interface for a range that is unbounded on both sides: <c>(-∞, +∞)</c>.
+/// An infinity range contains every value of the element type.
+/// </summary>
+/// <typeparam name="T">The element type of the range.</typeparam>
+public interface IInfinityRange<out T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>;

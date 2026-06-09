@@ -64,6 +64,11 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     private sealed record OpenEnd(decimal LowerBound, bool LowerBoundInclusive) : DecimalRange, IOpenEndRange<decimal>;
 
     /// <summary>
+    /// Represents a <see cref="DecimalRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
+    /// </summary>
+    private sealed record Infinity : DecimalRange, IInfinityRange<decimal>;
+
+    /// <summary>
     /// Creates a <see cref="DecimalRange"/> unbounded on the left.
     /// </summary>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
@@ -86,6 +91,12 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
     public static DecimalRange CreateOpenEnd(decimal lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
+
+    /// <summary>
+    /// Creates a <see cref="DecimalRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
+    /// </summary>
+    /// <returns>An <see cref="Infinity"/> range covering all decimal values.</returns>
+    public static DecimalRange Infinite { get; } = new Infinity();
 
     /// <summary>
     /// Returns an empty <see cref="DecimalRange"/> that contains no values.

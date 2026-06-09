@@ -63,6 +63,11 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     private sealed record OpenEnd(long LowerBound, bool LowerBoundInclusive) : Int64Range, IOpenEndRange<long>;
 
     /// <summary>
+    /// Represents an <see cref="Int64Range"/> unbounded on both sides: <c>(-∞, +∞)</c>.
+    /// </summary>
+    private sealed record Infinity : Int64Range, IInfinityRange<long>;
+
+    /// <summary>
     /// Creates an <see cref="Int64Range"/> unbounded on the left.
     /// </summary>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
@@ -85,6 +90,12 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
     public static Int64Range CreateOpenEnd(long lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
+
+    /// <summary>
+    /// Creates an <see cref="Int64Range"/> that spans the entire domain: <c>(-∞, +∞)</c>.
+    /// </summary>
+    /// <returns>An <see cref="Infinity"/> range covering all long integer values.</returns>
+    public static Int64Range Infinite { get; } = new Infinity();
 
     /// <summary>
     /// Returns an empty <see cref="Int64Range"/> that contains no values.
