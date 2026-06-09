@@ -1,0 +1,90 @@
+namespace CodoMetis.ValueRanges;
+
+using static RangeBoundHelpers;
+
+internal static class ExceptEngine
+{
+    // Called when range is IInfinityRange<T> — removes a bounded region from the entire domain.
+    internal static (TRange Left, TRange? Right) InfinityExcept<TRange, T>(IRange<T> other)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => other switch
+           {
+               IFiniteRange<T> o => (TRange.CreateOpenStart(o.Start, !o.StartInclusive),
+                                     (TRange?)TRange.CreateOpenEnd(o.End, !o.EndInclusive)),
+               IOpenStartRange<T> s => (TRange.CreateOpenEnd(s.End, !s.EndInclusive), default),
+               IOpenEndRange<T> e   => (TRange.CreateOpenStart(e.Start, !e.StartInclusive), default),
+               _                    => (TRange.Infinite, default)
+           };
+
+    internal static (TRange Left, TRange? Right) Execute<TRange, T>(IFiniteRange<T> left, IRange<T> right)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => right switch
+           {
+               IFiniteRange<T> o    => FiniteExceptFinite<TRange, T>(left, o),
+               IOpenStartRange<T> s => (TRange.CreateFinite(s.End,      left.End, !s.EndInclusive,     left.EndInclusive), default),
+               IOpenEndRange<T> e   => (TRange.CreateFinite(left.Start, e.Start,  left.StartInclusive, !e.StartInclusive), default),
+               _                    => (TRange.CreateFinite(left.Start, left.End, left.StartInclusive, left.EndInclusive), default)
+           };
+
+    internal static (TRange Left, TRange? Right) Execute<TRange, T>(IOpenStartRange<T> left, IRange<T> right)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => right switch
+           {
+               IFiniteRange<T> o => OpenStartExceptFinite<TRange, T>(left, o),
+               _                 => (TRange.CreateOpenStart(left.End, left.EndInclusive), default)
+           };
+
+    internal static (TRange Left, TRange? Right) Execute<TRange, T>(IOpenEndRange<T> left, IRange<T> right)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => right switch
+           {
+               IFiniteRange<T> o => OpenEndExceptFinite<TRange, T>(left, o),
+               _                 => (TRange.CreateOpenEnd(left.Start, left.StartInclusive), default)
+           };
+
+    // Three cases: o sits strictly inside b (split), o covers b's start (left-trim), o covers b's end (right-trim).
+    private static (TRange Left, TRange? Right) FiniteExceptFinite<TRange, T>(IFiniteRange<T> b, IFiniteRange<T> o)
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        bool oStartInsideB = OuterStartCoversInnerStart(b.Start, b.StartInclusive, o.Start, o.StartInclusive);
+        bool oEndInsideB   = OuterEndCoversInnerEnd(b.End, b.EndInclusive, o.End, o.EndInclusive);
+
+        if (oStartInsideB && oEndInsideB)
+            return (TRange.CreateFinite(b.Start, o.Start, b.StartInclusive, !o.StartInclusive),
+                    (TRange?)TRange.CreateFinite(o.End, b.End, !o.EndInclusive, b.EndInclusive));
+
+        if (OuterStartCoversInnerStart(o.Start, o.StartInclusive, b.Start, b.StartInclusive))
+            return (TRange.CreateFinite(o.End, b.End, !o.EndInclusive, b.EndInclusive), default);
+
+        return (TRange.CreateFinite(b.Start, o.Start, b.StartInclusive, !o.StartInclusive), default);
+    }
+
+    // o sits strictly inside s (split into OpenStart + Finite), or o trims s from the right (new OpenStart).
+    private static (TRange Left, TRange? Right) OpenStartExceptFinite<TRange, T>(IOpenStartRange<T> s, IFiniteRange<T> o)
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        if (OuterEndCoversInnerEnd(s.End, s.EndInclusive, o.End, o.EndInclusive))
+            return (TRange.CreateOpenStart(o.Start, !o.StartInclusive),
+                    (TRange?)TRange.CreateFinite(o.End, s.End, !o.EndInclusive, s.EndInclusive));
+
+        return (TRange.CreateOpenStart(o.Start, !o.StartInclusive), default);
+    }
+
+    // o sits strictly inside e (split into Finite + OpenEnd), or o trims e from the left (new OpenEnd).
+    private static (TRange Left, TRange? Right) OpenEndExceptFinite<TRange, T>(IOpenEndRange<T> e, IFiniteRange<T> o)
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        if (OuterStartCoversInnerStart(e.Start, e.StartInclusive, o.Start, o.StartInclusive))
+            return (TRange.CreateFinite(e.Start, o.Start, e.StartInclusive, !o.StartInclusive),
+                    (TRange?)TRange.CreateOpenEnd(o.End, !o.EndInclusive));
+
+        return (TRange.CreateOpenEnd(o.End, !o.EndInclusive), default);
+    }
+}

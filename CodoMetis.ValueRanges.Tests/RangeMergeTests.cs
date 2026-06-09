@@ -12,10 +12,10 @@ public class RangeMergeTests
         var result = r1.Merge(r2) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1,  result.LowerBound);
-        Assert.AreEqual(15, result.UpperBound);
-        Assert.IsTrue(result.LowerBoundInclusive);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(1,  result.Start);
+        Assert.AreEqual(15, result.End);
+        Assert.IsTrue(result.StartInclusive);
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
@@ -27,10 +27,10 @@ public class RangeMergeTests
         var result = r1.Merge(r2) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsTrue(result.LowerBoundInclusive); // more permissive
-        Assert.IsTrue(result.UpperBoundInclusive); // more permissive
+        Assert.AreEqual(1,  result.Start);
+        Assert.AreEqual(10, result.End);
+        Assert.IsTrue(result.StartInclusive); // more permissive
+        Assert.IsTrue(result.EndInclusive); // more permissive
     }
 
     [TestMethod]
@@ -42,8 +42,8 @@ public class RangeMergeTests
         var result = r1.Merge(r2) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
+        Assert.AreEqual(1,  result.Start);
+        Assert.AreEqual(10, result.End);
     }
 
     [TestMethod]
@@ -55,10 +55,10 @@ public class RangeMergeTests
         var result = r1.Merge(r2) as IFiniteRange<decimal>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1m,  result.LowerBound);
-        Assert.AreEqual(10m, result.UpperBound);
-        Assert.IsTrue(result.LowerBoundInclusive);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(1m,  result.Start);
+        Assert.AreEqual(10m, result.End);
+        Assert.IsTrue(result.StartInclusive);
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
@@ -80,8 +80,8 @@ public class RangeMergeTests
         var result = openStart.Merge(finite) as IOpenStartRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(10, result.End);
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
@@ -93,8 +93,8 @@ public class RangeMergeTests
         var result = openEnd.Merge(finite) as IOpenEndRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(3, result.LowerBound);
-        Assert.IsTrue(result.LowerBoundInclusive);
+        Assert.AreEqual(3, result.Start);
+        Assert.IsTrue(result.StartInclusive);
     }
 
     [TestMethod]
@@ -106,8 +106,8 @@ public class RangeMergeTests
         var result = s1.Merge(s2) as IOpenStartRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsFalse(result.UpperBoundInclusive);
+        Assert.AreEqual(10, result.End);
+        Assert.IsFalse(result.EndInclusive);
     }
 
     [TestMethod]
@@ -119,8 +119,8 @@ public class RangeMergeTests
         var result = e1.Merge(e2) as IOpenEndRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(3, result.LowerBound);
-        Assert.IsFalse(result.LowerBoundInclusive);
+        Assert.AreEqual(3, result.Start);
+        Assert.IsFalse(result.StartInclusive);
     }
 
     [TestMethod]

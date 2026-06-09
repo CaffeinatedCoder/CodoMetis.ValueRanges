@@ -12,10 +12,10 @@ public class RangeIntersectTests
         var result = r1.Intersect(r2) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(5,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsTrue(result.LowerBoundInclusive);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(5,  result.Start);
+        Assert.AreEqual(10, result.End);
+        Assert.IsTrue(result.StartInclusive);
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
@@ -27,10 +27,10 @@ public class RangeIntersectTests
         var result = r1.Intersect(r2) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(5,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsFalse(result.LowerBoundInclusive); // stricter: exclusive
-        Assert.IsFalse(result.UpperBoundInclusive); // stricter: exclusive
+        Assert.AreEqual(5,  result.Start);
+        Assert.AreEqual(10, result.End);
+        Assert.IsFalse(result.StartInclusive); // stricter: exclusive
+        Assert.IsFalse(result.EndInclusive); // stricter: exclusive
     }
 
     [TestMethod]
@@ -61,10 +61,10 @@ public class RangeIntersectTests
         var result = openEnd.Intersect(openStart) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(5,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsTrue(result.LowerBoundInclusive);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(5,  result.Start);
+        Assert.AreEqual(10, result.End);
+        Assert.IsTrue(result.StartInclusive);
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
@@ -76,10 +76,10 @@ public class RangeIntersectTests
         var result = openEnd.Intersect(openStart) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(5,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsFalse(result.LowerBoundInclusive);
-        Assert.IsFalse(result.UpperBoundInclusive);
+        Assert.AreEqual(5,  result.Start);
+        Assert.AreEqual(10, result.End);
+        Assert.IsFalse(result.StartInclusive);
+        Assert.IsFalse(result.EndInclusive);
     }
 
     [TestMethod]
@@ -91,8 +91,8 @@ public class RangeIntersectTests
         var result = s1.Intersect(s2) as IOpenStartRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(10, result.End);
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
@@ -104,8 +104,8 @@ public class RangeIntersectTests
         var result = e1.Intersect(e2) as IOpenEndRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(7, result.LowerBound);
-        Assert.IsFalse(result.LowerBoundInclusive);
+        Assert.AreEqual(7, result.Start);
+        Assert.IsFalse(result.StartInclusive);
     }
 
     [TestMethod]
@@ -117,10 +117,10 @@ public class RangeIntersectTests
         var result = openStart.Intersect(finite) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(5,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsTrue(result.LowerBoundInclusive);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(5,  result.Start);
+        Assert.AreEqual(10, result.End);
+        Assert.IsTrue(result.StartInclusive);
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
@@ -132,9 +132,9 @@ public class RangeIntersectTests
         var result = openEnd.Intersect(finite) as IFiniteRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(5,  result.LowerBound);
-        Assert.AreEqual(10, result.UpperBound);
-        Assert.IsTrue(result.LowerBoundInclusive);
-        Assert.IsTrue(result.UpperBoundInclusive);
+        Assert.AreEqual(5,  result.Start);
+        Assert.AreEqual(10, result.End);
+        Assert.IsTrue(result.StartInclusive);
+        Assert.IsTrue(result.EndInclusive);
     }
 }

@@ -50,10 +50,10 @@ public class RangeExceptTests
 
         var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(5,  left.LowerBound);
-        Assert.AreEqual(10, left.UpperBound);
-        Assert.IsFalse(left.LowerBoundInclusive); // flipped from other's upper inclusive
-        Assert.IsTrue(left.UpperBoundInclusive);
+        Assert.AreEqual(5,  left.Start);
+        Assert.AreEqual(10, left.End);
+        Assert.IsFalse(left.StartInclusive); // flipped from other's upper inclusive
+        Assert.IsTrue(left.EndInclusive);
         Assert.IsNull(result.Right);
     }
 
@@ -68,8 +68,8 @@ public class RangeExceptTests
 
         var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(5, left.LowerBound);
-        Assert.IsTrue(left.LowerBoundInclusive); // flipped from other's upper exclusive
+        Assert.AreEqual(5, left.Start);
+        Assert.IsTrue(left.StartInclusive); // flipped from other's upper exclusive
     }
 
     [TestMethod]
@@ -83,10 +83,10 @@ public class RangeExceptTests
 
         var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(1, left.LowerBound);
-        Assert.AreEqual(6, left.UpperBound);
-        Assert.IsTrue(left.LowerBoundInclusive);
-        Assert.IsFalse(left.UpperBoundInclusive); // flipped from other's lower inclusive
+        Assert.AreEqual(1, left.Start);
+        Assert.AreEqual(6, left.End);
+        Assert.IsTrue(left.StartInclusive);
+        Assert.IsFalse(left.EndInclusive); // flipped from other's lower inclusive
         Assert.IsNull(result.Right);
     }
 
@@ -104,15 +104,15 @@ public class RangeExceptTests
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 
-        Assert.AreEqual(1, left.LowerBound);
-        Assert.AreEqual(4, left.UpperBound);
-        Assert.IsTrue(left.LowerBoundInclusive);
-        Assert.IsFalse(left.UpperBoundInclusive);
+        Assert.AreEqual(1, left.Start);
+        Assert.AreEqual(4, left.End);
+        Assert.IsTrue(left.StartInclusive);
+        Assert.IsFalse(left.EndInclusive);
 
-        Assert.AreEqual(6,  right.LowerBound);
-        Assert.AreEqual(10, right.UpperBound);
-        Assert.IsFalse(right.LowerBoundInclusive);
-        Assert.IsTrue(right.UpperBoundInclusive);
+        Assert.AreEqual(6,  right.Start);
+        Assert.AreEqual(10, right.End);
+        Assert.IsFalse(right.StartInclusive);
+        Assert.IsTrue(right.EndInclusive);
     }
 
     [TestMethod]
@@ -129,11 +129,11 @@ public class RangeExceptTests
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 
-        Assert.AreEqual(4, left.UpperBound);
-        Assert.IsTrue(left.UpperBoundInclusive); // flipped from other's exclusive lower
+        Assert.AreEqual(4, left.End);
+        Assert.IsTrue(left.EndInclusive); // flipped from other's exclusive lower
 
-        Assert.AreEqual(6, right.LowerBound);
-        Assert.IsTrue(right.LowerBoundInclusive); // flipped from other's exclusive upper
+        Assert.AreEqual(6, right.Start);
+        Assert.IsTrue(right.StartInclusive); // flipped from other's exclusive upper
     }
 
     [TestMethod]
@@ -159,8 +159,8 @@ public class RangeExceptTests
 
         var left = result.Left as IOpenStartRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(7, left.UpperBound);
-        Assert.IsFalse(left.UpperBoundInclusive); // flipped from other's inclusive lower
+        Assert.AreEqual(7, left.End);
+        Assert.IsFalse(left.EndInclusive); // flipped from other's inclusive lower
         Assert.IsNull(result.Right);
     }
 
@@ -175,8 +175,8 @@ public class RangeExceptTests
 
         var left = result.Left as IOpenStartRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(7, left.UpperBound);
-        Assert.IsTrue(left.UpperBoundInclusive); // flipped from other's exclusive lower
+        Assert.AreEqual(7, left.End);
+        Assert.IsTrue(left.EndInclusive); // flipped from other's exclusive lower
     }
 
     [TestMethod]
@@ -194,14 +194,14 @@ public class RangeExceptTests
         Assert.IsNotNull(right);
 
         // Left piece: (-∞, 3)
-        Assert.AreEqual(3, left.UpperBound);
-        Assert.IsFalse(left.UpperBoundInclusive); // flipped from other's inclusive lower
+        Assert.AreEqual(3, left.End);
+        Assert.IsFalse(left.EndInclusive); // flipped from other's inclusive lower
 
         // Right piece: (7, 10]
-        Assert.AreEqual(7,  right.LowerBound);
-        Assert.AreEqual(10, right.UpperBound);
-        Assert.IsFalse(right.LowerBoundInclusive); // flipped from other's inclusive upper
-        Assert.IsTrue(right.UpperBoundInclusive);
+        Assert.AreEqual(7,  right.Start);
+        Assert.AreEqual(10, right.End);
+        Assert.IsFalse(right.StartInclusive); // flipped from other's inclusive upper
+        Assert.IsTrue(right.EndInclusive);
     }
 
     [TestMethod]
@@ -227,8 +227,8 @@ public class RangeExceptTests
 
         var left = result.Left as IOpenEndRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(8, left.LowerBound);
-        Assert.IsFalse(left.LowerBoundInclusive); // flipped from other's inclusive upper
+        Assert.AreEqual(8, left.Start);
+        Assert.IsFalse(left.StartInclusive); // flipped from other's inclusive upper
         Assert.IsNull(result.Right);
     }
 
@@ -247,13 +247,13 @@ public class RangeExceptTests
         Assert.IsNotNull(right);
 
         // Left piece: [5, 8)
-        Assert.AreEqual(5, left.LowerBound);
-        Assert.AreEqual(8, left.UpperBound);
-        Assert.IsTrue(left.LowerBoundInclusive);
-        Assert.IsFalse(left.UpperBoundInclusive); // flipped from other's inclusive lower
+        Assert.AreEqual(5, left.Start);
+        Assert.AreEqual(8, left.End);
+        Assert.IsTrue(left.StartInclusive);
+        Assert.IsFalse(left.EndInclusive); // flipped from other's inclusive lower
 
         // Right piece: (12, ∞)
-        Assert.AreEqual(12, right.LowerBound);
-        Assert.IsFalse(right.LowerBoundInclusive); // flipped from other's inclusive upper
+        Assert.AreEqual(12, right.Start);
+        Assert.IsFalse(right.StartInclusive); // flipped from other's inclusive upper
     }
 }

@@ -29,40 +29,40 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     {
         internal Finite(DateTime lowerBound, DateTime upperBound, bool lowerBoundInclusive, bool upperBoundInclusive)
         {
-            LowerBound          = lowerBound;
-            UpperBound          = upperBound;
-            LowerBoundInclusive = lowerBoundInclusive;
-            UpperBoundInclusive = upperBoundInclusive;
+            Start          = lowerBound;
+            End          = upperBound;
+            StartInclusive = lowerBoundInclusive;
+            EndInclusive = upperBoundInclusive;
         }
 
         /// <inheritdoc/>
-        public DateTime LowerBound { get; }
+        public DateTime Start { get; }
 
         /// <inheritdoc/>
-        public DateTime UpperBound { get; }
+        public DateTime End { get; }
 
         /// <inheritdoc/>
-        public bool LowerBoundInclusive { get; }
+        public bool StartInclusive { get; }
 
         /// <inheritdoc/>
-        public bool UpperBoundInclusive { get; }
+        public bool EndInclusive { get; }
     }
 
     /// <summary>
     /// Represents a <see cref="DateTimeRange"/> unbounded on the left:
     /// <c>(-∞, UpperBound]</c> or <c>(-∞, UpperBound)</c>.
     /// </summary>
-    /// <param name="UpperBound">The upper (right) bound of the range.</param>
-    /// <param name="UpperBoundInclusive"><see langword="true"/> to include <paramref name="UpperBound"/> in the range.</param>
-    private sealed record OpenStart(DateTime UpperBound, bool UpperBoundInclusive) : DateTimeRange, IOpenStartRange<DateTime>;
+    /// <param name="End">The upper (right) bound of the range.</param>
+    /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
+    private sealed record OpenStart(DateTime End, bool EndInclusive) : DateTimeRange, IOpenStartRange<DateTime>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeRange"/> unbounded on the right:
     /// <c>[LowerBound, +∞)</c> or <c>(LowerBound, +∞)</c>.
     /// </summary>
-    /// <param name="LowerBound">The lower (left) bound of the range.</param>
-    /// <param name="LowerBoundInclusive"><see langword="true"/> to include <paramref name="LowerBound"/> in the range.</param>
-    private sealed record OpenEnd(DateTime LowerBound, bool LowerBoundInclusive) : DateTimeRange, IOpenEndRange<DateTime>;
+    /// <param name="Start">The lower (left) bound of the range.</param>
+    /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
+    private sealed record OpenEnd(DateTime Start, bool StartInclusive) : DateTimeRange, IOpenEndRange<DateTime>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.

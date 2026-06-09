@@ -7,7 +7,7 @@ namespace CodoMetis.ValueRanges;
 /// This is a discriminated union with four variants: <see cref="Finite"/>, <see cref="OpenStart"/>,
 /// <see cref="OpenEnd"/>, and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
 /// exhaustive handling of all variants.
-/// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[lower, upper)</c>,
+/// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[start, end)</c>,
 /// which is conventional for continuous numeric types such as monetary amounts.
 /// </remarks>
 public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRange, decimal>
@@ -26,42 +26,42 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// </summary>
     private sealed record Finite : DecimalRange, IFiniteRange<decimal>
     {
-        internal Finite(decimal lowerBound, decimal upperBound, bool lowerBoundInclusive, bool upperBoundInclusive)
+        internal Finite(decimal start, decimal end, bool startInclusive, bool endInclusive)
         {
-            LowerBound          = lowerBound;
-            UpperBound          = upperBound;
-            LowerBoundInclusive = lowerBoundInclusive;
-            UpperBoundInclusive = upperBoundInclusive;
+            Start          = start;
+            End            = end;
+            StartInclusive = startInclusive;
+            EndInclusive   = endInclusive;
         }
 
         /// <inheritdoc/>
-        public decimal LowerBound { get; }
+        public decimal Start { get; }
 
         /// <inheritdoc/>
-        public decimal UpperBound { get; }
+        public decimal End { get; }
 
         /// <inheritdoc/>
-        public bool LowerBoundInclusive { get; }
+        public bool StartInclusive { get; }
 
         /// <inheritdoc/>
-        public bool UpperBoundInclusive { get; }
+        public bool EndInclusive { get; }
     }
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> unbounded on the left:
-    /// <c>(-∞, UpperBound]</c> or <c>(-∞, UpperBound)</c>.
+    /// <c>(-∞, End]</c> or <c>(-∞, End)</c>.
     /// </summary>
-    /// <param name="UpperBound">The upper (right) bound of the range.</param>
-    /// <param name="UpperBoundInclusive"><see langword="true"/> to include <paramref name="UpperBound"/> in the range.</param>
-    private sealed record OpenStart(decimal UpperBound, bool UpperBoundInclusive) : DecimalRange, IOpenStartRange<decimal>;
+    /// <param name="End">The upper (right) bound of the range.</param>
+    /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
+    private sealed record OpenStart(decimal End, bool EndInclusive) : DecimalRange, IOpenStartRange<decimal>;
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> unbounded on the right:
-    /// <c>[LowerBound, +∞)</c> or <c>(LowerBound, +∞)</c>.
+    /// <c>[Start, +∞)</c> or <c>(Start, +∞)</c>.
     /// </summary>
-    /// <param name="LowerBound">The lower (left) bound of the range.</param>
-    /// <param name="LowerBoundInclusive"><see langword="true"/> to include <paramref name="LowerBound"/> in the range.</param>
-    private sealed record OpenEnd(decimal LowerBound, bool LowerBoundInclusive) : DecimalRange, IOpenEndRange<decimal>;
+    /// <param name="Start">The lower (left) bound of the range.</param>
+    /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
+    private sealed record OpenEnd(decimal Start, bool StartInclusive) : DecimalRange, IOpenEndRange<decimal>;
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
@@ -71,26 +71,26 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <summary>
     /// Creates a <see cref="DecimalRange"/> unbounded on the left.
     /// </summary>
-    /// <param name="upperBound">The upper (right) bound of the range.</param>
-    /// <param name="upperBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="upperBound"/> in the range.
+    /// <param name="end">The upper (right) bound of the range.</param>
+    /// <param name="endInclusive">
+    /// <see langword="true"/> to include <paramref name="end"/> in the range.
     /// Defaults to <see langword="false"/>.
     /// </param>
-    /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, upperBound]</c> or <c>(-∞, upperBound)</c>.</returns>
-    public static DecimalRange CreateOpenStart(decimal upperBound, bool upperBoundInclusive = false)
-        => new OpenStart(upperBound, upperBoundInclusive);
+    /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
+    public static DecimalRange CreateOpenStart(decimal end, bool endInclusive = false)
+        => new OpenStart(end, endInclusive);
 
     /// <summary>
     /// Creates a <see cref="DecimalRange"/> unbounded on the right.
     /// </summary>
-    /// <param name="lowerBound">The lower (left) bound of the range.</param>
-    /// <param name="lowerBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="lowerBound"/> in the range.
+    /// <param name="start">The lower (left) bound of the range.</param>
+    /// <param name="startInclusive">
+    /// <see langword="true"/> to include <paramref name="start"/> in the range.
     /// Defaults to <see langword="true"/>.
     /// </param>
-    /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
-    public static DecimalRange CreateOpenEnd(decimal lowerBound, bool lowerBoundInclusive = true)
-        => new OpenEnd(lowerBound, lowerBoundInclusive);
+    /// <returns>An <see cref="OpenEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
+    public static DecimalRange CreateOpenEnd(decimal start, bool startInclusive = true)
+        => new OpenEnd(start, startInclusive);
 
     /// <summary>
     /// Creates a <see cref="DecimalRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -106,34 +106,34 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <summary>
     /// Creates a <see cref="DecimalRange"/> bounded on both sides.
     /// </summary>
-    /// <param name="lowerBound">The lower (left) bound of the range.</param>
-    /// <param name="upperBound">The upper (right) bound of the range.</param>
-    /// <param name="lowerBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="lowerBound"/> in the range.
+    /// <param name="start">The lower (left) bound of the range.</param>
+    /// <param name="end">The upper (right) bound of the range.</param>
+    /// <param name="startInclusive">
+    /// <see langword="true"/> to include <paramref name="start"/> in the range.
     /// Defaults to <see langword="true"/>.
     /// </param>
-    /// <param name="upperBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="upperBound"/> in the range.
+    /// <param name="endInclusive">
+    /// <see langword="true"/> to include <paramref name="end"/> in the range.
     /// Defaults to <see langword="false"/> (half-open convention).
     /// </param>
     /// <returns>
-    /// A <see cref="Finite"/> range when <paramref name="lowerBound"/> is strictly less than
-    /// <paramref name="upperBound"/>, or when they are equal and both bounds are inclusive.
-    /// Returns <see cref="EmptyRange"/> when <paramref name="lowerBound"/> is greater than
-    /// <paramref name="upperBound"/>, or when the bounds are equal but not both inclusive.
+    /// A <see cref="Finite"/> range when <paramref name="start"/> is strictly less than
+    /// <paramref name="end"/>, or when they are equal and both bounds are inclusive.
+    /// Returns <see cref="EmptyRange"/> when <paramref name="start"/> is greater than
+    /// <paramref name="end"/>, or when the bounds are equal but not both inclusive.
     /// </returns>
     public static DecimalRange CreateFinite(
-        decimal lowerBound,
-        decimal upperBound,
-        bool    lowerBoundInclusive = true,
-        bool    upperBoundInclusive = false
+        decimal start,
+        decimal end,
+        bool    startInclusive = true,
+        bool    endInclusive   = false
     ) =>
-        lowerBound.CompareTo(upperBound) switch
+        start.CompareTo(end) switch
         {
             > 0 => Empty,
-            0 => lowerBoundInclusive && upperBoundInclusive
-                     ? new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
+            0 => startInclusive && endInclusive
+                     ? new Finite(start, end, startInclusive, endInclusive)
                      : new EmptyRange(),
-            _ => new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
+            _ => new Finite(start, end, startInclusive, endInclusive)
         };
 }
