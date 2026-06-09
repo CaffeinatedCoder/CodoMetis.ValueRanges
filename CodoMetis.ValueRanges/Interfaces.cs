@@ -20,7 +20,7 @@ public interface IRangeFactory<out TRange, in T>
     /// <summary>
     /// Returns the empty range — a range that contains no values.
     /// </summary>
-    abstract static TRange EmptyRange();
+    abstract static TRange Empty { get; }
 
     /// <summary>
     /// Creates a range bounded on both sides.
@@ -31,21 +31,21 @@ public interface IRangeFactory<out TRange, in T>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
     /// <param name="lowerBoundInclusive"><see langword="true"/> to include <paramref name="lowerBound"/> in the range.</param>
     /// <param name="upperBoundInclusive"><see langword="true"/> to include <paramref name="upperBound"/> in the range.</param>
-    abstract static TRange Closed(T lowerBound, T upperBound, bool lowerBoundInclusive, bool upperBoundInclusive);
+    abstract static TRange CreateFinite(T lowerBound, T upperBound, bool lowerBoundInclusive, bool upperBoundInclusive);
 
     /// <summary>
     /// Creates a range that is unbounded on the right: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.
     /// </summary>
     /// <param name="lowerBound">The lower (left) bound of the range.</param>
     /// <param name="lowerBoundInclusive"><see langword="true"/> to include <paramref name="lowerBound"/> in the range.</param>
-    abstract static TRange WithOpenEnd(T lowerBound, bool lowerBoundInclusive);
+    abstract static TRange CreateOpenEnd(T lowerBound, bool lowerBoundInclusive);
 
     /// <summary>
     /// Creates a range that is unbounded on the left: <c>(-∞, upperBound]</c> or <c>(-∞, upperBound)</c>.
     /// </summary>
     /// <param name="upperBound">The upper (right) bound of the range.</param>
     /// <param name="upperBoundInclusive"><see langword="true"/> to include <paramref name="upperBound"/> in the range.</param>
-    abstract static TRange WithOpenStart(T upperBound, bool upperBoundInclusive);
+    abstract static TRange CreateOpenStart(T upperBound, bool upperBoundInclusive);
 }
 
 /// <summary>

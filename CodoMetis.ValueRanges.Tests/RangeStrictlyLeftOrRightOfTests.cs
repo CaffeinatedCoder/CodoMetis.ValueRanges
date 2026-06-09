@@ -6,8 +6,8 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_ClearGap_ReturnsTrue()
     {
-        var left  = Int32Range.Closed(1, 5);
-        var right = Int32Range.Closed(7, 10);
+        var left  = Int32Range.CreateFinite(1, 5);
+        var right = Int32Range.CreateFinite(7, 10);
 
         Assert.IsTrue(left.IsStrictlyLeftOf(right));
         Assert.IsTrue(right.IsStrictlyRightOf(left));
@@ -16,8 +16,8 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_TouchingLeftExclusiveRightInclusive_ReturnsTrue()
     {
-        var left  = Int32Range.Closed(1, 5,  true, false); // [1, 5)
-        var right = Int32Range.Closed(5, 10, true, true);  // [5, 10]
+        var left  = Int32Range.CreateFinite(1, 5,  true, false); // [1, 5)
+        var right = Int32Range.CreateFinite(5, 10, true, true);  // [5, 10]
 
         Assert.IsTrue(left.IsStrictlyLeftOf(right));
         Assert.IsTrue(right.IsStrictlyRightOf(left));
@@ -26,8 +26,8 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_TouchingLeftInclusiveRightExclusive_ReturnsTrue()
     {
-        var left  = Int32Range.Closed(1, 5,  true,  true); // [1, 5]
-        var right = Int32Range.Closed(5, 10, false, true); // (5, 10]
+        var left  = Int32Range.CreateFinite(1, 5,  true,  true); // [1, 5]
+        var right = Int32Range.CreateFinite(5, 10, false, true); // (5, 10]
 
         Assert.IsTrue(left.IsStrictlyLeftOf(right));
     }
@@ -35,8 +35,8 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_TouchingBothInclusive_ReturnsFalse()
     {
-        var left  = Int32Range.Closed(1, 5,  true, true); // [1, 5]
-        var right = Int32Range.Closed(5, 10, true, true); // [5, 10]
+        var left  = Int32Range.CreateFinite(1, 5,  true, true); // [1, 5]
+        var right = Int32Range.CreateFinite(5, 10, true, true); // [5, 10]
 
         Assert.IsFalse(left.IsStrictlyLeftOf(right));
     }
@@ -44,8 +44,8 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_Overlapping_ReturnsFalse()
     {
-        var left  = Int32Range.Closed(1, 7);
-        var right = Int32Range.Closed(5, 10);
+        var left  = Int32Range.CreateFinite(1, 7);
+        var right = Int32Range.CreateFinite(5, 10);
 
         Assert.IsFalse(left.IsStrictlyLeftOf(right));
     }
@@ -53,8 +53,8 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_FiniteVsOpenEnd_StrictlyLeft_ReturnsTrue()
     {
-        var finite  = Int32Range.Closed(1, 4, true, true); // [1, 4]
-        var openEnd = Int32Range.WithOpenEnd(5, true);     // [5, ∞)
+        var finite  = Int32Range.CreateFinite(1, 4, true, true); // [1, 4]
+        var openEnd = Int32Range.CreateOpenEnd(5, true);     // [5, ∞)
 
         Assert.IsTrue(finite.IsStrictlyLeftOf(openEnd));
     }
@@ -62,8 +62,8 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_FiniteVsOpenEnd_Touching_BothExclusive_ReturnsTrue()
     {
-        var finite  = Int32Range.Closed(1, 5, true, false); // [1, 5)
-        var openEnd = Int32Range.WithOpenEnd(5, false);     // (5, ∞)
+        var finite  = Int32Range.CreateFinite(1, 5, true, false); // [1, 5)
+        var openEnd = Int32Range.CreateOpenEnd(5, false);     // (5, ∞)
 
         Assert.IsTrue(finite.IsStrictlyLeftOf(openEnd));
     }
@@ -72,8 +72,8 @@ public class RangeStrictlyLeftOrRightOfTests
     public void IsStrictlyLeftOf_OpenStartIsNeverStrictlyLeft_ReturnsFalse()
     {
         // OpenStart ranges extend to -∞, so they can never be strictly left of anything
-        var openStart = Int32Range.WithOpenStart(5, true);
-        var finite    = Int32Range.Closed(10, 20);
+        var openStart = Int32Range.CreateOpenStart(5, true);
+        var finite    = Int32Range.CreateFinite(10, 20);
 
         Assert.IsFalse(openStart.IsStrictlyLeftOf(finite));
     }

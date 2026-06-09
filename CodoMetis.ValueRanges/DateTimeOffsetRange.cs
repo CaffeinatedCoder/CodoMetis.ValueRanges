@@ -6,9 +6,9 @@ namespace CodoMetis.ValueRanges;
 /// </summary>
 /// <remarks>
 /// This is a discriminated union with four variants: <see cref="Finite"/>, <see cref="OpenStart"/>,
-/// <see cref="OpenEnd"/>, and <see cref="Empty"/>. Use a <see langword="switch"/> expression for
+/// <see cref="OpenEnd"/>, and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
 /// exhaustive handling of all variants.
-/// The default boundary convention for <see cref="Closed"/> is a half-open interval <c>[lower, upper)</c>,
+/// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[lower, upper)</c>,
 /// which is conventional for timestamp ranges.
 /// </remarks>
 public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFactory<DateTimeOffsetRange, DateTimeOffset>
@@ -20,12 +20,12 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <summary>
     /// Represents an empty <see cref="DateTimeOffsetRange"/> that contains no values.
     /// </summary>
-    public sealed record Empty : DateTimeOffsetRange, IEmptyRange<DateTimeOffset>;
+    private sealed record EmptyRange : DateTimeOffsetRange, IEmptyRange<DateTimeOffset>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeOffsetRange"/> bounded on both sides.
     /// </summary>
-    public sealed record Finite : DateTimeOffsetRange, IFiniteRange<DateTimeOffset>
+    private sealed record Finite : DateTimeOffsetRange, IFiniteRange<DateTimeOffset>
     {
         internal Finite(DateTimeOffset lowerBound, DateTimeOffset upperBound, bool lowerBoundInclusive, bool upperBoundInclusive)
         {
@@ -54,7 +54,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     /// <param name="UpperBound">The upper (right) bound of the range.</param>
     /// <param name="UpperBoundInclusive"><see langword="true"/> to include <paramref name="UpperBound"/> in the range.</param>
-    public sealed record OpenStart(DateTimeOffset UpperBound, bool UpperBoundInclusive)
+    private sealed record OpenStart(DateTimeOffset UpperBound, bool UpperBoundInclusive)
         : DateTimeOffsetRange, IOpenStartRange<DateTimeOffset>;
 
     /// <summary>
@@ -63,7 +63,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     /// <param name="LowerBound">The lower (left) bound of the range.</param>
     /// <param name="LowerBoundInclusive"><see langword="true"/> to include <paramref name="LowerBound"/> in the range.</param>
-    public sealed record OpenEnd(DateTimeOffset LowerBound, bool LowerBoundInclusive)
+    private sealed record OpenEnd(DateTimeOffset LowerBound, bool LowerBoundInclusive)
         : DateTimeOffsetRange, IOpenEndRange<DateTimeOffset>;
 
     /// <summary>
@@ -75,7 +75,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, upperBound]</c> or <c>(-∞, upperBound)</c>.</returns>
-    public static DateTimeOffsetRange WithOpenStart(DateTimeOffset upperBound, bool upperBoundInclusive = false)
+    public static DateTimeOffsetRange CreateOpenStart(DateTimeOffset upperBound, bool upperBoundInclusive = false)
         => new OpenStart(upperBound, upperBoundInclusive);
 
     /// <summary>
@@ -87,13 +87,13 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
-    public static DateTimeOffsetRange WithOpenEnd(DateTimeOffset lowerBound, bool lowerBoundInclusive = true)
+    public static DateTimeOffsetRange CreateOpenEnd(DateTimeOffset lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
 
     /// <summary>
     /// Returns an empty <see cref="DateTimeOffsetRange"/> that contains no values.
     /// </summary>
-    public static DateTimeOffsetRange EmptyRange() => new Empty();
+    public static DateTimeOffsetRange Empty { get; } = new EmptyRange();
 
     /// <summary>
     /// Creates a <see cref="DateTimeOffsetRange"/> bounded on both sides.
@@ -111,10 +111,10 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <returns>
     /// A <see cref="Finite"/> range when <paramref name="lowerBound"/> is strictly less than
     /// <paramref name="upperBound"/>, or when they are equal and both bounds are inclusive.
-    /// Returns <see cref="Empty"/> when <paramref name="lowerBound"/> is greater than
+    /// Returns <see cref="EmptyRange"/> when <paramref name="lowerBound"/> is greater than
     /// <paramref name="upperBound"/>, or when the bounds are equal but not both inclusive.
     /// </returns>
-    public static DateTimeOffsetRange Closed(
+    public static DateTimeOffsetRange CreateFinite(
         DateTimeOffset lowerBound,
         DateTimeOffset upperBound,
         bool           lowerBoundInclusive = true,
@@ -122,10 +122,10 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     ) =>
         lowerBound.CompareTo(upperBound) switch
         {
-            > 0 => new Empty(),
+            > 0 => Empty,
             0 => lowerBoundInclusive && upperBoundInclusive
                      ? new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
-                     : new Empty(),
+                     : new EmptyRange(),
             _ => new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
         };
 }

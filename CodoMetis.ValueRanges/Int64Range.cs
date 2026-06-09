@@ -5,9 +5,9 @@ namespace CodoMetis.ValueRanges;
 /// </summary>
 /// <remarks>
 /// This is a discriminated union with four variants: <see cref="Finite"/>, <see cref="OpenStart"/>,
-/// <see cref="OpenEnd"/>, and <see cref="Empty"/>. Use a <see langword="switch"/> expression for
+/// <see cref="OpenEnd"/>, and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
 /// exhaustive handling of all variants.
-/// The default boundary convention for <see cref="Closed"/> is a fully closed interval <c>[lower, upper]</c>.
+/// The default boundary convention for <see cref="CreateFinite"/> is a fully closed interval <c>[lower, upper]</c>.
 /// </remarks>
 public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Range, long>
 {
@@ -18,12 +18,12 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     /// <summary>
     /// Represents an empty <see cref="Int64Range"/> that contains no values.
     /// </summary>
-    public sealed record Empty : Int64Range, IEmptyRange<long>;
+    private sealed record EmptyRange : Int64Range, IEmptyRange<long>;
 
     /// <summary>
     /// Represents an <see cref="Int64Range"/> bounded on both sides.
     /// </summary>
-    public sealed record Finite : Int64Range, IFiniteRange<long>
+    private sealed record Finite : Int64Range, IFiniteRange<long>
     {
         internal Finite(long lowerBound, long upperBound, bool lowerBoundInclusive, bool upperBoundInclusive)
         {
@@ -52,7 +52,7 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     /// </summary>
     /// <param name="UpperBound">The upper (right) bound of the range.</param>
     /// <param name="UpperBoundInclusive"><see langword="true"/> to include <paramref name="UpperBound"/> in the range.</param>
-    public sealed record OpenStart(long UpperBound, bool UpperBoundInclusive) : Int64Range, IOpenStartRange<long>;
+    private sealed record OpenStart(long UpperBound, bool UpperBoundInclusive) : Int64Range, IOpenStartRange<long>;
 
     /// <summary>
     /// Represents an <see cref="Int64Range"/> unbounded on the right:
@@ -60,7 +60,7 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     /// </summary>
     /// <param name="LowerBound">The lower (left) bound of the range.</param>
     /// <param name="LowerBoundInclusive"><see langword="true"/> to include <paramref name="LowerBound"/> in the range.</param>
-    public sealed record OpenEnd(long LowerBound, bool LowerBoundInclusive) : Int64Range, IOpenEndRange<long>;
+    private sealed record OpenEnd(long LowerBound, bool LowerBoundInclusive) : Int64Range, IOpenEndRange<long>;
 
     /// <summary>
     /// Creates an <see cref="Int64Range"/> unbounded on the left.
@@ -71,7 +71,7 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, upperBound]</c> or <c>(-∞, upperBound)</c>.</returns>
-    public static Int64Range WithOpenStart(long upperBound, bool upperBoundInclusive = false)
+    public static Int64Range CreateOpenStart(long upperBound, bool upperBoundInclusive = false)
         => new OpenStart(upperBound, upperBoundInclusive);
 
     /// <summary>
@@ -83,13 +83,13 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
-    public static Int64Range WithOpenEnd(long lowerBound, bool lowerBoundInclusive = true)
+    public static Int64Range CreateOpenEnd(long lowerBound, bool lowerBoundInclusive = true)
         => new OpenEnd(lowerBound, lowerBoundInclusive);
 
     /// <summary>
     /// Returns an empty <see cref="Int64Range"/> that contains no values.
     /// </summary>
-    public static Int64Range EmptyRange() => new Empty();
+    public static Int64Range Empty { get; } = new EmptyRange();
 
     /// <summary>
     /// Creates an <see cref="Int64Range"/> bounded on both sides.
@@ -107,10 +107,10 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     /// <returns>
     /// A <see cref="Finite"/> range when <paramref name="lowerBound"/> is strictly less than
     /// <paramref name="upperBound"/>, or when they are equal and both bounds are inclusive.
-    /// Returns <see cref="Empty"/> when <paramref name="lowerBound"/> is greater than
+    /// Returns <see cref="EmptyRange"/> when <paramref name="lowerBound"/> is greater than
     /// <paramref name="upperBound"/>, or when the bounds are equal but not both inclusive.
     /// </returns>
-    public static Int64Range Closed(
+    public static Int64Range CreateFinite(
         long lowerBound,
         long upperBound,
         bool lowerBoundInclusive = true,
@@ -118,10 +118,10 @@ public abstract record Int64Range : IDiscreteRange<long>, IRangeFactory<Int64Ran
     ) =>
         lowerBound.CompareTo(upperBound) switch
         {
-            > 0 => new Empty(),
+            > 0 => Empty,
             0 => lowerBoundInclusive && upperBoundInclusive
                      ? new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
-                     : new Empty(),
+                     : new EmptyRange(),
             _ => new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
         };
 

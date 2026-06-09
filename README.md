@@ -21,7 +21,7 @@ Each range type is modelled as a **discriminated union** of four sealed variants
 | `Finite`     | Bounded on both sides       | `[1, 10]`         |
 | `OpenStart`  | Unbounded on the left       | `(-∞, 10]`        |
 | `OpenEnd`    | Unbounded on the right      | `[1, +∞)`         |
-| `Empty`      | The empty range (no values) | `∅`               |
+| `EmptyRange` | The empty range (no values) | `∅`               |
 
 The *shape* of a range is encoded in its static type. An `OpenEnd` range has no `UpperBound` property — the property does not exist at compile time. An `Empty` range carries no bound information whatsoever. Invalid states are unrepresentable by construction, and pattern matching over a range is exhaustive with compiler-enforced coverage.
 
@@ -52,26 +52,26 @@ Every type exposes four static factory methods:
 
 ```csharp
 // Bounded on both sides
-Int32Range closed = Int32Range.Closed(1, 10);                              // [1, 10]
-Int32Range half   = Int32Range.Closed(1, 10, upperBoundInclusive: false);  // [1, 10)
+Int32Range closed = Int32Range.CreateFinite(1, 10);                              // [1, 10]
+Int32Range half   = Int32Range.CreateFinite(1, 10, upperBoundInclusive: false);  // [1, 10)
 
 // Unbounded on the left — upper bound exclusive by default
-DateRange upToToday = DateRange.WithOpenStart(DateOnly.FromDateTime(DateTime.Today)); // (-∞, today)
+DateRange upToToday = DateRange.CreateOpenStart(DateOnly.FromDateTime(DateTime.Today)); // (-∞, today)
 // Inclusive variant:
-DateRange throughToday = DateRange.WithOpenStart(DateOnly.FromDateTime(DateTime.Today), upperBoundInclusive: true);
+DateRange throughToday = DateRange.CreateOpenStart(DateOnly.FromDateTime(DateTime.Today), upperBoundInclusive: true);
 
 // Unbounded on the right — lower bound inclusive by default
-Int32Range fromFive = Int32Range.WithOpenEnd(5);  // [5, +∞)
+Int32Range fromFive = Int32Range.CreateOpenEnd(5);  // [5, +∞)
 
 // Explicitly empty
-Int32Range empty = Int32Range.EmptyRange();
+Int32Range empty = Int32Range.Empty;
 ```
 
-`Closed()` automatically returns an `Empty` when the arguments form a degenerate or inverted interval (e.g. `lowerBound > upperBound`, or equal bounds that are both exclusive).
+`CreateFinite()` automatically returns an `Empty` when the arguments form a degenerate or inverted interval (e.g. `lowerBound > upperBound`, or equal bounds that are both exclusive).
 
 **Default boundary inclusiveness:**
 
-| Range type                                                 | `Closed()` default          |
+| Range type                                                 | `CreateFinite()` default          |
 |------------------------------------------------------------|-----------------------------|
 | `Int32Range`, `Int64Range`, `DateRange`                    | `[lower, upper]` — closed   |
 | `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`     | `[lower, upper)` — half-open |
@@ -85,7 +85,7 @@ The nested sealed records are first-class citizens and ideal for exhaustive patt
 ```csharp
 string Describe(Int32Range range) => range switch
 {
-    Int32Range.Empty       => "empty",
+    Int32Range.EmptyRange  => "empty",
     Int32Range.Finite f    => $"[{f.LowerBound}, {f.UpperBound}]",
     Int32Range.OpenStart s => $"(-∞, {s.UpperBound}]",
     Int32Range.OpenEnd e   => $"[{e.LowerBound}, +∞)",
@@ -101,12 +101,12 @@ All query methods are extension methods on `IRange<T>` and work across any combi
 ### Containment
 
 ```csharp
-var sprint = DateRange.Closed(new DateOnly(2025, 1, 6), new DateOnly(2025, 1, 17));
+var sprint = DateRange.CreateFinite(new DateOnly(2025, 1, 6), new DateOnly(2025, 1, 17));
 
 sprint.Contains(new DateOnly(2025, 1, 10));  // true  — point containment
 sprint.Contains(new DateOnly(2025, 1, 20));  // false
 
-var inner = DateRange.Closed(new DateOnly(2025, 1, 8), new DateOnly(2025, 1, 14));
+var inner = DateRange.CreateFinite(new DateOnly(2025, 1, 8), new DateOnly(2025, 1, 14));
 sprint.Contains(inner);       // true  — range containment
 inner.IsContainedBy(sprint);  // true  — symmetric alias
 ```
@@ -114,9 +114,9 @@ inner.IsContainedBy(sprint);  // true  — symmetric alias
 ### Overlap
 
 ```csharp
-var a = Int32Range.Closed(1, 5);
-var b = Int32Range.Closed(5, 10);
-var c = Int32Range.Closed(6, 10);
+var a = Int32Range.CreateFinite(1, 5);
+var b = Int32Range.CreateFinite(5, 10);
+var c = Int32Range.CreateFinite(6, 10);
 
 a.Overlaps(b);  // true  — they share the point 5
 a.Overlaps(c);  // false
@@ -128,33 +128,33 @@ Two ranges are adjacent when they are contiguous with no gap and no overlap — 
 
 ```csharp
 // Discrete: consecutive integer values are adjacent
-var a = Int32Range.Closed(1, 5);
-var b = Int32Range.Closed(6, 10);
+var a = Int32Range.CreateFinite(1, 5);
+var b = Int32Range.CreateFinite(6, 10);
 a.IsAdjacentTo(b);  // true — GetNextValueFor(5) == 6
 
 // Continuous: touching bounds with complementary inclusiveness
-var x = DecimalRange.Closed(1m, 5m, upperBoundInclusive: true);    // [1, 5]
-var y = DecimalRange.Closed(5m, 10m, lowerBoundInclusive: false);  // (5, 10)
+var x = DecimalRange.CreateFinite(1m, 5m, upperBoundInclusive: true);    // [1, 5]
+var y = DecimalRange.CreateFinite(5m, 10m, lowerBoundInclusive: false);  // (5, 10)
 x.IsAdjacentTo(y);  // true — one side claims 5, the other does not
 ```
 
 ### Directional Comparisons
 
 ```csharp
-Int32Range.Closed(1, 3).IsStrictlyLeftOf(Int32Range.Closed(5, 9));  // true
-Int32Range.Closed(1, 5).IsStrictlyLeftOf(Int32Range.Closed(5, 9));  // false — they share 5
+Int32Range.CreateFinite(1, 3).IsStrictlyLeftOf(Int32Range.CreateFinite(5, 9));  // true
+Int32Range.CreateFinite(1, 5).IsStrictlyLeftOf(Int32Range.CreateFinite(5, 9));  // false — they share 5
 
-Int32Range.Closed(7, 9).IsStrictlyRightOf(Int32Range.Closed(1, 5)); // true
+Int32Range.CreateFinite(7, 9).IsStrictlyRightOf(Int32Range.CreateFinite(1, 5)); // true
 ```
 
 **PostgreSQL `&<` / `&>` equivalents:**
 
 ```csharp
 // Does not extend to the right of other  (&<)
-Int32Range.Closed(1, 5).DoesNotExtendRightOf(Int32Range.Closed(1, 10));  // true
+Int32Range.CreateFinite(1, 5).DoesNotExtendRightOf(Int32Range.CreateFinite(1, 10));  // true
 
 // Does not extend to the left of other  (&>)
-Int32Range.Closed(3, 10).DoesNotExtendLeftOf(Int32Range.Closed(1, 10));  // true
+Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10));  // true
 ```
 
 ## Set Operations
@@ -166,11 +166,11 @@ Set operations are extension methods on the concrete range types (any type that 
 Returns the largest range contained by both operands.
 
 ```csharp
-var a = Int32Range.Closed(1, 10);
-var b = Int32Range.Closed(5, 15);
+var a = Int32Range.CreateFinite(1, 10);
+var b = Int32Range.CreateFinite(5, 15);
 
 Int32Range? intersection = a.Intersect(b);              // [5, 10]
-a.Intersect(Int32Range.Closed(11, 20));                  // null — no overlap
+a.Intersect(Int32Range.CreateFinite(11, 20));                  // null — no overlap
 ```
 
 All shape combinations are handled: `Finite ∩ OpenStart`, `OpenEnd ∩ OpenStart`, `OpenStart ∩ OpenEnd`, and so on, each producing the correctly shaped result type.
@@ -180,9 +180,9 @@ All shape combinations are handled: `Finite ∩ OpenStart`, `OpenEnd ∩ OpenSta
 Returns the smallest range that spans both operands. Returns `null` when the ranges are neither overlapping nor adjacent.
 
 ```csharp
-var a = Int32Range.Closed(1, 5);
-var b = Int32Range.Closed(5, 10);
-var c = Int32Range.Closed(7, 10);
+var a = Int32Range.CreateFinite(1, 5);
+var b = Int32Range.CreateFinite(5, 10);
+var c = Int32Range.CreateFinite(7, 10);
 
 a.Merge(b);  // [1, 10]  — overlapping, forms one range
 a.Union(b);  // [1, 10]  — Union is an alias for Merge
@@ -196,8 +196,8 @@ Merging an `OpenEnd` with a `Finite` yields an `OpenEnd`; merging an `OpenStart`
 Removes the overlap of `other` from the receiver.
 
 ```csharp
-var range  = Int32Range.Closed(1, 10);
-var remove = Int32Range.Closed(4, 6);
+var range  = Int32Range.CreateFinite(1, 10);
+var remove = Int32Range.CreateFinite(4, 6);
 
 // [4, 6] is interior to [1, 10] — the result is split in two
 (Int32Range Left, Int32Range? Right)? result = range.Except(remove);

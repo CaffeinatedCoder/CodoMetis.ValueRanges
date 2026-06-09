@@ -460,7 +460,7 @@ public static class RangeExtensions
                    {
                        // Both finite — select the later start and earlier end
                        (IFiniteRange<T> b, IFiniteRange<T> o) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: LaterStart(b.LowerBound, b.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive)
                                                is var (lv, li)
                                                ? lv
@@ -479,7 +479,7 @@ public static class RangeExtensions
 
                        // OpenStart ∩ OpenStart — result is OpenStart at the earlier (more restrictive) end
                        (IOpenStartRange<T> s, IOpenStartRange<T> o) =>
-                           TRange.WithOpenStart(
+                           TRange.CreateOpenStart(
                                upperBound: EarlierEnd(
                                    s.UpperBound, s.UpperBoundInclusive, o.UpperBound, o.UpperBoundInclusive
                                ).Value,
@@ -490,7 +490,7 @@ public static class RangeExtensions
 
                        // OpenEnd ∩ OpenEnd — result is OpenEnd at the later (more restrictive) start
                        (IOpenEndRange<T> e, IOpenEndRange<T> o) =>
-                           TRange.WithOpenEnd(
+                           TRange.CreateOpenEnd(
                                lowerBound: LaterStart(
                                    e.LowerBound, e.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive
                                ).Value,
@@ -502,7 +502,7 @@ public static class RangeExtensions
                        // OpenStart ∩ Finite — the finite end is always more restrictive on the right;
                        // the finite start is more restrictive on the left since OpenStart has no lower bound
                        (IOpenStartRange<T> s, IFiniteRange<T> o) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: o.LowerBound,
                                upperBound: EarlierEnd(
                                    s.UpperBound, s.UpperBoundInclusive, o.UpperBound, o.UpperBoundInclusive
@@ -515,7 +515,7 @@ public static class RangeExtensions
 
                        // Finite ∩ OpenStart — symmetric
                        (IFiniteRange<T> b, IOpenStartRange<T> s) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: b.LowerBound,
                                upperBound: EarlierEnd(
                                    b.UpperBound, b.UpperBoundInclusive, s.UpperBound, s.UpperBoundInclusive
@@ -528,7 +528,7 @@ public static class RangeExtensions
 
                        // OpenEnd ∩ Finite — symmetric reasoning
                        (IOpenEndRange<T> e, IFiniteRange<T> o) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: LaterStart(
                                    e.LowerBound, e.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive
                                ).Value,
@@ -540,7 +540,7 @@ public static class RangeExtensions
 
                        // Finite ∩ OpenEnd — symmetric
                        (IFiniteRange<T> b, IOpenEndRange<T> e) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: LaterStart(
                                    b.LowerBound, b.LowerBoundInclusive, e.LowerBound, e.LowerBoundInclusive
                                ).Value,
@@ -552,7 +552,7 @@ public static class RangeExtensions
 
                        // OpenStart ∩ OpenEnd — overlapping region is finite; verified by Overlaps above
                        (IOpenStartRange<T> s, IOpenEndRange<T> e) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: e.LowerBound,
                                upperBound: s.UpperBound,
                                lowerBoundInclusive: e.LowerBoundInclusive,
@@ -560,7 +560,7 @@ public static class RangeExtensions
 
                        // OpenEnd ∩ OpenStart — symmetric
                        (IOpenEndRange<T> e, IOpenStartRange<T> s) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: e.LowerBound,
                                upperBound: s.UpperBound,
                                lowerBoundInclusive: e.LowerBoundInclusive,
@@ -593,7 +593,7 @@ public static class RangeExtensions
             return (range, other) switch
                    {
                        (IFiniteRange<T> b, IFiniteRange<T> o) =>
-                           TRange.Closed(
+                           TRange.CreateFinite(
                                lowerBound: EarlierStart(
                                    b.LowerBound, b.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive
                                ).Value,
@@ -610,7 +610,7 @@ public static class RangeExtensions
 
                        // OpenStart absorbs any finite lower bound — result stays OpenStart at the later end
                        (IOpenStartRange<T> s, IFiniteRange<T> o) =>
-                           TRange.WithOpenStart(
+                           TRange.CreateOpenStart(
                                upperBound: LaterEnd(
                                    s.UpperBound, s.UpperBoundInclusive, o.UpperBound, o.UpperBoundInclusive
                                ).Value,
@@ -620,7 +620,7 @@ public static class RangeExtensions
                            ),
 
                        (IFiniteRange<T> b, IOpenStartRange<T> s) =>
-                           TRange.WithOpenStart(
+                           TRange.CreateOpenStart(
                                upperBound: LaterEnd(
                                    b.UpperBound, b.UpperBoundInclusive, s.UpperBound, s.UpperBoundInclusive
                                ).Value,
@@ -631,7 +631,7 @@ public static class RangeExtensions
 
                        // OpenEnd absorbs any finite upper bound — result stays OpenEnd at the earlier start
                        (IOpenEndRange<T> e, IFiniteRange<T> o) =>
-                           TRange.WithOpenEnd(
+                           TRange.CreateOpenEnd(
                                lowerBound: EarlierStart(
                                    e.LowerBound, e.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive
                                ).Value,
@@ -641,7 +641,7 @@ public static class RangeExtensions
                            ),
 
                        (IFiniteRange<T> b, IOpenEndRange<T> e) =>
-                           TRange.WithOpenEnd(
+                           TRange.CreateOpenEnd(
                                lowerBound: EarlierStart(
                                    b.LowerBound, b.LowerBoundInclusive, e.LowerBound, e.LowerBoundInclusive
                                ).Value,
@@ -652,7 +652,7 @@ public static class RangeExtensions
 
                        // Two OpenStart ranges — result is OpenStart at the later end
                        (IOpenStartRange<T> s, IOpenStartRange<T> o) =>
-                           TRange.WithOpenStart(
+                           TRange.CreateOpenStart(
                                upperBound: LaterEnd(
                                    s.UpperBound, s.UpperBoundInclusive, o.UpperBound, o.UpperBoundInclusive
                                ).Value,
@@ -663,7 +663,7 @@ public static class RangeExtensions
 
                        // Two OpenEnd ranges — result is OpenEnd at the earlier start
                        (IOpenEndRange<T> e, IOpenEndRange<T> o) =>
-                           TRange.WithOpenEnd(
+                           TRange.CreateOpenEnd(
                                lowerBound: EarlierStart(
                                    e.LowerBound, e.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive
                                ).Value,
@@ -747,37 +747,37 @@ public static class RangeExtensions
                            // Interior split: other sits strictly inside range
                            OuterStartCoversInnerStart(b.LowerBound, b.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive) &&
                            OuterEndCoversInnerEnd(b.UpperBound, b.UpperBoundInclusive, o.UpperBound, o.UpperBoundInclusive)
-                               ? (TRange.Closed(b.LowerBound, o.LowerBound, b.LowerBoundInclusive, !o.LowerBoundInclusive),
-                                  (TRange?)TRange.Closed(o.UpperBound, b.UpperBound, !o.UpperBoundInclusive, b.UpperBoundInclusive))
+                               ? (TRange.CreateFinite(b.LowerBound, o.LowerBound, b.LowerBoundInclusive, !o.LowerBoundInclusive),
+                                  (TRange?)TRange.CreateFinite(o.UpperBound, b.UpperBound, !o.UpperBoundInclusive, b.UpperBoundInclusive))
                                // Left-side overlap: other covers the start of range
                                : OuterStartCoversInnerStart(o.LowerBound, o.LowerBoundInclusive, b.LowerBound, b.LowerBoundInclusive)
-                                   ? (TRange.Closed(o.UpperBound, b.UpperBound, !o.UpperBoundInclusive, b.UpperBoundInclusive),
+                                   ? (TRange.CreateFinite(o.UpperBound, b.UpperBound, !o.UpperBoundInclusive, b.UpperBoundInclusive),
                                       (TRange?)default)
                                    // Right-side overlap: other covers the end of range
-                                   : (TRange.Closed(b.LowerBound, o.LowerBound, b.LowerBoundInclusive, !o.LowerBoundInclusive),
+                                   : (TRange.CreateFinite(b.LowerBound, o.LowerBound, b.LowerBoundInclusive, !o.LowerBoundInclusive),
                                       (TRange?)default),
 
                        // OpenStart split by Finite interior: left part stays OpenStart, right part is Finite
                        (IOpenStartRange<T> s, IFiniteRange<T> o)
                            when OuterEndCoversInnerEnd(s.UpperBound, s.UpperBoundInclusive, o.UpperBound, o.UpperBoundInclusive) =>
-                           (TRange.WithOpenStart(o.LowerBound, !o.LowerBoundInclusive),
-                            (TRange?)TRange.Closed(o.UpperBound, s.UpperBound, !o.UpperBoundInclusive, s.UpperBoundInclusive)),
+                           (TRange.CreateOpenStart(o.LowerBound, !o.LowerBoundInclusive),
+                            (TRange?)TRange.CreateFinite(o.UpperBound, s.UpperBound, !o.UpperBoundInclusive, s.UpperBoundInclusive)),
 
                        // OpenStart trimmed by Finite from the right — result is OpenStart at a new end
                        (IOpenStartRange<T> s, IFiniteRange<T> o) =>
-                           TRange.WithOpenStart(o.LowerBound, !o.LowerBoundInclusive) is var left
+                           TRange.CreateOpenStart(o.LowerBound, !o.LowerBoundInclusive) is var left
                                ? (left, default)
                                : default,
 
                        // OpenEnd split by Finite interior: left part is Finite, right part stays OpenEnd
                        (IOpenEndRange<T> e, IFiniteRange<T> o)
                            when OuterStartCoversInnerStart(e.LowerBound, e.LowerBoundInclusive, o.LowerBound, o.LowerBoundInclusive) =>
-                           (TRange.Closed(e.LowerBound, o.LowerBound, e.LowerBoundInclusive, !o.LowerBoundInclusive),
-                            (TRange?)TRange.WithOpenEnd(o.UpperBound, !o.UpperBoundInclusive)),
+                           (TRange.CreateFinite(e.LowerBound, o.LowerBound, e.LowerBoundInclusive, !o.LowerBoundInclusive),
+                            (TRange?)TRange.CreateOpenEnd(o.UpperBound, !o.UpperBoundInclusive)),
 
                        // OpenEnd trimmed by Finite from the left — result is OpenEnd at a new start
                        (IOpenEndRange<T> e, IFiniteRange<T> o) =>
-                           TRange.WithOpenEnd(o.UpperBound, !o.UpperBoundInclusive) is var left
+                           TRange.CreateOpenEnd(o.UpperBound, !o.UpperBoundInclusive) is var left
                                ? (left, default)
                                : default,
 
