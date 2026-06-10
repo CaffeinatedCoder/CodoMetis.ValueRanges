@@ -1,4 +1,5 @@
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges;
 
@@ -21,19 +22,17 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// <summary>
     /// Represents an empty <see cref="DateRange"/> that contains no values.
     /// </summary>
-    private sealed record EmptyRange : DateRange, IEmptyRange<DateOnly>;
+    public sealed record EmptyRange : DateRange, IEmptyRange<DateOnly>;
 
     /// <summary>
     /// Represents a <see cref="DateRange"/> bounded on both sides.
     /// </summary>
-    private sealed record Finite : DateRange, IFiniteRange<DateOnly>
+    public sealed record Finite : DateRange, IFiniteRange<DateOnly>
     {
-        internal Finite(DateOnly start, DateOnly end, bool startInclusive, bool endInclusive)
+        internal Finite(DateOnly start, DateOnly end)
         {
-            Start          = start;
-            End            = end;
-            StartInclusive = startInclusive;
-            EndInclusive   = endInclusive;
+            Start = start;
+            End   = end;
         }
 
         /// <inheritdoc/>
@@ -43,10 +42,10 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
         public DateOnly End { get; }
 
         /// <inheritdoc/>
-        public bool StartInclusive { get; }
+        public bool StartInclusive => true;
 
         /// <inheritdoc/>
-        public bool EndInclusive { get; }
+        public bool EndInclusive => true;
     }
 
     /// <summary>
@@ -55,7 +54,11 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
-    private sealed record UnboundedStart(DateOnly End, bool EndInclusive) : DateRange, IUnboundedStartRange<DateOnly>;
+    public sealed record UnboundedStart(DateOnly End) : DateRange, IUnboundedStartRange<DateOnly>
+    {
+        /// <inheritdoc />
+        public bool EndInclusive => true;
+    }
 
     /// <summary>
     /// Represents a <see cref="DateRange"/> unbounded on the right:
@@ -63,12 +66,16 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
-    private sealed record UnboundedEnd(DateOnly Start, bool StartInclusive) : DateRange, IUnboundedEndRange<DateOnly>;
+    public sealed record UnboundedEnd(DateOnly Start) : DateRange, IUnboundedEndRange<DateOnly>
+    {
+        /// <inheritdoc />
+        public bool StartInclusive => true;
+    }
 
     /// <summary>
     /// Represents a <see cref="DateRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
-    private sealed record Infinity : DateRange, IInfinityRange<DateOnly>;
+    public sealed record Infinity : DateRange, IInfinityRange<DateOnly>;
 
     /// <summary>
     /// Creates a <see cref="DateRange"/> unbounded on the left.
@@ -79,8 +86,12 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static DateRange CreateOpenStart(DateOnly end, bool endInclusive = false)
-        => new UnboundedStart(end, endInclusive);
+    public static DateRange CreateOpenStart(DateOnly end, bool endInclusive = false) =>
+        endInclusive
+            ? new UnboundedStart(end)
+            : PreviousValueBefore(end) is { } e
+                ? new UnboundedStart(e)
+                : Empty;
 
     /// <summary>
     /// Creates a <see cref="DateRange"/> unbounded on the right.
@@ -91,8 +102,12 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static DateRange CreateOpenEnd(DateOnly start, bool startInclusive = true)
-        => new UnboundedEnd(start, startInclusive);
+    public static DateRange CreateOpenEnd(DateOnly start, bool startInclusive = true) =>
+        startInclusive
+            ? new UnboundedEnd(start)
+            : NextValueAfter(start) is { } s
+                ? new UnboundedEnd(s)
+                : Empty;
 
     /// <summary>
     /// Creates a <see cref="DateRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -129,15 +144,9 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
         DateOnly end,
         bool     startInclusive = true,
         bool     endInclusive   = true
-    ) =>
-        start.CompareTo(end) switch
-        {
-            > 0 => Empty,
-            0 => startInclusive && endInclusive
-                     ? new Finite(start, end, startInclusive, endInclusive)
-                     : Empty,
-            _ => new Finite(start, end, startInclusive, endInclusive)
-        };
+    ) => DiscreteCanonical.Finite<DateRange, DateOnly>(start, end, startInclusive, endInclusive) is { } b
+             ? new Finite(b.Start, b.End)
+             : Empty;
 
     /// <inheritdoc />
     public static DateOnly? NextValueAfter(DateOnly value) => value == DateOnly.MaxValue ? null : value.AddDays(1);

@@ -44,7 +44,7 @@ public class RangeExceptTests
     [TestMethod]
     public void Except_LeftTrim_OtherCoversLowerPart_ReturnsRightPiece()
     {
-        // [1, 10] \ [-5, 5] → (5, 10]
+        // [1, 10] \ [-5, 5] → (5, 10] ≡ [6, 10] for int
         var range = Int32Range.CreateFinite(1,  10, true, true); // [1, 10]
         var other = Int32Range.CreateFinite(-5, 5,  true, true); // [-5, 5] — starts before range
 
@@ -52,9 +52,9 @@ public class RangeExceptTests
 
         var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(5,  left.Start);
+        Assert.AreEqual(6,  left.Start);  // canonical: (5, 10] ≡ [6, 10]
         Assert.AreEqual(10, left.End);
-        Assert.IsFalse(left.StartInclusive); // flipped from other's upper inclusive
+        Assert.IsTrue(left.StartInclusive);
         Assert.IsTrue(left.EndInclusive);
         Assert.IsNull(result.Right);
     }
@@ -77,7 +77,7 @@ public class RangeExceptTests
     [TestMethod]
     public void Except_RightTrim_OtherCoversUpperPart_ReturnsLeftPiece()
     {
-        // [1, 10] \ [6, 15] → [1, 6)
+        // [1, 10] \ [6, 15] → [1, 6) ≡ [1, 5] for int
         var range = Int32Range.CreateFinite(1, 10, true, true); // [1, 10]
         var other = Int32Range.CreateFinite(6, 15, true, true); // [6, 15] — ends after range
 
@@ -86,16 +86,16 @@ public class RangeExceptTests
         var left = result.Left as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(1, left.Start);
-        Assert.AreEqual(6, left.End);
+        Assert.AreEqual(5, left.End);  // canonical: [1, 6) ≡ [1, 5]
         Assert.IsTrue(left.StartInclusive);
-        Assert.IsFalse(left.EndInclusive); // flipped from other's lower inclusive
+        Assert.IsTrue(left.EndInclusive);
         Assert.IsNull(result.Right);
     }
 
     [TestMethod]
     public void Except_InteriorSplit_OtherStrictlyInside_ReturnsTwoPieces()
     {
-        // [1, 10] \ [4, 6] → [1, 4) and (6, 10]
+        // [1, 10] \ [4, 6] → [1, 4) and (6, 10] ≡ [1, 3] and [7, 10] for int
         var range = Int32Range.CreateFinite(1, 10, true, true); // [1, 10]
         var other = Int32Range.CreateFinite(4, 6,  true, true); // [4, 6]
 
@@ -107,22 +107,23 @@ public class RangeExceptTests
         Assert.IsNotNull(right);
 
         Assert.AreEqual(1, left.Start);
-        Assert.AreEqual(4, left.End);
+        Assert.AreEqual(3, left.End);  // canonical: [1, 4) ≡ [1, 3]
         Assert.IsTrue(left.StartInclusive);
-        Assert.IsFalse(left.EndInclusive);
+        Assert.IsTrue(left.EndInclusive);
 
-        Assert.AreEqual(6,  right.Start);
+        Assert.AreEqual(7,  right.Start);  // canonical: (6, 10] ≡ [7, 10]
         Assert.AreEqual(10, right.End);
-        Assert.IsFalse(right.StartInclusive);
+        Assert.IsTrue(right.StartInclusive);
         Assert.IsTrue(right.EndInclusive);
     }
 
     [TestMethod]
     public void Except_InteriorSplit_OtherExclusive_FlipsBoundaryInclusiveness()
     {
-        // [1, 10] \ (4, 6) → [1, 4] and [6, 10]
+        // [1, 10] \ (4, 6) → [1, 4] and [6, 10] ≡ [1, 4] and [6, 10] for int
+        // (4, 6) ≡ [5, 5] for int, so flipped bounds land on 4 and 6 (already inclusive)
         var range = Int32Range.CreateFinite(1, 10, true,  true);  // [1, 10]
-        var other = Int32Range.CreateFinite(4, 6,  false, false); // (4, 6)
+        var other = Int32Range.CreateFinite(4, 6,  false, false); // (4, 6) ≡ [5, 5]
 
         var result = range.Except(other);
 
@@ -132,10 +133,10 @@ public class RangeExceptTests
         Assert.IsNotNull(right);
 
         Assert.AreEqual(4, left.End);
-        Assert.IsTrue(left.EndInclusive); // flipped from other's exclusive lower
+        Assert.IsTrue(left.EndInclusive); // canonical: [1, 4]
 
         Assert.AreEqual(6, right.Start);
-        Assert.IsTrue(right.StartInclusive); // flipped from other's exclusive upper
+        Assert.IsTrue(right.StartInclusive); // canonical: [6, 10]
     }
 
     [TestMethod]
@@ -153,39 +154,39 @@ public class RangeExceptTests
     [TestMethod]
     public void Except_OpenStart_OtherTrimsRightEnd_ReturnsNewOpenStart()
     {
-        // (-∞, 10] \ [7, 15] → (-∞, 7)
-        var range = Int32Range.CreateOpenStart(10, true);   // (-∞, 10]
+        // (-∞, 10] \ [7, 15] → (-∞, 7) ≡ (-∞, 6] for int
+        var range = Int32Range.CreateOpenStart(10, true);       // (-∞, 10]
         var other = Int32Range.CreateFinite(7, 15, true, true); // [7, 15]
 
         var result = range.Except(other);
 
         var left = result.Left as IUnboundedStartRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(7, left.End);
-        Assert.IsFalse(left.EndInclusive); // flipped from other's inclusive lower
+        Assert.AreEqual(6, left.End);  // canonical: (-∞, 7) ≡ (-∞, 6]
+        Assert.IsTrue(left.EndInclusive);
         Assert.IsNull(result.Right);
     }
 
     [TestMethod]
     public void Except_OpenStart_OtherExclusiveLower_FlipsToInclusiveOnResult()
     {
-        // (-∞, 10] \ (7, 15] → (-∞, 7]
-        var range = Int32Range.CreateOpenStart(10, true);    // (-∞, 10]
-        var other = Int32Range.CreateFinite(7, 15, false, true); // (7, 15]
+        // (-∞, 10] \ (7, 15] → (-∞, 7] ≡ (-∞, 7] for int (already canonical)
+        var range = Int32Range.CreateOpenStart(10, true);        // (-∞, 10]
+        var other = Int32Range.CreateFinite(7, 15, false, true); // (7, 15] ≡ [8, 15]
 
         var result = range.Except(other);
 
         var left = result.Left as IUnboundedStartRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(7, left.End);
-        Assert.IsTrue(left.EndInclusive); // flipped from other's exclusive lower
+        Assert.AreEqual(7, left.End);  // canonical: (-∞, 7]
+        Assert.IsTrue(left.EndInclusive);
     }
 
     [TestMethod]
     public void Except_OpenStart_OtherInterior_ReturnsSplitIntoOpenStartAndFinite()
     {
-        // (-∞, 10] \ [3, 7] → (-∞, 3) and (7, 10]
-        var range = Int32Range.CreateOpenStart(10, true);  // (-∞, 10]
+        // (-∞, 10] \ [3, 7] → (-∞, 3) and (7, 10] ≡ (-∞, 2] and [8, 10] for int
+        var range = Int32Range.CreateOpenStart(10, true);      // (-∞, 10]
         var other = Int32Range.CreateFinite(3, 7, true, true); // [3, 7]
 
         var result = range.Except(other);
@@ -195,14 +196,14 @@ public class RangeExceptTests
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 
-        // Left piece: (-∞, 3)
-        Assert.AreEqual(3, left.End);
-        Assert.IsFalse(left.EndInclusive); // flipped from other's inclusive lower
+        // Left piece: (-∞, 3) ≡ (-∞, 2] for int
+        Assert.AreEqual(2, left.End);
+        Assert.IsTrue(left.EndInclusive);
 
-        // Right piece: (7, 10]
-        Assert.AreEqual(7,  right.Start);
+        // Right piece: (7, 10] ≡ [8, 10] for int
+        Assert.AreEqual(8,  right.Start);
         Assert.AreEqual(10, right.End);
-        Assert.IsFalse(right.StartInclusive); // flipped from other's inclusive upper
+        Assert.IsTrue(right.StartInclusive);
         Assert.IsTrue(right.EndInclusive);
     }
 
@@ -221,24 +222,24 @@ public class RangeExceptTests
     [TestMethod]
     public void Except_OpenEnd_OtherTrimmedFromLeft_ReturnsNewOpenEnd()
     {
-        // [5, ∞) \ [1, 8] → (8, ∞)
-        var range = Int32Range.CreateOpenEnd(5, true);     // [5, ∞)
+        // [5, ∞) \ [1, 8] → (8, ∞) ≡ [9, ∞) for int
+        var range = Int32Range.CreateOpenEnd(5, true);         // [5, ∞)
         var other = Int32Range.CreateFinite(1, 8, true, true); // [1, 8]
 
         var result = range.Except(other);
 
         var left = result.Left as IUnboundedEndRange<int>;
         Assert.IsNotNull(left);
-        Assert.AreEqual(8, left.Start);
-        Assert.IsFalse(left.StartInclusive); // flipped from other's inclusive upper
+        Assert.AreEqual(9, left.Start);  // canonical: (8, ∞) ≡ [9, ∞)
+        Assert.IsTrue(left.StartInclusive);
         Assert.IsNull(result.Right);
     }
 
     [TestMethod]
     public void Except_OpenEnd_OtherInterior_ReturnsSplitIntoFiniteAndOpenEnd()
     {
-        // [5, ∞) \ [8, 12] → [5, 8) and (12, ∞)
-        var range = Int32Range.CreateOpenEnd(5, true);      // [5, ∞)
+        // [5, ∞) \ [8, 12] → [5, 8) and (12, ∞) ≡ [5, 7] and [13, ∞) for int
+        var range = Int32Range.CreateOpenEnd(5, true);          // [5, ∞)
         var other = Int32Range.CreateFinite(8, 12, true, true); // [8, 12]
 
         var result = range.Except(other);
@@ -248,14 +249,14 @@ public class RangeExceptTests
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 
-        // Left piece: [5, 8)
+        // Left piece: [5, 8) ≡ [5, 7] for int
         Assert.AreEqual(5, left.Start);
-        Assert.AreEqual(8, left.End);
+        Assert.AreEqual(7, left.End);
         Assert.IsTrue(left.StartInclusive);
-        Assert.IsFalse(left.EndInclusive); // flipped from other's inclusive lower
+        Assert.IsTrue(left.EndInclusive);
 
-        // Right piece: (12, ∞)
-        Assert.AreEqual(12, right.Start);
-        Assert.IsFalse(right.StartInclusive); // flipped from other's inclusive upper
+        // Right piece: (12, ∞) ≡ [13, ∞) for int
+        Assert.AreEqual(13, right.Start);
+        Assert.IsTrue(right.StartInclusive);
     }
 }

@@ -102,27 +102,27 @@ public class RangeMergeTests
     [TestMethod]
     public void Merge_TwoOpenStart_ReturnsOpenStartAtLaterEnd()
     {
-        var s1 = Int32Range.CreateOpenStart(5,  true);
-        var s2 = Int32Range.CreateOpenStart(10, false);
+        var s1 = Int32Range.CreateOpenStart(5,  true);  // (-∞, 5]
+        var s2 = Int32Range.CreateOpenStart(10, false); // (-∞, 10) ≡ (-∞, 9]
 
         var result = s1.Merge(s2) as IUnboundedStartRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(10, result.End);
-        Assert.IsFalse(result.EndInclusive);
+        Assert.AreEqual(9, result.End);  // canonical: (-∞, 10) ≡ (-∞, 9]
+        Assert.IsTrue(result.EndInclusive);
     }
 
     [TestMethod]
     public void Merge_TwoOpenEnd_ReturnsOpenEndAtEarlierStart()
     {
-        var e1 = Int32Range.CreateOpenEnd(3, false);
-        var e2 = Int32Range.CreateOpenEnd(7, true);
+        var e1 = Int32Range.CreateOpenEnd(3, false); // (3, ∞) ≡ [4, ∞)
+        var e2 = Int32Range.CreateOpenEnd(7, true);  // [7, ∞)
 
         var result = e1.Merge(e2) as IUnboundedEndRange<int>;
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(3, result.Start);
-        Assert.IsFalse(result.StartInclusive);
+        Assert.AreEqual(4, result.Start);  // canonical: (3, ∞) ≡ [4, ∞)
+        Assert.IsTrue(result.StartInclusive);
     }
 
     [TestMethod]

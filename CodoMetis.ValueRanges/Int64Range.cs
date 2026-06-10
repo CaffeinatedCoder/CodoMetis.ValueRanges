@@ -1,4 +1,5 @@
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges;
 
@@ -27,12 +28,10 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// </summary>
     public sealed record Finite : Int64Range, IFiniteRange<long>
     {
-        internal Finite(long start, long end, bool startInclusive, bool endInclusive)
+        internal Finite(long start, long end)
         {
-            Start          = start;
-            End            = end;
-            StartInclusive = startInclusive;
-            EndInclusive   = endInclusive;
+            Start = start;
+            End   = end;
         }
 
         /// <inheritdoc/>
@@ -42,10 +41,10 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
         public long End { get; }
 
         /// <inheritdoc/>
-        public bool StartInclusive { get; }
+        public bool StartInclusive => true;
 
         /// <inheritdoc/>
-        public bool EndInclusive { get; }
+        public bool EndInclusive => true;
     }
 
     /// <summary>
@@ -54,7 +53,11 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
-    public sealed record UnboundedStart(long End, bool EndInclusive) : Int64Range, IUnboundedStartRange<long>;
+    public sealed record UnboundedStart(long End) : Int64Range, IUnboundedStartRange<long>
+    {
+        /// <inheritdoc />
+        public bool EndInclusive => true;
+    }
 
     /// <summary>
     /// Represents an <see cref="Int64Range"/> unbounded on the right:
@@ -62,7 +65,11 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
-    public sealed record UnboundedEnd(long Start, bool StartInclusive) : Int64Range, IUnboundedEndRange<long>;
+    public sealed record UnboundedEnd(long Start) : Int64Range, IUnboundedEndRange<long>
+    {
+        /// <inheritdoc />
+        public bool StartInclusive => true;
+    }
 
     /// <summary>
     /// Represents an <see cref="Int64Range"/> unbounded on both sides: <c>(-∞, +∞)</c>.
@@ -78,8 +85,12 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static Int64Range CreateOpenStart(long end, bool endInclusive = false)
-        => new UnboundedStart(end, endInclusive);
+    public static Int64Range CreateOpenStart(long end, bool endInclusive = false) =>
+        endInclusive
+            ? new UnboundedStart(end)
+            : PreviousValueBefore(end) is { } e
+                ? new UnboundedStart(e) // (-∞, end) ≡ (-∞, end - 1]
+                : Empty;                // (-∞, int.MinValue) contains nothing
 
     /// <summary>
     /// Creates an <see cref="Int64Range"/> unbounded on the right.
@@ -90,8 +101,12 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static Int64Range CreateOpenEnd(long start, bool startInclusive = true)
-        => new UnboundedEnd(start, startInclusive);
+    public static Int64Range CreateOpenEnd(long start, bool startInclusive = true) =>
+        startInclusive
+            ? new UnboundedEnd(start)
+            : NextValueAfter(start) is { } s
+                ? new UnboundedEnd(s) // (start, +∞) ≡ [start + 1, +∞)
+                : Empty;              // (int.MaxValue, +∞) contains nothing
 
     /// <summary>
     /// Creates an <see cref="Int64Range"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -128,15 +143,9 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
         long end,
         bool startInclusive = true,
         bool endInclusive   = true
-    ) =>
-        start.CompareTo(end) switch
-        {
-            > 0 => Empty,
-            0 => startInclusive && endInclusive
-                     ? new Finite(start, end, startInclusive, endInclusive)
-                     : Empty,
-            _ => new Finite(start, end, startInclusive, endInclusive)
-        };
+    ) => DiscreteCanonical.Finite<Int64Range, long>(start, end, startInclusive, endInclusive) is { } b
+             ? new Finite(b.Start, b.End)
+             : Empty;
 
     /// <inheritdoc />
     public static long? NextValueAfter(long value) => value == long.MaxValue ? null : value + 1;

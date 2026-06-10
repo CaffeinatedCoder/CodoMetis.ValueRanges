@@ -1,4 +1,5 @@
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges;
 
@@ -27,12 +28,10 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// </summary>
     public sealed record Finite : Int32Range, IFiniteRange<int>
     {
-        internal Finite(int start, int end, bool startInclusive, bool endInclusive)
+        internal Finite(int start, int end)
         {
-            Start          = start;
-            End            = end;
-            StartInclusive = startInclusive;
-            EndInclusive   = endInclusive;
+            Start = start;
+            End   = end;
         }
 
         /// <inheritdoc/>
@@ -42,10 +41,10 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
         public int End { get; }
 
         /// <inheritdoc/>
-        public bool StartInclusive { get; }
+        public bool StartInclusive => true;
 
         /// <inheritdoc/>
-        public bool EndInclusive { get; }
+        public bool EndInclusive => true;
     }
 
     /// <summary>
@@ -54,7 +53,11 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
-    public sealed record UnboundedStart(int End, bool EndInclusive) : Int32Range, IUnboundedStartRange<int>;
+    public sealed record UnboundedStart(int End) : Int32Range, IUnboundedStartRange<int>
+    {
+        /// <inheritdoc />
+        public bool EndInclusive => true;
+    }
 
     /// <summary>
     /// Represents an <see cref="Int32Range"/> unbounded on the right:
@@ -62,7 +65,11 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
-    public sealed record UnboundedEnd(int Start, bool StartInclusive) : Int32Range, IUnboundedEndRange<int>;
+    public sealed record UnboundedEnd(int Start) : Int32Range, IUnboundedEndRange<int>
+    {
+        /// <inheritdoc />
+        public bool StartInclusive => true;
+    }
 
     /// <summary>
     /// Represents an <see cref="Int32Range"/> unbounded on both sides: <c>(-∞, +∞)</c>.
@@ -78,8 +85,12 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static Int32Range CreateOpenStart(int end, bool endInclusive = false)
-        => new UnboundedStart(end, endInclusive);
+    public static Int32Range CreateOpenStart(int end, bool endInclusive = false) =>
+        endInclusive
+            ? new UnboundedStart(end)
+            : PreviousValueBefore(end) is { } e
+                ? new UnboundedStart(e) // (-∞, end) ≡ (-∞, end - 1]
+                : Empty;                // (-∞, int.MinValue) contains nothing
 
     /// <summary>
     /// Creates an <see cref="Int32Range"/> unbounded on the right.
@@ -90,8 +101,12 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static Int32Range CreateOpenEnd(int start, bool startInclusive = true)
-        => new UnboundedEnd(start, startInclusive);
+    public static Int32Range CreateOpenEnd(int start, bool startInclusive = true) =>
+        startInclusive
+            ? new UnboundedEnd(start)
+            : NextValueAfter(start) is { } s
+                ? new UnboundedEnd(s) // (start, +∞) ≡ [start + 1, +∞)
+                : Empty;              // (int.MaxValue, +∞) contains nothing
 
     /// <summary>
     /// Creates an <see cref="Int32Range"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -128,15 +143,9 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
         int  end,
         bool startInclusive = true,
         bool endInclusive   = true
-    ) =>
-        start.CompareTo(end) switch
-        {
-            > 0 => Empty,
-            0 => startInclusive && endInclusive
-                     ? new Finite(start, end, startInclusive, endInclusive)
-                     : Empty,
-            _ => new Finite(start, end, startInclusive, endInclusive)
-        };
+    ) => DiscreteCanonical.Finite<Int32Range, int>(start, end, startInclusive, endInclusive) is { } b
+             ? new Finite(b.Start, b.End)
+             : Empty;
 
     /// <inheritdoc />
     public static int? NextValueAfter(int value) => value == int.MaxValue ? null : value + 1;
