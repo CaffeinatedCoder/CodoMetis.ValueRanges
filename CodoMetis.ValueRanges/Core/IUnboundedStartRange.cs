@@ -3,7 +3,7 @@ using CodoMetis.ValueRanges.Internals;
 namespace CodoMetis.ValueRanges.Core;
 
 /// <summary>
-/// Represents a range that is unbounded on the left: <c>(-∞, UpperBound]</c> or <c>(-∞, UpperBound)</c>.
+/// Represents a range that is unbounded on the left: <c>(-∞, End]</c> or <c>(-∞, End)</c>.
 /// </summary>
 /// <typeparam name="T">The element type of the range.</typeparam>
 public interface IUnboundedStartRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
