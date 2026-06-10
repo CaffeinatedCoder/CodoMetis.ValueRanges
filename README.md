@@ -14,16 +14,17 @@ The library is designed to stand on its own: all operations execute in process, 
 
 ### Design
 
-Each range type is modelled as a **discriminated union** of four sealed variants:
+Each range type is modelled as a **discriminated union** of five sealed variants:
 
-| Variant      | Represents                  | Interval notation |
-|--------------|-----------------------------|-------------------|
-| `Finite`     | Bounded on both sides       | `[1, 10]`         |
-| `OpenStart`  | Unbounded on the left       | `(-∞, 10]`        |
-| `OpenEnd`    | Unbounded on the right      | `[1, +∞)`         |
-| `EmptyRange` | The empty range (no values) | `∅`               |
+| Variant          | Represents                  | Interval notation |
+|------------------|-----------------------------|-----------------|
+| `Finite`         | Bounded on both sides       | `[1, 10]`       |
+| `UnboundedStart` | Unbounded on the left       | `(-∞, 10]`      |
+| `UnboundedEnd`   | Unbounded on the right      | `[1, +∞)`       |
+| `EmptyRange`     | The empty range (no values) | `∅`             |
+| `Infinity`       | Unbounded on both ends      | `(-∞, +∞)`      |
 
-The *shape* of a range is encoded in its static type. An `OpenEnd` range has no `UpperBound` property — the property does not exist at compile time. An `Empty` range carries no bound information whatsoever. Invalid states are unrepresentable by construction, and pattern matching over a range is exhaustive with compiler-enforced coverage.
+The *shape* of a range is encoded in its static type. An `UnboundedEnd` range has no `End` property — the property does not exist at compile time. An `Empty` range carries no bound information whatsoever. Invalid states are unrepresentable by construction, and pattern matching over a range is exhaustive with compiler-enforced coverage.
 
 ## Supported Types
 
@@ -52,16 +53,19 @@ Every type exposes four static factory methods:
 
 ```csharp
 // Bounded on both sides
-Int32Range closed = Int32Range.CreateFinite(1, 10);                              // [1, 10]
-Int32Range half   = Int32Range.CreateFinite(1, 10, upperBoundInclusive: false);  // [1, 10)
+Int32Range closed = Int32Range.CreateFinite(1, 10);                       // [1, 10]
+Int32Range half   = Int32Range.CreateFinite(1, 10, endInclusive: false);  // [1, 10)
 
-// Unbounded on the left — upper bound exclusive by default
-DateRange upToToday = DateRange.CreateOpenStart(DateOnly.FromDateTime(DateTime.Today)); // (-∞, today)
+// Unbounded on the left — end exclusive by default
+DateRange upToToday = DateRange.CreateUnboundedStart(DateOnly.FromDateTime(DateTime.Today)); // (-∞, today)
 // Inclusive variant:
-DateRange throughToday = DateRange.CreateOpenStart(DateOnly.FromDateTime(DateTime.Today), upperBoundInclusive: true);
+DateRange throughToday = DateRange.CreateUnboundedStart(DateOnly.FromDateTime(DateTime.Today), endInclusive: true);
 
-// Unbounded on the right — lower bound inclusive by default
-Int32Range fromFive = Int32Range.CreateOpenEnd(5);  // [5, +∞)
+// Unbounded on the right — start inclusive by default
+Int32Range fromFive = Int32Range.CreateUnboundedEnd(5);  // [5, +∞)
+
+// Unbounded on both ends
+Int32Range everything = Int32Range.Infinite;  // (-∞, +∞)
 
 // Explicitly empty
 Int32Range empty = Int32Range.Empty;
@@ -85,10 +89,11 @@ The nested sealed records are first-class citizens and ideal for exhaustive patt
 ```csharp
 string Describe(Int32Range range) => range switch
 {
-    Int32Range.EmptyRange  => "empty",
-    Int32Range.Finite f    => $"[{f.LowerBound}, {f.UpperBound}]",
-    Int32Range.OpenStart s => $"(-∞, {s.UpperBound}]",
-    Int32Range.OpenEnd e   => $"[{e.LowerBound}, +∞)",
+    Int32Range.EmptyRange       => "empty",
+    Int32Range.Finite f         => $"[{f.Start}, {f.End}]",
+    Int32Range.UnboundedStart s => $"(-∞, {s.End}]",
+    Int32Range.UnboundedEnd e   => $"[{e.Start}, +∞)",
+    Int32Range.Infinity         => "(-∞, +∞)",
 };
 ```
 
@@ -130,11 +135,11 @@ Two ranges are adjacent when they are contiguous with no gap and no overlap — 
 // Discrete: consecutive integer values are adjacent
 var a = Int32Range.CreateFinite(1, 5);
 var b = Int32Range.CreateFinite(6, 10);
-a.IsAdjacentTo(b);  // true — GetNextValueFor(5) == 6
+a.IsAdjacentTo(b);  // true — NextValueAfter(5) == 6
 
 // Continuous: touching bounds with complementary inclusiveness
-var x = DecimalRange.CreateFinite(1m, 5m, upperBoundInclusive: true);    // [1, 5]
-var y = DecimalRange.CreateFinite(5m, 10m, lowerBoundInclusive: false);  // (5, 10)
+var x = DecimalRange.CreateFinite(1m, 5m, endInclusive: true);      // [1, 5]
+var y = DecimalRange.CreateFinite(5m, 10m, startInclusive: false);  // (5, 10)
 x.IsAdjacentTo(y);  // true — one side claims 5, the other does not
 ```
 
@@ -159,75 +164,115 @@ Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10
 
 ## Set Operations
 
-Set operations are extension methods on the concrete range types (any type that implements `IRangeFactory<TRange, T>`). They return `null` when the result cannot be represented as a single contiguous range.
+Set operations are extension methods on the concrete range types (any type that implements `IRangeFactory<TRange, T>`).
 
 ### Intersection
 
-Returns the largest range contained by both operands.
+Returns the largest range contained by both operands. The intersection of two ranges is always expressible as a single range, so `Intersect` returns the range type directly — `Empty` genuinely means an empty intersection.
 
 ```csharp
 var a = Int32Range.CreateFinite(1, 10);
 var b = Int32Range.CreateFinite(5, 15);
 
-Int32Range? intersection = a.Intersect(b);              // [5, 10]
-a.Intersect(Int32Range.CreateFinite(11, 20));                  // null — no overlap
+Int32Range intersection = a.Intersect(b);       // [5, 10]
+a.Intersect(Int32Range.CreateFinite(11, 20));   // Empty — no overlap
 ```
 
-All shape combinations are handled: `Finite ∩ OpenStart`, `OpenEnd ∩ OpenStart`, `OpenStart ∩ OpenEnd`, and so on, each producing the correctly shaped result type.
+All shape combinations are handled: `Finite ∩ UnboundedStart`, `UnboundedEnd ∩ UnboundedStart`, and so on, each producing the correctly shaped result type.
 
-### Merge / Union
+### Union
 
-Returns the smallest range that spans both operands. Returns `null` when the ranges are neither overlapping nor adjacent.
+Returns a `RangeSet<TRange, T>` containing every value of both operands. When the ranges overlap or are adjacent, the set holds the single merged range; when they are disjoint, the set holds both — the union of two separated ranges genuinely *is* two ranges, and the result type says so.
 
 ```csharp
 var a = Int32Range.CreateFinite(1, 5);
 var b = Int32Range.CreateFinite(5, 10);
 var c = Int32Range.CreateFinite(7, 10);
 
-a.Merge(b);  // [1, 10]  — overlapping, forms one range
-a.Union(b);  // [1, 10]  — Union is an alias for Merge
-a.Merge(c);  // null     — there is a gap between [1, 5] and [7, 10]
+var ab = a.Union(b);  // { [1, 10] }        — overlapping, one element
+var ac = a.Union(c);  // { [1, 5], [7, 10] } — disjoint, two elements
+
+ab.Count;  // 1
+ac.Count;  // 2
+ac[1];     // [7, 10]
 ```
 
-Merging an `OpenEnd` with a `Finite` yields an `OpenEnd`; merging an `OpenStart` with an `OpenEnd` covers the entire domain and cannot be expressed as a single range type — this case returns `null`.
+Merging an `UnboundedEnd` with an overlapping `Finite` yields an `UnboundedEnd`; an `UnboundedStart` overlapping an `UnboundedEnd` covers the entire domain and yields `{ Infinity }`.
 
 ### Except (Set Difference)
 
-Removes the overlap of `other` from the receiver.
+Removes the overlap of `other` from the receiver, returning a `RangeSet<TRange, T>` whose cardinality reflects the structural outcome directly.
 
 ```csharp
 var range  = Int32Range.CreateFinite(1, 10);
 var remove = Int32Range.CreateFinite(4, 6);
 
 // [4, 6] is interior to [1, 10] — the result is split in two
-(Int32Range Left, Int32Range? Right)? result = range.Except(remove);
-// Left  = [1, 4)
-// Right = (6, 10]
+var result = range.Except(remove);
+// result[0] = [1, 4) ≡ [1, 3]
+// result[1] = (6, 10] ≡ [7, 10]
 ```
 
-| Return value        | Meaning                                                              |
-|---------------------|----------------------------------------------------------------------|
-| `null`              | The receiver is fully contained by `other`; nothing remains         |
-| `(remainder, null)` | One-sided trim or no overlap; `Left` holds the remaining range      |
-| `(left, right)`     | `other` was strictly interior to the receiver; it is split in two   |
+| Result       | Meaning                                                            |
+|--------------|--------------------------------------------------------------------|
+| `0` elements | The receiver is fully contained by `other`; nothing remains        |
+| `1` element  | One-sided trim or no overlap; the remaining range                  |
+| `2` elements | `other` was strictly interior to the receiver; it is split in two  |
 
 Boundary inclusiveness is inverted at the cut point so that no value is lost or double-counted across the resulting pieces.
+
+## RangeSet — Multirange Support
+
+`RangeSet<TRange, T>` is the in-memory counterpart of a PostgreSQL 14+ multirange (`int4multirange`, `nummultirange`, …): an immutable, always-normalized set of disjoint ranges. Its invariant — elements sorted by lower bound, pairwise disjoint, pairwise non-adjacent — is enforced on every construction: empty ranges are dropped, overlapping or adjacent inputs are merged, and any `Infinity` input collapses the set to `RangeSet<TRange, T>.Infinite`.
+
+```csharp
+using IntSet = RangeSet<Int32Range, int>;
+
+// Construction normalizes: [1, 5] and [6, 10] are adjacent for int and merge.
+var set = IntSet.From([
+    Int32Range.CreateFinite(6, 10),
+    Int32Range.CreateFinite(1, 5),
+    Int32Range.CreateFinite(20, 30)
+]);
+// { [1, 10], [20, 30] }
+
+// Query operations
+set.Contains(7);                              // true
+set.Contains(Int32Range.CreateFinite(2, 8));  // true  — within a single element
+set.Overlaps(Int32Range.CreateFinite(15, 25)); // true
+
+// Set operations — single-range and bulk variants
+set.Union(Int32Range.CreateFinite(11, 19));   // { [1, 30] } — bridges the gap
+set.Intersect(Int32Range.CreateFinite(5, 25)); // { [5, 10], [20, 25] }
+set.Except(Int32Range.CreateFinite(4, 6));     // { [1, 3], [7, 10], [20, 30] }
+
+// Complement — every value not covered by the set
+set.Complement();  // { (-∞, 0], [11, 19], [31, +∞) }
+```
+
+The set implements `IReadOnlyList<TRange>` (enumeration in lower-bound order, `Count`, indexer) and structural equality: two sets built from different inputs that normalize identically are equal.
+
+```csharp
+var a = IntSet.From([Int32Range.CreateFinite(1, 10)]);
+var b = IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(6, 10)]);
+a.Equals(b);  // true — both normalize to { [1, 10] }
+```
 
 ## Interface Overview
 
 The library exposes a structured set of interfaces for writing generic code:
 
-| Interface                  | Purpose                                                        |
-|----------------------------|----------------------------------------------------------------|
-| `IRange<T>`                | Base marker for all range types                                |
-| `IFiniteRange<T>`          | `LowerBound`, `UpperBound`, and their inclusiveness flags      |
-| `IOpenStartRange<T>`       | `UpperBound` and `UpperBoundInclusive`                         |
-| `IOpenEndRange<T>`         | `LowerBound` and `LowerBoundInclusive`                         |
-| `IEmptyRange<T>`           | Marker for the empty range; no bound properties                |
-| `IDiscreteRange<T>`        | Exposes `GetNextValueFor(T)` for step-aware adjacency logic    |
-| `IRangeFactory<TRange, T>` | Abstract static factory methods; required for set operations   |
+| Interface                  | Purpose                                                            |
+|----------------------------|--------------------------------------------------------------------|
+| `IRange<T>`                | Base marker for all range types                                    |
+| `IFiniteRange<T>`          | `Start`, `End`, and their inclusiveness flags                      |
+| `IUnboundedStartRange<T>`  | `End` and `EndInclusive`                                           |
+| `IUnboundedEndRange<T>`    | `Start` and `StartInclusive`                                       |
+| `IEmptyRange<T>`           | Marker for the empty range; no bound properties                    |
+| `IInfinityRange<T>`        | Marker for the range covering the entire domain                    |
+| `IRangeFactory<TRange, T>` | Abstract static factories; also `NextValueAfter`/`PreviousValueBefore` for step-aware (discrete) types |
 
-The read-side interfaces use a covariant `out T` parameter, enabling safe use in generic abstractions. `T` is constrained to `struct, IComparable<T>, IEquatable<T>` throughout.
+`T` is constrained to `struct, IComparable<T>, IEquatable<T>` throughout.
 
 ## Roadmap
 

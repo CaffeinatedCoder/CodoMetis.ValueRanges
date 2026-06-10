@@ -357,38 +357,34 @@ public static class RangeExtensions
                     : range.IntersectWith<TRange>(other);
 
         /// <summary>
-        /// Returns the smallest range that contains both this range and <paramref name="other"/>.
+        /// Returns the union of this range and <paramref name="other"/> as a normalized
+        /// <see cref="RangeSet{TRange, T}"/>.
         /// </summary>
         /// <remarks>
-        /// The result type reflects the most general bounds of the two operands: merging an
+        /// <para>
+        /// When the ranges overlap or are adjacent, the result is a one-element set holding the merged
+        /// range, whose shape reflects the most general bounds of the two operands: merging an
         /// <see cref="IUnboundedEndRange{T}"/> with a <see cref="IFiniteRange{T}"/> yields an
         /// <see cref="IUnboundedEndRange{T}"/>, and so on. Merging an <see cref="IUnboundedStartRange{T}"/>
-        /// with an <see cref="IUnboundedEndRange{T}"/> spans the entire domain and yields
-        /// <see cref="IInfinityRange{T}"/>. Merging two disjoint non-adjacent ranges that cannot
-        /// be expressed as a single range returns <see cref="IRangeFactory{TRange,T}.Empty"/>.
+        /// with an overlapping or adjacent <see cref="IUnboundedEndRange{T}"/> spans the entire domain
+        /// and yields <see cref="IInfinityRange{T}"/>.
+        /// </para>
+        /// <para>
+        /// When the ranges are disjoint and non-adjacent, the result is a two-element set — the union
+        /// genuinely consists of two separate ranges. Empty operands are dropped, so the result has
+        /// zero elements only when both operands are empty.
+        /// </para>
         /// </remarks>
-        /// <param name="other">The range to merge with.</param>
-        /// <returns>
-        /// The merged range; <see cref="IRangeFactory{TRange,T}.Empty"/> if the ranges are neither
-        /// overlapping nor adjacent (result cannot be expressed as a single range).
-        /// </returns>
-        public TRange Merge(IRange<T> other) =>
-            !range.Overlaps(other) && !range.IsAdjacentTo(other) ? TRange.Empty :
-            other is IInfinityRange<T>                           ? TRange.Infinite : range.MergeWith<TRange>(other);
-
-        /// <summary>
-        /// Returns the smallest range that contains both this range and <paramref name="other"/>.
-        /// Identical to <see cref="Merge"/>.
-        /// </summary>
         /// <param name="other">The range to compute the union with.</param>
         /// <returns>
-        /// The union of this range and <paramref name="other"/>; <see cref="IRangeFactory{TRange,T}.Empty"/>
-        /// if the ranges are neither overlapping nor adjacent.
+        /// A normalized set containing every value of this range and of <paramref name="other"/>.
         /// </returns>
-        public TRange Union(IRange<T> other) => range.Merge(other);
+        public RangeSet<TRange, T> Union(IRange<T> other) =>
+            RangeSet<TRange, T>.From([range, RangeBoundHelpers.RecreateAs<TRange, T>(other)]);
 
         /// <summary>
-        /// Returns what remains of this range after removing the portion that overlaps with <paramref name="other"/>.
+        /// Returns what remains of this range after removing the portion that overlaps with
+        /// <paramref name="other"/>, as a normalized <see cref="RangeSet{TRange, T}"/>.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -397,20 +393,18 @@ public static class RangeExtensions
         /// point, ensuring no value is lost or counted twice.
         /// </para>
         /// <para>
-        /// Return value semantics:
+        /// The set's cardinality reflects the structural outcome directly:
         /// <list type="bullet">
         ///   <item>
-        ///     <term><c>(Empty, null)</c></term>
+        ///     <term>0 elements</term>
         ///     <description>This range is fully contained by <paramref name="other"/>; nothing remains.</description>
         ///   </item>
         ///   <item>
-        ///     <term><c>(Left, null)</c></term>
-        ///     <description>
-        ///     A one-sided trim or no overlap; <c>Left</c> holds the unaffected portion.
-        ///     </description>
+        ///     <term>1 element</term>
+        ///     <description>A one-sided trim or no overlap; the unaffected portion remains.</description>
         ///   </item>
         ///   <item>
-        ///     <term><c>(Left, Right)</c></term>
+        ///     <term>2 elements</term>
         ///     <description>
         ///     <paramref name="other"/> was strictly interior to this range; the result is split in two.
         ///     </description>
@@ -419,22 +413,23 @@ public static class RangeExtensions
         /// </para>
         /// </remarks>
         /// <param name="other">The range whose overlap should be subtracted from this range.</param>
-        /// <returns>
-        /// A tuple containing the remaining range pieces. <c>Left</c> is <see cref="IRangeFactory{TRange,T}.Empty"/>
-        /// when this range is fully consumed by <paramref name="other"/>.
-        /// </returns>
-        public (TRange Left, TRange? Right) Except(IRange<T> other)
+        /// <returns>A normalized set of the remaining pieces.</returns>
+        public RangeSet<TRange, T> Except(IRange<T> other)
         {
-            if (!range.Overlaps(other)) return (range, default);
-            if (other.Contains(range)) return (TRange.Empty, default);
-            if (range is IInfinityRange<T>) return ExceptEngine.InfinityExcept<TRange, T>(other);
-            return range switch
-                   {
-                       IFiniteRange<T> b         => ExceptEngine.Execute<TRange, T>(b, other),
-                       IUnboundedStartRange<T> s => ExceptEngine.Execute<TRange, T>(s, other),
-                       IUnboundedEndRange<T> e   => ExceptEngine.Execute<TRange, T>(e, other),
-                       _                         => (range, default)
-                   };
+            if (!range.Overlaps(other)) return RangeSet<TRange, T>.From([range]);
+            if (other.Contains(range)) return RangeSet<TRange, T>.Empty;
+            var (left, right) = range is IInfinityRange<T>
+                                    ? ExceptEngine.InfinityExcept<TRange, T>(other)
+                                    : range switch
+                                      {
+                                          IFiniteRange<T> b         => ExceptEngine.Execute<TRange, T>(b, other),
+                                          IUnboundedStartRange<T> s => ExceptEngine.Execute<TRange, T>(s, other),
+                                          IUnboundedEndRange<T> e   => ExceptEngine.Execute<TRange, T>(e, other),
+                                          _                         => (range, default)
+                                      };
+            return right is null
+                       ? RangeSet<TRange, T>.From([left])
+                       : RangeSet<TRange, T>.From([left, right]);
         }
     }
 }

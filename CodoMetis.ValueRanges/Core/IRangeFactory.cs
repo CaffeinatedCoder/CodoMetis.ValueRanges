@@ -7,7 +7,7 @@ namespace CodoMetis.ValueRanges.Core;
 /// </summary>
 /// <typeparam name="TRange">The concrete range type being constructed.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
-public interface IRangeFactory<out TRange, T>
+public interface IRangeFactory<TRange, T>
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {

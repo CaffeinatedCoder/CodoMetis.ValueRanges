@@ -52,7 +52,6 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// <c>(-∞, End]</c> or <c>(-∞, End)</c>.
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
-    /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
     public sealed record UnboundedStart(long End) : Int64Range, IUnboundedStartRange<long>
     {
         /// <inheritdoc />
@@ -64,7 +63,6 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// <c>[Start, +∞)</c> or <c>(Start, +∞)</c>.
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
-    /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
     public sealed record UnboundedEnd(long Start) : Int64Range, IUnboundedEndRange<long>
     {
         /// <inheritdoc />

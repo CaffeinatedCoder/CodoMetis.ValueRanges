@@ -35,8 +35,9 @@ internal static class ExceptEngine
         where T : struct, IComparable<T>, IEquatable<T>
         => right switch
            {
-               IFiniteRange<T> o => OpenStartExceptFinite<TRange, T>(left, o),
-               _                 => (TRange.CreateUnboundedStart(left.End, left.EndInclusive), default)
+               IFiniteRange<T> o         => OpenStartExceptFinite<TRange, T>(left, o),
+               IUnboundedStartRange<T> o => (TRange.CreateFinite(o.End, left.End, !o.EndInclusive, left.EndInclusive), default),
+               _                         => (TRange.CreateUnboundedStart(left.End, left.EndInclusive), default)
            };
 
     internal static (TRange Left, TRange? Right) Execute<TRange, T>(IUnboundedEndRange<T> left, IRange<T> right)
@@ -44,8 +45,9 @@ internal static class ExceptEngine
         where T : struct, IComparable<T>, IEquatable<T>
         => right switch
            {
-               IFiniteRange<T> o => OpenEndExceptFinite<TRange, T>(left, o),
-               _                 => (TRange.CreateUnboundedEnd(left.Start, left.StartInclusive), default)
+               IFiniteRange<T> o       => OpenEndExceptFinite<TRange, T>(left, o),
+               IUnboundedEndRange<T> o => (TRange.CreateFinite(left.Start, o.Start, left.StartInclusive, !o.StartInclusive), default),
+               _                       => (TRange.CreateUnboundedEnd(left.Start, left.StartInclusive), default)
            };
 
     // Three cases: o sits strictly inside b (split), o covers b's start (left-trim), o covers b's end (right-trim).

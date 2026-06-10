@@ -53,7 +53,6 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// <c>(-∞, End]</c> or <c>(-∞, End)</c>.
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
-    /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
     public sealed record UnboundedStart(DateOnly End) : DateRange, IUnboundedStartRange<DateOnly>
     {
         /// <inheritdoc />
@@ -65,7 +64,6 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// <c>[Start, +∞)</c> or <c>(Start, +∞)</c>.
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
-    /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
     public sealed record UnboundedEnd(DateOnly Start) : DateRange, IUnboundedEndRange<DateOnly>
     {
         /// <inheritdoc />
