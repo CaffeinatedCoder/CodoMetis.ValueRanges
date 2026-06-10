@@ -165,6 +165,27 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
         Count       == 0 ? other : From(_elements.Concat(other._elements));
 
     /// <summary>
+    /// Returns the union of <paramref name="left"/> and <paramref name="right"/>.
+    /// </summary>
+    /// <param name="left">The set to add to.</param>
+    /// <param name="right">The range to add.</param>
+    /// <returns>
+    /// A normalized set containing every value of <paramref name="left"/> and of <paramref name="right"/>;
+    /// the range is merged into existing elements where it overlaps or is adjacent.
+    /// </returns>
+    public static RangeSet<TRange, T> operator |(RangeSet<TRange, T> left, TRange right) =>
+        left.Union(right);
+
+    /// <summary>
+    /// Returns the union of <paramref name="left"/> and <paramref name="right"/>.
+    /// </summary>
+    /// <param name="left">The set to add to.</param>
+    /// <param name="right">The set to combine with.</param>
+    /// <returns>A normalized set containing every value of both sets.</returns>
+    public static RangeSet<TRange, T> operator |(RangeSet<TRange, T> left, RangeSet<TRange, T> right) =>
+        left.Union(right);
+
+    /// <summary>
     /// Returns the intersection of this set with <paramref name="other"/>.
     /// </summary>
     /// <param name="other">The range to intersect with.</param>
@@ -207,6 +228,27 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
     }
 
     /// <summary>
+    /// Returns the intersection of <paramref name="left"/> with <paramref name="right"/>.
+    /// </summary>
+    /// <param name="left">The set to intersect.</param>
+    /// <param name="right">The range to intersect with.</param>
+    /// <returns>
+    /// A set containing, for each element of <paramref name="left"/>, its overlap with <paramref name="right"/>;
+    /// <see cref="Empty"/> when nothing overlaps.
+    /// </returns>
+    public static RangeSet<TRange, T> operator &(RangeSet<TRange, T> left, TRange right) =>
+        left.Intersect(right);
+
+    /// <summary>
+    /// Returns the intersection of <paramref name="left"/> with <paramref name="right"/>.
+    /// </summary>
+    /// <param name="left">The set to intersect.</param>
+    /// <param name="right">The set to intersect with.</param>
+    /// <returns>A normalized set containing the values common to both sets.</returns>
+    public static RangeSet<TRange, T> operator &(RangeSet<TRange, T> left, RangeSet<TRange, T> right) =>
+        left.Intersect(right);
+
+    /// <summary>
     /// Returns what remains of this set after removing every value covered by <paramref name="other"/>.
     /// </summary>
     /// <param name="other">The range to subtract.</param>
@@ -232,6 +274,27 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
     /// <returns>A normalized set of the remaining pieces.</returns>
     public RangeSet<TRange, T> Except(RangeSet<TRange, T> other) =>
         Enumerable.Aggregate(other._elements, this, (current, range) => current.Except(range));
+
+    /// <summary>
+    /// Returns what remains of <paramref name="left"/> after removing every value covered by <paramref name="right"/>.
+    /// </summary>
+    /// <param name="left">The set to subtract from.</param>
+    /// <param name="right">The range to subtract.</param>
+    /// <returns>
+    /// A normalized set of the remaining pieces; an element split by
+    /// <paramref name="right"/> contributes both of its parts.
+    /// </returns>
+    public static RangeSet<TRange, T> operator -(RangeSet<TRange, T> left, TRange right) =>
+        left.Except(right);
+
+    /// <summary>
+    /// Returns what remains of <paramref name="left"/> after removing every value covered by <paramref name="right"/>.
+    /// </summary>
+    /// <param name="left">The set to subtract from.</param>
+    /// <param name="right">The set to subtract.</param>
+    /// <returns>A normalized set of the remaining pieces.</returns>
+    public static RangeSet<TRange, T> operator -(RangeSet<TRange, T> left, RangeSet<TRange, T> right) =>
+        left.Except(right);
 
     /// <summary>
     /// Returns the complement of this set — every value of the domain not covered by it.

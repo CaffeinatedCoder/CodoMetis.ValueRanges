@@ -241,10 +241,15 @@ set.Contains(7);                              // true
 set.Contains(Int32Range.CreateFinite(2, 8));  // true  — within a single element
 set.Overlaps(Int32Range.CreateFinite(15, 25)); // true
 
-// Set operations — single-range and bulk variants
-set.Union(Int32Range.CreateFinite(11, 19));   // { [1, 30] } — bridges the gap
+// Set operations — single-range and bulk variants, with operator aliases (|, &, -)
+set.Union(Int32Range.CreateFinite(11, 19));    // { [1, 30] } — bridges the gap
+set | Int32Range.CreateFinite(11, 19);         // { [1, 30] }
+
 set.Intersect(Int32Range.CreateFinite(5, 25)); // { [5, 10], [20, 25] }
+set & Int32Range.CreateFinite(5, 25);          // { [5, 10], [20, 25] }
+
 set.Except(Int32Range.CreateFinite(4, 6));     // { [1, 3], [7, 10], [20, 30] }
+set - Int32Range.CreateFinite(4, 6);           // { [1, 3], [7, 10], [20, 30] }
 
 // Complement — every value not covered by the set
 set.Complement();  // { (-∞, 0], [11, 19], [31, +∞) }
