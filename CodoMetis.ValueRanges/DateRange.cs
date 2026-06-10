@@ -4,13 +4,13 @@ namespace CodoMetis.ValueRanges;
 /// A range over <see cref="DateOnly"/> values, equivalent to the PostgreSQL <c>daterange</c> type.
 /// </summary>
 /// <remarks>
-/// This is a discriminated union with four variants: <see cref="Finite"/>, <see cref="OpenStart"/>,
-/// <see cref="OpenEnd"/>, and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
+/// This is a discriminated union with five variants: <see cref="Finite"/>, <see cref="UnboundedStart"/>,
+/// <see cref="UnboundedEnd"/>, <see cref="Infinity"/> and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
 /// exhaustive handling of all variants.
 /// The default boundary convention for <see cref="CreateFinite"/> is a fully closed interval <c>[start, end]</c>.
 /// As a discrete type, two ranges whose boundaries are exactly one day apart are considered adjacent.
 /// </remarks>
-public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateRange, DateOnly>
+public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, DateOnly>
 {
     private DateRange()
     {
@@ -53,7 +53,7 @@ public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateR
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
-    private sealed record OpenStart(DateOnly End, bool EndInclusive) : DateRange, IOpenStartRange<DateOnly>;
+    private sealed record UnboundedStart(DateOnly End, bool EndInclusive) : DateRange, IUnboundedStartRange<DateOnly>;
 
     /// <summary>
     /// Represents a <see cref="DateRange"/> unbounded on the right:
@@ -61,7 +61,7 @@ public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateR
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
-    private sealed record OpenEnd(DateOnly Start, bool StartInclusive) : DateRange, IOpenEndRange<DateOnly>;
+    private sealed record UnboundedEnd(DateOnly Start, bool StartInclusive) : DateRange, IUnboundedEndRange<DateOnly>;
 
     /// <summary>
     /// Represents a <see cref="DateRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
@@ -76,9 +76,9 @@ public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateR
     /// <see langword="true"/> to include <paramref name="end"/> in the range.
     /// Defaults to <see langword="false"/>.
     /// </param>
-    /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
+    /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
     public static DateRange CreateOpenStart(DateOnly end, bool endInclusive = false)
-        => new OpenStart(end, endInclusive);
+        => new UnboundedStart(end, endInclusive);
 
     /// <summary>
     /// Creates a <see cref="DateRange"/> unbounded on the right.
@@ -88,9 +88,9 @@ public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateR
     /// <see langword="true"/> to include <paramref name="start"/> in the range.
     /// Defaults to <see langword="true"/>.
     /// </param>
-    /// <returns>An <see cref="OpenEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
+    /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
     public static DateRange CreateOpenEnd(DateOnly start, bool startInclusive = true)
-        => new OpenEnd(start, startInclusive);
+        => new UnboundedEnd(start, startInclusive);
 
     /// <summary>
     /// Creates a <see cref="DateRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -133,14 +133,13 @@ public abstract record DateRange : IDiscreteRange<DateOnly>, IRangeFactory<DateR
             > 0 => Empty,
             0 => startInclusive && endInclusive
                      ? new Finite(start, end, startInclusive, endInclusive)
-                     : new EmptyRange(),
+                     : Empty,
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
-    /// <summary>
-    /// Returns the day immediately following <paramref name="value"/>.
-    /// </summary>
-    /// <param name="value">The date whose successor is requested.</param>
-    /// <returns><paramref name="value"/> advanced by one day.</returns>
-    public DateOnly GetNextValueFor(DateOnly value) => value.AddDays(1);
+    /// <inheritdoc />
+    public static DateOnly? NextValueAfter(DateOnly value) => value == DateOnly.MaxValue ? null : value.AddDays(1);
+
+    /// <inheritdoc />
+    public static DateOnly? PreviousValueBefore(DateOnly value) => value == DateOnly.MinValue ? null : value.AddDays(-1);
 }

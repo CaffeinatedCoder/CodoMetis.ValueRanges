@@ -12,9 +12,9 @@ internal static class ExceptEngine
            {
                IFiniteRange<T> o => (TRange.CreateOpenStart(o.Start, !o.StartInclusive),
                                      (TRange?)TRange.CreateOpenEnd(o.End, !o.EndInclusive)),
-               IOpenStartRange<T> s => (TRange.CreateOpenEnd(s.End, !s.EndInclusive), default),
-               IOpenEndRange<T> e   => (TRange.CreateOpenStart(e.Start, !e.StartInclusive), default),
-               _                    => (TRange.Infinite, default)
+               IUnboundedStartRange<T> s => (TRange.CreateOpenEnd(s.End, !s.EndInclusive), default),
+               IUnboundedEndRange<T> e   => (TRange.CreateOpenStart(e.Start, !e.StartInclusive), default),
+               _                         => (TRange.Infinite, default)
            };
 
     internal static (TRange Left, TRange? Right) Execute<TRange, T>(IFiniteRange<T> left, IRange<T> right)
@@ -22,13 +22,13 @@ internal static class ExceptEngine
         where T : struct, IComparable<T>, IEquatable<T>
         => right switch
            {
-               IFiniteRange<T> o    => FiniteExceptFinite<TRange, T>(left, o),
-               IOpenStartRange<T> s => (TRange.CreateFinite(s.End,      left.End, !s.EndInclusive,     left.EndInclusive), default),
-               IOpenEndRange<T> e   => (TRange.CreateFinite(left.Start, e.Start,  left.StartInclusive, !e.StartInclusive), default),
-               _                    => (TRange.CreateFinite(left.Start, left.End, left.StartInclusive, left.EndInclusive), default)
+               IFiniteRange<T> o         => FiniteExceptFinite<TRange, T>(left, o),
+               IUnboundedStartRange<T> s => (TRange.CreateFinite(s.End,      left.End, !s.EndInclusive, left.EndInclusive), default),
+               IUnboundedEndRange<T> e   => (TRange.CreateFinite(left.Start, e.Start, left.StartInclusive, !e.StartInclusive), default),
+               _                         => (TRange.CreateFinite(left.Start, left.End, left.StartInclusive, left.EndInclusive), default)
            };
 
-    internal static (TRange Left, TRange? Right) Execute<TRange, T>(IOpenStartRange<T> left, IRange<T> right)
+    internal static (TRange Left, TRange? Right) Execute<TRange, T>(IUnboundedStartRange<T> left, IRange<T> right)
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
         => right switch
@@ -37,7 +37,7 @@ internal static class ExceptEngine
                _                 => (TRange.CreateOpenStart(left.End, left.EndInclusive), default)
            };
 
-    internal static (TRange Left, TRange? Right) Execute<TRange, T>(IOpenEndRange<T> left, IRange<T> right)
+    internal static (TRange Left, TRange? Right) Execute<TRange, T>(IUnboundedEndRange<T> left, IRange<T> right)
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
         => right switch
@@ -64,8 +64,8 @@ internal static class ExceptEngine
         return (TRange.CreateFinite(b.Start, o.Start, b.StartInclusive, !o.StartInclusive), default);
     }
 
-    // o sits strictly inside s (split into OpenStart + Finite), or o trims s from the right (new OpenStart).
-    private static (TRange Left, TRange? Right) OpenStartExceptFinite<TRange, T>(IOpenStartRange<T> s, IFiniteRange<T> o)
+    // o sits strictly inside s (split into UnboundedStart + Finite), or o trims s from the right (new UnboundedStart).
+    private static (TRange Left, TRange? Right) OpenStartExceptFinite<TRange, T>(IUnboundedStartRange<T> s, IFiniteRange<T> o)
         where TRange : IRangeFactory<TRange, T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
@@ -76,8 +76,8 @@ internal static class ExceptEngine
         return (TRange.CreateOpenStart(o.Start, !o.StartInclusive), default);
     }
 
-    // o sits strictly inside e (split into Finite + OpenEnd), or o trims e from the left (new OpenEnd).
-    private static (TRange Left, TRange? Right) OpenEndExceptFinite<TRange, T>(IOpenEndRange<T> e, IFiniteRange<T> o)
+    // o sits strictly inside e (split into Finite + UnboundedEnd), or o trims e from the left (new UnboundedEnd).
+    private static (TRange Left, TRange? Right) OpenEndExceptFinite<TRange, T>(IUnboundedEndRange<T> e, IFiniteRange<T> o)
         where TRange : IRangeFactory<TRange, T>
         where T : struct, IComparable<T>, IEquatable<T>
     {

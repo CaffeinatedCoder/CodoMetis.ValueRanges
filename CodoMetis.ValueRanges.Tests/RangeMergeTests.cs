@@ -77,7 +77,7 @@ public class RangeMergeTests
         var openStart = Int32Range.CreateOpenStart(5, true);    // (-∞, 5]
         var finite    = Int32Range.CreateFinite(2, 10, true, true); // [2, 10]
 
-        var result = openStart.Merge(finite) as IOpenStartRange<int>;
+        var result = openStart.Merge(finite) as IUnboundedStartRange<int>;
 
         Assert.IsNotNull(result);
         Assert.AreEqual(10, result.End);
@@ -90,7 +90,7 @@ public class RangeMergeTests
         var openEnd = Int32Range.CreateOpenEnd(8, true);      // [8, ∞)
         var finite  = Int32Range.CreateFinite(3, 12, true, true); // [3, 12]
 
-        var result = openEnd.Merge(finite) as IOpenEndRange<int>;
+        var result = openEnd.Merge(finite) as IUnboundedEndRange<int>;
 
         Assert.IsNotNull(result);
         Assert.AreEqual(3, result.Start);
@@ -103,7 +103,7 @@ public class RangeMergeTests
         var s1 = Int32Range.CreateOpenStart(5,  true);
         var s2 = Int32Range.CreateOpenStart(10, false);
 
-        var result = s1.Merge(s2) as IOpenStartRange<int>;
+        var result = s1.Merge(s2) as IUnboundedStartRange<int>;
 
         Assert.IsNotNull(result);
         Assert.AreEqual(10, result.End);
@@ -116,7 +116,7 @@ public class RangeMergeTests
         var e1 = Int32Range.CreateOpenEnd(3, false);
         var e2 = Int32Range.CreateOpenEnd(7, true);
 
-        var result = e1.Merge(e2) as IOpenEndRange<int>;
+        var result = e1.Merge(e2) as IUnboundedEndRange<int>;
 
         Assert.IsNotNull(result);
         Assert.AreEqual(3, result.Start);

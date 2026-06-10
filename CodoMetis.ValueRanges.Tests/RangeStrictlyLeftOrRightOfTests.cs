@@ -71,7 +71,7 @@ public class RangeStrictlyLeftOrRightOfTests
     [TestMethod]
     public void IsStrictlyLeftOf_OpenStartIsNeverStrictlyLeft_ReturnsFalse()
     {
-        // OpenStart ranges extend to -∞, so they can never be strictly left of anything
+        // UnboundedStart ranges extend to -∞, so they can never be strictly left of anything
         var openStart = Int32Range.CreateOpenStart(5, true);
         var finite    = Int32Range.CreateFinite(10, 20);
 

@@ -55,7 +55,7 @@ public class RangeDoesNotExtendLeftOfTests
     [TestMethod]
     public void DoesNotExtendLeftOf_OpenStart_AlwaysReturnsFalse()
     {
-        // An OpenStart range extends to -∞, so it always extends left of anything finite
+        // An UnboundedStart range extends to -∞, so it always extends left of anything finite
         var openStart = Int32Range.CreateOpenStart(10, true);
         var finite    = Int32Range.CreateFinite(1, 5, true, true);
 
@@ -65,7 +65,7 @@ public class RangeDoesNotExtendLeftOfTests
     [TestMethod]
     public void DoesNotExtendLeftOf_FiniteVsOpenStart_ReturnsTrue()
     {
-        // Any finite range does not extend left of an OpenStart range
+        // Any finite range does not extend left of an UnboundedStart range
         var finite    = Int32Range.CreateFinite(1, 10, true, true);
         var openStart = Int32Range.CreateOpenStart(10, true);
 

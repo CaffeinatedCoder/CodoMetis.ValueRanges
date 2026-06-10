@@ -88,7 +88,7 @@ public class RangeIntersectTests
         var s1 = Int32Range.CreateOpenStart(10, true);  // (-∞, 10]
         var s2 = Int32Range.CreateOpenStart(20, false); // (-∞, 20)
 
-        var result = s1.Intersect(s2) as IOpenStartRange<int>;
+        var result = s1.Intersect(s2) as IUnboundedStartRange<int>;
 
         Assert.IsNotNull(result);
         Assert.AreEqual(10, result.End);
@@ -101,7 +101,7 @@ public class RangeIntersectTests
         var e1 = Int32Range.CreateOpenEnd(3, true);  // [3, ∞)
         var e2 = Int32Range.CreateOpenEnd(7, false); // (7, ∞)
 
-        var result = e1.Intersect(e2) as IOpenEndRange<int>;
+        var result = e1.Intersect(e2) as IUnboundedEndRange<int>;
 
         Assert.IsNotNull(result);
         Assert.AreEqual(7, result.Start);

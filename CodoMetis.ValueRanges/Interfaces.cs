@@ -22,7 +22,7 @@ public interface IRange<T> where T : struct, IComparable<T>, IEquatable<T>
 /// </summary>
 /// <typeparam name="TRange">The concrete range type being constructed.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
-public interface IRangeFactory<out TRange, in T>
+public interface IRangeFactory<out TRange, T>
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
@@ -30,6 +30,11 @@ public interface IRangeFactory<out TRange, in T>
     /// Returns the empty range — a range that contains no values.
     /// </summary>
     abstract static TRange Empty { get; }
+
+    /// <summary>
+    /// Creates a range that is unbounded on both sides: <c>(-∞, +∞)</c> — the entire domain.
+    /// </summary>
+    abstract static TRange Infinite { get; }
 
     /// <summary>
     /// Creates a range bounded on both sides.
@@ -57,27 +62,18 @@ public interface IRangeFactory<out TRange, in T>
     abstract static TRange CreateOpenStart(T end, bool endInclusive);
 
     /// <summary>
-    /// Creates a range that is unbounded on both sides: <c>(-∞, +∞)</c> — the entire domain.
+    /// Returns the immediate successor of <paramref name="value"/> in a discrete domain.
+    /// The default implementation returns <see langword="null"/>, marking the domain as continuous.
+    /// Discrete domains also return <see langword="null"/> when <paramref name="value"/> is the
+    /// last representable value.
     /// </summary>
-    abstract static TRange Infinite { get; }
-}
+    virtual static T? NextValueAfter(T value) => null;
 
-/// <summary>
-/// Extends <see cref="IRange{T}"/> for element types with a well-defined successor value.
-/// The discrete step is used by adjacency checks: two ranges whose boundaries are exactly
-/// one step apart are treated as adjacent.
-/// </summary>
-/// <typeparam name="T">
-/// The discrete element type (e.g. <see cref="int"/>, <see cref="long"/>, <see cref="DateOnly"/>).
-/// </typeparam>
-public interface IDiscreteRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
-{
     /// <summary>
-    /// Returns the immediate successor of <paramref name="value"/> in the element type's ordering.
+    /// Returns the immediate predecessor of <paramref name="value"/> in a discrete domain.
+    /// The default implementation returns <see langword="null"/>, marking the domain as continuous.
     /// </summary>
-    /// <param name="value">The value whose successor is requested.</param>
-    /// <returns>The next discrete value after <paramref name="value"/>.</returns>
-    T GetNextValueFor(T value);
+    virtual static T? PreviousValueBefore(T value) => null;
 }
 
 /// <summary>
@@ -98,18 +94,16 @@ public interface IFiniteRange<T> : IRange<T> where T : struct, IComparable<T>, I
     /// <summary>Gets a value indicating whether <see cref="End"/> is included in the range.</summary>
     bool EndInclusive { get; }
 
-    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other)
-        => IntersectEngine.Execute<TRange, T>(this, other);
+    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other) => IntersectEngine.Execute<TRange, T>(this, other);
 
-    TRange IRange<T>.MergeWith<TRange>(IRange<T> other)
-        => MergeEngine.Execute<TRange, T>(this, other);
+    TRange IRange<T>.MergeWith<TRange>(IRange<T> other) => MergeEngine.Execute<TRange, T>(this, other);
 }
 
 /// <summary>
 /// Represents a range that is unbounded on the right: <c>[LowerBound, +∞)</c> or <c>(LowerBound, +∞)</c>.
 /// </summary>
 /// <typeparam name="T">The element type of the range.</typeparam>
-public interface IOpenEndRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
+public interface IUnboundedEndRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
 {
     /// <summary>Gets the lower (left) bound of the range.</summary>
     T Start { get; }
@@ -117,18 +111,16 @@ public interface IOpenEndRange<T> : IRange<T> where T : struct, IComparable<T>, 
     /// <summary>Gets a value indicating whether <see cref="Start"/> is included in the range.</summary>
     bool StartInclusive { get; }
 
-    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other)
-        => IntersectEngine.Execute<TRange, T>(this, other);
+    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other) => IntersectEngine.Execute<TRange, T>(this, other);
 
-    TRange IRange<T>.MergeWith<TRange>(IRange<T> other)
-        => MergeEngine.Execute<TRange, T>(this, other);
+    TRange IRange<T>.MergeWith<TRange>(IRange<T> other) => MergeEngine.Execute<TRange, T>(this, other);
 }
 
 /// <summary>
 /// Represents a range that is unbounded on the left: <c>(-∞, UpperBound]</c> or <c>(-∞, UpperBound)</c>.
 /// </summary>
 /// <typeparam name="T">The element type of the range.</typeparam>
-public interface IOpenStartRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
+public interface IUnboundedStartRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
 {
     /// <summary>Gets the upper (right) bound of the range.</summary>
     T End { get; }
@@ -136,11 +128,9 @@ public interface IOpenStartRange<T> : IRange<T> where T : struct, IComparable<T>
     /// <summary>Gets a value indicating whether <see cref="End"/> is included in the range.</summary>
     bool EndInclusive { get; }
 
-    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other)
-        => IntersectEngine.Execute<TRange, T>(this, other);
+    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other) => IntersectEngine.Execute<TRange, T>(this, other);
 
-    TRange IRange<T>.MergeWith<TRange>(IRange<T> other)
-        => MergeEngine.Execute<TRange, T>(this, other);
+    TRange IRange<T>.MergeWith<TRange>(IRange<T> other) => MergeEngine.Execute<TRange, T>(this, other);
 }
 
 /// <summary>
@@ -156,9 +146,7 @@ public interface IEmptyRange<T> : IRange<T> where T : struct, IComparable<T>, IE
 /// <typeparam name="T">The element type of the range.</typeparam>
 public interface IInfinityRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
 {
-    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other)
-        => RangeBoundHelpers.RecreateAs<TRange, T>(other);
+    TRange IRange<T>.IntersectWith<TRange>(IRange<T> other) => RangeBoundHelpers.RecreateAs<TRange, T>(other);
 
-    TRange IRange<T>.MergeWith<TRange>(IRange<T> other)
-        => TRange.Infinite;
+    TRange IRange<T>.MergeWith<TRange>(IRange<T> other) => TRange.Infinite;
 }

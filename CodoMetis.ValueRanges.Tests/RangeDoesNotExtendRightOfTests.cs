@@ -55,7 +55,7 @@ public class RangeDoesNotExtendRightOfTests
     [TestMethod]
     public void DoesNotExtendRightOf_OpenEnd_AlwaysReturnsFalse()
     {
-        // An OpenEnd range extends to +∞, so it always extends right of anything finite
+        // An UnboundedEnd range extends to +∞, so it always extends right of anything finite
         var openEnd = Int32Range.CreateOpenEnd(1, true); // [1, +∞)
         var finite  = Int32Range.CreateFinite(1, 100, true, true);
 
@@ -65,7 +65,7 @@ public class RangeDoesNotExtendRightOfTests
     [TestMethod]
     public void DoesNotExtendRightOf_FiniteVsOpenEnd_ReturnsTrue()
     {
-        // Any finite range does not extend right of an OpenEnd range
+        // Any finite range does not extend right of an UnboundedEnd range
         var finite  = Int32Range.CreateFinite(1, 100, true, true);
         var openEnd = Int32Range.CreateOpenEnd(1, true);
 

@@ -157,7 +157,7 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        var left = result.Left as IOpenStartRange<int>;
+        var left = result.Left as IUnboundedStartRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(7, left.End);
         Assert.IsFalse(left.EndInclusive); // flipped from other's inclusive lower
@@ -173,7 +173,7 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        var left = result.Left as IOpenStartRange<int>;
+        var left = result.Left as IUnboundedStartRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(7, left.End);
         Assert.IsTrue(left.EndInclusive); // flipped from other's exclusive lower
@@ -188,7 +188,7 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        var left  = result.Left as IOpenStartRange<int>;
+        var left  = result.Left as IUnboundedStartRange<int>;
         var right = result.Right as IFiniteRange<int>;
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
@@ -225,7 +225,7 @@ public class RangeExceptTests
 
         var result = range.Except(other);
 
-        var left = result.Left as IOpenEndRange<int>;
+        var left = result.Left as IUnboundedEndRange<int>;
         Assert.IsNotNull(left);
         Assert.AreEqual(8, left.Start);
         Assert.IsFalse(left.StartInclusive); // flipped from other's inclusive upper
@@ -242,7 +242,7 @@ public class RangeExceptTests
         var result = range.Except(other);
 
         var left  = result.Left as IFiniteRange<int>;
-        var right = result.Right as IOpenEndRange<int>;
+        var right = result.Right as IUnboundedEndRange<int>;
         Assert.IsNotNull(left);
         Assert.IsNotNull(right);
 

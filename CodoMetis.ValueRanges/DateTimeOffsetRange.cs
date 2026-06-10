@@ -5,8 +5,8 @@ namespace CodoMetis.ValueRanges;
 /// (timestamp with time zone) type.
 /// </summary>
 /// <remarks>
-/// This is a discriminated union with four variants: <see cref="Finite"/>, <see cref="OpenStart"/>,
-/// <see cref="OpenEnd"/>, and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
+/// This is a discriminated union with five variants: <see cref="Finite"/>, <see cref="UnboundedStart"/>,
+/// <see cref="UnboundedEnd"/>, <see cref="Infinity"/> and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
 /// exhaustive handling of all variants.
 /// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[start, end)</c>,
 /// which is conventional for timestamp ranges.
@@ -20,12 +20,12 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <summary>
     /// Represents an empty <see cref="DateTimeOffsetRange"/> that contains no values.
     /// </summary>
-    private sealed record EmptyRange : DateTimeOffsetRange, IEmptyRange<DateTimeOffset>;
+    public sealed record EmptyRange : DateTimeOffsetRange, IEmptyRange<DateTimeOffset>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeOffsetRange"/> bounded on both sides.
     /// </summary>
-    private sealed record Finite : DateTimeOffsetRange, IFiniteRange<DateTimeOffset>
+    public sealed record Finite : DateTimeOffsetRange, IFiniteRange<DateTimeOffset>
     {
         internal Finite(DateTimeOffset start, DateTimeOffset end, bool startInclusive, bool endInclusive)
         {
@@ -54,8 +54,8 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
-    private sealed record OpenStart(DateTimeOffset End, bool EndInclusive)
-        : DateTimeOffsetRange, IOpenStartRange<DateTimeOffset>;
+    public sealed record UnboundedStart(DateTimeOffset End, bool EndInclusive)
+        : DateTimeOffsetRange, IUnboundedStartRange<DateTimeOffset>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeOffsetRange"/> unbounded on the right:
@@ -63,13 +63,13 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
-    private sealed record OpenEnd(DateTimeOffset Start, bool StartInclusive)
-        : DateTimeOffsetRange, IOpenEndRange<DateTimeOffset>;
+    public sealed record UnboundedEnd(DateTimeOffset Start, bool StartInclusive)
+        : DateTimeOffsetRange, IUnboundedEndRange<DateTimeOffset>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeOffsetRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
-    private sealed record Infinity : DateTimeOffsetRange, IInfinityRange<DateTimeOffset>;
+    public sealed record Infinity : DateTimeOffsetRange, IInfinityRange<DateTimeOffset>;
 
     /// <summary>
     /// Creates a <see cref="DateTimeOffsetRange"/> unbounded on the left.
@@ -79,9 +79,9 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <see langword="true"/> to include <paramref name="end"/> in the range.
     /// Defaults to <see langword="false"/>.
     /// </param>
-    /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
+    /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
     public static DateTimeOffsetRange CreateOpenStart(DateTimeOffset end, bool endInclusive = false)
-        => new OpenStart(end, endInclusive);
+        => new UnboundedStart(end, endInclusive);
 
     /// <summary>
     /// Creates a <see cref="DateTimeOffsetRange"/> unbounded on the right.
@@ -91,9 +91,9 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <see langword="true"/> to include <paramref name="start"/> in the range.
     /// Defaults to <see langword="true"/>.
     /// </param>
-    /// <returns>An <see cref="OpenEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
+    /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
     public static DateTimeOffsetRange CreateOpenEnd(DateTimeOffset start, bool startInclusive = true)
-        => new OpenEnd(start, startInclusive);
+        => new UnboundedEnd(start, startInclusive);
 
     /// <summary>
     /// Creates a <see cref="DateTimeOffsetRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -136,7 +136,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
             > 0 => Empty,
             0 => startInclusive && endInclusive
                      ? new Finite(start, end, startInclusive, endInclusive)
-                     : new EmptyRange(),
+                     : Empty,
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 }

@@ -32,20 +32,21 @@ internal static class RangeBoundHelpers
     // True when leftEnd and rightStart form a valid adjacency boundary.
     // Two cases:
     //   1. Equal values with XOR inclusiveness — one side claims the point, the other doesn't.
-    //   2. Discrete only: leftEnd is exclusive and rightStart is inclusive at the very next
-    //      discrete value — the gap of one step is exactly closed by the exclusiveness.
-    internal static bool BoundaryMeetsAdjacently<T>(
-        T                  leftEnd,
-        bool               leftEndInclusive,
-        T                  rightStart,
-        bool               rightStartInclusive,
-        IDiscreteRange<T>? discrete
-    ) where T : struct, IComparable<T>, IEquatable<T> =>
+    //   2. Discrete domains only: rightStart is the immediate successor of leftEnd and both
+    //      bounds are inclusive — the one-step gap is exactly closed.
+    //      Continuous domains return null from NextValueAfter and never hit this case.
+    internal static bool BoundaryMeetsAdjacently<TRange, T>(
+        T    leftEnd,
+        bool leftEndInclusive,
+        T    rightStart,
+        bool rightStartInclusive
+    ) where TRange : IRangeFactory<TRange, T>
+      where T : struct, IComparable<T>, IEquatable<T> =>
         leftEnd.CompareTo(rightStart) switch
         {
             0 => leftEndInclusive != rightStartInclusive,
-            < 0 when discrete is not null && leftEndInclusive && rightStartInclusive =>
-                discrete.GetNextValueFor(leftEnd).CompareTo(rightStart) == 0,
+            < 0 when leftEndInclusive && rightStartInclusive =>
+                TRange.NextValueAfter(leftEnd) is { } next && next.CompareTo(rightStart) == 0,
             _ => false
         };
 
@@ -100,10 +101,10 @@ internal static class RangeBoundHelpers
         where T : struct, IComparable<T>, IEquatable<T> =>
         source switch
         {
-            IInfinityRange<T>    => TRange.Infinite,
-            IFiniteRange<T> f    => TRange.CreateFinite(f.Start, f.End, f.StartInclusive, f.EndInclusive),
-            IOpenStartRange<T> s => TRange.CreateOpenStart(s.End, s.EndInclusive),
-            IOpenEndRange<T> e   => TRange.CreateOpenEnd(e.Start, e.StartInclusive),
-            _                    => TRange.Empty
+            IInfinityRange<T>         => TRange.Infinite,
+            IFiniteRange<T> f         => TRange.CreateFinite(f.Start, f.End, f.StartInclusive, f.EndInclusive),
+            IUnboundedStartRange<T> s => TRange.CreateOpenStart(s.End, s.EndInclusive),
+            IUnboundedEndRange<T> e   => TRange.CreateOpenEnd(e.Start, e.StartInclusive),
+            _                         => TRange.Empty
         };
 }

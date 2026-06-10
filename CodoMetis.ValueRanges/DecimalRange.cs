@@ -4,8 +4,8 @@ namespace CodoMetis.ValueRanges;
 /// A range over <see cref="decimal"/> values, equivalent to the PostgreSQL <c>numrange</c> type.
 /// </summary>
 /// <remarks>
-/// This is a discriminated union with four variants: <see cref="Finite"/>, <see cref="OpenStart"/>,
-/// <see cref="OpenEnd"/>, and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
+/// This is a discriminated union with five variants: <see cref="Finite"/>, <see cref="UnboundedStart"/>,
+/// <see cref="UnboundedEnd"/>, <see cref="Infinity"/> and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
 /// exhaustive handling of all variants.
 /// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[start, end)</c>,
 /// which is conventional for continuous numeric types such as monetary amounts.
@@ -19,12 +19,12 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <summary>
     /// Represents an empty <see cref="DecimalRange"/> that contains no values.
     /// </summary>
-    private sealed record EmptyRange : DecimalRange, IEmptyRange<decimal>;
+    public sealed record EmptyRange : DecimalRange, IEmptyRange<decimal>;
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> bounded on both sides.
     /// </summary>
-    private sealed record Finite : DecimalRange, IFiniteRange<decimal>
+    public sealed record Finite : DecimalRange, IFiniteRange<decimal>
     {
         internal Finite(decimal start, decimal end, bool startInclusive, bool endInclusive)
         {
@@ -53,7 +53,7 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
-    private sealed record OpenStart(decimal End, bool EndInclusive) : DecimalRange, IOpenStartRange<decimal>;
+    public sealed record UnboundedStart(decimal End, bool EndInclusive) : DecimalRange, IUnboundedStartRange<decimal>;
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> unbounded on the right:
@@ -61,12 +61,12 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
-    private sealed record OpenEnd(decimal Start, bool StartInclusive) : DecimalRange, IOpenEndRange<decimal>;
+    public sealed record UnboundedEnd(decimal Start, bool StartInclusive) : DecimalRange, IUnboundedEndRange<decimal>;
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
-    private sealed record Infinity : DecimalRange, IInfinityRange<decimal>;
+    public sealed record Infinity : DecimalRange, IInfinityRange<decimal>;
 
     /// <summary>
     /// Creates a <see cref="DecimalRange"/> unbounded on the left.
@@ -76,9 +76,9 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <see langword="true"/> to include <paramref name="end"/> in the range.
     /// Defaults to <see langword="false"/>.
     /// </param>
-    /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
+    /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
     public static DecimalRange CreateOpenStart(decimal end, bool endInclusive = false)
-        => new OpenStart(end, endInclusive);
+        => new UnboundedStart(end, endInclusive);
 
     /// <summary>
     /// Creates a <see cref="DecimalRange"/> unbounded on the right.
@@ -88,9 +88,9 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <see langword="true"/> to include <paramref name="start"/> in the range.
     /// Defaults to <see langword="true"/>.
     /// </param>
-    /// <returns>An <see cref="OpenEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
+    /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
     public static DecimalRange CreateOpenEnd(decimal start, bool startInclusive = true)
-        => new OpenEnd(start, startInclusive);
+        => new UnboundedEnd(start, startInclusive);
 
     /// <summary>
     /// Creates a <see cref="DecimalRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -133,7 +133,7 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
             > 0 => Empty,
             0 => startInclusive && endInclusive
                      ? new Finite(start, end, startInclusive, endInclusive)
-                     : new EmptyRange(),
+                     : Empty,
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 }

@@ -24,9 +24,9 @@ public static class RangeExtensions
                 IInfinityRange<T> => true,
                 IFiniteRange<T> b => (b.StartInclusive ? b.Start.CompareTo(value) <= 0 : b.Start.CompareTo(value) < 0) &&
                                      (b.EndInclusive ? value.CompareTo(b.End)     <= 0 : value.CompareTo(b.End)   < 0),
-                IOpenStartRange<T> s => s.EndInclusive ? value.CompareTo(s.End)     <= 0 : value.CompareTo(s.End)   < 0,
-                IOpenEndRange<T> e   => e.StartInclusive ? e.Start.CompareTo(value) <= 0 : e.Start.CompareTo(value) < 0,
-                _                    => false
+                IUnboundedStartRange<T> s => s.EndInclusive ? value.CompareTo(s.End)     <= 0 : value.CompareTo(s.End)   < 0,
+                IUnboundedEndRange<T> e   => e.StartInclusive ? e.Start.CompareTo(value) <= 0 : e.Start.CompareTo(value) < 0,
+                _                         => false
             };
 
         /// <summary>
@@ -54,23 +54,23 @@ public static class RangeExtensions
                     },
 
                 // (-∞, s.End] or (-∞, s.End): no lower constraint — only the upper bound matters.
-                // An IOpenEndRange inner goes to +∞ and can never be contained.
-                IOpenStartRange<T> s =>
+                // An IUnboundedEndRange inner goes to +∞ and can never be contained.
+                IUnboundedStartRange<T> s =>
                     other switch
                     {
-                        IFiniteRange<T> o    => OuterEndCoversInnerEnd(s.End, s.EndInclusive, o.End, o.EndInclusive),
-                        IOpenStartRange<T> o => OuterEndCoversInnerEnd(s.End, s.EndInclusive, o.End, o.EndInclusive),
-                        _                    => false
+                        IFiniteRange<T> o         => OuterEndCoversInnerEnd(s.End, s.EndInclusive, o.End, o.EndInclusive),
+                        IUnboundedStartRange<T> o => OuterEndCoversInnerEnd(s.End, s.EndInclusive, o.End, o.EndInclusive),
+                        _                         => false
                     },
 
                 // [e.Start, +∞) or (e.Start, +∞): no upper constraint — only the lower bound matters.
-                // An IOpenStartRange inner goes to -∞ and can never be contained.
-                IOpenEndRange<T> e =>
+                // An IUnboundedStartRange inner goes to -∞ and can never be contained.
+                IUnboundedEndRange<T> e =>
                     other switch
                     {
-                        IFiniteRange<T> o  => OuterStartCoversInnerStart(e.Start, e.StartInclusive, o.Start, o.StartInclusive),
-                        IOpenEndRange<T> o => OuterStartCoversInnerStart(e.Start, e.StartInclusive, o.Start, o.StartInclusive),
-                        _                  => false
+                        IFiniteRange<T> o       => OuterStartCoversInnerStart(e.Start, e.StartInclusive, o.Start, o.StartInclusive),
+                        IUnboundedEndRange<T> o => OuterStartCoversInnerStart(e.Start, e.StartInclusive, o.Start, o.StartInclusive),
+                        _                       => false
                     },
 
                 _ => false
@@ -98,30 +98,30 @@ public static class RangeExtensions
                     {
                         IFiniteRange<T> o => TouchingBoundsOverlap(b.End, b.EndInclusive, o.Start, o.StartInclusive) &&
                                              TouchingBoundsOverlap(o.End, o.EndInclusive, b.Start, b.StartInclusive),
-                        IOpenStartRange<T> s => TouchingBoundsOverlap(s.End, s.EndInclusive, b.Start, b.StartInclusive),
-                        IOpenEndRange<T> e   => TouchingBoundsOverlap(b.End, b.EndInclusive, e.Start, e.StartInclusive),
-                        IInfinityRange<T>    => true,
-                        _                    => false
+                        IUnboundedStartRange<T> s => TouchingBoundsOverlap(s.End, s.EndInclusive, b.Start, b.StartInclusive),
+                        IUnboundedEndRange<T> e   => TouchingBoundsOverlap(b.End, b.EndInclusive, e.Start, e.StartInclusive),
+                        IInfinityRange<T>         => true,
+                        _                         => false
                     },
 
-                IOpenStartRange<T> s =>
+                IUnboundedStartRange<T> s =>
                     other switch
                     {
-                        IFiniteRange<T> o  => TouchingBoundsOverlap(s.End, s.EndInclusive, o.Start, o.StartInclusive),
-                        IOpenEndRange<T> e => TouchingBoundsOverlap(s.End, s.EndInclusive, e.Start, e.StartInclusive),
-                        IOpenStartRange<T> => true,
-                        IInfinityRange<T>  => true,
-                        _                  => false
+                        IFiniteRange<T> o       => TouchingBoundsOverlap(s.End, s.EndInclusive, o.Start, o.StartInclusive),
+                        IUnboundedEndRange<T> e => TouchingBoundsOverlap(s.End, s.EndInclusive, e.Start, e.StartInclusive),
+                        IUnboundedStartRange<T> => true,
+                        IInfinityRange<T>       => true,
+                        _                       => false
                     },
 
-                IOpenEndRange<T> e =>
+                IUnboundedEndRange<T> e =>
                     other switch
                     {
-                        IFiniteRange<T> o    => TouchingBoundsOverlap(o.End, o.EndInclusive, e.Start, e.StartInclusive),
-                        IOpenStartRange<T> s => TouchingBoundsOverlap(s.End, s.EndInclusive, e.Start, e.StartInclusive),
-                        IOpenEndRange<T>     => true,
-                        IInfinityRange<T>    => true,
-                        _                    => false
+                        IFiniteRange<T> o         => TouchingBoundsOverlap(o.End, o.EndInclusive, e.Start, e.StartInclusive),
+                        IUnboundedStartRange<T> s => TouchingBoundsOverlap(s.End, s.EndInclusive, e.Start, e.StartInclusive),
+                        IUnboundedEndRange<T>     => true,
+                        IInfinityRange<T>         => true,
+                        _                         => false
                     },
 
                 _ => false
@@ -135,8 +135,8 @@ public static class RangeExtensions
         /// <returns>
         /// <see langword="true"/> if the upper bound of this range is less than the lower bound of
         /// <paramref name="other"/>, or if they meet at a single point but at least one side is exclusive there.
-        /// Always <see langword="false"/> when this range is <see cref="IOpenEndRange{T}"/>,
-        /// <see cref="IOpenStartRange{T}"/>, <see cref="IInfinityRange{T}"/>, or <see cref="IEmptyRange{T}"/>.
+        /// Always <see langword="false"/> when this range is <see cref="IUnboundedEndRange{T}"/>,
+        /// <see cref="IUnboundedStartRange{T}"/>, <see cref="IInfinityRange{T}"/>, or <see cref="IEmptyRange{T}"/>.
         /// </returns>
         public bool IsStrictlyLeftOf(IRange<T> other) =>
             range switch
@@ -146,7 +146,7 @@ public static class RangeExtensions
                     {
                         IFiniteRange<T> o =>
                             b.End.CompareTo(o.Start) < 0 || (b.End.CompareTo(o.Start) == 0 && !(b.EndInclusive && o.StartInclusive)),
-                        IOpenEndRange<T> e =>
+                        IUnboundedEndRange<T> e =>
                             b.End.CompareTo(e.Start) < 0 || (b.End.CompareTo(e.Start) == 0 && !(b.EndInclusive && e.StartInclusive)),
                         _ => false
                     },
@@ -182,42 +182,42 @@ public static class RangeExtensions
         /// The upper bound of this range must be less than or equal to the upper bound of
         /// <paramref name="other"/>. When the upper bounds are equal, this range must not be inclusive
         /// where <paramref name="other"/> is exclusive at that point.
-        /// An <see cref="IOpenEndRange{T}"/> or <see cref="IInfinityRange{T}"/> has no finite upper bound
+        /// An <see cref="IUnboundedEndRange{T}"/> or <see cref="IInfinityRange{T}"/> has no finite upper bound
         /// and always returns <see langword="false"/>.
         /// </remarks>
         /// <param name="other">The range to compare against.</param>
         /// <returns>
         /// <see langword="true"/> if the upper bound of this range does not exceed that of <paramref name="other"/>;
-        /// always <see langword="false"/> for <see cref="IOpenEndRange{T}"/> or <see cref="IInfinityRange{T}"/>.
+        /// always <see langword="false"/> for <see cref="IUnboundedEndRange{T}"/> or <see cref="IInfinityRange{T}"/>.
         /// </returns>
         public bool DoesNotExtendRightOf(IRange<T> other) =>
             range switch
             {
-                IOpenEndRange<T>  => false,
-                IInfinityRange<T> => false,
+                IUnboundedEndRange<T> => false,
+                IInfinityRange<T>     => false,
 
                 IFiniteRange<T> b =>
                     other switch
                     {
                         IFiniteRange<T> o =>
                             b.End.CompareTo(o.End) < 0 || (b.End.CompareTo(o.End) == 0 && (!b.EndInclusive || o.EndInclusive)),
-                        IOpenStartRange<T> s =>
+                        IUnboundedStartRange<T> s =>
                             b.End.CompareTo(s.End) < 0 || (b.End.CompareTo(s.End) == 0 && (!b.EndInclusive || s.EndInclusive)),
-                        IOpenEndRange<T>  => true,
-                        IInfinityRange<T> => true,
-                        _                 => false
+                        IUnboundedEndRange<T> => true,
+                        IInfinityRange<T>     => true,
+                        _                     => false
                     },
 
-                IOpenStartRange<T> s =>
+                IUnboundedStartRange<T> s =>
                     other switch
                     {
-                        IFiniteRange<T> o => s.End.CompareTo(o.End) < 0 || 
+                        IFiniteRange<T> o => s.End.CompareTo(o.End) < 0 ||
                                              (s.End.CompareTo(o.End) == 0 && (!s.EndInclusive || o.EndInclusive)),
-                        IOpenStartRange<T> o => s.End.CompareTo(o.End) < 0 ||
-                                                (s.End.CompareTo(o.End) == 0 && (!s.EndInclusive || o.EndInclusive)),
-                        IOpenEndRange<T>  => true,
-                        IInfinityRange<T> => true,
-                        _                 => false
+                        IUnboundedStartRange<T> o => s.End.CompareTo(o.End) < 0 ||
+                                                     (s.End.CompareTo(o.End) == 0 && (!s.EndInclusive || o.EndInclusive)),
+                        IUnboundedEndRange<T> => true,
+                        IInfinityRange<T>     => true,
+                        _                     => false
                     },
 
                 _ => false
@@ -231,47 +231,56 @@ public static class RangeExtensions
         /// The lower bound of this range must be greater than or equal to the lower bound of
         /// <paramref name="other"/>. When the lower bounds are equal, this range must not be inclusive
         /// where <paramref name="other"/> is exclusive at that point.
-        /// An <see cref="IOpenStartRange{T}"/> or <see cref="IInfinityRange{T}"/> has no finite lower bound
+        /// An <see cref="IUnboundedStartRange{T}"/> or <see cref="IInfinityRange{T}"/> has no finite lower bound
         /// and always returns <see langword="false"/>.
         /// </remarks>
         /// <param name="other">The range to compare against.</param>
         /// <returns>
         /// <see langword="true"/> if the lower bound of this range is not less than that of <paramref name="other"/>;
-        /// always <see langword="false"/> for <see cref="IOpenStartRange{T}"/> or <see cref="IInfinityRange{T}"/>.
+        /// always <see langword="false"/> for <see cref="IUnboundedStartRange{T}"/> or <see cref="IInfinityRange{T}"/>.
         /// </returns>
         public bool DoesNotExtendLeftOf(IRange<T> other) =>
             range switch
             {
-                IOpenStartRange<T> => false,
-                IInfinityRange<T>  => false,
+                IUnboundedStartRange<T> => false,
+                IInfinityRange<T>       => false,
 
                 IFiniteRange<T> b =>
                     other switch
                     {
                         IFiniteRange<T> o => b.Start.CompareTo(o.Start) > 0 ||
                                              (b.Start.CompareTo(o.Start) == 0 && (!b.StartInclusive || o.StartInclusive)),
-                        IOpenEndRange<T> e => b.Start.CompareTo(e.Start) > 0 ||
-                                              (b.Start.CompareTo(e.Start) == 0 && (!b.StartInclusive || e.StartInclusive)),
-                        IOpenStartRange<T> => true,
-                        IInfinityRange<T>  => true,
-                        _                  => false
+                        IUnboundedEndRange<T> e => b.Start.CompareTo(e.Start) > 0 ||
+                                                   (b.Start.CompareTo(e.Start) == 0 && (!b.StartInclusive || e.StartInclusive)),
+                        IUnboundedStartRange<T> => true,
+                        IInfinityRange<T>       => true,
+                        _                       => false
                     },
 
-                IOpenEndRange<T> e =>
+                IUnboundedEndRange<T> e =>
                     other switch
                     {
                         IFiniteRange<T> o => e.Start.CompareTo(o.Start) > 0 ||
                                              (e.Start.CompareTo(o.Start) == 0 && (!e.StartInclusive || o.StartInclusive)),
-                        IOpenEndRange<T> o => e.Start.CompareTo(o.Start) > 0 ||
-                                              (e.Start.CompareTo(o.Start) == 0 && (!e.StartInclusive || o.StartInclusive)),
-                        IOpenStartRange<T> => true,
-                        IInfinityRange<T>  => true,
-                        _                  => false
+                        IUnboundedEndRange<T> o => e.Start.CompareTo(o.Start) > 0 ||
+                                                   (e.Start.CompareTo(o.Start) == 0 && (!e.StartInclusive || o.StartInclusive)),
+                        IUnboundedStartRange<T> => true,
+                        IInfinityRange<T>       => true,
+                        _                       => false
                     },
 
                 _ => false
             };
+    }
 
+    // -------------------------------------------------------------------------
+    // Set operation extensions
+    // -------------------------------------------------------------------------
+
+    extension<TRange, T>(TRange range)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
         /// <summary>
         /// Determines whether this range and <paramref name="other"/> are contiguous —
         /// no gap and no overlap — such that their union forms a single range.
@@ -288,7 +297,7 @@ public static class RangeExtensions
         /// </para>
         /// <para>
         /// Only <see cref="IFiniteRange{T}"/> instances can be adjacent to other ranges;
-        /// <see cref="IOpenEndRange{T}"/>, <see cref="IOpenStartRange{T}"/>, and
+        /// <see cref="IUnboundedEndRange{T}"/>, <see cref="IUnboundedStartRange{T}"/>, and
         /// <see cref="IInfinityRange{T}"/> always return <see langword="false"/>.
         /// </para>
         /// </remarks>
@@ -296,54 +305,39 @@ public static class RangeExtensions
         /// <returns>
         /// <see langword="true"/> if the ranges are contiguous with no gap and no overlap.
         /// </returns>
-        public bool IsAdjacentTo(IRange<T> other)
-        {
-            var discrete = range as IDiscreteRange<T>;
+        public bool IsAdjacentTo(IRange<T> other) =>
+            range switch
+            {
+                IFiniteRange<T> b =>
+                    other switch
+                    {
+                        IFiniteRange<T> o => BoundaryMeetsAdjacently<TRange, T>(
+                                                 b.End, b.EndInclusive, o.Start, o.StartInclusive
+                                             ) ||
+                                             BoundaryMeetsAdjacently<TRange, T>(
+                                                 o.End, o.EndInclusive, b.Start, b.StartInclusive
+                                             ),
 
-            return range switch
-                   {
-                       IFiniteRange<T> b =>
-                           other switch
-                           {
-                               IFiniteRange<T> o => BoundaryMeetsAdjacently(
-                                                        b.End, b.EndInclusive, o.Start, o.StartInclusive, discrete
-                                                    ) ||
-                                                    BoundaryMeetsAdjacently(
-                                                        o.End, o.EndInclusive, b.Start, b.StartInclusive, discrete
-                                                    ),
+                        IUnboundedStartRange<T> s => BoundaryMeetsAdjacently<TRange, T>(
+                            s.End, s.EndInclusive, b.Start, b.StartInclusive
+                        ),
 
-                               // s extends left from s.End; b's start must meet s.End
-                               IOpenStartRange<T> s => BoundaryMeetsAdjacently(
-                                   s.End, s.EndInclusive, b.Start, b.StartInclusive, discrete
-                               ),
+                        IUnboundedEndRange<T> e => BoundaryMeetsAdjacently<TRange, T>(
+                            b.End, b.EndInclusive, e.Start, e.StartInclusive
+                        ),
 
-                               // e extends right from e.Start; b's end must meet e.Start
-                               IOpenEndRange<T> e => BoundaryMeetsAdjacently(
-                                   b.End, b.EndInclusive, e.Start, e.StartInclusive, discrete
-                               ),
+                        _ => false
+                    },
 
-                               _ => false
-                           },
+                _ => false
+            };
 
-                       _ => false
-                   };
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Set operation extensions
-    // -------------------------------------------------------------------------
-
-    extension<TRange, T>(TRange range)
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
-        where T : struct, IComparable<T>, IEquatable<T>
-    {
         /// <summary>
         /// Returns the largest range contained by both this range and <paramref name="other"/>.
         /// </summary>
         /// <remarks>
-        /// All combinations of <see cref="IFiniteRange{T}"/>, <see cref="IOpenStartRange{T}"/>,
-        /// <see cref="IOpenEndRange{T}"/>, and <see cref="IInfinityRange{T}"/> are handled and produce
+        /// All combinations of <see cref="IFiniteRange{T}"/>, <see cref="IUnboundedStartRange{T}"/>,
+        /// <see cref="IUnboundedEndRange{T}"/>, and <see cref="IInfinityRange{T}"/> are handled and produce
         /// the appropriately shaped result type. For example, intersecting an <see cref="IInfinityRange{T}"/>
         /// with any range returns that range unchanged.
         /// </remarks>
@@ -364,9 +358,9 @@ public static class RangeExtensions
         /// </summary>
         /// <remarks>
         /// The result type reflects the most general bounds of the two operands: merging an
-        /// <see cref="IOpenEndRange{T}"/> with a <see cref="IFiniteRange{T}"/> yields an
-        /// <see cref="IOpenEndRange{T}"/>, and so on. Merging an <see cref="IOpenStartRange{T}"/>
-        /// with an <see cref="IOpenEndRange{T}"/> spans the entire domain and yields
+        /// <see cref="IUnboundedEndRange{T}"/> with a <see cref="IFiniteRange{T}"/> yields an
+        /// <see cref="IUnboundedEndRange{T}"/>, and so on. Merging an <see cref="IUnboundedStartRange{T}"/>
+        /// with an <see cref="IUnboundedEndRange{T}"/> spans the entire domain and yields
         /// <see cref="IInfinityRange{T}"/>. Merging two disjoint non-adjacent ranges that cannot
         /// be expressed as a single range returns <see cref="IRangeFactory{TRange,T}.Empty"/>.
         /// </remarks>
@@ -433,10 +427,10 @@ public static class RangeExtensions
             if (range is IInfinityRange<T>) return ExceptEngine.InfinityExcept<TRange, T>(other);
             return range switch
                    {
-                       IFiniteRange<T> b    => ExceptEngine.Execute<TRange, T>(b, other),
-                       IOpenStartRange<T> s => ExceptEngine.Execute<TRange, T>(s, other),
-                       IOpenEndRange<T> e   => ExceptEngine.Execute<TRange, T>(e, other),
-                       _                    => (range, default)
+                       IFiniteRange<T> b         => ExceptEngine.Execute<TRange, T>(b, other),
+                       IUnboundedStartRange<T> s => ExceptEngine.Execute<TRange, T>(s, other),
+                       IUnboundedEndRange<T> e   => ExceptEngine.Execute<TRange, T>(e, other),
+                       _                         => (range, default)
                    };
         }
     }

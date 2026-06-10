@@ -5,10 +5,10 @@ namespace CodoMetis.ValueRanges;
 /// (timestamp without time zone) type.
 /// </summary>
 /// <remarks>
-/// This is a discriminated union with four variants: <see cref="Finite"/>, <see cref="OpenStart"/>,
-/// <see cref="OpenEnd"/>, and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
+/// This is a discriminated union with five variants: <see cref="Finite"/>, <see cref="UnboundedStart"/>,
+/// <see cref="UnboundedEnd"/>, <see cref="Infinity"/> and <see cref="EmptyRange"/>. Use a <see langword="switch"/> expression for
 /// exhaustive handling of all variants.
-/// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[lower, upper)</c>,
+/// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[start, end)</c>,
 /// which is conventional for timestamp ranges.
 /// </remarks>
 public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeRange, DateTime>
@@ -20,19 +20,19 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     /// <summary>
     /// Represents an empty <see cref="DateTimeRange"/> that contains no values.
     /// </summary>
-    private sealed record EmptyRange : DateTimeRange, IEmptyRange<DateTime>;
+    public sealed record EmptyRange : DateTimeRange, IEmptyRange<DateTime>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeRange"/> bounded on both sides.
     /// </summary>
-    private sealed record Finite : DateTimeRange, IFiniteRange<DateTime>
+    public sealed record Finite : DateTimeRange, IFiniteRange<DateTime>
     {
-        internal Finite(DateTime lowerBound, DateTime upperBound, bool lowerBoundInclusive, bool upperBoundInclusive)
+        internal Finite(DateTime start, DateTime end, bool startInclusive, bool endInclusive)
         {
-            Start          = lowerBound;
-            End          = upperBound;
-            StartInclusive = lowerBoundInclusive;
-            EndInclusive = upperBoundInclusive;
+            Start          = start;
+            End            = end;
+            StartInclusive = startInclusive;
+            EndInclusive   = endInclusive;
         }
 
         /// <inheritdoc/>
@@ -50,48 +50,48 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
 
     /// <summary>
     /// Represents a <see cref="DateTimeRange"/> unbounded on the left:
-    /// <c>(-∞, UpperBound]</c> or <c>(-∞, UpperBound)</c>.
+    /// <c>(-∞, End]</c> or <c>(-∞, End)</c>.
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
-    private sealed record OpenStart(DateTime End, bool EndInclusive) : DateTimeRange, IOpenStartRange<DateTime>;
+    public sealed record UnboundedStart(DateTime End, bool EndInclusive) : DateTimeRange, IUnboundedStartRange<DateTime>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeRange"/> unbounded on the right:
-    /// <c>[LowerBound, +∞)</c> or <c>(LowerBound, +∞)</c>.
+    /// <c>[Start, +∞)</c> or <c>(Start, +∞)</c>.
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
-    private sealed record OpenEnd(DateTime Start, bool StartInclusive) : DateTimeRange, IOpenEndRange<DateTime>;
+    public sealed record UnboundedEnd(DateTime Start, bool StartInclusive) : DateTimeRange, IUnboundedEndRange<DateTime>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
-    private sealed record Infinity : DateTimeRange, IInfinityRange<DateTime>;
+    public sealed record Infinity : DateTimeRange, IInfinityRange<DateTime>;
 
     /// <summary>
     /// Creates a <see cref="DateTimeRange"/> unbounded on the left.
     /// </summary>
-    /// <param name="upperBound">The upper (right) bound of the range.</param>
-    /// <param name="upperBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="upperBound"/> in the range.
+    /// <param name="end">The upper (right) bound of the range.</param>
+    /// <param name="endInclusive">
+    /// <see langword="true"/> to include <paramref name="end"/> in the range.
     /// Defaults to <see langword="false"/>.
     /// </param>
-    /// <returns>An <see cref="OpenStart"/> range: <c>(-∞, upperBound]</c> or <c>(-∞, upperBound)</c>.</returns>
-    public static DateTimeRange CreateOpenStart(DateTime upperBound, bool upperBoundInclusive = false)
-        => new OpenStart(upperBound, upperBoundInclusive);
+    /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
+    public static DateTimeRange CreateOpenStart(DateTime end, bool endInclusive = false)
+        => new UnboundedStart(end, endInclusive);
 
     /// <summary>
     /// Creates a <see cref="DateTimeRange"/> unbounded on the right.
     /// </summary>
-    /// <param name="lowerBound">The lower (left) bound of the range.</param>
-    /// <param name="lowerBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="lowerBound"/> in the range.
+    /// <param name="start">The lower (left) bound of the range.</param>
+    /// <param name="startInclusive">
+    /// <see langword="true"/> to include <paramref name="start"/> in the range.
     /// Defaults to <see langword="true"/>.
     /// </param>
-    /// <returns>An <see cref="OpenEnd"/> range: <c>[lowerBound, +∞)</c> or <c>(lowerBound, +∞)</c>.</returns>
-    public static DateTimeRange CreateOpenEnd(DateTime lowerBound, bool lowerBoundInclusive = true)
-        => new OpenEnd(lowerBound, lowerBoundInclusive);
+    /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
+    public static DateTimeRange CreateOpenEnd(DateTime start, bool startInclusive = true)
+        => new UnboundedEnd(start, startInclusive);
 
     /// <summary>
     /// Creates a <see cref="DateTimeRange"/> that spans the entire domain: <c>(-∞, +∞)</c>.
@@ -107,34 +107,34 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     /// <summary>
     /// Creates a <see cref="DateTimeRange"/> bounded on both sides.
     /// </summary>
-    /// <param name="lowerBound">The lower (left) bound of the range.</param>
-    /// <param name="upperBound">The upper (right) bound of the range.</param>
-    /// <param name="lowerBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="lowerBound"/> in the range.
+    /// <param name="start">The lower (left) bound of the range.</param>
+    /// <param name="end">The upper (right) bound of the range.</param>
+    /// <param name="startInclusive">
+    /// <see langword="true"/> to include <paramref name="start"/> in the range.
     /// Defaults to <see langword="true"/>.
     /// </param>
-    /// <param name="upperBoundInclusive">
-    /// <see langword="true"/> to include <paramref name="upperBound"/> in the range.
+    /// <param name="endInclusive">
+    /// <see langword="true"/> to include <paramref name="end"/> in the range.
     /// Defaults to <see langword="false"/> (half-open convention).
     /// </param>
     /// <returns>
-    /// A <see cref="Finite"/> range when <paramref name="lowerBound"/> is strictly less than
-    /// <paramref name="upperBound"/>, or when they are equal and both bounds are inclusive.
-    /// Returns <see cref="EmptyRange"/> when <paramref name="lowerBound"/> is greater than
-    /// <paramref name="upperBound"/>, or when the bounds are equal but not both inclusive.
+    /// A <see cref="Finite"/> range when <paramref name="start"/> is strictly less than
+    /// <paramref name="end"/>, or when they are equal and both bounds are inclusive.
+    /// Returns <see cref="EmptyRange"/> when <paramref name="start"/> is greater than
+    /// <paramref name="end"/>, or when the bounds are equal but not both inclusive.
     /// </returns>
     public static DateTimeRange CreateFinite(
-        DateTime lowerBound,
-        DateTime upperBound,
-        bool     lowerBoundInclusive = true,
-        bool     upperBoundInclusive = false
+        DateTime start,
+        DateTime end,
+        bool     startInclusive = true,
+        bool     endInclusive   = false
     ) =>
-        lowerBound.CompareTo(upperBound) switch
+        start.CompareTo(end) switch
         {
             > 0 => Empty,
-            0 => lowerBoundInclusive && upperBoundInclusive
-                     ? new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
-                     : new EmptyRange(),
-            _ => new Finite(lowerBound, upperBound, lowerBoundInclusive, upperBoundInclusive)
+            0 => startInclusive && endInclusive
+                     ? new Finite(start, end, startInclusive, endInclusive)
+                     : Empty,
+            _ => new Finite(start, end, startInclusive, endInclusive)
         };
 }
