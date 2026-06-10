@@ -52,9 +52,9 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
         var normalized = Normalize(ranges);
         return normalized.Length switch
                {
-                   0                                       => Empty,
+                   0                                         => Empty,
                    1 when normalized[0] is IInfinityRange<T> => Infinite,
-                   _                                       => new(normalized)
+                   _                                         => new(normalized)
                };
     }
 
@@ -117,13 +117,8 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
     /// </summary>
     /// <param name="value">The value to test.</param>
     /// <returns><see langword="true"/> if some element contains the value.</returns>
-    public bool Contains(T value)
-    {
-        foreach (var element in _elements)
-            if (element.Contains(value))
-                return true;
-        return false;
-    }
+    public bool Contains(T value) =>
+        Enumerable.Any(_elements, element => element.Contains(value));
 
     /// <summary>
     /// Determines whether <paramref name="range"/> is entirely contained within the set.
@@ -134,26 +129,16 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
     /// </remarks>
     /// <param name="range">The range to test.</param>
     /// <returns><see langword="true"/> if some element contains <paramref name="range"/>.</returns>
-    public bool Contains(IRange<T> range)
-    {
-        foreach (var element in _elements)
-            if (element.Contains(range))
-                return true;
-        return false;
-    }
+    public bool Contains(IRange<T> range) =>
+        Enumerable.Any(_elements, element => element.Contains(range));
 
     /// <summary>
     /// Determines whether <paramref name="range"/> shares at least one value with the set.
     /// </summary>
     /// <param name="range">The range to test.</param>
     /// <returns><see langword="true"/> if some element overlaps <paramref name="range"/>.</returns>
-    public bool Overlaps(IRange<T> range)
-    {
-        foreach (var element in _elements)
-            if (element.Overlaps(range))
-                return true;
-        return false;
-    }
+    public bool Overlaps(IRange<T> range) =>
+        Enumerable.Any(_elements, element => element.Overlaps(range));
 
     // -------------------------------------------------------------------------
     // Set operations
@@ -177,7 +162,7 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
     /// <returns>A normalized set containing every value of both sets.</returns>
     public RangeSet<TRange, T> Union(RangeSet<TRange, T> other) =>
         other.Count == 0 ? this :
-        Count == 0       ? other : From(_elements.Concat(other._elements));
+        Count       == 0 ? other : From(_elements.Concat(other._elements));
 
     /// <summary>
     /// Returns the intersection of this set with <paramref name="other"/>.
@@ -245,13 +230,8 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
     /// </summary>
     /// <param name="other">The set to subtract.</param>
     /// <returns>A normalized set of the remaining pieces.</returns>
-    public RangeSet<TRange, T> Except(RangeSet<TRange, T> other)
-    {
-        var result = this;
-        foreach (var range in other._elements)
-            result = result.Except(range);
-        return result;
-    }
+    public RangeSet<TRange, T> Except(RangeSet<TRange, T> other) =>
+        Enumerable.Aggregate(other._elements, this, (current, range) => current.Except(range));
 
     /// <summary>
     /// Returns the complement of this set — every value of the domain not covered by it.
@@ -272,16 +252,8 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
     /// </summary>
     /// <param name="other">The set to compare with.</param>
     /// <returns><see langword="true"/> if both sets contain the same ranges.</returns>
-    public bool Equals(RangeSet<TRange, T>? other)
-    {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
-        if (_elements.Length != other._elements.Length) return false;
-        for (int i = 0; i < _elements.Length; i++)
-            if (!_elements[i].Equals(other._elements[i]))
-                return false;
-        return true;
-    }
+    public bool Equals(RangeSet<TRange, T>? other) =>
+        other is not null && (ReferenceEquals(this, other) || _elements.SequenceEqual(other._elements));
 
     /// <inheritdoc />
     public override bool Equals(object? obj) => Equals(obj as RangeSet<TRange, T>);
