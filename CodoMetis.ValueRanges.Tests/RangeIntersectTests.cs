@@ -1,3 +1,5 @@
+using CodoMetis.ValueRanges.Core;
+
 namespace CodoMetis.ValueRanges.Tests;
 
 [TestClass]

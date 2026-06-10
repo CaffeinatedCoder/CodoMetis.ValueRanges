@@ -1,3 +1,6 @@
+using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
+
 namespace CodoMetis.ValueRanges;
 
 using static RangeBoundHelpers;
@@ -287,7 +290,7 @@ public static class RangeExtensions
         /// </summary>
         /// <remarks>
         /// <para>
-        /// For discrete types (<see cref="IDiscreteRange{T}"/>), two ranges whose boundaries are
+        /// For discrete types, two ranges whose boundaries are
         /// exactly one step apart are also considered adjacent. For example, <c>[1, 5]</c> and
         /// <c>[6, 10]</c> are adjacent for <see cref="int"/>.
         /// </para>

@@ -1,4 +1,6 @@
-namespace CodoMetis.ValueRanges;
+using CodoMetis.ValueRanges.Core;
+
+namespace CodoMetis.ValueRanges.Internals;
 
 using static RangeBoundHelpers;
 
