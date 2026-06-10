@@ -57,8 +57,8 @@ public class RangeIntersectTests
     [TestMethod]
     public void Intersect_OpenEndAndOpenStart_ReturnsFiniteOverlap()
     {
-        var openEnd   = Int32Range.CreateOpenEnd(5, true);    // [5, ∞)
-        var openStart = Int32Range.CreateOpenStart(10, true); // (-∞, 10]
+        var openEnd   = Int32Range.CreateUnboundedEnd(5, true);    // [5, ∞)
+        var openStart = Int32Range.CreateUnboundedStart(10, true); // (-∞, 10]
 
         var result = openEnd.Intersect(openStart) as IFiniteRange<int>;
 
@@ -72,8 +72,8 @@ public class RangeIntersectTests
     [TestMethod]
     public void Intersect_OpenEndAndOpenStart_ExclusiveBoundaries_ReturnsNarrowedFinite()
     {
-        var openEnd   = Int32Range.CreateOpenEnd(5, false);    // (5, ∞) ≡ [6, ∞)
-        var openStart = Int32Range.CreateOpenStart(10, false); // (-∞, 10) ≡ (-∞, 9]
+        var openEnd   = Int32Range.CreateUnboundedEnd(5, false);    // (5, ∞) ≡ [6, ∞)
+        var openStart = Int32Range.CreateUnboundedStart(10, false); // (-∞, 10) ≡ (-∞, 9]
 
         var result = openEnd.Intersect(openStart) as IFiniteRange<int>;
 
@@ -87,8 +87,8 @@ public class RangeIntersectTests
     [TestMethod]
     public void Intersect_TwoOpenStart_ReturnsOpenStartAtEarlierEnd()
     {
-        var s1 = Int32Range.CreateOpenStart(10, true);  // (-∞, 10]
-        var s2 = Int32Range.CreateOpenStart(20, false); // (-∞, 20)
+        var s1 = Int32Range.CreateUnboundedStart(10, true);  // (-∞, 10]
+        var s2 = Int32Range.CreateUnboundedStart(20, false); // (-∞, 20)
 
         var result = s1.Intersect(s2) as IUnboundedStartRange<int>;
 
@@ -100,8 +100,8 @@ public class RangeIntersectTests
     [TestMethod]
     public void Intersect_TwoOpenEnd_ReturnsOpenEndAtLaterStart()
     {
-        var e1 = Int32Range.CreateOpenEnd(3, true);  // [3, ∞)
-        var e2 = Int32Range.CreateOpenEnd(7, false); // (7, ∞) ≡ [8, ∞)
+        var e1 = Int32Range.CreateUnboundedEnd(3, true);  // [3, ∞)
+        var e2 = Int32Range.CreateUnboundedEnd(7, false); // (7, ∞) ≡ [8, ∞)
 
         var result = e1.Intersect(e2) as IUnboundedEndRange<int>;
 
@@ -113,7 +113,7 @@ public class RangeIntersectTests
     [TestMethod]
     public void Intersect_OpenStartAndFinite_ReturnsFiniteClippedByFinite()
     {
-        var openStart = Int32Range.CreateOpenStart(10, true);       // (-∞, 10]
+        var openStart = Int32Range.CreateUnboundedStart(10, true);       // (-∞, 10]
         var finite    = Int32Range.CreateFinite(5, 15, true, true); // [5, 15]
 
         var result = openStart.Intersect(finite) as IFiniteRange<int>;
@@ -128,7 +128,7 @@ public class RangeIntersectTests
     [TestMethod]
     public void Intersect_OpenEndAndFinite_ReturnsFiniteClippedByFinite()
     {
-        var openEnd = Int32Range.CreateOpenEnd(5, true);          // [5, ∞)
+        var openEnd = Int32Range.CreateUnboundedEnd(5, true);          // [5, ∞)
         var finite  = Int32Range.CreateFinite(1, 10, true, true); // [1, 10]
 
         var result = openEnd.Intersect(finite) as IFiniteRange<int>;

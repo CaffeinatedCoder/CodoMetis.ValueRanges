@@ -142,7 +142,7 @@ public class RangeExceptTests
     [TestMethod]
     public void Except_OpenStart_NoOverlap_ReturnsOriginalRange()
     {
-        var range = Int32Range.CreateOpenStart(3, true);    // (-∞, 3]
+        var range = Int32Range.CreateUnboundedStart(3, true);    // (-∞, 3]
         var other = Int32Range.CreateFinite(5, 10, true, true); // [5, 10]
 
         var result = range.Except(other);
@@ -155,7 +155,7 @@ public class RangeExceptTests
     public void Except_OpenStart_OtherTrimsRightEnd_ReturnsNewOpenStart()
     {
         // (-∞, 10] \ [7, 15] → (-∞, 7) ≡ (-∞, 6] for int
-        var range = Int32Range.CreateOpenStart(10, true);       // (-∞, 10]
+        var range = Int32Range.CreateUnboundedStart(10, true);       // (-∞, 10]
         var other = Int32Range.CreateFinite(7, 15, true, true); // [7, 15]
 
         var result = range.Except(other);
@@ -171,7 +171,7 @@ public class RangeExceptTests
     public void Except_OpenStart_OtherExclusiveLower_FlipsToInclusiveOnResult()
     {
         // (-∞, 10] \ (7, 15] → (-∞, 7] ≡ (-∞, 7] for int (already canonical)
-        var range = Int32Range.CreateOpenStart(10, true);        // (-∞, 10]
+        var range = Int32Range.CreateUnboundedStart(10, true);        // (-∞, 10]
         var other = Int32Range.CreateFinite(7, 15, false, true); // (7, 15] ≡ [8, 15]
 
         var result = range.Except(other);
@@ -186,7 +186,7 @@ public class RangeExceptTests
     public void Except_OpenStart_OtherInterior_ReturnsSplitIntoOpenStartAndFinite()
     {
         // (-∞, 10] \ [3, 7] → (-∞, 3) and (7, 10] ≡ (-∞, 2] and [8, 10] for int
-        var range = Int32Range.CreateOpenStart(10, true);      // (-∞, 10]
+        var range = Int32Range.CreateUnboundedStart(10, true);      // (-∞, 10]
         var other = Int32Range.CreateFinite(3, 7, true, true); // [3, 7]
 
         var result = range.Except(other);
@@ -210,7 +210,7 @@ public class RangeExceptTests
     [TestMethod]
     public void Except_OpenEnd_NoOverlap_ReturnsOriginalRange()
     {
-        var range = Int32Range.CreateOpenEnd(10, true);    // [10, ∞)
+        var range = Int32Range.CreateUnboundedEnd(10, true);    // [10, ∞)
         var other = Int32Range.CreateFinite(1, 5, true, true); // [1, 5]
 
         var result = range.Except(other);
@@ -223,7 +223,7 @@ public class RangeExceptTests
     public void Except_OpenEnd_OtherTrimmedFromLeft_ReturnsNewOpenEnd()
     {
         // [5, ∞) \ [1, 8] → (8, ∞) ≡ [9, ∞) for int
-        var range = Int32Range.CreateOpenEnd(5, true);         // [5, ∞)
+        var range = Int32Range.CreateUnboundedEnd(5, true);         // [5, ∞)
         var other = Int32Range.CreateFinite(1, 8, true, true); // [1, 8]
 
         var result = range.Except(other);
@@ -239,7 +239,7 @@ public class RangeExceptTests
     public void Except_OpenEnd_OtherInterior_ReturnsSplitIntoFiniteAndOpenEnd()
     {
         // [5, ∞) \ [8, 12] → [5, 8) and (12, ∞) ≡ [5, 7] and [13, ∞) for int
-        var range = Int32Range.CreateOpenEnd(5, true);          // [5, ∞)
+        var range = Int32Range.CreateUnboundedEnd(5, true);          // [5, ∞)
         var other = Int32Range.CreateFinite(8, 12, true, true); // [8, 12]
 
         var result = range.Except(other);

@@ -54,7 +54,7 @@ public class RangeStrictlyLeftOrRightOfTests
     public void IsStrictlyLeftOf_FiniteVsOpenEnd_StrictlyLeft_ReturnsTrue()
     {
         var finite  = Int32Range.CreateFinite(1, 4, true, true); // [1, 4]
-        var openEnd = Int32Range.CreateOpenEnd(5, true);     // [5, ∞)
+        var openEnd = Int32Range.CreateUnboundedEnd(5, true);     // [5, ∞)
 
         Assert.IsTrue(finite.IsStrictlyLeftOf(openEnd));
     }
@@ -63,7 +63,7 @@ public class RangeStrictlyLeftOrRightOfTests
     public void IsStrictlyLeftOf_FiniteVsOpenEnd_Touching_BothExclusive_ReturnsTrue()
     {
         var finite  = Int32Range.CreateFinite(1, 5, true, false); // [1, 5)
-        var openEnd = Int32Range.CreateOpenEnd(5, false);     // (5, ∞)
+        var openEnd = Int32Range.CreateUnboundedEnd(5, false);     // (5, ∞)
 
         Assert.IsTrue(finite.IsStrictlyLeftOf(openEnd));
     }
@@ -72,7 +72,7 @@ public class RangeStrictlyLeftOrRightOfTests
     public void IsStrictlyLeftOf_OpenStartIsNeverStrictlyLeft_ReturnsFalse()
     {
         // UnboundedStart ranges extend to -∞, so they can never be strictly left of anything
-        var openStart = Int32Range.CreateOpenStart(5, true);
+        var openStart = Int32Range.CreateUnboundedStart(5, true);
         var finite    = Int32Range.CreateFinite(10, 20);
 
         Assert.IsFalse(openStart.IsStrictlyLeftOf(finite));

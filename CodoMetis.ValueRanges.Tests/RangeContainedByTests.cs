@@ -45,7 +45,7 @@ public class RangeContainedByTests
     public void IsContainedBy_FiniteContainedByOpenStart_ReturnsTrue()
     {
         var inner     = Int32Range.CreateFinite(1, 7,  true, true); // [1, 7]
-        var openStart = Int32Range.CreateOpenStart(10, true);   // (-∞, 10]
+        var openStart = Int32Range.CreateUnboundedStart(10, true);   // (-∞, 10]
 
         Assert.IsTrue(inner.IsContainedBy(openStart));
     }
@@ -54,7 +54,7 @@ public class RangeContainedByTests
     public void IsContainedBy_FiniteContainedByOpenEnd_ReturnsTrue()
     {
         var inner   = Int32Range.CreateFinite(5, 15, true, true); // [5, 15]
-        var openEnd = Int32Range.CreateOpenEnd(1, true);      // [1, +∞)
+        var openEnd = Int32Range.CreateUnboundedEnd(1, true);      // [1, +∞)
 
         Assert.IsTrue(inner.IsContainedBy(openEnd));
     }

@@ -72,7 +72,7 @@ internal static class IntersectEngine
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var (uv, ui) = EarlierEnd(s.End, s.EndInclusive, o.End, o.EndInclusive);
-        return TRange.CreateOpenStart(uv, ui);
+        return TRange.CreateUnboundedStart(uv, ui);
     }
 
     // UnboundedEnd ∩ UnboundedEnd: result is UnboundedEnd at the later (more restrictive) lower bound.
@@ -81,7 +81,7 @@ internal static class IntersectEngine
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var (lv, li) = LaterStart(e.Start, e.StartInclusive, o.Start, o.StartInclusive);
-        return TRange.CreateOpenEnd(lv, li);
+        return TRange.CreateUnboundedEnd(lv, li);
     }
 
     // UnboundedStart ∩ UnboundedEnd: the overlapping region is finite — verified by Overlaps before this call.

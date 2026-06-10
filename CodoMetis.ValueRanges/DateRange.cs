@@ -86,7 +86,7 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static DateRange CreateOpenStart(DateOnly end, bool endInclusive = false) =>
+    public static DateRange CreateUnboundedStart(DateOnly end, bool endInclusive = false) =>
         endInclusive
             ? new UnboundedStart(end)
             : PreviousValueBefore(end) is { } e
@@ -102,7 +102,7 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static DateRange CreateOpenEnd(DateOnly start, bool startInclusive = true) =>
+    public static DateRange CreateUnboundedEnd(DateOnly start, bool startInclusive = true) =>
         startInclusive
             ? new UnboundedEnd(start)
             : NextValueAfter(start) is { } s

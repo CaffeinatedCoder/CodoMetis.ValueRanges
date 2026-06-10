@@ -82,7 +82,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static DateTimeOffsetRange CreateOpenStart(DateTimeOffset end, bool endInclusive = false)
+    public static DateTimeOffsetRange CreateUnboundedStart(DateTimeOffset end, bool endInclusive = false)
         => new UnboundedStart(end, endInclusive);
 
     /// <summary>
@@ -94,7 +94,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static DateTimeOffsetRange CreateOpenEnd(DateTimeOffset start, bool startInclusive = true)
+    public static DateTimeOffsetRange CreateUnboundedEnd(DateTimeOffset start, bool startInclusive = true)
         => new UnboundedEnd(start, startInclusive);
 
     /// <summary>

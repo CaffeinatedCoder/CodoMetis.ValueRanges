@@ -54,7 +54,7 @@ internal static class MergeEngine
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var (uv, ui) = LaterEnd(s.End, s.EndInclusive, b.End, b.EndInclusive);
-        return TRange.CreateOpenStart(uv, ui);
+        return TRange.CreateUnboundedStart(uv, ui);
     }
 
     // UnboundedEnd absorbs any finite upper bound — result is UnboundedEnd at the earlier lower bound.
@@ -63,7 +63,7 @@ internal static class MergeEngine
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var (lv, li) = EarlierStart(e.Start, e.StartInclusive, b.Start, b.StartInclusive);
-        return TRange.CreateOpenEnd(lv, li);
+        return TRange.CreateUnboundedEnd(lv, li);
     }
 
     // Two UnboundedStart ranges — result is UnboundedStart at the later upper bound.
@@ -72,7 +72,7 @@ internal static class MergeEngine
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var (uv, ui) = LaterEnd(s.End, s.EndInclusive, o.End, o.EndInclusive);
-        return TRange.CreateOpenStart(uv, ui);
+        return TRange.CreateUnboundedStart(uv, ui);
     }
 
     // Two UnboundedEnd ranges — result is UnboundedEnd at the earlier lower bound.
@@ -81,6 +81,6 @@ internal static class MergeEngine
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var (lv, li) = EarlierStart(e.Start, e.StartInclusive, o.Start, o.StartInclusive);
-        return TRange.CreateOpenEnd(lv, li);
+        return TRange.CreateUnboundedEnd(lv, li);
     }
 }

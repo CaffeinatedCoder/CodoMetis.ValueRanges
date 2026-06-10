@@ -105,8 +105,8 @@ internal static class RangeBoundHelpers
         {
             IInfinityRange<T>         => TRange.Infinite,
             IFiniteRange<T> f         => TRange.CreateFinite(f.Start, f.End, f.StartInclusive, f.EndInclusive),
-            IUnboundedStartRange<T> s => TRange.CreateOpenStart(s.End, s.EndInclusive),
-            IUnboundedEndRange<T> e   => TRange.CreateOpenEnd(e.Start, e.StartInclusive),
+            IUnboundedStartRange<T> s => TRange.CreateUnboundedStart(s.End, s.EndInclusive),
+            IUnboundedEndRange<T> e   => TRange.CreateUnboundedEnd(e.Start, e.StartInclusive),
             _                         => TRange.Empty
         };
 }

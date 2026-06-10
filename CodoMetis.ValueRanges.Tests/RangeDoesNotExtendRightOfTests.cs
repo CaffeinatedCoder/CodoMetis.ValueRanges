@@ -56,7 +56,7 @@ public class RangeDoesNotExtendRightOfTests
     public void DoesNotExtendRightOf_OpenEnd_AlwaysReturnsFalse()
     {
         // An UnboundedEnd range extends to +∞, so it always extends right of anything finite
-        var openEnd = Int32Range.CreateOpenEnd(1, true); // [1, +∞)
+        var openEnd = Int32Range.CreateUnboundedEnd(1, true); // [1, +∞)
         var finite  = Int32Range.CreateFinite(1, 100, true, true);
 
         Assert.IsFalse(openEnd.DoesNotExtendRightOf(finite));
@@ -67,7 +67,7 @@ public class RangeDoesNotExtendRightOfTests
     {
         // Any finite range does not extend right of an UnboundedEnd range
         var finite  = Int32Range.CreateFinite(1, 100, true, true);
-        var openEnd = Int32Range.CreateOpenEnd(1, true);
+        var openEnd = Int32Range.CreateUnboundedEnd(1, true);
 
         Assert.IsTrue(finite.DoesNotExtendRightOf(openEnd));
     }
@@ -76,8 +76,8 @@ public class RangeDoesNotExtendRightOfTests
     public void DoesNotExtendRightOf_OpenStartVsOpenStart_SameBound_BothInclusive_ReturnsTrue()
     {
         // (-∞, 10] &< (-∞, 10] — same upper bound, both inclusive
-        var left  = Int32Range.CreateOpenStart(10, true);
-        var right = Int32Range.CreateOpenStart(10, true);
+        var left  = Int32Range.CreateUnboundedStart(10, true);
+        var right = Int32Range.CreateUnboundedStart(10, true);
 
         Assert.IsTrue(left.DoesNotExtendRightOf(right));
     }
@@ -86,8 +86,8 @@ public class RangeDoesNotExtendRightOfTests
     public void DoesNotExtendRightOf_OpenStartVsOpenStart_ReceiverEndsLater_ReturnsFalse()
     {
         // (-∞, 15] &< (-∞, 10] → false
-        var left  = Int32Range.CreateOpenStart(15, true);
-        var right = Int32Range.CreateOpenStart(10, true);
+        var left  = Int32Range.CreateUnboundedStart(15, true);
+        var right = Int32Range.CreateUnboundedStart(10, true);
 
         Assert.IsFalse(left.DoesNotExtendRightOf(right));
     }

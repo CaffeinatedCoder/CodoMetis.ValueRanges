@@ -76,7 +76,7 @@ public class RangeMergeTests
     [TestMethod]
     public void Merge_OpenStartAndFinite_ReturnsOpenStartAtLaterEnd()
     {
-        var openStart = Int32Range.CreateOpenStart(5, true);    // (-∞, 5]
+        var openStart = Int32Range.CreateUnboundedStart(5, true);    // (-∞, 5]
         var finite    = Int32Range.CreateFinite(2, 10, true, true); // [2, 10]
 
         var result = openStart.Merge(finite) as IUnboundedStartRange<int>;
@@ -89,7 +89,7 @@ public class RangeMergeTests
     [TestMethod]
     public void Merge_OpenEndAndFinite_ReturnsOpenEndAtEarlierStart()
     {
-        var openEnd = Int32Range.CreateOpenEnd(8, true);      // [8, ∞)
+        var openEnd = Int32Range.CreateUnboundedEnd(8, true);      // [8, ∞)
         var finite  = Int32Range.CreateFinite(3, 12, true, true); // [3, 12]
 
         var result = openEnd.Merge(finite) as IUnboundedEndRange<int>;
@@ -102,8 +102,8 @@ public class RangeMergeTests
     [TestMethod]
     public void Merge_TwoOpenStart_ReturnsOpenStartAtLaterEnd()
     {
-        var s1 = Int32Range.CreateOpenStart(5,  true);  // (-∞, 5]
-        var s2 = Int32Range.CreateOpenStart(10, false); // (-∞, 10) ≡ (-∞, 9]
+        var s1 = Int32Range.CreateUnboundedStart(5,  true);  // (-∞, 5]
+        var s2 = Int32Range.CreateUnboundedStart(10, false); // (-∞, 10) ≡ (-∞, 9]
 
         var result = s1.Merge(s2) as IUnboundedStartRange<int>;
 
@@ -115,8 +115,8 @@ public class RangeMergeTests
     [TestMethod]
     public void Merge_TwoOpenEnd_ReturnsOpenEndAtEarlierStart()
     {
-        var e1 = Int32Range.CreateOpenEnd(3, false); // (3, ∞) ≡ [4, ∞)
-        var e2 = Int32Range.CreateOpenEnd(7, true);  // [7, ∞)
+        var e1 = Int32Range.CreateUnboundedEnd(3, false); // (3, ∞) ≡ [4, ∞)
+        var e2 = Int32Range.CreateUnboundedEnd(7, true);  // [7, ∞)
 
         var result = e1.Merge(e2) as IUnboundedEndRange<int>;
 
@@ -128,8 +128,8 @@ public class RangeMergeTests
     [TestMethod]
     public void Merge_OpenStartAndOpenEnd_ReturnsInfinity()
     {
-        var openStart = Int32Range.CreateOpenStart(5, true);
-        var openEnd   = Int32Range.CreateOpenEnd(3, true);
+        var openStart = Int32Range.CreateUnboundedStart(5, true);
+        var openEnd   = Int32Range.CreateUnboundedEnd(3, true);
 
         Assert.IsInstanceOfType<IInfinityRange<int>>(openStart.Merge(openEnd));
         Assert.IsInstanceOfType<IInfinityRange<int>>(openEnd.Merge(openStart));

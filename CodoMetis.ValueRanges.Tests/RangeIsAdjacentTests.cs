@@ -69,7 +69,7 @@ public class RangeIsAdjacentTests
     public void IsAdjacentTo_Finite_AdjacentToOpenStart_AtUpperBound()
     {
         // (-∞, 5) and [5, 10] — adjacent because XOR inclusiveness at 5
-        var openStart = Int32Range.CreateOpenStart(5, false);   // (-∞, 5)
+        var openStart = Int32Range.CreateUnboundedStart(5, false);   // (-∞, 5)
         var finite    = Int32Range.CreateFinite(5, 10, true, true); // [5, 10]
 
         // IsAdjacentTo is only implemented when the receiver is IFiniteRange
@@ -81,7 +81,7 @@ public class RangeIsAdjacentTests
     {
         // [1, 5] and (5, ∞) — adjacent because XOR inclusiveness at 5
         var finite  = Int32Range.CreateFinite(1, 5, true, true); // [1, 5]
-        var openEnd = Int32Range.CreateOpenEnd(5, false);    // (5, ∞)
+        var openEnd = Int32Range.CreateUnboundedEnd(5, false);    // (5, ∞)
 
         // IsAdjacentTo is only implemented when the receiver is IFiniteRange
         Assert.IsTrue(finite.IsAdjacentTo(openEnd));
@@ -91,13 +91,13 @@ public class RangeIsAdjacentTests
     public void IsAdjacentTo_Discrete_FiniteAdjacentToOpenStart_OneStepApart()
     {
         // (-∞, 4] and [6, 10] with int — gap is one step (4+1=5, not 6), so NOT adjacent
-        var openStart = Int32Range.CreateOpenStart(4, true);    // (-∞, 4]
+        var openStart = Int32Range.CreateUnboundedStart(4, true);    // (-∞, 4]
         var finite    = Int32Range.CreateFinite(6, 10, true, true); // [6, 10]
 
         Assert.IsFalse(finite.IsAdjacentTo(openStart));
 
         // But (-∞, 5] and [6, 10] IS adjacent
-        var openStart2 = Int32Range.CreateOpenStart(5, true);
+        var openStart2 = Int32Range.CreateUnboundedStart(5, true);
         Assert.IsTrue(finite.IsAdjacentTo(openStart2));
     }
 }

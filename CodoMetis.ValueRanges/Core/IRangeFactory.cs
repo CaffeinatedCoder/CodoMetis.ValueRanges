@@ -37,14 +37,14 @@ public interface IRangeFactory<out TRange, T>
     /// </summary>
     /// <param name="start">The lower (left) bound of the range.</param>
     /// <param name="startInclusive"><see langword="true"/> to include <paramref name="start"/> in the range.</param>
-    abstract static TRange CreateOpenEnd(T start, bool startInclusive);
+    abstract static TRange CreateUnboundedEnd(T start, bool startInclusive);
 
     /// <summary>
     /// Creates a range that is unbounded on the left: <c>(-∞, end]</c> or <c>(-∞, end)</c>.
     /// </summary>
     /// <param name="end">The upper (right) bound of the range.</param>
     /// <param name="endInclusive"><see langword="true"/> to include <paramref name="end"/> in the range.</param>
-    abstract static TRange CreateOpenStart(T end, bool endInclusive);
+    abstract static TRange CreateUnboundedStart(T end, bool endInclusive);
 
     /// <summary>
     /// Returns the immediate successor of <paramref name="value"/> in a discrete domain.

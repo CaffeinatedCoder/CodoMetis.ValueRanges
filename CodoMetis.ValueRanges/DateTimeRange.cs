@@ -80,7 +80,7 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static DateTimeRange CreateOpenStart(DateTime end, bool endInclusive = false)
+    public static DateTimeRange CreateUnboundedStart(DateTime end, bool endInclusive = false)
         => new UnboundedStart(end, endInclusive);
 
     /// <summary>
@@ -92,7 +92,7 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static DateTimeRange CreateOpenEnd(DateTime start, bool startInclusive = true)
+    public static DateTimeRange CreateUnboundedEnd(DateTime start, bool startInclusive = true)
         => new UnboundedEnd(start, startInclusive);
 
     /// <summary>

@@ -85,7 +85,7 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static Int32Range CreateOpenStart(int end, bool endInclusive = false) =>
+    public static Int32Range CreateUnboundedStart(int end, bool endInclusive = false) =>
         endInclusive
             ? new UnboundedStart(end)
             : PreviousValueBefore(end) is { } e
@@ -101,7 +101,7 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static Int32Range CreateOpenEnd(int start, bool startInclusive = true) =>
+    public static Int32Range CreateUnboundedEnd(int start, bool startInclusive = true) =>
         startInclusive
             ? new UnboundedEnd(start)
             : NextValueAfter(start) is { } s

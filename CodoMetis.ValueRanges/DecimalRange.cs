@@ -79,7 +79,7 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// Defaults to <see langword="false"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedStart"/> range: <c>(-∞, end]</c> or <c>(-∞, end)</c>.</returns>
-    public static DecimalRange CreateOpenStart(decimal end, bool endInclusive = false)
+    public static DecimalRange CreateUnboundedStart(decimal end, bool endInclusive = false)
         => new UnboundedStart(end, endInclusive);
 
     /// <summary>
@@ -91,7 +91,7 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// Defaults to <see langword="true"/>.
     /// </param>
     /// <returns>An <see cref="UnboundedEnd"/> range: <c>[start, +∞)</c> or <c>(start, +∞)</c>.</returns>
-    public static DecimalRange CreateOpenEnd(decimal start, bool startInclusive = true)
+    public static DecimalRange CreateUnboundedEnd(decimal start, bool startInclusive = true)
         => new UnboundedEnd(start, startInclusive);
 
     /// <summary>
