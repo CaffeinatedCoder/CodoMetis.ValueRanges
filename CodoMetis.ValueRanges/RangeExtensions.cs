@@ -12,11 +12,45 @@ public static class RangeExtensions
 {
     extension<T>(IRange<T> range) where T : struct, IComparable<T>, IEquatable<T>
     {
-        public bool IsEmpty          => range is IEmptyRange<T>;
-        public bool IsInfinity       => range is IInfinityRange<T>;
-        public bool IsFinite         => range is IFiniteRange<T>;
-        public bool IsUnboundedStart => range is IUnboundedStartRange<T>;
-        public bool IsUnboundedEnd   => range is IUnboundedEndRange<T>;
+        /// <summary>
+        /// Returns <see langword="true"/> if the range contains no values — equivalent to the PostgreSQL <c>isempty</c> function.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> for <see cref="IEmptyRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// </returns>
+        public bool IsEmpty()          => range is IEmptyRange<T>;
+
+        /// <summary>
+        /// Returns <see langword="true"/> if the range is unbounded in both directions — equivalent to <c>(-∞, +∞)</c>.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> for <see cref="IInfinityRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// </returns>
+        public bool IsInfinity()       => range is IInfinityRange<T>;
+
+        /// <summary>
+        /// Returns <see langword="true"/> if the range has both a lower and an upper bound.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> for <see cref="IFiniteRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// </returns>
+        public bool IsFinite()         => range is IFiniteRange<T>;
+
+        /// <summary>
+        /// Returns <see langword="true"/> if the range has no lower bound but has an upper bound — equivalent to <c>(-∞, end]</c>.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> for <see cref="IUnboundedStartRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// </returns>
+        public bool IsUnboundedStart() => range is IUnboundedStartRange<T>;
+
+        /// <summary>
+        /// Returns <see langword="true"/> if the range has a lower bound but no upper bound — equivalent to <c>[start, +∞)</c>.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> for <see cref="IUnboundedEndRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// </returns>
+        public bool IsUnboundedEnd()   => range is IUnboundedEndRange<T>;
 
         /// <summary>
         /// Determines whether <paramref name="value"/> is contained in the range.
@@ -52,7 +86,7 @@ public static class RangeExtensions
         public bool Contains(IRange<T> other) =>
             range switch
             {
-                IInfinityRange<T> => !other.IsEmpty,
+                IInfinityRange<T> => !other.IsEmpty(),
 
                 IFiniteRange<T> b =>
                     other switch
@@ -100,7 +134,7 @@ public static class RangeExtensions
             {
                 IEmptyRange<T> => false,
 
-                IInfinityRange<T> => !other.IsEmpty,
+                IInfinityRange<T> => !other.IsEmpty(),
 
                 IFiniteRange<T> b =>
                     other switch

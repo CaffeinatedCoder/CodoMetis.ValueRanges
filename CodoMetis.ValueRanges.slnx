@@ -1,4 +1,6 @@
 <Solution>
+    <Project Path="CodoMetis.ValueRanges.EFCore.PostgreSQL\CodoMetis.ValueRanges.EFCore.PostgreSQL.csproj" />
+    <Project Path="CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests.csproj" />
     <Project Path="CodoMetis.ValueRanges.Tests/CodoMetis.ValueRanges.Tests.csproj" />
     <Project Path="CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj" />
 </Solution>

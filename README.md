@@ -427,9 +427,77 @@ From v2.0.0, `ToString()` returns the PostgreSQL range literal:
 
 If your code depended on the old format for logging, display, serialization, or string comparison, update it to use the new literal format or, if you need the structural representation, reconstruct it from the variant's properties via pattern matching.
 
-## Roadmap
+## Migration from v2.x
 
-A companion package is planned. It will bridge the range types in this library to `NpgsqlRange<T>` and register LINQ expression translators so that every range operation maps to its corresponding PostgreSQL range operator in EF Core queries — giving you identical semantics whether executing against an in-memory collection or a live PostgreSQL database.
+### State-check methods now require parentheses
+
+`IsEmpty`, `IsFinite`, `IsInfinity`, `IsUnboundedStart`, and `IsUnboundedEnd` were extension properties in v2.x. In v3.0.0 they are extension methods — add parentheses at every call site:
+
+```csharp
+// v2.x
+if (range.IsEmpty) { … }
+
+// v3.0.0
+if (range.IsEmpty()) { … }
+```
+
+The change is mechanical and the compiler will flag every affected site. The motivation is EF Core compatibility: extension properties cannot appear in LINQ expression trees, preventing SQL translation. As extension methods they are fully translated by the EF Core companion package — see the [EF Core section](#entity-framework-core-postgresql) below.
+
+## Entity Framework Core (PostgreSQL)
+
+The companion package **CodoMetis.ValueRanges.EFCore.PostgreSQL** maps every range type to its PostgreSQL range column and `RangeSet<TRange, T>` to the corresponding multirange column, bridging through `NpgsqlRange<T>` at the provider boundary — giving you identical semantics whether executing against an in-memory collection or a live PostgreSQL database.
+
+```bash
+dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL
+```
+
+Enable it with one line — no value converters, comparers, or column types to configure:
+
+```csharp
+options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
+```
+
+Properties of the six range types and of `RangeSet<TRange, T>` are then mapped by convention:
+
+| Property type                    | Column type      |
+|----------------------------------|------------------|
+| `Int32Range`                     | `int4range`      |
+| `RangeSet<Int32Range, int>`      | `int4multirange` |
+| `DateRange`                      | `daterange`      |
+| `RangeSet<DateRange, DateOnly>`  | `datemultirange` |
+| … and so on for all six types    |                  |
+
+The full range algebra translates from LINQ to SQL:
+
+```csharp
+var day = new DateOnly(2024, 6, 15);
+
+// b."Period" @> @day
+bookings.Where(b => b.Period.Contains(day));
+
+// b."Period" && b."Blocked", b."Period" << @other, b."Period" -|- @other, ...
+bookings.Where(b => b.Period.Overlaps(other));
+
+// b."Period" * @other                                   (intersection)
+bookings.Select(b => b.Period.Intersect(other));
+
+// datemultirange(b."Period") + datemultirange(@other)   (union -> multirange)
+bookings.Select(b => b.Period.Union(other));
+
+// b."BlockedDays" @> @day, multirange + - * operators, complement, ...
+bookings.Where(b => b.BlockedDays.Contains(day));
+bookings.Select(b => b.BlockedDays | b.Period);
+
+// CASE WHEN b."From" <= b."To" THEN daterange(b."From", b."To", '[]') ELSE 'empty' END
+bookings.Where(b => DateRange.CreateFinite(b.From, b.To).Contains(day));
+```
+
+`Contains`, `Overlaps`, `IsContainedBy`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` and `IsAdjacentTo` map to `@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>` and `-|-`. `Intersect` maps to `*`; `Union` and `Except` lift both operands to multiranges (`+`/`-`), matching their `RangeSet` return type — a disjoint union is a real two-element multirange, never an error. The `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` factories translate to guarded range constructor calls with the model's inverted-bounds-yield-empty semantics.
+
+Notes:
+
+- Range state checks translate directly: `IsEmpty()` → `isempty`, `IsUnboundedStart()` → `lower_inf`, `IsUnboundedEnd()` → `upper_inf`, `IsInfinity()` → `lower_inf AND upper_inf`, `IsFinite()` → `NOT lower_inf AND NOT upper_inf AND NOT isempty`.
+- `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified`; `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz` (instants are preserved).
 
 ## License
 

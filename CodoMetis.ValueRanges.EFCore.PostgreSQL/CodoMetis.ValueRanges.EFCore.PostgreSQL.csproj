@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL</RootNamespace>
+        <PackageId>CodoMetis.ValueRanges.EFCore.PostgreSQL</PackageId>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <Description>Entity Framework Core (Npgsql) plugin for CodoMetis.ValueRanges: maps the six range types to the PostgreSQL range columns (int4range, int8range, numrange, daterange, tsrange, tstzrange) and RangeSet&lt;TRange, T&gt; to the corresponding multirange columns — no manual value converters required.
+
+Translates the full range algebra from LINQ to SQL: Contains, Overlaps, IsContainedBy, IsStrictlyLeftOf/RightOf, DoesNotExtendLeftOf/RightOf, IsAdjacentTo (@&gt;, &lt;@, &amp;&amp;, &lt;&lt;, &gt;&gt;, &amp;&lt;, &amp;&gt;, -|-), Intersect (*), Union and Except (multirange + and -), RangeSet operations and operators, and the CreateFinite/CreateUnboundedStart/CreateUnboundedEnd factories as range constructor calls. Enable with one line: options.UseNpgsql(..., npgsql =&gt; npgsql.UseValueRanges()).</Description>
+        <PackageTags>range;interval;multirange;postgresql;postgres;npgsql;efcore;entity-framework-core;int4range;int8range;numrange;daterange;tsrange;tstzrange;value-converter;linq-to-sql</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\CodoMetis.ValueRanges\CodoMetis.ValueRanges.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    </ItemGroup>
+
+</Project>
