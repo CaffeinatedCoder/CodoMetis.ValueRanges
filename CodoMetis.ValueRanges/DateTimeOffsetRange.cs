@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.Globalization;
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges;
 
@@ -13,6 +16,7 @@ namespace CodoMetis.ValueRanges;
 /// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[start, end)</c>,
 /// which is conventional for timestamp ranges.
 /// </remarks>
+[DebuggerDisplay("{ToString(),nq}")]
 public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFactory<DateTimeOffsetRange, DateTimeOffset>
 {
     private DateTimeOffsetRange()
@@ -141,4 +145,32 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
                      : Empty,
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
+
+    /// <inheritdoc />
+    public static DateTimeOffset ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => DateTimeOffset.Parse(s, provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Formats a <see cref="DateTimeOffset"/> value using the round-trip format specifier (<c>O</c>) by default,
+    /// preserving full precision and UTC offset.
+    /// </summary>
+    public static string FormatValue(DateTimeOffset value, string? format, IFormatProvider? provider)
+        => value.ToString(format ?? "O", provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses a PostgreSQL range literal into a <see cref="DateTimeOffsetRange"/>.
+    /// </summary>
+    public static DateTimeOffsetRange Parse(string s, IFormatProvider? provider)
+        => RangeFormat.Parse<DateTimeOffsetRange, DateTimeOffset>(s.AsSpan(), provider);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal into a <see cref="DateTimeOffsetRange"/>.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(string? s, IFormatProvider? provider, out DateTimeOffsetRange result)
+        => RangeFormat.TryParse<DateTimeOffsetRange, DateTimeOffset>(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc />
+    public override sealed string ToString()
+        => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
 }

@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.Globalization;
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges;
 
@@ -13,6 +16,7 @@ namespace CodoMetis.ValueRanges;
 /// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[start, end)</c>,
 /// which is conventional for timestamp ranges.
 /// </remarks>
+[DebuggerDisplay("{ToString(),nq}")]
 public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeRange, DateTime>
 {
     private DateTimeRange()
@@ -139,4 +143,33 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
                      : Empty,
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
+
+    /// <inheritdoc />
+    public static DateTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+    /// <summary>
+    /// Formats a <see cref="DateTime"/> value using the round-trip format specifier (<c>O</c>) by default,
+    /// preserving full precision and <see cref="DateTimeKind"/>.
+    /// </summary>
+    public static string FormatValue(DateTime value, string? format, IFormatProvider? provider)
+        => value.ToString(format ?? "O", provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses a PostgreSQL range literal (e.g. <c>[2024-01-01T00:00:00,2024-12-31T23:59:59)</c>,
+    /// <c>empty</c>, <c>(,)</c>) into a <see cref="DateTimeRange"/>.
+    /// </summary>
+    public static DateTimeRange Parse(string s, IFormatProvider? provider)
+        => RangeFormat.Parse<DateTimeRange, DateTime>(s.AsSpan(), provider);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal into a <see cref="DateTimeRange"/>.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(string? s, IFormatProvider? provider, out DateTimeRange result)
+        => RangeFormat.TryParse<DateTimeRange, DateTime>(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc />
+    public override sealed string ToString()
+        => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
 }

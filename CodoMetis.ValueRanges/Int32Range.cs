@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 
@@ -12,6 +14,7 @@ namespace CodoMetis.ValueRanges;
 /// exhaustive handling of all variants.
 /// The default boundary convention for <see cref="CreateFinite"/> is a fully closed interval <c>[start, end]</c>.
 /// </remarks>
+[DebuggerDisplay("{ToString(),nq}")]
 public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
 {
     private Int32Range()
@@ -150,4 +153,26 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
 
     /// <inheritdoc />
     public static int? PreviousValueBefore(int value) => value == int.MinValue ? null : value - 1;
+
+    /// <inheritdoc />
+    public static int ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => int.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses a PostgreSQL range literal (e.g. <c>[1,10]</c>, <c>empty</c>, <c>(,)</c>)
+    /// into an <see cref="Int32Range"/>.
+    /// </summary>
+    public static Int32Range Parse(string s, IFormatProvider? provider)
+        => RangeFormat.Parse<Int32Range, int>(s.AsSpan(), provider);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal into an <see cref="Int32Range"/>.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(string? s, IFormatProvider? provider, out Int32Range result)
+        => RangeFormat.TryParse<Int32Range, int>(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc />
+    public override sealed string ToString()
+        => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
 }

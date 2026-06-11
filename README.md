@@ -71,14 +71,14 @@ Int32Range everything = Int32Range.Infinite;  // (-∞, +∞)
 Int32Range empty = Int32Range.Empty;
 ```
 
-`CreateFinite()` automatically returns an `Empty` when the arguments form a degenerate or inverted interval (e.g. `lowerBound > upperBound`, or equal bounds that are both exclusive).
+`CreateFinite()` automatically returns an `Empty` when the arguments form a degenerate or inverted interval (e.g. `start > end`, or equal bounds that are both exclusive).
 
 **Default boundary inclusiveness:**
 
-| Range type                                                 | `CreateFinite()` default          |
-|------------------------------------------------------------|-----------------------------|
-| `Int32Range`, `Int64Range`, `DateRange`                    | `[lower, upper]` — closed   |
-| `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`     | `[lower, upper)` — half-open |
+| Range type                                                 | `CreateFinite()` default   |
+|------------------------------------------------------------|----------------------------|
+| `Int32Range`, `Int64Range`, `DateRange`                    | `[start, end]` — closed    |
+| `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`     | `[start, end)` — half-open |
 
 Discrete types default to fully closed intervals; continuous types default to the half-open convention that is conventional for monetary amounts and timestamps.
 
@@ -263,6 +263,136 @@ var b = IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(6, 1
 a.Equals(b);  // true — both normalize to { [1, 10] }
 ```
 
+## Parsing and Formatting
+
+All range types and `RangeSet<TRange, T>` implement `IParsable<T>` and `IFormattable`. The canonical string representation is the PostgreSQL range literal format — the same syntax PostgreSQL uses on the wire.
+
+### Formatting
+
+`ToString()` (and `IFormattable.ToString(format, provider)`) produces PostgreSQL range literals:
+
+```csharp
+Int32Range.CreateFinite(1, 10).ToString()              // "[1,10]"
+Int32Range.CreateFinite(1, 10, endInclusive: false)
+          .ToString()                                  // "[1,10)"
+Int32Range.CreateUnboundedStart(5).ToString()          // "(,5]"
+Int32Range.CreateUnboundedEnd(5).ToString()            // "[5,)"
+Int32Range.Infinite.ToString()                         // "(,)"
+Int32Range.Empty.ToString()                            // "empty"
+
+DateRange.CreateFinite(new DateOnly(2025, 1, 1),
+                       new DateOnly(2025, 3, 31)).ToString()
+// "[2025-01-01,2025-03-31]"
+
+DateTimeOffsetRange.CreateFinite(
+    new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.FromHours(1)),
+    new DateTimeOffset(2024, 7, 1, 0, 0, 0, TimeSpan.FromHours(1))).ToString()
+// "[2024-06-01T00:00:00.0000000+01:00,2024-07-01T00:00:00.0000000+01:00)"
+```
+
+The optional `format` parameter is forwarded to the element type, so you can control how individual bound values are rendered:
+
+```csharp
+((IFormattable)DateRange.CreateFinite(new DateOnly(2025, 1, 1),
+                                      new DateOnly(2025, 3, 31)))
+    .ToString("MMM d yyyy", CultureInfo.InvariantCulture)
+// "[Jan 1 2025,Mar 31 2025]"
+```
+
+`RangeSet<TRange, T>` formats as a PostgreSQL multirange literal:
+
+```csharp
+IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(7, 10)])
+      .ToString()    // "{[1,5],[7,10]}"
+
+IntSet.Empty.ToString()    // "{}"
+IntSet.Infinite.ToString() // "{(,)}"
+```
+
+### Parsing
+
+Every concrete range type exposes `Parse` and `TryParse` static methods that accept any valid PostgreSQL range literal:
+
+```csharp
+var r1 = Int32Range.Parse("[1,10]", null);     // Finite [1, 10]
+var r2 = Int32Range.Parse("(,5]", null);       // UnboundedStart (−∞, 5]
+var r3 = Int32Range.Parse("[3,)", null);        // UnboundedEnd [3, +∞)
+var r4 = Int32Range.Parse("(,)", null);         // Infinity (−∞, +∞)
+var r5 = Int32Range.Parse("empty", null);       // Empty
+
+if (Int32Range.TryParse(userInput, null, out var range))
+    Console.WriteLine(range);
+```
+
+Discrete types canonicalize on parse — `"[1,10)"` is equivalent to `"[1,9]"` and both parse to the same closed `[1, 9]` range:
+
+```csharp
+Int32Range.Parse("[1,10)", null).ToString()  // "[1,9]"
+```
+
+`RangeSet<TRange, T>` parses multirange literals in the same way:
+
+```csharp
+var set = RangeSet<Int32Range, int>.Parse("{[1,5],[7,10]}", null);
+set.Count;   // 2
+set[0];      // [1, 5]
+set[1];      // [7, 10]
+```
+
+## JSON Serialization
+
+The `CodoMetis.ValueRanges.Serialization` namespace provides `System.Text.Json` converters for all range types and their multirange counterparts. Ranges serialize as JSON strings in PostgreSQL literal format — compact and round-trippable.
+
+### Registration
+
+Register all converters at once using the `AddRangeConverters()` extension:
+
+```csharp
+using CodoMetis.ValueRanges.Serialization;
+
+var options = new JsonSerializerOptions().AddRangeConverters();
+```
+
+Or use the factory for automatic registration on any range/multirange type:
+
+```csharp
+var options = new JsonSerializerOptions
+{
+    Converters = { new RangeJsonConverterFactory() }
+};
+```
+
+In ASP.NET Core, add it to your serializer configuration:
+
+```csharp
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.AddRangeConverters());
+```
+
+### Usage
+
+```csharp
+var range = Int32Range.CreateFinite(1, 10);
+string json = JsonSerializer.Serialize(range, options);   // "\"[1,10]\""
+
+var back = JsonSerializer.Deserialize<Int32Range>(json, options);
+// back == Int32Range.CreateFinite(1, 10)
+
+// Multirange
+var set = RangeSet<Int32Range, int>.From([
+    Int32Range.CreateFinite(1, 5),
+    Int32Range.CreateFinite(7, 10)
+]);
+string setJson = JsonSerializer.Serialize(set, options);   // "\"{[1,5],[7,10]}\""
+
+// Works with all six range types and their multirange counterparts
+var dates = JsonSerializer.Serialize(
+    DateRange.CreateFinite(new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31)), options);
+// "\"[2025-01-01,2025-12-31]\""
+```
+
+A null JSON token is rejected with `JsonException`; use the literal `"empty"` to represent an empty range.
+
 ## Interface Overview
 
 The library exposes a structured set of interfaces for writing generic code:
@@ -278,6 +408,24 @@ The library exposes a structured set of interfaces for writing generic code:
 | `IRangeFactory<TRange, T>` | Abstract static factories; also `NextValueAfter`/`PreviousValueBefore` for step-aware (discrete) types |
 
 `T` is constrained to `struct, IComparable<T>, IEquatable<T>` throughout.
+
+## Migration from v1.x
+
+### `ToString()` now returns a PostgreSQL range literal
+
+In v1.x, calling `.ToString()` on any range variant returned the default C# record representation:
+
+```
+Finite { Start = 1, End = 10, StartInclusive = True, EndInclusive = True }
+```
+
+From v2.0.0, `ToString()` returns the PostgreSQL range literal:
+
+```
+[1,10]
+```
+
+If your code depended on the old format for logging, display, serialization, or string comparison, update it to use the new literal format or, if you need the structural representation, reconstruct it from the variant's properties via pattern matching.
 
 ## Roadmap
 

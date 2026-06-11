@@ -6,6 +6,10 @@
         <Nullable>enable</Nullable>
         <PackageId>CodoMetis.ValueRanges</PackageId>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <Description>In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (int4range, int8range, numrange, daterange, tsrange, tstzrange). Each type is a discriminated union of five sealed variants (Finite, UnboundedStart, UnboundedEnd, EmptyRange, Infinity) with invalid states unrepresentable at compile time.
+
+Includes the full PostgreSQL interval algebra — Contains, Overlaps, IsAdjacentTo, Intersect, Union, Except, Complement — plus RangeSet&lt;TRange, T&gt; as an immutable, always-normalized multirange. All types implement IParsable&lt;T&gt; and IFormattable using PostgreSQL range literal syntax, and ship with System.Text.Json converters for direct use in ASP.NET Core APIs. No database dependency.</Description>
+        <PackageTags>range;interval;multirange;postgresql;postgres;int4range;int8range;numrange;daterange;tsrange;tstzrange;discriminated-union;set-operations;json-serialization;iparsable;iformattable;value-types;ddd</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>

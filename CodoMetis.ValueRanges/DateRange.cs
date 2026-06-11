@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 
@@ -13,6 +15,7 @@ namespace CodoMetis.ValueRanges;
 /// The default boundary convention for <see cref="CreateFinite"/> is a fully closed interval <c>[start, end]</c>.
 /// As a discrete type, two ranges whose boundaries are exactly one day apart are considered adjacent.
 /// </remarks>
+[DebuggerDisplay("{ToString(),nq}")]
 public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, DateOnly>
 {
     private DateRange()
@@ -151,4 +154,32 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
 
     /// <inheritdoc />
     public static DateOnly? PreviousValueBefore(DateOnly value) => value == DateOnly.MinValue ? null : value.AddDays(-1);
+
+    /// <inheritdoc />
+    public static DateOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => DateOnly.Parse(s, provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Formats a <see cref="DateOnly"/> value using ISO 8601 (<c>yyyy-MM-dd</c>) by default.
+    /// </summary>
+    public static string FormatValue(DateOnly value, string? format, IFormatProvider? provider)
+        => value.ToString(format ?? "yyyy-MM-dd", provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses a PostgreSQL range literal (e.g. <c>[2024-01-01,2024-12-31]</c>, <c>empty</c>, <c>(,)</c>)
+    /// into a <see cref="DateRange"/>.
+    /// </summary>
+    public static DateRange Parse(string s, IFormatProvider? provider)
+        => RangeFormat.Parse<DateRange, DateOnly>(s.AsSpan(), provider);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal into a <see cref="DateRange"/>.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(string? s, IFormatProvider? provider, out DateRange result)
+        => RangeFormat.TryParse<DateRange, DateOnly>(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc />
+    public override sealed string ToString()
+        => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
 }

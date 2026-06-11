@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.Globalization;
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges;
 
@@ -12,6 +15,7 @@ namespace CodoMetis.ValueRanges;
 /// The default boundary convention for <see cref="CreateFinite"/> is a half-open interval <c>[start, end)</c>,
 /// which is conventional for continuous numeric types such as monetary amounts.
 /// </remarks>
+[DebuggerDisplay("{ToString(),nq}")]
 public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRange, decimal>
 {
     private DecimalRange()
@@ -138,4 +142,26 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
                      : Empty,
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
+
+    /// <inheritdoc />
+    public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => decimal.Parse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses a PostgreSQL range literal (e.g. <c>[1.5,9.9)</c>, <c>empty</c>, <c>(,)</c>)
+    /// into a <see cref="DecimalRange"/>.
+    /// </summary>
+    public static DecimalRange Parse(string s, IFormatProvider? provider)
+        => RangeFormat.Parse<DecimalRange, decimal>(s.AsSpan(), provider);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal into a <see cref="DecimalRange"/>.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(string? s, IFormatProvider? provider, out DecimalRange result)
+        => RangeFormat.TryParse<DecimalRange, decimal>(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc />
+    public override sealed string ToString()
+        => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
 }

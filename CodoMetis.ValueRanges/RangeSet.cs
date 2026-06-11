@@ -1,5 +1,8 @@
 using System.Collections;
 using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 
@@ -24,7 +27,9 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 /// <typeparam name="TRange">The concrete range type the set is composed of.</typeparam>
 /// <typeparam name="T">The element type of the ranges.</typeparam>
-public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>
+[DebuggerDisplay("{ToString(),nq}")]
+public sealed class RangeSet<TRange, T>
+    : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IFormattable, IParsable<RangeSet<TRange, T>>
     where TRange : IRangeFactory<TRange, T>, IRange<T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
@@ -329,6 +334,67 @@ public sealed class RangeSet<TRange, T> : IReadOnlyList<TRange>, IEquatable<Rang
         return hash.ToHashCode();
     }
 
-    /// <summary>Returns a string listing the normalized elements, e.g. <c>{ [1, 3], [5, 7] }</c>.</summary>
-    public override string ToString() => $"{{ {string.Join(", ", _elements)} }}";
+    // -------------------------------------------------------------------------
+    // IFormattable / IParsable
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the PostgreSQL multirange literal for this set, e.g. <c>{[1,3],[5,7]}</c>.
+    /// The optional <paramref name="format"/> string is forwarded to each element's formatter.
+    /// </summary>
+    public string ToString(string? format, IFormatProvider? provider)
+    {
+        if (_elements.IsEmpty)
+            return "{}";
+
+        var sb = new StringBuilder("{");
+        sb.Append(_elements[0].ToString(format, provider));
+        for (var i = 1; i < _elements.Length; i++)
+        {
+            sb.Append(',');
+            sb.Append(_elements[i].ToString(format, provider));
+        }
+
+        sb.Append('}');
+        return sb.ToString();
+    }
+
+    /// <summary>Returns the PostgreSQL multirange literal for this set, e.g. <c>{[1,3],[5,7]}</c>.</summary>
+    public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses a PostgreSQL multirange literal (e.g. <c>{[1,5],[7,10]}</c> or <c>{}</c>)
+    /// into a <see cref="RangeSet{TRange,T}"/>.
+    /// </summary>
+    public static RangeSet<TRange, T> Parse(string s, IFormatProvider? provider)
+    {
+        var literals = RangeFormat.SplitSetLiterals(s.AsSpan());
+        return From(literals.Select(l => TRange.Parse(l, provider)));
+    }
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL multirange literal into a <see cref="RangeSet{TRange,T}"/>.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(string? s, IFormatProvider? provider, out RangeSet<TRange, T> result)
+    {
+        try
+        {
+            var literals = RangeFormat.SplitSetLiterals((s ?? string.Empty).AsSpan());
+            result = From(literals.Select(l => TRange.Parse(l, provider)));
+            return true;
+        }
+        catch
+        {
+            result = Empty;
+            return false;
+        }
+    }
+
+    // Explicit interface implementations delegate to the public methods above.
+    static RangeSet<TRange, T> IParsable<RangeSet<TRange, T>>.Parse(string s, IFormatProvider? provider)
+        => Parse(s, provider);
+
+    static bool IParsable<RangeSet<TRange, T>>.TryParse(string? s, IFormatProvider? provider, out RangeSet<TRange, T> result)
+        => TryParse(s, provider, out result);
 }

@@ -12,6 +12,12 @@ public static class RangeExtensions
 {
     extension<T>(IRange<T> range) where T : struct, IComparable<T>, IEquatable<T>
     {
+        public bool IsEmpty          => range is IEmptyRange<T>;
+        public bool IsInfinity       => range is IInfinityRange<T>;
+        public bool IsFinite         => range is IFiniteRange<T>;
+        public bool IsUnboundedStart => range is IUnboundedStartRange<T>;
+        public bool IsUnboundedEnd   => range is IUnboundedEndRange<T>;
+
         /// <summary>
         /// Determines whether <paramref name="value"/> is contained in the range.
         /// </summary>
@@ -46,7 +52,7 @@ public static class RangeExtensions
         public bool Contains(IRange<T> other) =>
             range switch
             {
-                IInfinityRange<T> => other is not IEmptyRange<T>,
+                IInfinityRange<T> => !other.IsEmpty,
 
                 IFiniteRange<T> b =>
                     other switch
@@ -94,7 +100,7 @@ public static class RangeExtensions
             {
                 IEmptyRange<T> => false,
 
-                IInfinityRange<T> => other is not IEmptyRange<T>,
+                IInfinityRange<T> => !other.IsEmpty,
 
                 IFiniteRange<T> b =>
                     other switch
@@ -110,21 +116,19 @@ public static class RangeExtensions
                 IUnboundedStartRange<T> s =>
                     other switch
                     {
-                        IFiniteRange<T> o       => TouchingBoundsOverlap(s.End, s.EndInclusive, o.Start, o.StartInclusive),
+                        IFiniteRange<T> o => TouchingBoundsOverlap(s.End, s.EndInclusive, o.Start, o.StartInclusive),
                         IUnboundedEndRange<T> e => TouchingBoundsOverlap(s.End, s.EndInclusive, e.Start, e.StartInclusive),
-                        IUnboundedStartRange<T> => true,
-                        IInfinityRange<T>       => true,
-                        _                       => false
+                        IUnboundedStartRange<T> or IInfinityRange<T> => true,
+                        _ => false
                     },
 
                 IUnboundedEndRange<T> e =>
                     other switch
                     {
-                        IFiniteRange<T> o         => TouchingBoundsOverlap(o.End, o.EndInclusive, e.Start, e.StartInclusive),
+                        IFiniteRange<T> o => TouchingBoundsOverlap(o.End, o.EndInclusive, e.Start, e.StartInclusive),
                         IUnboundedStartRange<T> s => TouchingBoundsOverlap(s.End, s.EndInclusive, e.Start, e.StartInclusive),
-                        IUnboundedEndRange<T>     => true,
-                        IInfinityRange<T>         => true,
-                        _                         => false
+                        IUnboundedEndRange<T> or IInfinityRange<T> => true,
+                        _ => false
                     },
 
                 _ => false
@@ -206,9 +210,8 @@ public static class RangeExtensions
                             b.End.CompareTo(o.End) < 0 || (b.End.CompareTo(o.End) == 0 && (!b.EndInclusive || o.EndInclusive)),
                         IUnboundedStartRange<T> s =>
                             b.End.CompareTo(s.End) < 0 || (b.End.CompareTo(s.End) == 0 && (!b.EndInclusive || s.EndInclusive)),
-                        IUnboundedEndRange<T> => true,
-                        IInfinityRange<T>     => true,
-                        _                     => false
+                        IUnboundedEndRange<T> or IInfinityRange<T> => true,
+                        _                                          => false
                     },
 
                 IUnboundedStartRange<T> s =>
@@ -218,9 +221,8 @@ public static class RangeExtensions
                                              (s.End.CompareTo(o.End) == 0 && (!s.EndInclusive || o.EndInclusive)),
                         IUnboundedStartRange<T> o => s.End.CompareTo(o.End) < 0 ||
                                                      (s.End.CompareTo(o.End) == 0 && (!s.EndInclusive || o.EndInclusive)),
-                        IUnboundedEndRange<T> => true,
-                        IInfinityRange<T>     => true,
-                        _                     => false
+                        IUnboundedEndRange<T> or IInfinityRange<T> => true,
+                        _                                          => false
                     },
 
                 _ => false
@@ -255,9 +257,8 @@ public static class RangeExtensions
                                              (b.Start.CompareTo(o.Start) == 0 && (!b.StartInclusive || o.StartInclusive)),
                         IUnboundedEndRange<T> e => b.Start.CompareTo(e.Start) > 0 ||
                                                    (b.Start.CompareTo(e.Start) == 0 && (!b.StartInclusive || e.StartInclusive)),
-                        IUnboundedStartRange<T> => true,
-                        IInfinityRange<T>       => true,
-                        _                       => false
+                        IUnboundedStartRange<T> or IInfinityRange<T> => true,
+                        _                                            => false
                     },
 
                 IUnboundedEndRange<T> e =>
@@ -267,9 +268,8 @@ public static class RangeExtensions
                                              (e.Start.CompareTo(o.Start) == 0 && (!e.StartInclusive || o.StartInclusive)),
                         IUnboundedEndRange<T> o => e.Start.CompareTo(o.Start) > 0 ||
                                                    (e.Start.CompareTo(o.Start) == 0 && (!e.StartInclusive || o.StartInclusive)),
-                        IUnboundedStartRange<T> => true,
-                        IInfinityRange<T>       => true,
-                        _                       => false
+                        IUnboundedStartRange<T> or IInfinityRange<T> => true,
+                        _                                            => false
                     },
 
                 _ => false
