@@ -79,14 +79,14 @@ public sealed class ProviderConversionTests
     [TestMethod]
     public void ToProvider_Empty_MapsToNpgsqlEmpty()
     {
-        var provider = RangeProviderConversion.ToProvider<DateOnly>(DateRange.Empty, null);
+        var provider = RangeProviderConversion.ToProvider(DateRange.Empty, null);
         Assert.IsTrue(provider.IsEmpty);
     }
 
     [TestMethod]
     public void ToProvider_Infinity_MapsToDoublyInfinite()
     {
-        var provider = RangeProviderConversion.ToProvider<DateOnly>(DateRange.Infinite, null);
+        var provider = RangeProviderConversion.ToProvider(DateRange.Infinite, null);
         Assert.IsTrue(provider.LowerBoundInfinite);
         Assert.IsTrue(provider.UpperBoundInfinite);
     }
@@ -94,7 +94,7 @@ public sealed class ProviderConversionTests
     [TestMethod]
     public void ToProvider_DiscreteFinite_IsFullyClosed()
     {
-        var provider = RangeProviderConversion.ToProvider<DateOnly>(
+        var provider = RangeProviderConversion.ToProvider(
             DateRange.CreateFinite(new DateOnly(2024, 1, 1), new DateOnly(2024, 3, 31)), null);
         Assert.IsTrue(provider.LowerBoundIsInclusive);
         Assert.IsTrue(provider.UpperBoundIsInclusive);
@@ -123,7 +123,7 @@ public sealed class ProviderConversionTests
             new DateTime(2024, 1, 1, 10, 0, 0, DateTimeKind.Utc),
             new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Local));
 
-        var provider = RangeProviderConversion.ToProvider<DateTime>(
+        var provider = RangeProviderConversion.ToProvider(
             range, value => DateTime.SpecifyKind(value, DateTimeKind.Unspecified));
 
         Assert.AreEqual(DateTimeKind.Unspecified, provider.LowerBound.Kind);
@@ -137,7 +137,7 @@ public sealed class ProviderConversionTests
             new DateTimeOffset(2024, 1, 1, 10, 0, 0, TimeSpan.FromHours(2)),
             new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.FromHours(2)));
 
-        var provider = RangeProviderConversion.ToProvider<DateTimeOffset>(range, value => value.ToUniversalTime());
+        var provider = RangeProviderConversion.ToProvider(range, value => value.ToUniversalTime());
 
         Assert.AreEqual(TimeSpan.Zero, provider.LowerBound.Offset);
         Assert.AreEqual(new DateTimeOffset(2024, 1, 1, 8, 0, 0, TimeSpan.Zero), provider.LowerBound);

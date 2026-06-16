@@ -1,5 +1,4 @@
 using System.Text.Json;
-using CodoMetis.ValueRanges;
 using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges.Tests;
