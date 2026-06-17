@@ -1,3 +1,4 @@
+using System.Text;
 using CodoMetis.ValueRanges.Core;
 
 namespace CodoMetis.ValueRanges.Internals;
@@ -133,5 +134,35 @@ internal static class RangeFormat
     }
 
     private static ReadOnlySpan<char> UnquoteValue(ReadOnlySpan<char> s)
-        => s.Length >= 2 && s[0] == '"' && s[^1] == '"' ? s[1..^1] : s;
+    {
+        if (s.Length < 2 || s[0] != '"' || s[^1] != '"') return s;
+        var inner = s[1..^1];
+        // No backslash escapes inside the quotes — return a slice of the input directly.
+        if (!inner.Contains('\\')) return inner;
+        // PostgreSQL quoted bounds escape `\"` as `"` and `\\` as `\`. Unescape them so
+        // ParseValue receives the literal value the user intended. This path is rare for
+        // the built-in element types (int, decimal, DateOnly, …) but matters for custom
+        // range types whose bound stringification can contain quotes or backslashes.
+        return UnescapeQuoted(inner);
+    }
+
+    private static string UnescapeQuoted(ReadOnlySpan<char> s)
+    {
+        var sb = new StringBuilder(s.Length);
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (s[i] == '\\' && i + 1 < s.Length)
+            {
+                char next = s[i + 1];
+                if (next == '"' || next == '\\')
+                {
+                    sb.Append(next);
+                    i++; // consume the escaped char
+                    continue;
+                }
+            }
+            sb.Append(s[i]);
+        }
+        return sb.ToString();
+    }
 }

@@ -29,6 +29,23 @@ Each range type is modelled as a **discriminated union** of five sealed variants
 
 The *shape* of a range is encoded in its static type. An `UnboundedEnd` range has no `End` property — the property does not exist at compile time. An `Empty` range carries no bound information whatsoever. Invalid states are unrepresentable by construction, and pattern matching over a range is exhaustive with compiler-enforced coverage.
 
+## What's new in v3.1
+
+**Performance** — `RangeSet<TRange, T>` now exploits its sorted, disjoint, non-adjacent invariant for sub-linear queries and merge-join set operations. No public API or results changed — only the time complexity:
+
+| Operation | Before | After |
+|---|---|---|
+| `Contains(T)`, `Contains(IRange<T>)`, `Overlaps(IRange<T>)` | O(n) linear scan | O(log n) binary search on lower bounds |
+| `Union(RangeSet, RangeSet)` | re-sort of concatenation | O(n + m) merge of two pre-sorted streams |
+| `Intersect(RangeSet, RangeSet)` | O(n · m) nested loop | O(n + m) two-pointer merge-join |
+| `Except(RangeSet, RangeSet)` | per-element re-normalization | O(n + m) two-pointer walk |
+| `Except` from `Infinite` | O(\|other\|²) | O(\|other\|) single-pass complement walk |
+| `From` single-element input | list + sort + merge | zero-allocation fast path |
+
+**New API** — `RangeSet<TRange, T>.LowerBoundComparer` exposes the set's internal lower-bound ordering as a public `IComparer<TRange>` singleton, for sorting arbitrary `List<TRange>`s the same way the set does. Also available as `RangeLowerBoundComparer<TRange, T>.Instance`. See [RangeSet — Sorting ranges externally](#sorting-ranges-externally).
+
+**Bug fix** — Quoted range bounds now unescape PostgreSQL `\"` → `"` and `\\` → `\` on parse, so element types whose stringification can contain quotes or backslashes round-trip correctly. See [Parsing — Quoted bounds](#quoted-bounds).
+
 ## Supported Types
 
 | .NET type              | PostgreSQL equivalent | Element type     | Discrete |
@@ -266,6 +283,24 @@ var b = IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(6, 1
 a.Equals(b);  // true — both normalize to { [1, 10] }
 ```
 
+### Sorting ranges externally
+
+The set's internal lower-bound ordering is exposed as `RangeSet<TRange, T>.LowerBoundComparer` — an `IComparer<TRange>` singleton for sorting arbitrary `List<TRange>`s the same way the set does, for example to pre-sort inputs before handing them to `From`. `IUnboundedStartRange<T>` sorts first (its lower bound is -∞); at the same finite value, an inclusive lower bound sorts before an exclusive one (`[5, …` before `(5, …`).
+
+```csharp
+var unsorted = new List<Int32Range>
+{
+    Int32Range.CreateFinite(20, 30),
+    Int32Range.CreateFinite(1, 5),
+    Int32Range.CreateUnboundedStart(10, true)
+};
+
+unsorted.Sort(RangeSet<Int32Range, int>.LowerBoundComparer);
+// { (-∞, 10], [1, 5], [20, 30] }
+```
+
+The same instance is available as `RangeLowerBoundComparer<Int32Range, int>.Instance` for contexts where you only have the comparer type and not the set type.
+
 ## Parsing and Formatting
 
 All range types and `RangeSet<TRange, T>` implement `IParsable<T>` and `IFormattable`. The canonical string representation is the PostgreSQL range literal format — the same syntax PostgreSQL uses on the wire.
@@ -342,6 +377,16 @@ set[0];      // [1, 5]
 set[1];      // [7, 10]
 ```
 
+### Quoted bounds
+
+PostgreSQL allows quoting individual bounds to embed commas, brackets, or other characters that would otherwise confuse the parser:
+
+```csharp
+Int32Range.Parse("[\"1\",\"10\"]", null);   // [1, 10]
+```
+
+Inside quotes, `\"` is unescaped to `"` and `\\` to `\`, matching PostgreSQL's quoted-bound syntax. The no-quote fast path stays allocation-free; unescaping only runs when a backslash is actually present inside the quotes.
+
 ## JSON Serialization
 
 The `CodoMetis.ValueRanges.Serialization` namespace provides `System.Text.Json` converters for all range types and their multirange counterparts. Ranges serialize as JSON strings in PostgreSQL literal format — compact and round-trippable.
@@ -411,6 +456,8 @@ The library exposes a structured set of interfaces for writing generic code:
 | `IRangeFactory<TRange, T>` | Abstract static factories; also `NextValueAfter`/`PreviousValueBefore` for step-aware (discrete) types |
 
 `T` is constrained to `struct, IComparable<T>, IEquatable<T>` throughout.
+
+For sorting ranges externally, `RangeLowerBoundComparer<TRange, T>` (an `IComparer<TRange>` singleton) exposes the same lower-bound ordering the set uses internally. See [Sorting ranges externally](#sorting-ranges-externally).
 
 ## Migration from v1.x
 
