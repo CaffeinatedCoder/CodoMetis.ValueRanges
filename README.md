@@ -13,7 +13,7 @@ Fully functional, in-memory range types for .NET — complete interval algebra w
 
 `CodoMetis.ValueRanges` provides concrete, type-safe range types covering the same six value domains as PostgreSQL's built-in range types (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`), together with a full in-memory implementation of every range operation PostgreSQL exposes.
 
-The library is designed to stand on its own: all operations execute in process, with no ORM or database driver required. A companion EF Core package is planned that will bridge these types to `NpgsqlRange<T>` for automatic LINQ-to-SQL translation, making the same code work both in memory and as PostgreSQL queries.
+The library is designed to stand on its own: all operations execute in process, with no ORM or database driver required. A companion EF Core package ([CodoMetis.ValueRanges.EFCore.PostgreSQL](#entity-framework-core-postgresql)) bridges these types to `NpgsqlRange<T>` for automatic LINQ-to-SQL translation, making the same code work both in memory and as PostgreSQL queries.
 
 ### Design
 
