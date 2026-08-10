@@ -38,6 +38,14 @@ internal interface IRangeTypeDefinition
     /// </summary>
     string ElementStoreType { get; }
 
+    /// <summary>
+    /// Whether the element domain is discrete (int, bigint, date). PostgreSQL canonicalizes
+    /// discrete ranges to half-open <c>[lower, upper)</c> form while the model canonicalizes
+    /// to closed <c>[lower, upper]</c>, so upper-bound extraction must compensate
+    /// (<c>upper(x) - 1</c>) to keep server results equal to the in-memory results.
+    /// </summary>
+    bool IsDiscrete { get; }
+
     /// <summary>The type mapping for the range type.</summary>
     RelationalTypeMapping RangeTypeMapping { get; }
 

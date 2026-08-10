@@ -44,10 +44,14 @@ All type parameters are constrained to `struct, IComparable<T>, IEquatable<T>`.
 
 Uses the C# 14 `extension` keyword. Two `extension<T>` blocks:
 
-1. **Query operations** on `IRange<T>` — state checks (`IsEmpty`, `IsInfinity`, etc.), containment, overlap, adjacency, directional comparisons
-2. **Set operations** on `IRangeFactory<TRange, T>` — `Intersect` (returns `TRange`), `Union`/`Except` (return `RangeSet<TRange, T>`)
+1. **Query operations** on `IRange<T>` — state checks (`IsEmpty`, `IsInfinity`, etc.), bound accessors (`LowerBound`/`UpperBound` returning `T?`, `LowerBoundInclusive`/`UpperBoundInclusive` — PostgreSQL `lower`/`upper`/`lower_inc`/`upper_inc`), containment, overlap, adjacency, directional comparisons
+2. **Set operations** on `IRangeFactory<TRange, T>` — `Intersect` (returns `TRange`), `Merge` (convex hull, `range_merge`, returns `TRange`), `Union`/`Except` (return `RangeSet<TRange, T>`)
 
 See `CodoMetis.ValueRanges/RangeExtensions.cs` for the full implementation.
+
+## Aggregates (`RangeAggregateExtensions.cs`)
+
+`RangeAgg()` (→ `RangeSet`, PostgreSQL `range_agg`) and `RangeIntersectAgg()` (→ `TRange?`, `null` on empty source, PostgreSQL `range_intersect_agg`) over `IEnumerable<TRange>`. Declared as **per-type overloads** (six each) because C# cannot infer the element type `T` from `TRange` alone — constraints do not participate in type inference. A generic private core holds the intersect-fold logic.
 
 ## RangeSet<TRange, T> (`RangeSet.cs`)
 
@@ -61,7 +65,10 @@ Immutable multirange counterpart of PostgreSQL's `int4multirange`, etc. A sealed
 Key methods:
 - `From(IEnumerable<TRange>)` — normalizes (filter → sort via `Internals/RangeSetHelpers.CompareByLowerBound` → greedy merge)
 - Bulk ops (`Union`, `Intersect`, `Except`) use O(n+m) merge-join instead of nested loops
-- Operators: `\|` for union, `&` for intersect, `-` for except
+- Operators: `\|` for union, `&` for intersect, `-` for except; `==`/`!=` are structural equality (delegating to `Equals`)
+- State checks `IsEmpty()`/`IsUnboundedStart()`/`IsUnboundedEnd()`, bound accessors (`LowerBound` = first element's lower, `UpperBound` = last element's upper), and `Merge()` (convex hull of first + last element)
+- Set-operand comparisons `Contains(RangeSet)`/`Overlaps(RangeSet)` delegate per element (O(m log n))
+- Positional comparisons (`IsAdjacentTo`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf`) mirror PostgreSQL exactly: they consult the **outermost elements only**, and adjacency is **directional through the outer edges** — the operand must end where the set begins or begin where the set ends; interior boundaries (even the inner side of the first/last element) never count. Verified against live PostgreSQL in the integration suite.
 - `LowerBoundComparer` — static `IComparer<TRange>` for external sorting
 
 See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBoundComparer.cs`.
@@ -74,7 +81,8 @@ See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBou
 
 ## EF Core PostgreSQL (`CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
 
-- **`ValueRangesMethodCallTranslator`** — translates LINQ methods to PostgreSQL operators (`@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>`, `-|-`, `*`, `+`, `-`)
+- **`ValueRangesMethodCallTranslator`** — translates LINQ methods to PostgreSQL operators (`@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>`, `-|-`, `*`, `+`, `-`) and functions (`lower`, `upper`, `lower_inc`, `upper_inc`, `isempty`, `lower_inf`, `upper_inf`, `range_merge`), for ranges and multiranges
+- **`ValueRangesAggregateMethodCallTranslator`** — translates `RangeAgg`/`RangeIntersectAgg` to `range_agg`/`range_intersect_agg` inside grouped queries
 - **Type mapping** — maps range types to PostgreSQL range columns, RangeSet to multirange columns
 - **Enable**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());`
 

@@ -25,12 +25,18 @@ One test file per operation, named `Range[Operation]Tests.cs`:
 | `RangeContainedByTests.cs` | Symmetric containment alias |
 | `RangeDoesNotExtendLeftOfTests.cs` / `RightOfTests.cs` | PostgreSQL `&<`/`&>` |
 | `RangeStrictlyLeftOrRightOfTests.cs` | PostgreSQL `<<`/`>>` |
+| `RangeBoundAccessorTests.cs` | `lower`/`upper`/`lower_inc`/`upper_inc` equivalents on ranges and sets |
+| `RangeMergeSpanTests.cs` | `Merge` convex hull (`range_merge`), spanning gaps |
+| `RangeAggregateTests.cs` | `RangeAgg`/`RangeIntersectAgg` (`range_agg`, `range_intersect_agg`) |
+| `RangeSetComparisonTests.cs` | Multirange operator parity: state checks, set-operand ops, positional comparisons, `==`/`!=` |
 | `RangeParseFormatTests.cs` | PostgreSQL range literal round-trips |
 | `RangeSetTests.cs` | RangeSet construction, normalization, bulk ops |
 | `RangeSetOptimizationTests.cs` | Performance-critical invariants |
 | `RangeJsonConverterTests.cs` | JSON serialization round-trips |
 
-EF Core tests live in `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/`.
+EF Core translation tests live in `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — they assert generated SQL via `ToQueryString()` without a database.
+
+`CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` executes against **live PostgreSQL** via Testcontainers (Docker required; tests report Inconclusive without it): round-trips for every range/multirange type, timestamp normalization rules, and SQL-vs-in-memory parity assertions for the v4 operations. These tests are the authority on PostgreSQL semantics — they caught the discrete `upper()` canonicalization offset and the directional multirange adjacency rule.
 
 ## Patterns
 

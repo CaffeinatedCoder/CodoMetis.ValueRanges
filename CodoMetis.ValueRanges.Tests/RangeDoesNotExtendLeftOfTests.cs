@@ -53,13 +53,36 @@ public class RangeDoesNotExtendLeftOfTests
     }
 
     [TestMethod]
-    public void DoesNotExtendLeftOf_OpenStart_AlwaysReturnsFalse()
+    public void DoesNotExtendLeftOf_OpenStartVsFinite_ReturnsFalse()
     {
-        // An UnboundedStart range extends to -∞, so it always extends left of anything finite
+        // An UnboundedStart range extends to -∞, past any finite lower bound
         var openStart = Int32Range.CreateUnboundedStart(10, true);
         var finite    = Int32Range.CreateFinite(1, 5, true, true);
 
         Assert.IsFalse(openStart.DoesNotExtendLeftOf(finite));
+    }
+
+    [TestMethod]
+    public void DoesNotExtendLeftOf_UnboundedLowerVsUnboundedLower_ReturnsTrue()
+    {
+        // Full PostgreSQL &> parity: -∞ ≥ -∞ compares equal.
+        var openStart = Int32Range.CreateUnboundedStart(10, true); // (-∞, 10]
+        var other     = Int32Range.CreateUnboundedStart(-50, true); // (-∞, -50]
+
+        Assert.IsTrue(openStart.DoesNotExtendLeftOf(other));
+        Assert.IsTrue(openStart.DoesNotExtendLeftOf(Int32Range.Infinite));
+        Assert.IsTrue(Int32Range.Infinite.DoesNotExtendLeftOf(openStart));
+        Assert.IsTrue(Int32Range.Infinite.DoesNotExtendLeftOf(Int32Range.Infinite));
+    }
+
+    [TestMethod]
+    public void DoesNotExtendLeftOf_UnboundedLowerVsFiniteLowerOrEmpty_ReturnsFalse()
+    {
+        var openStart = Int32Range.CreateUnboundedStart(10, true);
+
+        Assert.IsFalse(openStart.DoesNotExtendLeftOf(Int32Range.CreateUnboundedEnd(1, true)));
+        Assert.IsFalse(openStart.DoesNotExtendLeftOf(Int32Range.Empty));
+        Assert.IsFalse(Int32Range.Infinite.DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 5)));
     }
 
     [TestMethod]

@@ -6,10 +6,12 @@
         <Nullable>enable</Nullable>
         <RootNamespace>CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL</RootNamespace>
         <PackageId>CodoMetis.ValueRanges.EFCore.PostgreSQL</PackageId>
+        <Version>4.0.0</Version>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <Description>Entity Framework Core (Npgsql) plugin for CodoMetis.ValueRanges: maps the six range types to the PostgreSQL range columns (int4range, int8range, numrange, daterange, tsrange, tstzrange) and RangeSet&lt;TRange, T&gt; to the corresponding multirange columns — no manual value converters required.
 
-Translates the full range algebra from LINQ to SQL: Contains, Overlaps, IsContainedBy, IsStrictlyLeftOf/RightOf, DoesNotExtendLeftOf/RightOf, IsAdjacentTo (@&gt;, &lt;@, &amp;&amp;, &lt;&lt;, &gt;&gt;, &amp;&lt;, &amp;&gt;, -|-), Intersect (*), Union and Except (multirange + and -), RangeSet operations and operators, and the CreateFinite/CreateUnboundedStart/CreateUnboundedEnd factories as range constructor calls. Enable with one line: options.UseNpgsql(..., npgsql =&gt; npgsql.UseValueRanges()).</Description>
+Translates the full range algebra from LINQ to SQL: Contains, Overlaps, IsContainedBy, IsStrictlyLeftOf/RightOf, DoesNotExtendLeftOf/RightOf, IsAdjacentTo (@&gt;, &lt;@, &amp;&amp;, &lt;&lt;, &gt;&gt;, &amp;&lt;, &amp;&gt;, -|-) on ranges and multiranges, bound accessors (lower, upper, lower_inc, upper_inc), Merge (range_merge), the RangeAgg/RangeIntersectAgg aggregates (range_agg, range_intersect_agg), Intersect (*), Union and Except (multirange + and -), RangeSet operations and operators including == equality, and the CreateFinite/CreateUnboundedStart/CreateUnboundedEnd factories as range constructor calls. Enable with one line: options.UseNpgsql(..., npgsql =&gt; npgsql.UseValueRanges()).</Description>
         <PackageTags>range;interval;multirange;postgresql;postgres;npgsql;efcore;entity-framework-core;int4range;int8range;numrange;daterange;tsrange;tstzrange;value-converter;linq-to-sql</PackageTags>
     </PropertyGroup>
 

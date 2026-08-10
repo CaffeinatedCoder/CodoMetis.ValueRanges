@@ -53,6 +53,70 @@ public static class RangeExtensions
         public bool IsUnboundedEnd()   => range is IUnboundedEndRange<T>;
 
         /// <summary>
+        /// Returns the lower bound of the range, or <see langword="null"/> when the range is
+        /// empty or unbounded on the left — equivalent to the PostgreSQL <c>lower</c> function.
+        /// </summary>
+        /// <returns>
+        /// The <c>Start</c> value for <see cref="IFiniteRange{T}"/> and <see cref="IUnboundedEndRange{T}"/>;
+        /// <see langword="null"/> for all other shapes.
+        /// </returns>
+        public T? LowerBound() =>
+            range switch
+            {
+                IFiniteRange<T> b       => b.Start,
+                IUnboundedEndRange<T> e => e.Start,
+                _                       => null
+            };
+
+        /// <summary>
+        /// Returns the upper bound of the range, or <see langword="null"/> when the range is
+        /// empty or unbounded on the right — equivalent to the PostgreSQL <c>upper</c> function.
+        /// </summary>
+        /// <returns>
+        /// The <c>End</c> value for <see cref="IFiniteRange{T}"/> and <see cref="IUnboundedStartRange{T}"/>;
+        /// <see langword="null"/> for all other shapes.
+        /// </returns>
+        public T? UpperBound() =>
+            range switch
+            {
+                IFiniteRange<T> b         => b.End,
+                IUnboundedStartRange<T> s => s.End,
+                _                         => null
+            };
+
+        /// <summary>
+        /// Returns <see langword="true"/> if the range has an inclusive lower bound —
+        /// equivalent to the PostgreSQL <c>lower_inc</c> function.
+        /// </summary>
+        /// <returns>
+        /// The <c>StartInclusive</c> flag for <see cref="IFiniteRange{T}"/> and
+        /// <see cref="IUnboundedEndRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// </returns>
+        public bool LowerBoundInclusive() =>
+            range switch
+            {
+                IFiniteRange<T> b       => b.StartInclusive,
+                IUnboundedEndRange<T> e => e.StartInclusive,
+                _                       => false
+            };
+
+        /// <summary>
+        /// Returns <see langword="true"/> if the range has an inclusive upper bound —
+        /// equivalent to the PostgreSQL <c>upper_inc</c> function.
+        /// </summary>
+        /// <returns>
+        /// The <c>EndInclusive</c> flag for <see cref="IFiniteRange{T}"/> and
+        /// <see cref="IUnboundedStartRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// </returns>
+        public bool UpperBoundInclusive() =>
+            range switch
+            {
+                IFiniteRange<T> b         => b.EndInclusive,
+                IUnboundedStartRange<T> s => s.EndInclusive,
+                _                         => false
+            };
+
+        /// <summary>
         /// Determines whether <paramref name="value"/> is contained in the range.
         /// </summary>
         /// <param name="value">The value to test.</param>
@@ -222,20 +286,23 @@ public static class RangeExtensions
         /// <remarks>
         /// The upper bound of this range must be less than or equal to the upper bound of
         /// <paramref name="other"/>. When the upper bounds are equal, this range must not be inclusive
-        /// where <paramref name="other"/> is exclusive at that point.
-        /// An <see cref="IUnboundedEndRange{T}"/> or <see cref="IInfinityRange{T}"/> has no finite upper bound
-        /// and always returns <see langword="false"/>.
+        /// where <paramref name="other"/> is exclusive at that point. An infinite upper bound compares
+        /// equal to another infinite upper bound — PostgreSQL semantics: <c>+∞ ≤ +∞</c> —
+        /// so an <see cref="IUnboundedEndRange{T}"/> or <see cref="IInfinityRange{T}"/> receiver
+        /// returns <see langword="true"/> exactly when <paramref name="other"/> is also unbounded above.
         /// </remarks>
         /// <param name="other">The range to compare against.</param>
         /// <returns>
-        /// <see langword="true"/> if the upper bound of this range does not exceed that of <paramref name="other"/>;
-        /// always <see langword="false"/> for <see cref="IUnboundedEndRange{T}"/> or <see cref="IInfinityRange{T}"/>.
+        /// <see langword="true"/> if the upper bound of this range does not exceed that of
+        /// <paramref name="other"/>; always <see langword="false"/> when either range is
+        /// <see cref="IEmptyRange{T}"/>.
         /// </returns>
         public bool DoesNotExtendRightOf(IRange<T> other) =>
             range switch
             {
-                IUnboundedEndRange<T> => false,
-                IInfinityRange<T>     => false,
+                // Upper bound +∞: only another +∞ upper compares equal (PostgreSQL &<).
+                IUnboundedEndRange<T> or IInfinityRange<T> =>
+                    other is IUnboundedEndRange<T> or IInfinityRange<T>,
 
                 IFiniteRange<T> b =>
                     other switch
@@ -269,20 +336,23 @@ public static class RangeExtensions
         /// <remarks>
         /// The lower bound of this range must be greater than or equal to the lower bound of
         /// <paramref name="other"/>. When the lower bounds are equal, this range must not be inclusive
-        /// where <paramref name="other"/> is exclusive at that point.
-        /// An <see cref="IUnboundedStartRange{T}"/> or <see cref="IInfinityRange{T}"/> has no finite lower bound
-        /// and always returns <see langword="false"/>.
+        /// where <paramref name="other"/> is exclusive at that point. An infinite lower bound compares
+        /// equal to another infinite lower bound — PostgreSQL semantics: <c>-∞ ≥ -∞</c> —
+        /// so an <see cref="IUnboundedStartRange{T}"/> or <see cref="IInfinityRange{T}"/> receiver
+        /// returns <see langword="true"/> exactly when <paramref name="other"/> is also unbounded below.
         /// </remarks>
         /// <param name="other">The range to compare against.</param>
         /// <returns>
-        /// <see langword="true"/> if the lower bound of this range is not less than that of <paramref name="other"/>;
-        /// always <see langword="false"/> for <see cref="IUnboundedStartRange{T}"/> or <see cref="IInfinityRange{T}"/>.
+        /// <see langword="true"/> if the lower bound of this range is not less than that of
+        /// <paramref name="other"/>; always <see langword="false"/> when either range is
+        /// <see cref="IEmptyRange{T}"/>.
         /// </returns>
         public bool DoesNotExtendLeftOf(IRange<T> other) =>
             range switch
             {
-                IUnboundedStartRange<T> => false,
-                IInfinityRange<T>       => false,
+                // Lower bound -∞: only another -∞ lower compares equal (PostgreSQL &>).
+                IUnboundedStartRange<T> or IInfinityRange<T> =>
+                    other is IUnboundedStartRange<T> or IInfinityRange<T>,
 
                 IFiniteRange<T> b =>
                     other switch
@@ -368,6 +438,50 @@ public static class RangeExtensions
 
                 _ => false
             };
+
+        /// <summary>
+        /// Returns the smallest single range containing both this range and
+        /// <paramref name="other"/> — equivalent to the PostgreSQL <c>range_merge</c> function.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="Union"/>, the result also covers any gap between disjoint
+        /// operands: <c>[1,3].Merge([10,12])</c> is <c>[1,12]</c>. Empty operands are
+        /// ignored; merging two empty ranges yields <see cref="IRangeFactory{TRange,T}.Empty"/>.
+        /// </remarks>
+        /// <param name="other">The range to span together with this range.</param>
+        /// <returns>The convex hull of the two operands.</returns>
+        public TRange Merge(IRange<T> other)
+        {
+            if (range.IsEmpty()) return RecreateAs<TRange, T>(other);
+            if (other.IsEmpty()) return range;
+            if (range.IsInfinity() || other.IsInfinity()) return TRange.Infinite;
+
+            var (aLower, aLowerInc, aLowerInf) = RangeSetHelpers.RangeLowerBound<T>(range);
+            var (bLower, bLowerInc, bLowerInf) = RangeSetHelpers.RangeLowerBound<T>(other);
+            var (aUpper, aUpperInc, aUpperInf) = RangeSetHelpers.RangeUpperBound<T>(range);
+            var (bUpper, bUpperInc, bUpperInf) = RangeSetHelpers.RangeUpperBound<T>(other);
+
+            bool lowerInfinite = aLowerInf || bLowerInf;
+            bool upperInfinite = aUpperInf || bUpperInf;
+
+            if (lowerInfinite && upperInfinite) return TRange.Infinite;
+
+            if (lowerInfinite)
+            {
+                var (value, inclusive) = LaterEnd(aUpper, aUpperInc, bUpper, bUpperInc);
+                return TRange.CreateUnboundedStart(value, inclusive);
+            }
+
+            if (upperInfinite)
+            {
+                var (value, inclusive) = EarlierStart(aLower, aLowerInc, bLower, bLowerInc);
+                return TRange.CreateUnboundedEnd(value, inclusive);
+            }
+
+            var lower = EarlierStart(aLower, aLowerInc, bLower, bLowerInc);
+            var upper = LaterEnd(aUpper, aUpperInc, bUpper, bUpperInc);
+            return TRange.CreateFinite(lower.Value, upper.Value, lower.Inclusive, upper.Inclusive);
+        }
 
         /// <summary>
         /// Returns the largest range contained by both this range and <paramref name="other"/>.

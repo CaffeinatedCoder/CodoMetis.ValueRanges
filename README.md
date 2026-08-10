@@ -29,6 +29,19 @@ Each range type is modelled as a **discriminated union** of five sealed variants
 
 The *shape* of a range is encoded in its static type. An `UnboundedEnd` range has no `End` property — the property does not exist at compile time. An `Empty` range carries no bound information whatsoever. Invalid states are unrepresentable by construction, and pattern matching over a range is exhaustive with compiler-enforced coverage.
 
+## What's new in v4.0
+
+**PostgreSQL feature-matrix completion** — every remaining range/multirange operator and function now has an in-memory implementation and a LINQ-to-SQL translation:
+
+- **Bound accessors** — `LowerBound()` / `UpperBound()` return `T?` (`null` when unbounded or empty, matching PostgreSQL `lower`/`upper` `NULL` semantics), and `LowerBoundInclusive()` / `UpperBoundInclusive()` mirror `lower_inc`/`upper_inc` — on ranges and on `RangeSet`. Sorting by range start finally works straight from LINQ: `query.OrderBy(b => b.Period.LowerBound())` → `ORDER BY lower("Period")`. See [Bound Accessors](#bound-accessors).
+- **`Merge`** — the smallest single range spanning both operands *including any gap* (PostgreSQL `range_merge`), on ranges and as `RangeSet.Merge()`. See [Merge (Convex Hull)](#merge-convex-hull).
+- **Aggregates** — `RangeAgg()` and `RangeIntersectAgg()` over sequences of ranges (`range_agg`, `range_intersect_agg`), translated inside `GroupBy` projections. See [Aggregates](#aggregates).
+- **Multirange operator parity** — `RangeSet` gains `Contains(RangeSet)`, `Overlaps(RangeSet)`, `IsAdjacentTo`, `IsStrictlyLeftOf`/`RightOf` and `DoesNotExtendLeftOf`/`RightOf` (range and set operands), plus the state checks `IsEmpty()`, `IsUnboundedStart()`, `IsUnboundedEnd()` — each translating to its multirange operator or function.
+- **`==` / `!=` on `RangeSet`** — structural equality operators, so in-memory comparisons agree with the SQL `=` the EF Core provider generates. **Behavioral change:** `==` on sets was previously reference equality; recompiling against v4 switches those call sites to value equality. This is the change that makes v4 a major version.
+- **Full `&<` / `&>` parity** — `DoesNotExtendRightOf`/`DoesNotExtendLeftOf` now treat an infinite bound as comparing equal to another infinite bound (`+∞ ≤ +∞`, `-∞ ≥ -∞`), exactly like PostgreSQL. **Behavioral change:** an unbounded receiver previously always returned `false`, even against an operand unbounded on the same side.
+- **Bug fix** — `RangeSet.Infinite.Contains(range)` and `RangeSet.Infinite.Overlaps(range)` threw `InvalidOperationException` for operands with a finite bound; they now return the expected result.
+- **Live-PostgreSQL integration suite** — a Testcontainers-based test project executes the translated SQL against real PostgreSQL and asserts agreement with the in-memory results: round-trips for all six range and both multirange column types, the timestamp normalization rules, and the v4 operations end-to-end.
+
 ## What's new in v3.1
 
 **Performance** — `RangeSet<TRange, T>` now exploits its sorted, disjoint, non-adjacent invariant for sub-linear queries and merge-join set operations. No public API or results changed — only the time complexity:
@@ -182,6 +195,24 @@ Int32Range.CreateFinite(1, 5).DoesNotExtendRightOf(Int32Range.CreateFinite(1, 10
 Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10));  // true
 ```
 
+### Bound Accessors
+
+The PostgreSQL `lower` / `upper` / `lower_inc` / `upper_inc` functions, on any range shape. The variants expose `Start`/`End` only where they exist structurally; the accessors provide the dynamic view: `T?` with `null` for a missing bound — exactly PostgreSQL's `NULL` semantics.
+
+```csharp
+Int32Range.CreateFinite(1, 10).LowerBound();          // 1
+Int32Range.CreateFinite(1, 10).UpperBoundInclusive(); // true
+
+Int32Range.CreateUnboundedStart(5, true).LowerBound(); // null — no lower bound
+Int32Range.Empty.UpperBound();                         // null
+Int32Range.Infinite.LowerBoundInclusive();             // false
+
+// On RangeSet: the first element's lower bound, the last element's upper bound.
+var set = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 3), Int32Range.CreateFinite(7, 9)]);
+set.LowerBound();  // 1
+set.UpperBound();  // 9
+```
+
 ## Set Operations
 
 Set operations are extension methods on the concrete range types (any type that implements `IRangeFactory<TRange, T>`).
@@ -241,6 +272,38 @@ var result = range.Except(remove);
 
 Boundary inclusiveness is inverted at the cut point so that no value is lost or double-counted across the resulting pieces.
 
+### Merge (Convex Hull)
+
+Returns the smallest single range containing both operands — PostgreSQL's `range_merge`. Unlike `Union`, the result also covers any gap between disjoint operands.
+
+```csharp
+var a = Int32Range.CreateFinite(1, 3);
+var b = Int32Range.CreateFinite(10, 12);
+
+a.Union(b);  // { [1, 3], [10, 12] } — two elements, the gap stays open
+a.Merge(b);  // [1, 12]              — one range, the gap is covered
+
+// Empty operands are ignored; unbounded edges span accordingly:
+Int32Range.CreateUnboundedStart(3, true).Merge(Int32Range.CreateUnboundedEnd(10)); // (-∞, +∞)
+
+// RangeSet.Merge() spans the whole set:
+RangeSet<Int32Range, int>.From([a, b]).Merge(); // [1, 12]
+```
+
+### Aggregates
+
+`RangeAgg()` and `RangeIntersectAgg()` aggregate a sequence of ranges — the in-memory counterparts of PostgreSQL's `range_agg` and `range_intersect_agg`:
+
+```csharp
+new[] { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8), Int32Range.CreateFinite(20, 25) }
+    .RangeAgg();           // { [1, 8], [20, 25] } — a normalized RangeSet
+
+new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
+    .RangeIntersectAgg();  // [5, 10] — the common intersection; null for an empty source
+```
+
+In EF Core queries they translate to the SQL aggregates inside `GroupBy` projections — see [Entity Framework Core](#entity-framework-core-postgresql).
+
 ## RangeSet — Multirange Support
 
 `RangeSet<TRange, T>` is the in-memory counterpart of a PostgreSQL 14+ multirange (`int4multirange`, `nummultirange`, …): an immutable, always-normalized set of disjoint ranges. Its invariant — elements sorted by lower bound, pairwise disjoint, pairwise non-adjacent — is enforced on every construction: empty ranges are dropped, overlapping or adjacent inputs are merged, and any `Infinity` input collapses the set to `RangeSet<TRange, T>.Infinite`.
@@ -273,14 +336,40 @@ set - Int32Range.CreateFinite(4, 6);           // { [1, 3], [7, 10], [20, 30] }
 
 // Complement — every value not covered by the set
 set.Complement();  // { (-∞, 0], [11, 19], [31, +∞) }
+
+// State checks — isempty / lower_inf / upper_inf equivalents
+set.IsEmpty();           // false
+set.IsUnboundedStart();  // false
+set.IsUnboundedEnd();    // false
+
+// Set-operand comparisons — the full multirange operator matrix
+set.Contains(IntSet.From([Int32Range.CreateFinite(2, 8)]));   // true   (@>)
+set.Overlaps(IntSet.From([Int32Range.CreateFinite(25, 40)])); // true   (&&)
+set.IsStrictlyLeftOf(Int32Range.CreateFinite(40, 50));        // true   (<<)
+set.DoesNotExtendRightOf(Int32Range.CreateFinite(1, 30));     // true   (&<)
+set.IsAdjacentTo(Int32Range.CreateFinite(31, 40));            // true   (-|-)
 ```
 
-The set implements `IReadOnlyList<TRange>` (enumeration in lower-bound order, `Count`, indexer) and structural equality: two sets built from different inputs that normalize identically are equal.
+**Adjacency mirrors PostgreSQL exactly:** it is *directional through the outer edges* — the operand must end exactly where the set's first element begins, or begin exactly where the set's last element ends. Touching any interior boundary, even the inner side of the first or last element, does not count (verified against live PostgreSQL):
+
+```csharp
+var three = IntSet.From([
+    Int32Range.CreateFinite(1, 3), Int32Range.CreateFinite(7, 9), Int32Range.CreateFinite(20, 22)
+]);
+three.IsAdjacentTo(Int32Range.CreateFinite(23, 25)); // true  — attaches after the last element
+three.IsAdjacentTo(Int32Range.CreateFinite(4, 6));   // false — inner side of the first element
+three.IsAdjacentTo(Int32Range.CreateFinite(10, 12)); // false — touches only the interior [7, 9]
+```
+
+The positional operators (`<<`, `>>`, `&<`, `&>`) likewise compare the first/last element's bounds.
+
+The set implements `IReadOnlyList<TRange>` (enumeration in lower-bound order, `Count`, indexer) and structural equality, including `==`/`!=`: two sets built from different inputs that normalize identically are equal.
 
 ```csharp
 var a = IntSet.From([Int32Range.CreateFinite(1, 10)]);
 var b = IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(6, 10)]);
 a.Equals(b);  // true — both normalize to { [1, 10] }
+a == b;       // true — same value semantics as the ranges themselves
 ```
 
 ### Sorting ranges externally
@@ -493,6 +582,18 @@ if (range.IsEmpty()) { … }
 
 The change is mechanical and the compiler will flag every affected site. The motivation is EF Core compatibility: extension properties cannot appear in LINQ expression trees, preventing SQL translation. As extension methods they are fully translated by the EF Core companion package — see the [EF Core section](#entity-framework-core-postgresql) below.
 
+## Migration from v3.x
+
+### `RangeSet` `==` is now structural
+
+`RangeSet<TRange, T>` defines `operator ==`/`!=` as value equality, delegating to `Equals` — consistent with the range types themselves (records) and with the SQL `=` the EF Core provider generates. Code that compared sets with `==` previously got reference equality; recompiling against v4 silently changes those call sites to value comparison. If you relied on reference identity, switch to `ReferenceEquals(a, b)`.
+
+### `DoesNotExtendRightOf`/`LeftOf` now match PostgreSQL for infinite bounds
+
+An unbounded receiver previously always returned `false`. In v4, an infinite bound compares equal to another infinite bound — `[5, +∞).DoesNotExtendRightOf([100, +∞))` is now `true` (`+∞ ≤ +∞`), matching the `&<`/`&>` operators exactly. Results against finite-bounded or empty operands are unchanged.
+
+Everything else in v4 is additive — no other source changes are required.
+
 ## Entity Framework Core (PostgreSQL)
 
 The companion package **CodoMetis.ValueRanges.EFCore.PostgreSQL** maps every range type to its PostgreSQL range column and `RangeSet<TRange, T>` to the corresponding multirange column, bridging through `NpgsqlRange<T>` at the provider boundary — giving you identical semantics whether executing against an in-memory collection or a live PostgreSQL database.
@@ -542,12 +643,42 @@ bookings.Select(b => b.BlockedDays | b.Period);
 bookings.Where(b => DateRange.CreateFinite(b.From, b.To).Contains(day));
 ```
 
-`Contains`, `Overlaps`, `IsContainedBy`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` and `IsAdjacentTo` map to `@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>` and `-|-`. `Intersect` maps to `*`; `Union` and `Except` lift both operands to multiranges (`+`/`-`), matching their `RangeSet` return type — a disjoint union is a real two-element multirange, never an error. The `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` factories translate to guarded range constructor calls with the model's inverted-bounds-yield-empty semantics.
+`Contains`, `Overlaps`, `IsContainedBy`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` and `IsAdjacentTo` map to `@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>` and `-|-` — on ranges and, since v4, on `RangeSet` with range or multirange operands. `Intersect` maps to `*`; `Union` and `Except` lift both operands to multiranges (`+`/`-`), matching their `RangeSet` return type — a disjoint union is a real two-element multirange, never an error. The `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` factories translate to guarded range constructor calls with the model's inverted-bounds-yield-empty semantics.
+
+New in v4:
+
+```csharp
+// ORDER BY lower(b."Period") — bound accessors: lower / upper / lower_inc / upper_inc
+bookings.OrderBy(b => b.Period.LowerBound());
+
+// range_merge(b."Period", @other) and range_merge(b."BlockedDays")
+bookings.Select(b => b.Period.Merge(other));
+bookings.Select(b => b.BlockedDays.Merge());
+
+// range_agg(b."Period") / range_intersect_agg(b."Period") per group
+bookings.GroupBy(b => b.CustomerId)
+        .Select(g => g.Select(b => b.Period).RangeAgg());
+
+// isempty / lower_inf / upper_inf on multirange columns
+bookings.Where(b => !b.BlockedDays.IsEmpty());
+
+// Value equality on multirange columns — b."BlockedDays" = @set
+bookings.Where(b => b.BlockedDays == someSet);
+```
 
 Notes:
 
-- Range state checks translate directly: `IsEmpty()` → `isempty`, `IsUnboundedStart()` → `lower_inf`, `IsUnboundedEnd()` → `upper_inf`, `IsInfinity()` → `lower_inf AND upper_inf`, `IsFinite()` → `NOT lower_inf AND NOT upper_inf AND NOT isempty`.
-- `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified`; `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz` (instants are preserved).
+- Range state checks translate directly: `IsEmpty()` → `isempty`, `IsUnboundedStart()` → `lower_inf`, `IsUnboundedEnd()` → `upper_inf`, `IsInfinity()` → `lower_inf AND upper_inf`, `IsFinite()` → `NOT lower_inf AND NOT upper_inf AND NOT isempty`. The same state checks exist on `RangeSet` and translate to the multirange functions.
+- `LowerBound()`/`UpperBound()` return `T?` because PostgreSQL's `lower`/`upper` return `NULL` for an unbounded or empty operand — the in-memory implementation matches.
+- For the discrete types (`int4range`, `int8range`, `daterange`), PostgreSQL canonicalizes to half-open `[lower, upper)` while the model canonicalizes to closed `[lower, upper]`. `UpperBound()` therefore translates to `upper(x) - 1` and `UpperBoundInclusive()` to `NOT upper_inf(x) AND NOT isempty(x)`, so server results always equal the in-memory results (verified against live PostgreSQL).
+- The aggregates return `NULL` in SQL for zero input rows (standard PostgreSQL aggregate behavior), while the in-memory `RangeAgg()` returns the empty set. `RangeIntersectAgg()` returns `null` in both worlds.
+- The factory-method bound-inclusiveness flags must be compile-time constants to translate (they pick the bounds literal, e.g. `'[]'`); in practice they always are, because the flags default at the call site.
+
+Timestamp semantics:
+
+- `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified` — a UTC-kinded `DateTime` is reinterpreted as wall-clock time, not converted. `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz`: the instant is preserved, but the original offset is not round-tripped (values read back carry offset `+00:00` and compare equal to what was written, since `DateTimeOffset` equality is instant-based).
+- Npgsql by default maps `DateTime.MinValue`/`MaxValue` to PostgreSQL `-infinity`/`infinity`. A *finite* bound of `DateTime.MaxValue` therefore becomes an explicit `infinity` bound in the database — which is distinct from an *unbounded* side (`upper_inf` stays `false`), so shape checks behave consistently.
+- Reverse engineering (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`, not to these types — the plugin provides no design-time services. Apply the range types manually after scaffolding.
 
 ## License
 

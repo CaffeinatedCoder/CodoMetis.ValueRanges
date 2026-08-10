@@ -9,7 +9,8 @@ In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six bui
 - `CodoMetis.ValueRanges/` — Core library: range types, interfaces, set ops
 - `CodoMetis.ValueRanges.EFCore.PostgreSQL/` — EF Core provider for LINQ-to-SQL translation
 - `CodoMetis.ValueRanges.Tests/` — Unit tests (one file per operation)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core integration tests
+- `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
+- `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without). Authority on PostgreSQL semantics — run when changing translations or range algebra
 - `docs/` — Agent docs (read relevant doc before starting work)
 
 ## Commands

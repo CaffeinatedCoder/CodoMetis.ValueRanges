@@ -53,9 +53,9 @@ public class RangeDoesNotExtendRightOfTests
     }
 
     [TestMethod]
-    public void DoesNotExtendRightOf_OpenEnd_AlwaysReturnsFalse()
+    public void DoesNotExtendRightOf_OpenEndVsFinite_ReturnsFalse()
     {
-        // An UnboundedEnd range extends to +∞, so it always extends right of anything finite
+        // An UnboundedEnd range extends to +∞, past any finite upper bound
         var openEnd = Int32Range.CreateUnboundedEnd(1, true); // [1, +∞)
         var finite  = Int32Range.CreateFinite(1, 100, true, true);
 
@@ -70,6 +70,29 @@ public class RangeDoesNotExtendRightOfTests
         var openEnd = Int32Range.CreateUnboundedEnd(1, true);
 
         Assert.IsTrue(finite.DoesNotExtendRightOf(openEnd));
+    }
+
+    [TestMethod]
+    public void DoesNotExtendRightOf_UnboundedUpperVsUnboundedUpper_ReturnsTrue()
+    {
+        // Full PostgreSQL &< parity: +∞ ≤ +∞ compares equal.
+        var openEnd = Int32Range.CreateUnboundedEnd(5, true);   // [5, +∞)
+        var other   = Int32Range.CreateUnboundedEnd(100, true); // [100, +∞)
+
+        Assert.IsTrue(openEnd.DoesNotExtendRightOf(other));
+        Assert.IsTrue(openEnd.DoesNotExtendRightOf(Int32Range.Infinite));
+        Assert.IsTrue(Int32Range.Infinite.DoesNotExtendRightOf(openEnd));
+        Assert.IsTrue(Int32Range.Infinite.DoesNotExtendRightOf(Int32Range.Infinite));
+    }
+
+    [TestMethod]
+    public void DoesNotExtendRightOf_UnboundedUpperVsFiniteUpperOrEmpty_ReturnsFalse()
+    {
+        var openEnd = Int32Range.CreateUnboundedEnd(1, true); // [1, +∞)
+
+        Assert.IsFalse(openEnd.DoesNotExtendRightOf(Int32Range.CreateUnboundedStart(10, true)));
+        Assert.IsFalse(openEnd.DoesNotExtendRightOf(Int32Range.Empty));
+        Assert.IsFalse(Int32Range.Infinite.DoesNotExtendRightOf(Int32Range.CreateFinite(1, 5)));
     }
 
     [TestMethod]

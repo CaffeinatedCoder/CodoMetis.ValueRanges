@@ -47,6 +47,7 @@ internal sealed class ValueRangesMethodCallTranslator(
     // -- RangeExtensions set operations: extension<TRange, T>(TRange) --
 
     private static readonly MethodInfo IsAdjacentToMethod = GetExtensionMethod(nameof(RangeExtensions.IsAdjacentTo));
+    private static readonly MethodInfo MergeMethod        = GetExtensionMethod(nameof(RangeExtensions.Merge));
     private static readonly MethodInfo IntersectMethod    = GetExtensionMethod(nameof(RangeExtensions.Intersect));
     private static readonly MethodInfo UnionMethod        = GetExtensionMethod(nameof(RangeExtensions.Union));
     private static readonly MethodInfo ExceptMethod       = GetExtensionMethod(nameof(RangeExtensions.Except));
@@ -58,6 +59,13 @@ internal sealed class ValueRangesMethodCallTranslator(
     private static readonly MethodInfo IsFiniteMethod         = GetExtensionMethod(nameof(RangeExtensions.IsFinite));
     private static readonly MethodInfo IsUnboundedStartMethod = GetExtensionMethod(nameof(RangeExtensions.IsUnboundedStart));
     private static readonly MethodInfo IsUnboundedEndMethod   = GetExtensionMethod(nameof(RangeExtensions.IsUnboundedEnd));
+
+    // -- RangeExtensions bound accessors: extension<T>(IRange<T>) --
+
+    private static readonly MethodInfo LowerBoundMethod          = GetExtensionMethod(nameof(RangeExtensions.LowerBound));
+    private static readonly MethodInfo UpperBoundMethod          = GetExtensionMethod(nameof(RangeExtensions.UpperBound));
+    private static readonly MethodInfo LowerBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.LowerBoundInclusive));
+    private static readonly MethodInfo UpperBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.UpperBoundInclusive));
 
     private static MethodInfo GetExtensionMethod(string name, Func<MethodInfo, bool>? filter = null)
         => typeof(RangeExtensions)
@@ -129,6 +137,15 @@ internal sealed class ValueRangesMethodCallTranslator(
         if (generic == IsAdjacentToMethod)
             return sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeIsAdjacentTo, Range(0), Range(1));
 
+        if (generic == MergeMethod)
+            return sqlExpressionFactory.Function(
+                "range_merge",
+                [Range(0), Range(1)],
+                nullable: true,
+                argumentsPropagateNullability: [true, true],
+                definition.RangeClrType,
+                definition.RangeTypeMapping);
+
         if (generic == IntersectMethod)
             return sqlExpressionFactory.MakePostgresBinary(
                 PgExpressionType.RangeIntersect, Range(0), Range(1), definition.RangeTypeMapping);
@@ -167,6 +184,18 @@ internal sealed class ValueRangesMethodCallTranslator(
                 sqlExpressionFactory.AndAlso(
                     sqlExpressionFactory.Not(BoolFunction("upper_inf", Range(0))),
                     sqlExpressionFactory.Not(BoolFunction("isempty", Range(0)))));
+
+        if (generic == LowerBoundMethod)
+            return BoundFunction("lower", Range(0), definition);
+
+        if (generic == UpperBoundMethod)
+            return UpperBoundFunction(Range(0), definition);
+
+        if (generic == LowerBoundInclusiveMethod)
+            return BoolFunction("lower_inc", Range(0));
+
+        if (generic == UpperBoundInclusiveMethod)
+            return UpperInclusiveFunction(Range(0), definition);
 
         return null;
     }
@@ -214,17 +243,58 @@ internal sealed class ValueRangesMethodCallTranslator(
                    ? Set(expression)
                    : AsMultirange(Range(expression), definition);
 
+        // Boolean comparisons accept element, range, and multirange operands natively —
+        // no lifting required, only the matching type mapping.
+        SqlExpression Operand(SqlExpression expression)
+            => Unwrap(expression).Type == definition.RangeSetClrType ? Set(expression)
+             : expression.Type == definition.ElementClrType          ? ApplyElementMapping(expression, definition)
+                                                                     : Range(expression);
+
         switch (method.Name)
         {
             case nameof(RangeSet<,>.Contains) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.Contains(
-                    Set(instance),
-                    arguments[0].Type == definition.ElementClrType
-                        ? ApplyElementMapping(arguments[0], definition)
-                        : Range(arguments[0]));
+                return sqlExpressionFactory.Contains(Set(instance), Operand(arguments[0]));
 
             case nameof(RangeSet<,>.Overlaps) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.Overlaps(Set(instance), Range(arguments[0]));
+                return sqlExpressionFactory.Overlaps(Set(instance), Operand(arguments[0]));
+
+            case nameof(RangeSet<,>.IsAdjacentTo) when instance is not null && arguments.Count == 1:
+                return sqlExpressionFactory.MakePostgresBinary(
+                    PgExpressionType.RangeIsAdjacentTo, Set(instance), Operand(arguments[0]));
+
+            case nameof(RangeSet<,>.IsStrictlyLeftOf) when instance is not null && arguments.Count == 1:
+                return sqlExpressionFactory.MakePostgresBinary(
+                    PgExpressionType.RangeIsStrictlyLeftOf, Set(instance), Operand(arguments[0]));
+
+            case nameof(RangeSet<,>.IsStrictlyRightOf) when instance is not null && arguments.Count == 1:
+                return sqlExpressionFactory.MakePostgresBinary(
+                    PgExpressionType.RangeIsStrictlyRightOf, Set(instance), Operand(arguments[0]));
+
+            case nameof(RangeSet<,>.DoesNotExtendRightOf) when instance is not null && arguments.Count == 1:
+                return sqlExpressionFactory.MakePostgresBinary(
+                    PgExpressionType.RangeDoesNotExtendRightOf, Set(instance), Operand(arguments[0]));
+
+            case nameof(RangeSet<,>.DoesNotExtendLeftOf) when instance is not null && arguments.Count == 1:
+                return sqlExpressionFactory.MakePostgresBinary(
+                    PgExpressionType.RangeDoesNotExtendLeftOf, Set(instance), Operand(arguments[0]));
+
+            case nameof(RangeSet<,>.Merge) when instance is not null && arguments.Count == 0:
+                return sqlExpressionFactory.Function(
+                    "range_merge",
+                    [Set(instance)],
+                    nullable: true,
+                    argumentsPropagateNullability: [true],
+                    definition.RangeClrType,
+                    definition.RangeTypeMapping);
+
+            case nameof(RangeSet<,>.IsEmpty) when instance is not null && arguments.Count == 0:
+                return BoolFunction("isempty", Set(instance));
+
+            case nameof(RangeSet<,>.IsUnboundedStart) when instance is not null && arguments.Count == 0:
+                return BoolFunction("lower_inf", Set(instance));
+
+            case nameof(RangeSet<,>.IsUnboundedEnd) when instance is not null && arguments.Count == 0:
+                return BoolFunction("upper_inf", Set(instance));
 
             case nameof(RangeSet<,>.Union) when instance is not null && arguments.Count == 1:
                 return SetBinary(PgExpressionType.RangeUnion, Set(instance), AsSet(arguments[0]));
@@ -240,6 +310,18 @@ internal sealed class ValueRangesMethodCallTranslator(
                     PgExpressionType.RangeExcept,
                     sqlExpressionFactory.Constant(definition.InfiniteRangeSet, definition.RangeSetTypeMapping),
                     Set(instance));
+
+            case nameof(RangeSet<,>.LowerBound) when instance is not null && arguments.Count == 0:
+                return BoundFunction("lower", Set(instance), definition);
+
+            case nameof(RangeSet<,>.UpperBound) when instance is not null && arguments.Count == 0:
+                return UpperBoundFunction(Set(instance), definition);
+
+            case nameof(RangeSet<,>.LowerBoundInclusive) when instance is not null && arguments.Count == 0:
+                return BoolFunction("lower_inc", Set(instance));
+
+            case nameof(RangeSet<,>.UpperBoundInclusive) when instance is not null && arguments.Count == 0:
+                return UpperInclusiveFunction(Set(instance), definition);
 
             // User-defined operators arrive as static binary methods.
             case "op_BitwiseOr" when arguments.Count == 2:
@@ -383,4 +465,49 @@ internal sealed class ValueRangesMethodCallTranslator(
             nullable: true,
             argumentsPropagateNullability: [true],
             typeof(bool));
+
+    /// <summary>
+    /// A bound-extraction function (<c>lower</c>/<c>upper</c>) on a range or multirange.
+    /// PostgreSQL returns NULL for an empty or correspondingly unbounded operand, hence the
+    /// nullable CLR type.
+    /// </summary>
+    private SqlExpression BoundFunction(string name, SqlExpression argument, IRangeTypeDefinition definition)
+        => sqlExpressionFactory.Function(
+            name,
+            [argument],
+            nullable: true,
+            argumentsPropagateNullability: [true],
+            typeof(Nullable<>).MakeGenericType(definition.ElementClrType),
+            typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType));
+
+    /// <summary>
+    /// <c>upper()</c> with discrete-canonicalization compensation. PostgreSQL stores
+    /// discrete ranges half-open (<c>[lower, upper)</c>) while the model is closed
+    /// (<c>[lower, upper]</c>), so the server's exclusive upper is one step past the
+    /// model's inclusive upper: <c>upper(x) - 1</c> restores agreement. NULL propagates
+    /// through the subtraction for empty or unbounded operands.
+    /// </summary>
+    private SqlExpression UpperBoundFunction(SqlExpression argument, IRangeTypeDefinition definition)
+    {
+        var upper = BoundFunction("upper", argument, definition);
+        if (!definition.IsDiscrete) return upper;
+
+        // The step constant must keep its own integer mapping: `date - 1` is date arithmetic
+        // in PostgreSQL, and applying the element mapping to the 1 would render it as a date.
+        var one = sqlExpressionFactory.Constant(1, typeMappingSource.FindMapping(typeof(int)));
+        return sqlExpressionFactory.Subtract(
+            upper, one, typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType));
+    }
+
+    /// <summary>
+    /// The <c>upper_inc()</c> equivalent. On discrete types the model's canonical form is
+    /// closed, so the upper bound is inclusive exactly when a finite upper bound exists —
+    /// while PostgreSQL's <c>upper_inc</c> on its half-open canonical form is always false.
+    /// </summary>
+    private SqlExpression UpperInclusiveFunction(SqlExpression argument, IRangeTypeDefinition definition)
+        => definition.IsDiscrete
+               ? sqlExpressionFactory.AndAlso(
+                   sqlExpressionFactory.Not(BoolFunction("upper_inf", argument)),
+                   sqlExpressionFactory.Not(BoolFunction("isempty", argument)))
+               : BoolFunction("upper_inc", argument);
 }

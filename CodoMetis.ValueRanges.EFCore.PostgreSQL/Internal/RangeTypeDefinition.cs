@@ -33,6 +33,9 @@ internal sealed class RangeTypeDefinition<TRange, T>(
 
     public string ElementStoreType { get; } = elementStoreType;
 
+    // A domain with a successor function is discrete; continuous types return null.
+    public bool IsDiscrete { get; } = TRange.NextValueAfter(default) is not null;
+
     public RelationalTypeMapping RangeTypeMapping { get; } = new ValueRangeTypeMapping<TRange, T>(rangeStoreType, normalizeValue);
 
     public RelationalTypeMapping RangeSetTypeMapping { get; } = 

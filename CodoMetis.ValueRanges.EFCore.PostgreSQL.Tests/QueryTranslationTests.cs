@@ -132,8 +132,87 @@ public sealed class QueryTranslationTests
     }
 
     // -------------------------------------------------------------------------
+    // Bound accessors
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void LowerBound_TranslatesToLower()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.LowerBound() == Day));
+        StringAssert.Contains(sql, "lower(b.\"Period\")");
+    }
+
+    [TestMethod]
+    public void LowerBound_InOrderBy()
+    {
+        var sql = Sql(db => db.Bookings.OrderBy(b => b.Period.LowerBound()));
+        StringAssert.Contains(sql, "ORDER BY lower(b.\"Period\")");
+    }
+
+    [TestMethod]
+    public void UpperBound_Discrete_CompensatesHalfOpenCanonicalization()
+    {
+        // PostgreSQL stores daterange half-open; the model is closed — upper(x) - 1 aligns them.
+        var sql = Sql(db => db.Bookings.Select(b => (object?)b.Period.UpperBound()));
+        StringAssert.Contains(sql, "upper(b.\"Period\") - 1");
+    }
+
+    [TestMethod]
+    public void UpperBound_Continuous_TranslatesToPlainUpper()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => (object?)b.Price.UpperBound()));
+        StringAssert.Contains(sql, "upper(b.\"Price\")");
+        Assert.IsFalse(sql.Contains("upper(b.\"Price\") - 1"));
+    }
+
+    [TestMethod]
+    public void BoundInclusive_TranslatesToLowerIncUpperInc()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.LowerBoundInclusive() && b.Price.UpperBoundInclusive()));
+        StringAssert.Contains(sql, "lower_inc(b.\"Period\")");
+        StringAssert.Contains(sql, "upper_inc(b.\"Price\")");
+    }
+
+    [TestMethod]
+    public void UpperBoundInclusive_Discrete_ExpandsToBoundednessCheck()
+    {
+        // On the closed discrete model, the upper bound is inclusive iff it exists;
+        // PostgreSQL's upper_inc on its half-open form would always be false.
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.UpperBoundInclusive()));
+        StringAssert.Contains(sql, "NOT (upper_inf(b.\"Period\"))");
+        StringAssert.Contains(sql, "NOT (isempty(b.\"Period\"))");
+    }
+
+    [TestMethod]
+    public void RangeSet_BoundAccessors_TranslateToMultirangeFunctions()
+    {
+        var sql = Sql(db => db.Bookings
+            .Where(b => b.BlockedDays.LowerBoundInclusive())
+            .OrderBy(b => b.BlockedDays.LowerBound())
+            .Select(b => (object?)b.BlockedDays.UpperBound()));
+
+        StringAssert.Contains(sql, "lower_inc(b.\"BlockedDays\")");
+        StringAssert.Contains(sql, "ORDER BY lower(b.\"BlockedDays\")");
+        StringAssert.Contains(sql, "upper(b.\"BlockedDays\")");
+    }
+
+    // -------------------------------------------------------------------------
     // Set operations on ranges
     // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void Merge_TranslatesToRangeMergeFunction()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.Period.Merge(Range)));
+        StringAssert.Contains(sql, $"range_merge(b.\"Period\", {RangeLiteral})");
+    }
+
+    [TestMethod]
+    public void RangeSet_Merge_TranslatesToRangeMergeFunction()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.BlockedDays.Merge()));
+        StringAssert.Contains(sql, "range_merge(b.\"BlockedDays\")");
+    }
 
     [TestMethod]
     public void Intersect_TranslatesToRangeIntersection()
@@ -154,6 +233,31 @@ public sealed class QueryTranslationTests
     {
         var sql = Sql(db => db.Bookings.Select(b => b.Period.Except(Range)));
         StringAssert.Contains(sql, $"datemultirange(b.\"Period\") - datemultirange({RangeLiteral})");
+    }
+
+    // -------------------------------------------------------------------------
+    // Aggregates
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void RangeAgg_TranslatesToRangeAggAggregate()
+    {
+        var sql = Sql(db => db.Bookings
+            .GroupBy(b => b.Day)
+            .Select(g => g.Select(b => b.Period).RangeAgg()));
+
+        StringAssert.Contains(sql, "range_agg(b.\"Period\")");
+        StringAssert.Contains(sql, "GROUP BY b.\"Day\"");
+    }
+
+    [TestMethod]
+    public void RangeIntersectAgg_TranslatesToRangeIntersectAggAggregate()
+    {
+        var sql = Sql(db => db.Bookings
+            .GroupBy(b => b.Day)
+            .Select(g => g.Select(b => b.Period).RangeIntersectAgg()));
+
+        StringAssert.Contains(sql, "range_intersect_agg(b.\"Period\")");
     }
 
     // -------------------------------------------------------------------------
@@ -179,6 +283,65 @@ public sealed class QueryTranslationTests
     {
         var sql = Sql(db => db.Bookings.Where(b => b.BlockedDays.Overlaps(b.Period)));
         StringAssert.Contains(sql, "b.\"BlockedDays\" && b.\"Period\"");
+    }
+
+    [TestMethod]
+    public void RangeSet_Contains_Set()
+    {
+        // A static property operand is funcletized into a parameter, not inlined.
+        var sql = Sql(db => db.Bookings.Where(b => b.SeatBlocks.Contains(RangeSet<Int32Range, int>.Empty)));
+        StringAssert.Contains(sql, "b.\"SeatBlocks\" @> @");
+    }
+
+    [TestMethod]
+    public void RangeSet_Overlaps_Set()
+    {
+        var blocked = RangeSet<DateRange, DateOnly>.From([Range]);
+        var sql = Sql(db => db.Bookings.Where(b => b.BlockedDays.Overlaps(blocked)));
+        StringAssert.Contains(sql, "b.\"BlockedDays\" && @");
+    }
+
+    [TestMethod]
+    public void RangeSet_IsAdjacentTo_Range()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.BlockedDays.IsAdjacentTo(b.Period)));
+        StringAssert.Contains(sql, "b.\"BlockedDays\" -|- b.\"Period\"");
+    }
+
+    [TestMethod]
+    public void RangeSet_PositionalComparisons_TranslateToRangeOperators()
+    {
+        var sql = Sql(db => db.Bookings.Where(b =>
+            b.BlockedDays.IsStrictlyLeftOf(b.Period)
+            && b.BlockedDays.IsStrictlyRightOf(b.Period)
+            && b.BlockedDays.DoesNotExtendRightOf(b.Period)
+            && b.BlockedDays.DoesNotExtendLeftOf(b.Period)));
+
+        StringAssert.Contains(sql, "b.\"BlockedDays\" << b.\"Period\"");
+        StringAssert.Contains(sql, "b.\"BlockedDays\" >> b.\"Period\"");
+        StringAssert.Contains(sql, "b.\"BlockedDays\" &< b.\"Period\"");
+        StringAssert.Contains(sql, "b.\"BlockedDays\" &> b.\"Period\"");
+    }
+
+    [TestMethod]
+    public void RangeSet_StateChecks_TranslateToMultirangeFunctions()
+    {
+        var sql = Sql(db => db.Bookings.Where(b =>
+            b.BlockedDays.IsEmpty()
+            || b.BlockedDays.IsUnboundedStart()
+            || b.BlockedDays.IsUnboundedEnd()));
+
+        StringAssert.Contains(sql, "isempty(b.\"BlockedDays\")");
+        StringAssert.Contains(sql, "lower_inf(b.\"BlockedDays\")");
+        StringAssert.Contains(sql, "upper_inf(b.\"BlockedDays\")");
+    }
+
+    [TestMethod]
+    public void RangeSet_EqualityOperator_TranslatesToSqlEquals()
+    {
+        var blocked = RangeSet<DateRange, DateOnly>.From([Range]);
+        var sql = Sql(db => db.Bookings.Where(b => b.BlockedDays == blocked));
+        StringAssert.Contains(sql, "b.\"BlockedDays\" = @");
     }
 
     [TestMethod]

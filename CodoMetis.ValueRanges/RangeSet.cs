@@ -189,6 +189,62 @@ public sealed class RangeSet<TRange, T>
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     // -------------------------------------------------------------------------
+    // State checks
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the set contains no ranges — equivalent to the
+    /// PostgreSQL <c>isempty</c> function on multiranges.
+    /// </summary>
+    public bool IsEmpty() => _elements.IsEmpty;
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the set is unbounded on the left — its first
+    /// element has no lower bound. Equivalent to the PostgreSQL <c>lower_inf</c> function
+    /// on multiranges.
+    /// </summary>
+    public bool IsUnboundedStart() =>
+        !_elements.IsEmpty && _elements[0] is IUnboundedStartRange<T> or IInfinityRange<T>;
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the set is unbounded on the right — its last
+    /// element has no upper bound. Equivalent to the PostgreSQL <c>upper_inf</c> function
+    /// on multiranges.
+    /// </summary>
+    public bool IsUnboundedEnd() =>
+        !_elements.IsEmpty && _elements[^1] is IUnboundedEndRange<T> or IInfinityRange<T>;
+
+    // -------------------------------------------------------------------------
+    // Bound accessors
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the lower bound of the set — the lower bound of its first element — or
+    /// <see langword="null"/> when the set is empty or unbounded on the left.
+    /// Equivalent to the PostgreSQL <c>lower</c> function on multiranges.
+    /// </summary>
+    public T? LowerBound() => _elements.IsEmpty ? null : _elements[0].LowerBound();
+
+    /// <summary>
+    /// Returns the upper bound of the set — the upper bound of its last element — or
+    /// <see langword="null"/> when the set is empty or unbounded on the right.
+    /// Equivalent to the PostgreSQL <c>upper</c> function on multiranges.
+    /// </summary>
+    public T? UpperBound() => _elements.IsEmpty ? null : _elements[^1].UpperBound();
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the set's first element has an inclusive lower
+    /// bound — equivalent to the PostgreSQL <c>lower_inc</c> function on multiranges.
+    /// </summary>
+    public bool LowerBoundInclusive() => !_elements.IsEmpty && _elements[0].LowerBoundInclusive();
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the set's last element has an inclusive upper
+    /// bound — equivalent to the PostgreSQL <c>upper_inc</c> function on multiranges.
+    /// </summary>
+    public bool UpperBoundInclusive() => !_elements.IsEmpty && _elements[^1].UpperBoundInclusive();
+
+    // -------------------------------------------------------------------------
     // Query operations
     // -------------------------------------------------------------------------
 
@@ -224,6 +280,10 @@ public sealed class RangeSet<TRange, T>
         if (range is IEmptyRange<T>) return false;
         if (range is IInfinityRange<T>) return IsInfiniteSet;
 
+        // The infinite set contains every non-empty range. Also keeps the Infinity element
+        // away from the bound helpers below, which reject that shape.
+        if (IsInfiniteSet) return true;
+
         // Unbounded-start query (-∞, E]: only an IUnboundedStartRange element (which sorts
         // first) could contain it; if the first element isn't one, nothing can.
         if (range is IUnboundedStartRange<T>)
@@ -236,6 +296,30 @@ public sealed class RangeSet<TRange, T>
         if (lowerInfinite) return false; // unreachable: handled by the IUnboundedStartRange branch above
         int idx = RangeSetHelpers.LastIndexWithLowerBoundAtOrBelow<TRange, T>(_elements, lowerValue);
         return idx >= 0 && _elements[idx].Contains(range);
+    }
+
+    /// <summary>
+    /// Determines whether every value of <paramref name="other"/> is contained in this
+    /// set — the multirange <c>@&gt;</c> operator.
+    /// </summary>
+    /// <param name="other">The set to test.</param>
+    /// <returns>
+    /// <see langword="true"/> if each element of <paramref name="other"/> is contained in
+    /// this set; always <see langword="true"/> when <paramref name="other"/> is empty.
+    /// </returns>
+    /// <remarks>
+    /// Each element of <paramref name="other"/> must be contained by a single element of
+    /// this set — elements are disjoint and non-adjacent, so a contiguous range cannot span
+    /// two of them. Delegates to <see cref="Contains(IRange{T})"/> per element: O(m log n).
+    /// </remarks>
+    public bool Contains(RangeSet<TRange, T> other)
+    {
+        foreach (var range in other._elements)
+        {
+            if (!Contains(range)) return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -255,6 +339,10 @@ public sealed class RangeSet<TRange, T>
         if (_elements.IsEmpty || range is IEmptyRange<T>) return false;
         if (range is IInfinityRange<T>) return true; // any non-empty element overlaps infinity
 
+        // The infinite set overlaps every non-empty range. Also keeps the Infinity element
+        // away from the bound helpers below, which reject that shape.
+        if (IsInfiniteSet) return true;
+
         // Unbounded-end query [S, +∞): only the last element could possibly extend past S,
         // because upper bounds are strictly increasing. If the last element's upper bound
         // is below S, no element reaches S; otherwise the last element overlaps.
@@ -268,6 +356,162 @@ public sealed class RangeSet<TRange, T>
         int idx = RangeSetHelpers.LastIndexWithLowerBoundAtOrBelow<TRange, T>(_elements, upperValue);
         return idx >= 0 && _elements[idx].Overlaps(range);
     }
+
+    /// <summary>
+    /// Determines whether this set and <paramref name="other"/> share at least one value —
+    /// the multirange <c>&amp;&amp;</c> operator.
+    /// </summary>
+    /// <param name="other">The set to test against.</param>
+    /// <returns><see langword="true"/> if any pair of elements overlaps.</returns>
+    /// <remarks>
+    /// Probes with the smaller set and binary-searches the larger via
+    /// <see cref="Overlaps(IRange{T})"/>: O(min(n,m) · log max(n,m)).
+    /// </remarks>
+    public bool Overlaps(RangeSet<TRange, T> other)
+    {
+        var (probe, target) = other._elements.Length <= _elements.Length ? (other, this) : (this, other);
+        foreach (var range in probe._elements)
+        {
+            if (target.Overlaps(range)) return true;
+        }
+
+        return false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Positional comparisons
+    //
+    // PostgreSQL compares multiranges positionally through their outermost elements
+    // only: << and &> look at the first element, >> and &< at the last, and -|- at
+    // the outermost boundaries of both operands. A range that would be adjacent to an
+    // interior gap of the set is NOT adjacent to the set. These methods mirror that
+    // exactly.
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Determines whether the set is adjacent to <paramref name="other"/> — the multirange
+    /// <c>-|-</c> operator. Adjacency is <em>directional through the outer edges</em>,
+    /// mirroring PostgreSQL: <paramref name="other"/> must end exactly where the set's
+    /// first element begins, or begin exactly where the set's last element ends. A range
+    /// that touches an interior element — even the first element's inner side — is not
+    /// adjacent to the set.
+    /// </summary>
+    /// <param name="other">The range to test against.</param>
+    /// <returns>
+    /// <see langword="true"/> if <paramref name="other"/> attaches seamlessly before the
+    /// first or after the last element; always <see langword="false"/> for an empty set,
+    /// an infinite set, or an empty or infinite operand.
+    /// </returns>
+    public bool IsAdjacentTo(IRange<T> other)
+    {
+        if (_elements.IsEmpty || IsInfiniteSet) return false;
+        if (other is IEmptyRange<T> or IInfinityRange<T>) return false;
+
+        var (otherUpper, otherUpperInc, otherUpperInf) = RangeSetHelpers.RangeUpperBound<T>(other);
+        var (otherLower, otherLowerInc, otherLowerInf) = RangeSetHelpers.RangeLowerBound<T>(other);
+        var (firstLower, firstLowerInc, firstLowerInf) = RangeSetHelpers.RangeLowerBound<T>(_elements[0]);
+        var (lastUpper, lastUpperInc, lastUpperInf)    = RangeSetHelpers.RangeUpperBound<T>(_elements[^1]);
+
+        return (!otherUpperInf && !firstLowerInf
+                && RangeBoundHelpers.BoundaryMeetsAdjacently<TRange, T>(
+                    otherUpper, otherUpperInc, firstLower, firstLowerInc))
+            || (!lastUpperInf && !otherLowerInf
+                && RangeBoundHelpers.BoundaryMeetsAdjacently<TRange, T>(
+                    lastUpper, lastUpperInc, otherLower, otherLowerInc));
+    }
+
+    /// <summary>
+    /// Determines whether this set and <paramref name="other"/> are adjacent — the
+    /// multirange <c>-|-</c> operator. Adjacency is <em>directional through the outer
+    /// edges</em>, mirroring PostgreSQL: one set's last element must end exactly where the
+    /// other set's first element begins. Interior boundaries never count.
+    /// </summary>
+    /// <param name="other">The set to test against.</param>
+    /// <returns>
+    /// <see langword="true"/> if one set attaches seamlessly after the other; always
+    /// <see langword="false"/> when either set is empty or infinite.
+    /// </returns>
+    public bool IsAdjacentTo(RangeSet<TRange, T> other)
+    {
+        if (_elements.IsEmpty || other._elements.IsEmpty) return false;
+        if (IsInfiniteSet || other.IsInfiniteSet) return false;
+
+        var (thisLower, thisLowerInc, thisLowerInf)   = RangeSetHelpers.RangeLowerBound<T>(_elements[0]);
+        var (thisUpper, thisUpperInc, thisUpperInf)   = RangeSetHelpers.RangeUpperBound<T>(_elements[^1]);
+        var (otherLower, otherLowerInc, otherLowerInf) = RangeSetHelpers.RangeLowerBound<T>(other._elements[0]);
+        var (otherUpper, otherUpperInc, otherUpperInf) = RangeSetHelpers.RangeUpperBound<T>(other._elements[^1]);
+
+        return (!thisUpperInf && !otherLowerInf
+                && RangeBoundHelpers.BoundaryMeetsAdjacently<TRange, T>(
+                    thisUpper, thisUpperInc, otherLower, otherLowerInc))
+            || (!otherUpperInf && !thisLowerInf
+                && RangeBoundHelpers.BoundaryMeetsAdjacently<TRange, T>(
+                    otherUpper, otherUpperInc, thisLower, thisLowerInc));
+    }
+
+    /// <summary>
+    /// Determines whether the whole set ends strictly before <paramref name="other"/>
+    /// begins — the multirange <c>&lt;&lt;</c> operator, decided by the last element.
+    /// </summary>
+    /// <param name="other">The range to compare against.</param>
+    /// <returns>
+    /// <see langword="true"/> if the last element is strictly left of <paramref name="other"/>;
+    /// always <see langword="false"/> for an empty set or empty operand.
+    /// </returns>
+    public bool IsStrictlyLeftOf(IRange<T> other) =>
+        !_elements.IsEmpty && _elements[^1].IsStrictlyLeftOf(other);
+
+    /// <inheritdoc cref="IsStrictlyLeftOf(IRange{T})"/>
+    public bool IsStrictlyLeftOf(RangeSet<TRange, T> other) =>
+        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[^1].IsStrictlyLeftOf(other._elements[0]);
+
+    /// <summary>
+    /// Determines whether the whole set begins strictly after <paramref name="other"/>
+    /// ends — the multirange <c>&gt;&gt;</c> operator, decided by the first element.
+    /// </summary>
+    /// <param name="other">The range to compare against.</param>
+    /// <returns>
+    /// <see langword="true"/> if the first element is strictly right of <paramref name="other"/>;
+    /// always <see langword="false"/> for an empty set or empty operand.
+    /// </returns>
+    public bool IsStrictlyRightOf(IRange<T> other) =>
+        !_elements.IsEmpty && _elements[0].IsStrictlyRightOf(other);
+
+    /// <inheritdoc cref="IsStrictlyRightOf(IRange{T})"/>
+    public bool IsStrictlyRightOf(RangeSet<TRange, T> other) =>
+        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[0].IsStrictlyRightOf(other._elements[^1]);
+
+    /// <summary>
+    /// Determines whether the set does not extend to the right of <paramref name="other"/> —
+    /// the multirange <c>&amp;&lt;</c> operator, comparing upper bounds via the last element.
+    /// </summary>
+    /// <param name="other">The range to compare against.</param>
+    /// <returns>
+    /// <see langword="true"/> if the last element does not extend right of <paramref name="other"/>;
+    /// always <see langword="false"/> for an empty set or empty operand.
+    /// </returns>
+    public bool DoesNotExtendRightOf(IRange<T> other) =>
+        !_elements.IsEmpty && _elements[^1].DoesNotExtendRightOf(other);
+
+    /// <inheritdoc cref="DoesNotExtendRightOf(IRange{T})"/>
+    public bool DoesNotExtendRightOf(RangeSet<TRange, T> other) =>
+        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[^1].DoesNotExtendRightOf(other._elements[^1]);
+
+    /// <summary>
+    /// Determines whether the set does not extend to the left of <paramref name="other"/> —
+    /// the multirange <c>&amp;&gt;</c> operator, comparing lower bounds via the first element.
+    /// </summary>
+    /// <param name="other">The range to compare against.</param>
+    /// <returns>
+    /// <see langword="true"/> if the first element does not extend left of <paramref name="other"/>;
+    /// always <see langword="false"/> for an empty set or empty operand.
+    /// </returns>
+    public bool DoesNotExtendLeftOf(IRange<T> other) =>
+        !_elements.IsEmpty && _elements[0].DoesNotExtendLeftOf(other);
+
+    /// <inheritdoc cref="DoesNotExtendLeftOf(IRange{T})"/>
+    public bool DoesNotExtendLeftOf(RangeSet<TRange, T> other) =>
+        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[0].DoesNotExtendLeftOf(other._elements[0]);
 
     // -------------------------------------------------------------------------
     // Set operations
@@ -661,6 +905,20 @@ public sealed class RangeSet<TRange, T>
     /// </returns>
     public RangeSet<TRange, T> Complement() => Infinite.Except(this);
 
+    /// <summary>
+    /// Returns the smallest single range containing every value of the set, spanning any
+    /// interior gaps — equivalent to the PostgreSQL <c>range_merge</c> function on
+    /// multiranges. The empty set yields <see cref="IRangeFactory{TRange,T}.Empty"/>.
+    /// </summary>
+    /// <returns>The convex hull of the set: its first element merged with its last.</returns>
+    public TRange Merge() =>
+        _elements.Length switch
+        {
+            0 => TRange.Empty,
+            1 => _elements[0],
+            _ => _elements[0].Merge(_elements[^1])
+        };
+
     // -------------------------------------------------------------------------
     // Equality
     // -------------------------------------------------------------------------
@@ -684,6 +942,19 @@ public sealed class RangeSet<TRange, T>
         foreach (var element in _elements) hash.Add(element);
         return hash.ToHashCode();
     }
+
+    /// <summary>
+    /// Structural equality, delegating to <see cref="Equals(RangeSet{TRange,T})"/>.
+    /// Defined so that in-memory <c>==</c> agrees with the SQL <c>=</c> that the EF Core
+    /// provider produces for multirange comparisons — the ranges themselves are records
+    /// and already compare by value.
+    /// </summary>
+    public static bool operator ==(RangeSet<TRange, T>? left, RangeSet<TRange, T>? right) =>
+        left is null ? right is null : left.Equals(right);
+
+    /// <summary>Structural inequality — the negation of <see cref="operator =="/>.</summary>
+    public static bool operator !=(RangeSet<TRange, T>? left, RangeSet<TRange, T>? right) =>
+        !(left == right);
 
     // -------------------------------------------------------------------------
     // IFormattable / IParsable
