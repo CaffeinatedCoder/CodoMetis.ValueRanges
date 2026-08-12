@@ -351,6 +351,8 @@ internal sealed class ValueRangesMethodCallTranslator(
         IReadOnlyList<SqlExpression> arguments
     )
     {
+        if (!definition.SupportsSqlConstruction) return null;
+
         // Bound inclusiveness must be a compile-time constant to pick the bounds literal;
         // in practice it always is, because the flags default at the call site.
         switch (method.Name)
@@ -436,15 +438,21 @@ internal sealed class ValueRangesMethodCallTranslator(
     }
 
     /// <summary>
-    /// Applies the range subtype mapping to a bound or element expression. The provider's
-    /// CLR-type default may differ from the range's subtype (e.g. <see cref="DateTime"/>
-    /// defaults to <c>timestamptz</c> while the <c>tsrange</c> subtype is <c>timestamp</c>),
-    /// so the element store type is resolved explicitly.
+    /// The range subtype mapping. Definition-supplied when the element CLR type is unknown to
+    /// the provider; otherwise resolved explicitly by element store type, because the
+    /// provider's CLR-type default may differ from the range's subtype (e.g.
+    /// <see cref="DateTime"/> defaults to <c>timestamptz</c> while the <c>tsrange</c> subtype
+    /// is <c>timestamp</c>).
+    /// </summary>
+    private RelationalTypeMapping? ElementMapping(IRangeTypeDefinition definition)
+        => definition.ElementTypeMapping
+        ?? typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType);
+
+    /// <summary>
+    /// Applies the range subtype mapping to a bound or element expression.
     /// </summary>
     private SqlExpression ApplyElementMapping(SqlExpression expression, IRangeTypeDefinition definition)
-        => sqlExpressionFactory.ApplyTypeMapping(
-            Unwrap(expression),
-            typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType));
+        => sqlExpressionFactory.ApplyTypeMapping(Unwrap(expression), ElementMapping(definition));
 
     private SqlExpression AsMultirange(SqlExpression range, IRangeTypeDefinition definition)
         => sqlExpressionFactory.Function(
@@ -478,7 +486,7 @@ internal sealed class ValueRangesMethodCallTranslator(
             nullable: true,
             argumentsPropagateNullability: [true],
             typeof(Nullable<>).MakeGenericType(definition.ElementClrType),
-            typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType));
+            ElementMapping(definition));
 
     /// <summary>
     /// <c>upper()</c> with discrete-canonicalization compensation. PostgreSQL stores
@@ -495,8 +503,7 @@ internal sealed class ValueRangesMethodCallTranslator(
         // The step constant must keep its own integer mapping: `date - 1` is date arithmetic
         // in PostgreSQL, and applying the element mapping to the 1 would render it as a date.
         var one = sqlExpressionFactory.Constant(1, typeMappingSource.FindMapping(typeof(int)));
-        return sqlExpressionFactory.Subtract(
-            upper, one, typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType));
+        return sqlExpressionFactory.Subtract(upper, one, ElementMapping(definition));
     }
 
     /// <summary>

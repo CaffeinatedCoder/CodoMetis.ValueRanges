@@ -23,6 +23,10 @@ public class Booking
 
     public DateTimeOffsetRange InstantTime { get; set; } = DateTimeOffsetRange.Empty;
 
+    public TimeRange OpeningHours { get; set; } = TimeRange.Empty;
+
+    public RangeSet<TimeRange, TimeOnly> OpeningWindows { get; set; } = RangeSet<TimeRange, TimeOnly>.Empty;
+
     public RangeSet<DateRange, DateOnly> BlockedDays { get; set; } = RangeSet<DateRange, DateOnly>.Empty;
 
     public RangeSet<Int32Range, int> SeatBlocks { get; set; } = RangeSet<Int32Range, int>.Empty;
@@ -32,6 +36,8 @@ public class Booking
     public DateOnly OtherDay { get; set; }
 
     public decimal Amount { get; set; }
+
+    public TimeOnly At { get; set; }
 }
 
 public sealed class TestDbContext : DbContext

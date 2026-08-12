@@ -10,6 +10,8 @@ NodaTime support for the [CodoMetis.ValueRanges EF Core plugin](https://www.nuge
 | `RangeSet<LocalDateTimeRange, LocalDateTime>` | `tsmultirange` |
 | `InstantRange`                           | `tstzrange`      |
 | `RangeSet<InstantRange, Instant>`        | `tstzmultirange` |
+| `YearMonthRange`                         | `daterange` (month-aligned) |
+| `RangeSet<YearMonthRange, YearMonth>`    | `datemultirange` (month-aligned) |
 
 ## Usage
 
@@ -39,6 +41,7 @@ reservations.GroupBy(r => r.CustomerId)
 
 - **No normalization rules.** The base package documents `DateTimeKind` reinterpretation for `tsrange` and UTC offset normalization for `tstzrange`. Neither applies here: `LocalDateTime` is wall-clock time by construction and `Instant` is an instant by construction — the value written is the value stored.
 - **Discrete canonicalization** is compensated exactly as for `DateRange`: `LocalDateRange.UpperBound()` translates to `upper(x) - 1`, so server results always equal the in-memory results (verified against live PostgreSQL).
+- **`YearMonthRange` (v5)** is stored as a **month-aligned `daterange`**: `[2025-01, 2025-03]` becomes `[2025-01-01, 2025-04-01)`, so no custom database type is needed and every operator works server-side. Bound elements convert through first-of-month dates (`Contains(yearMonth)` → `@> DATE 'yyyy-MM-01'`); `UpperBound()`'s `upper(x) - 1` lands on the last day of the end month, which reads back as that month. Reads validate month alignment — a partial-month `daterange` throws instead of silently shifting. The factories cannot be constructed *in SQL from column values* (months are coarser than the `date` subtype); constant and parameter ranges work as usual.
 - **Precision**: NodaTime carries nanoseconds, PostgreSQL stores microseconds — sub-microsecond precision is reduced at the database boundary.
 - **`Instant.MinValue`/`MaxValue`** map to PostgreSQL `-infinity`/`infinity` by default (Npgsql rule): a finite bound that happens to be infinite, distinct from an unbounded side (`upper_inf` stays `false`).
 - **External data sources**: when the application builds its own `NpgsqlDataSource` instead of letting EF create one, call `UseNodaTime()` on that data source builder as well — the same requirement `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime` documents.

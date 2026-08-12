@@ -14,8 +14,11 @@ CodoMetis.ValueRanges is a .NET 10 class library providing type-safe range types
 | `DecimalRange` | `numrange` | `decimal` | — |
 | `DateTimeRange` | `tsrange` | `DateTime` | — |
 | `DateTimeOffsetRange` | `tstzrange` | `DateTimeOffset` | — |
+| `TimeRange` | `timerange` (custom) | `TimeOnly` | — |
 
 Discrete types (int, long, DateOnly) implement `NextValueAfter`/`PreviousValueBefore` to return the adjacent value. Continuous types leave them returning `null`. Discrete ranges canonicalize to closed `[lower, upper]` at construction (`Internals/DiscreteCanonical.cs`); continuous ranges default to half-open `[lower, upper)`.
+
+`TimeRange` (v5) is the first domain beyond the six built-ins: `timerange` does not exist in PostgreSQL until the database runs `CREATE TYPE timerange AS RANGE (subtype = time)` (via `HasPostgresRange`), and the Npgsql data source needs `EnableUnmappedTypes()`. A single range cannot cross midnight — overnight windows are two-element `RangeSet`s. PostgreSQL `time`'s special value `24:00:00` is not representable in `TimeOnly`.
 
 ## NodaTime Satellites
 
@@ -26,12 +29,13 @@ Discrete types (int, long, DateOnly) implement `NextValueAfter`/`PreviousValueBe
 | `LocalDateRange` | `daterange` | `LocalDate` | ✓ |
 | `LocalDateTimeRange` | `tsrange` | `LocalDateTime` | — |
 | `InstantRange` | `tstzrange` | `Instant` | — |
+| `YearMonthRange` | `daterange` (month-aligned) | `YearMonth` | ✓ |
 
 Because the whole algebra (extensions, engines, `RangeSet`, parsing defaults, JSON factory) is generic over `IRange<T>`/`IRangeFactory<TRange, T>`, the satellite only defines the unions themselves plus per-type `RangeAgg`/`RangeIntersectAgg` overloads (`NodaTimeRangeAggregateExtensions`) and `Interval`/`DateInterval` interop adapters. It accesses `Internals/` (`DiscreteCanonical`, `RangeFormat`) via `InternalsVisibleTo` — the public API stays closed to third parties, preserving the exhaustive-matching guarantee. Types live in the shared `CodoMetis.ValueRanges` namespace (a `NodaTime` namespace segment would shadow the NodaTime root namespace).
 
-Satellite-specific construction rules: `LocalDate`/`LocalDateTime` bounds normalize to the ISO calendar (`WithCalendar`) so `CompareTo` can never see mixed calendars; text I/O uses NodaTime's culture-free ISO patterns, with PostgreSQL wire-form fallbacks (space separator, numeric offsets) on parse.
+Satellite-specific construction rules: `LocalDate`/`LocalDateTime` bounds normalize to the ISO calendar (`WithCalendar`) so `CompareTo` can never see mixed calendars; text I/O uses NodaTime's culture-free ISO patterns, with PostgreSQL wire-form fallbacks (space separator, numeric offsets) on parse. `YearMonth` bounds **reject** non-ISO calendars instead of normalizing — a non-ISO year-month spans parts of two ISO months, so unlike a date there is no lossless conversion. `YearMonthRange` (v5, one-month discrete step) interops with `LocalDateRange` via `ToLocalDateRange()` (total, expands months to days) and `ToYearMonthRange()` (partial, validates month alignment).
 
-`CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime` registers three `RangeTypeDefinition`s and the aggregate overload class via `UseValueRangesNodaTime()`, which also chains Npgsql's `UseNodaTime()` (element mappings) and `UseValueRanges()`.
+`CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime` registers the `RangeTypeDefinition`s and the aggregate overload class via `UseValueRangesNodaTime()`, which also chains Npgsql's `UseNodaTime()` (element mappings) and `UseValueRanges()`. `YearMonthRange` gets a hand-written `YearMonthRangeTypeDefinition` instead of the generic one: `YearMonth` has no wire representation, so its mappings convert through month-aligned `NpgsqlRange<LocalDate>`/`daterange` values (`Internal/YearMonthRangeTypeDefinition.cs`), it supplies its own element mapping (`YearMonth` ⇄ first-of-month `date`), and it opts out of SQL factory construction (`SupportsSqlConstruction = false`) because months are coarser than the `date` subtype — see the extended `IRangeTypeDefinition` members.
 
 ## Discriminated Union Pattern
 
@@ -100,7 +104,8 @@ See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBou
 - **`ValueRangesMethodCallTranslator`** — translates LINQ methods to PostgreSQL operators (`@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>`, `-|-`, `*`, `+`, `-`) and functions (`lower`, `upper`, `lower_inc`, `upper_inc`, `isempty`, `lower_inf`, `upper_inf`, `range_merge`), for ranges and multiranges
 - **`ValueRangesAggregateMethodCallTranslator`** — translates `RangeAgg`/`RangeIntersectAgg` to `range_agg`/`range_intersect_agg` inside grouped queries, for every declaring class registered via `RangeTypeRegistry.RegisterAggregateExtensions`
 - **Type mapping** — maps range types to PostgreSQL range columns, RangeSet to multirange columns
-- **`RangeTypeRegistry`** (`Internal/`) — the single wiring point. Process-wide and additive: the six built-ins are registered up front; satellites contribute `RangeTypeDefinition`s at options-configuration time via `Register` (idempotent per range CLR type, thread-safe immutable-snapshot swap). Lookups: by range/set CLR type, by element type (the `IRange<T>`-typed-operand fallback — one range type per element type, enforced), and by store type name (first registration owns the name; BCL and NodaTime types share `daterange` etc., so store-name-only resolution stays with the BCL types)
+- **`RangeTypeRegistry`** (`Internal/`) — the single wiring point. Process-wide and additive: the seven core types (six built-ins + `timerange`) are registered up front; satellites contribute `RangeTypeDefinition`s at options-configuration time via `Register` (idempotent per range CLR type, thread-safe immutable-snapshot swap). Lookups: by range/set CLR type, by element type (the `IRange<T>`-typed-operand fallback — one range type per element type, enforced), and by store type name (first registration owns the name; BCL and NodaTime types share `daterange` etc., so store-name-only resolution stays with the BCL types)
+- **`IRangeTypeDefinition` extension points** — `ElementTypeMapping` (default `null`: resolve the subtype mapping from the type mapping source) lets a definition supply a converting element mapping when the element CLR type is unknown to the provider (NodaTime `YearMonth` ⇄ `date`); `SupportsSqlConstruction` (default `true`) lets a definition whose model granularity is coarser than its store subtype opt out of server-side factory-constructor translation
 - **Enable**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());` — or `npgsql.UseValueRangesNodaTime()` from the NodaTime satellite, which implies it
 
 ## Engine Internals (`Internals/`)

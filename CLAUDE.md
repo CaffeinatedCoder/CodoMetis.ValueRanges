@@ -1,6 +1,6 @@
 # CodoMetis.ValueRanges
 
-In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`). Each type is a discriminated union of five sealed variants with exhaustive pattern matching.
+In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`) plus two v5 additions: `TimeRange` over `TimeOnly` (maps to the custom `timerange` type — needs `HasPostgresRange` + `EnableUnmappedTypes` on the EF side) and, in the NodaTime satellite, `YearMonthRange` over `YearMonth` (stored as a month-aligned `daterange`). Each type is a discriminated union of five sealed variants with exhaustive pattern matching.
 
 ## Stack
 .NET 10 · C# 14 (extension methods) · MSTest 4.x · EF Core + Npgsql (PostgreSQL bridge)

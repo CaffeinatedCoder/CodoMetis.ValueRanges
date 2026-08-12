@@ -46,6 +46,23 @@ internal interface IRangeTypeDefinition
     /// </summary>
     bool IsDiscrete { get; }
 
+    /// <summary>
+    /// The type mapping for elements of the range, or <see langword="null"/> to resolve it
+    /// from the type mapping source via <see cref="ElementClrType"/>/<see cref="ElementStoreType"/>.
+    /// A definition whose element CLR type is unknown to the provider (e.g. NodaTime
+    /// <c>YearMonth</c> stored as <c>date</c>) supplies its own converting mapping here.
+    /// </summary>
+    RelationalTypeMapping? ElementTypeMapping => null;
+
+    /// <summary>
+    /// Whether the PostgreSQL range constructor function can build this range in SQL.
+    /// Requires the model's element granularity to equal the store subtype's granularity:
+    /// converting the bounds elementwise preserves inclusiveness only then. A definition whose
+    /// model is coarser than its subtype (e.g. months stored as <c>date</c>) opts out — the
+    /// factory methods then evaluate client-side, and calls on column values fail to translate.
+    /// </summary>
+    bool SupportsSqlConstruction => true;
+
     /// <summary>The type mapping for the range type.</summary>
     RelationalTypeMapping RangeTypeMapping { get; }
 

@@ -1,5 +1,6 @@
 using CodoMetis.ValueRanges;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Internal;
 using NodaTime;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
@@ -20,11 +21,15 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             new RangeTypeDefinition<LocalDateTimeRange, LocalDateTime>(
                 "tsrange", "tsmultirange", "timestamp without time zone"),
             new RangeTypeDefinition<InstantRange, Instant>(
-                "tstzrange", "tstzmultirange", "timestamp with time zone")
+                "tstzrange", "tstzmultirange", "timestamp with time zone"),
 
             // No element normalization anywhere: a LocalDateTime is wall-clock time by
             // construction and an Instant is an instant by construction — the Kind and
             // offset reinterpretations of the BCL definitions have nothing to fix here.
+
+            // YearMonth has no PostgreSQL representation: this definition stores the range
+            // as a month-aligned daterange, converting every boundary through its days.
+            new YearMonthRangeTypeDefinition()
         ];
 
     /// <summary>

@@ -35,6 +35,14 @@ public sealed class NodaModelMappingTests
         Assert.AreEqual("tstzmultirange", ColumnTypeOf(nameof(Reservation.Windows)));
 
     [TestMethod]
+    public void YearMonthRange_MapsTo_DateRange() =>
+        Assert.AreEqual("daterange", ColumnTypeOf(nameof(Reservation.BillingPeriod)));
+
+    [TestMethod]
+    public void YearMonthRangeSet_MapsTo_DateMultirange() =>
+        Assert.AreEqual("datemultirange", ColumnTypeOf(nameof(Reservation.BillingPeriods)));
+
+    [TestMethod]
     public void NodaTimeScalars_MapViaNpgsqlNodaTimePlugin()
     {
         Assert.AreEqual("date", ColumnTypeOf(nameof(Reservation.Day)));

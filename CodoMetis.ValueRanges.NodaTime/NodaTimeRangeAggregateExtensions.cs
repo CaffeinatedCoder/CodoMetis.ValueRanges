@@ -36,6 +36,10 @@ public static class NodaTimeRangeAggregateExtensions
     public static RangeSet<InstantRange, Instant> RangeAgg(this IEnumerable<InstantRange> source)
         => RangeSet<InstantRange, Instant>.From(source);
 
+    /// <inheritdoc cref="RangeAgg(IEnumerable{LocalDateRange})"/>
+    public static RangeSet<YearMonthRange, YearMonth> RangeAgg(this IEnumerable<YearMonthRange> source)
+        => RangeSet<YearMonthRange, YearMonth>.From(source);
+
     /// <summary>
     /// Intersects all ranges of the sequence into a single range — equivalent to the
     /// PostgreSQL <c>range_intersect_agg</c> aggregate.
@@ -59,6 +63,10 @@ public static class NodaTimeRangeAggregateExtensions
     /// <inheritdoc cref="RangeIntersectAgg(IEnumerable{LocalDateRange})"/>
     public static InstantRange? RangeIntersectAgg(this IEnumerable<InstantRange> source)
         => IntersectAggCore<InstantRange, Instant>(source);
+
+    /// <inheritdoc cref="RangeIntersectAgg(IEnumerable{LocalDateRange})"/>
+    public static YearMonthRange? RangeIntersectAgg(this IEnumerable<YearMonthRange> source)
+        => IntersectAggCore<YearMonthRange, YearMonth>(source);
 
     private static TRange? IntersectAggCore<TRange, T>(IEnumerable<TRange> source)
         where TRange : class, IRangeFactory<TRange, T>, IRange<T>

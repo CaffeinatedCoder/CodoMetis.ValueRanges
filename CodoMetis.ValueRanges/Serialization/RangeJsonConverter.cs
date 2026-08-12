@@ -94,6 +94,9 @@ public sealed class DateTimeRangeJsonConverter : RangeJsonConverter<DateTimeRang
 /// <summary>JSON converter for <see cref="DateTimeOffsetRange"/>.</summary>
 public sealed class DateTimeOffsetRangeJsonConverter : RangeJsonConverter<DateTimeOffsetRange, DateTimeOffset>;
 
+/// <summary>JSON converter for <see cref="TimeRange"/>.</summary>
+public sealed class TimeRangeJsonConverter : RangeJsonConverter<TimeRange, TimeOnly>;
+
 /// <summary>JSON converter for <see cref="RangeSet{TRange,T}"/> of <see cref="Int32Range"/>.</summary>
 public sealed class Int32RangeSetJsonConverter : RangeSetJsonConverter<Int32Range, int>;
 
@@ -111,3 +114,6 @@ public sealed class DateTimeRangeSetJsonConverter : RangeSetJsonConverter<DateTi
 
 /// <summary>JSON converter for <see cref="RangeSet{TRange,T}"/> of <see cref="DateTimeOffsetRange"/>.</summary>
 public sealed class DateTimeOffsetRangeSetJsonConverter : RangeSetJsonConverter<DateTimeOffsetRange, DateTimeOffset>;
+
+/// <summary>JSON converter for <see cref="RangeSet{TRange,T}"/> of <see cref="TimeRange"/>.</summary>
+public sealed class TimeRangeSetJsonConverter : RangeSetJsonConverter<TimeRange, TimeOnly>;

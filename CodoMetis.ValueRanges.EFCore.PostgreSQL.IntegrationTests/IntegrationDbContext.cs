@@ -40,6 +40,17 @@ public class Reservation
 
     public RangeSet<InstantRange, Instant> NodaWindows { get; set; } = RangeSet<InstantRange, Instant>.Empty;
 
+    // A custom PostgreSQL range type — CREATE TYPE timerange AS RANGE (subtype = time),
+    // declared via HasPostgresRange below; PostgreSQL auto-creates timemultirange.
+    public TimeRange OpeningHours { get; set; } = TimeRange.Empty;
+
+    public RangeSet<TimeRange, TimeOnly> OpeningWindows { get; set; } = RangeSet<TimeRange, TimeOnly>.Empty;
+
+    // Month granularity, stored as a month-aligned daterange — no custom type needed.
+    public YearMonthRange BillingPeriod { get; set; } = YearMonthRange.Empty;
+
+    public RangeSet<YearMonthRange, YearMonth> BillingPeriods { get; set; } = RangeSet<YearMonthRange, YearMonth>.Empty;
+
     public int GroupKey { get; set; }
 }
 
@@ -51,8 +62,16 @@ public sealed class IntegrationDbContext : DbContext
         => optionsBuilder.UseNpgsql(
             ContainerLifecycle.ConnectionString!,
             // Implies UseNodaTime() and UseValueRanges() — the BCL range types keep working.
-            npgsql => npgsql.UseValueRangesNodaTime());
+            // EnableUnmappedTypes lets Npgsql put the custom timerange type on the wire;
+            // Npgsql resolves it dynamically instead of from its built-in mappings.
+            npgsql => npgsql.UseValueRangesNodaTime()
+                            .ConfigureDataSource(dataSource => dataSource.EnableUnmappedTypes()));
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-        => modelBuilder.Entity<Reservation>().Property(r => r.Id).ValueGeneratedNever();
+    {
+        modelBuilder.Entity<Reservation>().Property(r => r.Id).ValueGeneratedNever();
+
+        // Generates CREATE TYPE timerange AS RANGE (SUBTYPE = time) ahead of the tables.
+        modelBuilder.HasPostgresRange("timerange", "time");
+    }
 }

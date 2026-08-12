@@ -14,6 +14,9 @@ internal static class NodaPatterns
     /// <summary>ISO 8601 date: <c>2024-06-01</c>. Also the PostgreSQL wire form.</summary>
     internal static readonly LocalDatePattern Date = LocalDatePattern.Iso;
 
+    /// <summary>ISO 8601 year-month: <c>2024-06</c>.</summary>
+    internal static readonly YearMonthPattern YearMonth = YearMonthPattern.Iso;
+
     /// <summary>ISO 8601 with optional subsecond digits: <c>2024-06-01T12:30:00.123456789</c>.</summary>
     internal static readonly LocalDateTimePattern DateTime = LocalDateTimePattern.ExtendedIso;
 
@@ -34,6 +37,9 @@ internal static class NodaPatterns
 
     internal static LocalDate ParseDate(string text)
         => Date.Parse(text).GetValueOrThrow();
+
+    internal static YearMonth ParseYearMonth(string text)
+        => YearMonth.Parse(text).GetValueOrThrow();
 
     internal static LocalDateTime ParseDateTime(string text)
     {

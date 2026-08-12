@@ -24,6 +24,11 @@ public class Reservation
 
     public RangeSet<InstantRange, Instant> Windows { get; set; } = RangeSet<InstantRange, Instant>.Empty;
 
+    // Month granularity, stored as a month-aligned daterange.
+    public YearMonthRange BillingPeriod { get; set; } = YearMonthRange.Empty;
+
+    public RangeSet<YearMonthRange, YearMonth> BillingPeriods { get; set; } = RangeSet<YearMonthRange, YearMonth>.Empty;
+
     public LocalDate Day { get; set; }
 
     public LocalDate OtherDay { get; set; }

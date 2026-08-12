@@ -10,7 +10,7 @@
         <PackageId>CodoMetis.ValueRanges.NodaTime</PackageId>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <Description>NodaTime range types for CodoMetis.ValueRanges: LocalDateRange (daterange), LocalDateTimeRange (tsrange) and InstantRange (tstzrange) — the three NodaTime primitives with a total order and a built-in PostgreSQL range domain.
+        <Description>NodaTime range types for CodoMetis.ValueRanges: LocalDateRange (daterange), LocalDateTimeRange (tsrange), InstantRange (tstzrange) and YearMonthRange — a month-granularity range for billing and reporting periods, stored as a month-aligned daterange by the EF Core companion.
 
 Each type is a discriminated union of five sealed variants (Finite, UnboundedStart, UnboundedEnd, EmptyRange, Infinity) with the full interval algebra of the core package: Contains, Overlaps, IsAdjacentTo, Intersect, Union, Except, Merge, bound accessors, RangeAgg/RangeIntersectAgg aggregates, RangeSet&lt;TRange, T&gt; multiranges, PostgreSQL literal parsing/formatting and System.Text.Json support. Includes conversions to and from NodaTime's own Interval and DateInterval. LocalDateTime is wall-clock time by construction and Instant is an instant by construction, so the DateTimeKind and offset-normalization caveats of the BCL-based types do not arise.</Description>
         <PackageTags>range;interval;multirange;postgresql;postgres;nodatime;daterange;tsrange;tstzrange;localdate;localdatetime;instant;discriminated-union;set-operations</PackageTags>

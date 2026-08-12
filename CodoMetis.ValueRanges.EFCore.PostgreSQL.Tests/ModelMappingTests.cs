@@ -34,6 +34,13 @@ public sealed class ModelMappingTests
         Assert.AreEqual("tstzrange", ColumnTypeOf(nameof(Booking.InstantTime)));
 
     [TestMethod]
+    public void TimeRange_MapsTo_TimeRange() => Assert.AreEqual("timerange", ColumnTypeOf(nameof(Booking.OpeningHours)));
+
+    [TestMethod]
+    public void TimeRangeSet_MapsTo_TimeMultirange() =>
+        Assert.AreEqual("timemultirange", ColumnTypeOf(nameof(Booking.OpeningWindows)));
+
+    [TestMethod]
     public void DateRangeSet_MapsTo_DateMultirange() =>
         Assert.AreEqual("datemultirange", ColumnTypeOf(nameof(Booking.BlockedDays)));
 
@@ -50,5 +57,7 @@ public sealed class ModelMappingTests
         Assert.AreEqual(typeof(DateRange), mappingSource.FindMapping("daterange")?.ClrType);
         Assert.AreEqual(typeof(RangeSet<DateRange, DateOnly>), mappingSource.FindMapping("datemultirange")?.ClrType);
         Assert.AreEqual(typeof(Int64Range), mappingSource.FindMapping("int8range")?.ClrType);
+        Assert.AreEqual(typeof(TimeRange), mappingSource.FindMapping("timerange")?.ClrType);
+        Assert.AreEqual(typeof(RangeSet<TimeRange, TimeOnly>), mappingSource.FindMapping("timemultirange")?.ClrType);
     }
 }

@@ -45,6 +45,17 @@ DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a
 
 The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](#entity-framework-core-postgresql) for how that round-trips.
 
+## What's new in v5.0
+
+**Two new range domains** — the first additions beyond PostgreSQL's six built-ins, chosen because their element types clear the same bar (a total order the type's own comparisons agree with, and a defined step where adjacency needs one):
+
+- **`TimeRange`** (core package) — a time-of-day range over `TimeOnly`, the equivalent of the most common custom range type in PostgreSQL practice: `CREATE TYPE timerange AS RANGE (subtype = time)`. Continuous, half-open by default, so `[09:00, 12:00)` and `[12:00, 17:00)` compose the way opening hours and shifts do. A window that crosses midnight is two ranges — which `RangeSet` represents naturally. See [TimeRange and the custom timerange type](#timerange-and-the-custom-timerange-type) for the EF Core mapping.
+- **`YearMonthRange`** (NodaTime satellite) — a month-granularity range over NodaTime's `YearMonth` for billing and reporting periods. Discrete with a one-month step: `[2024-01, 2024-03]` and `[2024-04, 2024-06]` are adjacent and merge. The EF Core NodaTime satellite stores it as a **month-aligned `daterange`** — no custom database type needed, and every operator works server-side. Conversions to and from `LocalDateRange` and `DateInterval` are included.
+
+Both types carry the complete algebra, multiranges, literals, JSON support and aggregate overloads of the existing eight. The EF Core packages map them by convention; `timerange` needs two one-line opt-ins on the database side ([documented below](#timerange-and-the-custom-timerange-type)).
+
+v5.0 contains **no breaking changes** to existing APIs; the major bump marks the model growing beyond the PostgreSQL built-ins.
+
 ## What's new in v4.1
 
 **NodaTime satellites** — two new packages bring the range model to NodaTime-based projects:
@@ -94,12 +105,15 @@ The core and base EF packages are unchanged apart from the EF plugin's internal 
 | `DateRange`            | `daterange`           | `DateOnly`       | ✓        |
 | `DateTimeRange`        | `tsrange`             | `DateTime`       | —        |
 | `DateTimeOffsetRange`  | `tstzrange`           | `DateTimeOffset` | —        |
+| `TimeRange`            | `timerange` (custom)  | `TimeOnly`       | —        |
 
 Discrete types (`int`, `long`, `DateOnly`) know their step size. This matters for adjacency checks: `[1, 5]` and `[6, 10]` are adjacent for integers because there is no integer between 5 and 6.
 
-### Why these six element types
+`TimeRange` is a time-of-day range — opening hours, shifts, booking slots. A single range cannot cross midnight; a 22:00–06:00 window is two ranges, which is exactly what a two-element `RangeSet` (and its PostgreSQL multirange counterpart) represents. PostgreSQL has no built-in `timerange`, so the EF Core companion maps it to the custom type users conventionally create for this — see [TimeRange and the custom timerange type](#timerange-and-the-custom-timerange-type).
 
-The list is closed on purpose. Interval algebra needs a total order that the type's own comparisons agree with, and — for adjacency — a defined step between neighbouring values. These six domains have both, which is also why they are the six PostgreSQL ships as built-ins rather than leaving to `CREATE TYPE ... AS RANGE`.
+### Why these element types
+
+The list is deliberately vetted. Interval algebra needs a total order that the type's own comparisons agree with, and — for adjacency — a defined step between neighbouring values. The first six domains have both and are the six PostgreSQL ships as built-ins; `TimeOnly` (and, in the NodaTime satellite, `YearMonth`) clear the same bar and joined in v5.
 
 `double` and `float` have neither, and fail *quietly*. `double.CompareTo` reports `NaN` as less than every value and equal to itself, which is a total order; the IEEE operators disagree, since `NaN < 5.0`, `NaN > 5.0` and `NaN == NaN` are all `false`. A range library generic over `IComparable<T>` therefore accepts `double` without complaint and answers containment against a `NaN` bound with a straight face. There is no exception to catch and no bound to reject at construction — the result is simply wrong. Restricting `T` to a vetted set is what makes the algebra sound, not a limitation left in for later.
 
@@ -109,11 +123,14 @@ The list is closed on purpose. Interval algebra needs a total order that the typ
 
 For projects that build on NodaTime's primitives instead of the BCL date/time types, the satellite package **[CodoMetis.ValueRanges.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.NodaTime)** provides the three NodaTime types that clear the same bar — a total order the type's own comparisons agree with, mapping onto a PostgreSQL built-in:
 
-| .NET type              | PostgreSQL equivalent | Element type     | Discrete |
-|------------------------|-----------------------|------------------|----------|
-| `LocalDateRange`       | `daterange`           | `LocalDate`      | ✓        |
-| `LocalDateTimeRange`   | `tsrange`             | `LocalDateTime`  | —        |
-| `InstantRange`         | `tstzrange`           | `Instant`        | —        |
+| .NET type              | PostgreSQL equivalent      | Element type     | Discrete |
+|------------------------|----------------------------|------------------|----------|
+| `LocalDateRange`       | `daterange`                | `LocalDate`      | ✓        |
+| `LocalDateTimeRange`   | `tsrange`                  | `LocalDateTime`  | —        |
+| `InstantRange`         | `tstzrange`                | `Instant`        | —        |
+| `YearMonthRange`       | `daterange` (month-aligned) | `YearMonth`     | ✓        |
+
+`YearMonthRange` (v5) is a month-granularity range for billing and reporting periods — discrete with a one-month step, so `[2024-01, 2024-03]` and `[2024-04, 2024-06]` are adjacent. It converts losslessly to the `LocalDateRange` covering exactly its months (`ToLocalDateRange()` / `ToYearMonthRange()`), which is also how the EF Core satellite stores it: as a month-aligned `daterange`, with every operator working server-side and reads validating alignment rather than silently shifting boundaries.
 
 The same algebra, literals, JSON support and `RangeSet` multiranges apply unchanged. Notably, the two timestamp caveats documented [below](#entity-framework-core-postgresql) do not arise there: `LocalDateTime` is wall-clock time by construction and `Instant` is an instant by construction, so there is no `Kind` to reinterpret and no offset to normalize away. `ZonedDateTime` and `OffsetDateTime` are excluded by the same reasoning as `double` — NodaTime deliberately gives them no default ordering (instant order and local order disagree), so the `IComparable<T>` constraint rejects them at compile time. See the satellite's README for the full rationale and the `Interval`/`DateInterval` interop.
 
@@ -662,7 +679,7 @@ Enable it with one line — no value converters, comparers, or column types to c
 options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
 ```
 
-Properties of the six range types and of `RangeSet<TRange, T>` are then mapped by convention:
+Properties of the range types and of `RangeSet<TRange, T>` are then mapped by convention:
 
 | Property type                    | Column type      |
 |----------------------------------|------------------|
@@ -670,7 +687,8 @@ Properties of the six range types and of `RangeSet<TRange, T>` are then mapped b
 | `RangeSet<Int32Range, int>`      | `int4multirange` |
 | `DateRange`                      | `daterange`      |
 | `RangeSet<DateRange, DateOnly>`  | `datemultirange` |
-| … and so on for all six types    |                  |
+| `TimeRange`                      | `timerange` ([custom type](#timerange-and-the-custom-timerange-type)) |
+| … and so on for all types        |                  |
 
 The full range algebra translates from LINQ to SQL:
 
@@ -733,6 +751,30 @@ Timestamp semantics:
 - `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified` — a UTC-kinded `DateTime` is reinterpreted as wall-clock time, not converted. `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz`: the instant is preserved, but the original offset is not round-tripped (values read back carry offset `+00:00` and compare equal to what was written, since `DateTimeOffset` equality is instant-based).
 - Npgsql by default maps `DateTime.MinValue`/`MaxValue` to PostgreSQL `-infinity`/`infinity`. A *finite* bound of `DateTime.MaxValue` therefore becomes an explicit `infinity` bound in the database — which is distinct from an *unbounded* side (`upper_inf` stays `false`), so shape checks behave consistently.
 - Reverse engineering (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`, not to these types — the plugin provides no design-time services. Apply the range types manually after scaffolding.
+
+### TimeRange and the custom timerange type
+
+`timerange` is not built into PostgreSQL, so using `TimeRange` columns takes two one-line opt-ins beyond `UseValueRanges()`:
+
+```csharp
+// 1. The database needs the type — this generates
+//    CREATE TYPE timerange AS RANGE (SUBTYPE = time) in your migrations
+//    (PostgreSQL 14+ auto-creates timemultirange alongside it):
+modelBuilder.HasPostgresRange("timerange", "time");
+
+// 2. Npgsql needs permission to resolve the unmapped type on the wire:
+options.UseNpgsql(connectionString, npgsql => npgsql
+    .UseValueRanges()
+    .ConfigureDataSource(dataSource => dataSource.EnableUnmappedTypes()));
+// (call EnableUnmappedTypes() on your own NpgsqlDataSourceBuilder instead
+//  if you pass a pre-built NpgsqlDataSource to UseNpgsql)
+```
+
+Everything else is automatic: all range and multirange operators, functions and aggregates in PostgreSQL are polymorphic (`anyrange`/`anymultirange`), so the full LINQ translation works on the custom type exactly as on the built-ins — [verified against live PostgreSQL](#verified-against-postgresql). One caveat: PostgreSQL's `time` admits the special value `24:00:00`, which `TimeOnly` cannot represent; express "until end of day" as an unbounded end or an inclusive `TimeOnly.MaxValue` bound.
+
+### YearMonthRange storage
+
+The NodaTime satellite stores `YearMonthRange` as a **month-aligned `daterange`** — `[2024-01, 2024-03]` becomes `[2024-01-01, 2024-04-01)` — so no custom database type is involved and every operator, bound accessor and aggregate translates and agrees with the in-memory results (`upper()` compensation lands on the last day of the end month, whose month is the model's inclusive upper bound). Reads validate month alignment: a `daterange` covering a partial month fails loudly instead of silently shifting boundaries. The one restriction: because months are coarser than the `date` subtype, the `CreateFinite`/`CreateUnbounded*` factories cannot be built *in SQL from column values* — constant and parameter ranges work as usual, and a column-dependent factory call fails translation with a clear error.
 
 ## Verified against PostgreSQL
 

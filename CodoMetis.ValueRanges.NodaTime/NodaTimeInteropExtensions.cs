@@ -85,4 +85,72 @@ public static class NodaTimeInteropExtensions
     /// <returns>The equivalent <see cref="DateInterval"/>, fully closed on both sides.</returns>
     public static DateInterval ToDateInterval(this LocalDateRange.Finite range)
         => new(range.Start, range.End);
+
+    /// <summary>
+    /// Converts a <see cref="YearMonthRange"/> to the <see cref="LocalDateRange"/> covering
+    /// exactly the days of its months. This conversion is total: each bound month expands to
+    /// its first or last day, and the empty and unbounded shapes map to their counterparts.
+    /// This is also how the EF Core companion stores a <see cref="YearMonthRange"/> in a
+    /// PostgreSQL <c>daterange</c> column.
+    /// </summary>
+    /// <param name="range">The range to convert.</param>
+    /// <returns>The equivalent month-aligned <see cref="LocalDateRange"/>.</returns>
+    public static LocalDateRange ToLocalDateRange(this YearMonthRange range)
+        => range switch
+           {
+               YearMonthRange.EmptyRange     => LocalDateRange.Empty,
+               YearMonthRange.Infinity       => LocalDateRange.Infinite,
+               YearMonthRange.Finite f       => LocalDateRange.CreateFinite(f.Start.OnDayOfMonth(1), LastDayOf(f.End)),
+               YearMonthRange.UnboundedStart s => LocalDateRange.CreateUnboundedStart(LastDayOf(s.End), endInclusive: true),
+               YearMonthRange.UnboundedEnd e => LocalDateRange.CreateUnboundedEnd(e.Start.OnDayOfMonth(1)),
+               _ => throw new InvalidOperationException($"Unknown range variant: {range.GetType()}.")
+           };
+
+    /// <summary>
+    /// Converts a month-aligned <see cref="LocalDateRange"/> back to a <see cref="YearMonthRange"/> —
+    /// the inverse of <see cref="ToLocalDateRange(YearMonthRange)"/>.
+    /// </summary>
+    /// <param name="range">The range to convert. Its canonical closed bounds must lie on month
+    /// boundaries: lower bounds on the first day of a month, upper bounds on the last.</param>
+    /// <returns>The equivalent <see cref="YearMonthRange"/>.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// A bound does not lie on a month boundary, so the range covers a partial month and has
+    /// no month-granularity equivalent.
+    /// </exception>
+    public static YearMonthRange ToYearMonthRange(this LocalDateRange range)
+        => range switch
+           {
+               LocalDateRange.EmptyRange     => YearMonthRange.Empty,
+               LocalDateRange.Infinity       => YearMonthRange.Infinite,
+               LocalDateRange.Finite f       => YearMonthRange.CreateFinite(MonthOfFirstDay(f.Start), MonthOfLastDay(f.End)),
+               LocalDateRange.UnboundedStart s => YearMonthRange.CreateUnboundedStart(MonthOfLastDay(s.End), endInclusive: true),
+               LocalDateRange.UnboundedEnd e => YearMonthRange.CreateUnboundedEnd(MonthOfFirstDay(e.Start)),
+               _ => throw new InvalidOperationException($"Unknown range variant: {range.GetType()}.")
+           };
+
+    /// <summary>
+    /// Converts a finite <see cref="YearMonthRange"/> to the NodaTime <see cref="DateInterval"/>
+    /// covering exactly the days of its months. Declared on <see cref="YearMonthRange.Finite"/>
+    /// because a <see cref="DateInterval"/> cannot represent the unbounded or empty shapes —
+    /// pattern match first.
+    /// </summary>
+    /// <param name="range">The finite range to convert.</param>
+    /// <returns>The equivalent <see cref="DateInterval"/>, from the first day of the start
+    /// month through the last day of the end month.</returns>
+    public static DateInterval ToDateInterval(this YearMonthRange.Finite range)
+        => new(range.Start.OnDayOfMonth(1), LastDayOf(range.End));
+
+    private static LocalDate LastDayOf(YearMonth month) => month.ToDateInterval().End;
+
+    private static YearMonth MonthOfFirstDay(LocalDate date)
+        => date.Day == 1
+               ? date.ToYearMonth()
+               : throw new InvalidOperationException(
+                     $"The date range bound {date} is not the first day of a month; the range covers a partial month and cannot convert to a YearMonthRange.");
+
+    private static YearMonth MonthOfLastDay(LocalDate date)
+        => date == LastDayOf(date.ToYearMonth())
+               ? date.ToYearMonth()
+               : throw new InvalidOperationException(
+                     $"The date range bound {date} is not the last day of a month; the range covers a partial month and cannot convert to a YearMonthRange.");
 }

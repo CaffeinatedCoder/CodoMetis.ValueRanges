@@ -236,4 +236,77 @@ public sealed class NodaQueryTranslationTests
         StringAssert.Contains(sql, "r.\"Period\" @> DATE '2024-06-15'");
         StringAssert.Contains(sql, "r.\"LegacyPeriod\" && '[2024-01-01,2024-12-31]'::daterange");
     }
+
+    // -------------------------------------------------------------------------
+    // YearMonthRange — month granularity over a month-aligned daterange
+    // -------------------------------------------------------------------------
+
+    private static readonly YearMonth Month = new(2024, 6);
+
+    private static readonly YearMonthRange BillingYear =
+        YearMonthRange.CreateFinite(new YearMonth(2024, 1), new YearMonth(2024, 12));
+
+    [TestMethod]
+    public void YearMonthRange_Contains_Month_ConvertsToFirstOfMonthDate()
+    {
+        var sql = Sql(db => db.Reservations.Where(r => r.BillingPeriod.Contains(Month)));
+        StringAssert.Contains(sql, "r.\"BillingPeriod\" @> DATE '2024-06-01'");
+    }
+
+    [TestMethod]
+    public void YearMonthRange_Overlaps_ConstantRendersDateRangeLiteral()
+    {
+        // The month bounds expand to the days they cover: 2024-01 through 2024-12
+        // is [2024-01-01,2024-12-31], canonicalized by the server.
+        var sql = Sql(db => db.Reservations.Where(r => r.BillingPeriod.Overlaps(BillingYear)));
+        StringAssert.Contains(sql, "r.\"BillingPeriod\" && '[2024-01-01,2024-12-31]'::daterange");
+    }
+
+    [TestMethod]
+    public void YearMonthRange_UpperBound_Discrete_CompensatesCanonicalForm()
+    {
+        // upper() of the month-aligned daterange is the first day of the month after the
+        // end month; - 1 lands on the last day of the end month, which reads back as it.
+        var sql = Sql(db => db.Reservations.Select(r => (object?)r.BillingPeriod.UpperBound()));
+        StringAssert.Contains(sql, "upper(r.\"BillingPeriod\") - 1");
+    }
+
+    [TestMethod]
+    public void YearMonthRange_ConstantFactory_EvaluatesClientSideToDateRangeLiteral()
+    {
+        // Fully constant factories evaluate client-side; the resulting range renders in
+        // date form — January through June 2024 covers [2024-01-01,2024-06-30].
+        var sql = Sql(db => db.Reservations.Where(r =>
+            r.BillingPeriod.Overlaps(YearMonthRange.CreateFinite(new YearMonth(2024, 1), new YearMonth(2024, 6), true, true))));
+        StringAssert.Contains(sql, "r.\"BillingPeriod\" && '[2024-01-01,2024-06-30]'::daterange");
+    }
+
+    [TestMethod]
+    public void YearMonthRange_ColumnFactory_DoesNotTranslate()
+    {
+        // Months are coarser than the date subtype, so building a YearMonthRange from
+        // column values in SQL is unsupported — it must fail loudly, not shift bounds.
+        using var context = new NodaTestDbContext();
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            context.Reservations
+                   .Where(r => YearMonthRange.CreateUnboundedEnd(r.Day.ToYearMonth(), true).Contains(Month))
+                   .ToQueryString());
+    }
+
+    [TestMethod]
+    public void YearMonthRange_RangeAgg_TranslatesToRangeAggAggregate()
+    {
+        var sql = Sql(db => db.Reservations
+            .GroupBy(r => r.CustomerId)
+            .Select(g => g.Select(r => r.BillingPeriod).RangeAgg()));
+
+        StringAssert.Contains(sql, "range_agg(r.\"BillingPeriod\")");
+    }
+
+    [TestMethod]
+    public void YearMonthRangeSet_Contains_TranslatesOnMultirange()
+    {
+        var sql = Sql(db => db.Reservations.Where(r => r.BillingPeriods.Contains(Month)));
+        StringAssert.Contains(sql, "r.\"BillingPeriods\" @> DATE '2024-06-01'");
+    }
 }

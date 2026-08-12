@@ -46,7 +46,12 @@ internal static class RangeTypeRegistry
             // are normalized to UTC. This preserves the instant (DateTimeOffset compares by UTC ticks).
             new RangeTypeDefinition<DateTimeOffsetRange, DateTimeOffset>(
                 "tstzrange", "tstzmultirange", "timestamp with time zone",
-                value => value.ToUniversalTime())
+                value => value.ToUniversalTime()),
+
+            // `timerange` is not built into PostgreSQL: the database needs
+            // `CREATE TYPE timerange AS RANGE (subtype = time)` (e.g. via HasPostgresRange)
+            // and the Npgsql data source needs EnableUnmappedTypes() to put it on the wire.
+            new RangeTypeDefinition<TimeRange, TimeOnly>("timerange", "timemultirange", "time without time zone")
         ],
         [typeof(RangeAggregateExtensions)]);
 

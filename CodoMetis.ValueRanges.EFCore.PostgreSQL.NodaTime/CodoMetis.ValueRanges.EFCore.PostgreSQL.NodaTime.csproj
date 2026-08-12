@@ -8,7 +8,7 @@
         <PackageId>CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime</PackageId>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <Description>NodaTime support for the CodoMetis.ValueRanges EF Core (Npgsql) plugin: maps LocalDateRange to daterange, LocalDateTimeRange to tsrange and InstantRange to tstzrange (plus their RangeSet&lt;TRange, T&gt; multirange counterparts), bridging through NpgsqlRange&lt;T&gt; via Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime.
+        <Description>NodaTime support for the CodoMetis.ValueRanges EF Core (Npgsql) plugin: maps LocalDateRange to daterange, LocalDateTimeRange to tsrange, InstantRange to tstzrange and YearMonthRange to a month-aligned daterange (plus their RangeSet&lt;TRange, T&gt; multirange counterparts), bridging through NpgsqlRange&lt;T&gt; via Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime.
 
 The full range algebra translates from LINQ to SQL exactly as for the BCL-based types — operators, bound accessors, range_merge, range_agg/range_intersect_agg, factories and multirange operations. Enable with one line: options.UseNpgsql(..., npgsql =&gt; npgsql.UseValueRangesNodaTime()) — this implies both UseNodaTime() and UseValueRanges().</Description>
         <PackageTags>range;interval;multirange;postgresql;postgres;npgsql;efcore;entity-framework-core;nodatime;daterange;tsrange;tstzrange;localdate;instant;linq-to-sql</PackageTags>

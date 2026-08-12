@@ -458,4 +458,60 @@ public sealed class QueryTranslationTests
         var sql = Sql(db => db.Bookings.Where(b => b.Period == DateRange.Infinite));
         StringAssert.Contains(sql, "b.\"Period\" = @");
     }
+
+    // -------------------------------------------------------------------------
+    // TimeRange — a custom range type (CREATE TYPE timerange AS RANGE),
+    // translated through the same paths as the built-ins
+    // -------------------------------------------------------------------------
+
+    private static readonly TimeRange Shift =
+        TimeRange.CreateFinite(new TimeOnly(9, 0), new TimeOnly(17, 0));
+
+    private const string ShiftLiteral = "'[09:00:00.0000000,17:00:00.0000000)'::timerange";
+
+    [TestMethod]
+    public void TimeRange_Contains_ColumnValue()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.OpeningHours.Contains(b.At)));
+        StringAssert.Contains(sql, "b.\"OpeningHours\" @> b.\"At\"");
+    }
+
+    [TestMethod]
+    public void TimeRange_Overlaps_ConstantRendersTimerangeLiteral()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.OpeningHours.Overlaps(Shift)));
+        StringAssert.Contains(sql, $"b.\"OpeningHours\" && {ShiftLiteral}");
+    }
+
+    [TestMethod]
+    public void TimeRange_UpperBound_Continuous_IsBareUpper()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => (object?)b.OpeningHours.UpperBound()));
+        StringAssert.Contains(sql, "upper(b.\"OpeningHours\")");
+        Assert.IsFalse(sql.Contains("upper(b.\"OpeningHours\") - 1"));
+    }
+
+    [TestMethod]
+    public void TimeRange_CreateFinite_TranslatesToTimerangeConstructor()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => TimeRange.CreateFinite(b.At, new TimeOnly(17, 0), true, false).Contains(b.At)));
+        StringAssert.Contains(sql, "timerange(b.\"At\",");
+    }
+
+    [TestMethod]
+    public void TimeRange_Union_LiftsToTimeMultirange()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => (object?)b.OpeningHours.Union(Shift)));
+        StringAssert.Contains(sql, "timemultirange(b.\"OpeningHours\") + timemultirange(");
+    }
+
+    [TestMethod]
+    public void TimeRange_RangeAgg_TranslatesToRangeAggAggregate()
+    {
+        var sql = Sql(db => db.Bookings
+            .GroupBy(b => b.Day)
+            .Select(g => g.Select(b => b.OpeningHours).RangeAgg()));
+
+        StringAssert.Contains(sql, "range_agg(b.\"OpeningHours\")");
+    }
 }

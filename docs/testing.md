@@ -33,12 +33,13 @@ One test file per operation, named `Range[Operation]Tests.cs`:
 | `RangeSetTests.cs` | RangeSet construction, normalization, bulk ops |
 | `RangeSetOptimizationTests.cs` | Performance-critical invariants |
 | `RangeJsonConverterTests.cs` | JSON serialization round-trips |
+| `TimeRangeTests.cs` | What is new with `TimeRange`: TimeOnly parse/format, half-open default, midnight-wrap sets (per-type file; the engines are covered by the per-operation files) |
 
-`CodoMetis.ValueRanges.NodaTime.Tests/` covers what is new in the NodaTime satellite — type wiring, the one-day discrete step, ISO calendar normalization, wire-form parsing, `Interval`/`DateInterval` interop — with representative shape coverage; the engines themselves are exhaustively covered by the core tests.
+`CodoMetis.ValueRanges.NodaTime.Tests/` covers what is new in the NodaTime satellite — type wiring, the one-day and one-month discrete steps, ISO calendar normalization (and `YearMonthRange`'s non-ISO rejection), wire-form parsing, `Interval`/`DateInterval`/month-alignment interop — with representative shape coverage; the engines themselves are exhaustively covered by the core tests.
 
 EF Core translation tests live in `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — they assert generated SQL via `ToQueryString()` without a database. `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` does the same for the NodaTime types, proving every translation path (operators, functions, factories, aggregates, multiranges, BCL coexistence).
 
-`CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` executes against **live PostgreSQL** via Testcontainers (Docker required; tests report Inconclusive without it — except under `CI=true`, where a missing database **fails** the tests so the build badge can never be green with the live layer silently skipped): round-trips for every range/multirange type, timestamp normalization rules, and SQL-vs-in-memory parity assertions for the v4 operations. These tests are the authority on PostgreSQL semantics — they caught the discrete `upper()` canonicalization offset and the directional multirange adjacency rule.
+`CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` executes against **live PostgreSQL** via Testcontainers (Docker required; tests report Inconclusive without it — except under `CI=true`, where a missing database **fails** the tests so the build badge can never be green with the live layer silently skipped): round-trips for every range/multirange type, timestamp normalization rules, and SQL-vs-in-memory parity assertions for the v4 operations. `TimeAndYearMonthIntegrationTests.cs` covers the v5 types: the custom `timerange` created via `HasPostgresRange` + `EnableUnmappedTypes`, and `YearMonthRange`'s month-aligned `daterange` storage form. These tests are the authority on PostgreSQL semantics — they caught the discrete `upper()` canonicalization offset and the directional multirange adjacency rule.
 
 ## Patterns
 
@@ -62,8 +63,8 @@ For `Finite` ranges, tests cover all four inclusiveness combinations:
 ### Discrete vs Continuous Split
 
 Tests are parameterized by range type:
-- **Discrete** (`Int32Range`, `Int64Range`, `DateRange`) — canonicalization, adjacency with step awareness
-- **Continuous** (`DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`) — half-open defaults, equality via `IEquatable`
+- **Discrete** (`Int32Range`, `Int64Range`, `DateRange`; satellite: `LocalDateRange`, `YearMonthRange`) — canonicalization, adjacency with step awareness
+- **Continuous** (`DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange`; satellite: `LocalDateTimeRange`, `InstantRange`) — half-open defaults, equality via `IEquatable`
 
 ### Assertion Style
 
