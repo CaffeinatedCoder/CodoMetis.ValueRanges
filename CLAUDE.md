@@ -14,7 +14,7 @@ In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six bui
 - `CodoMetis.ValueRanges.NodaTime.Tests/` — NodaTime satellite unit tests
 - `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
 - `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
+- `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without, but hard failure under CI=true). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
 - `docs/` — Agent docs (read relevant doc before starting work)
 
 ## Commands
