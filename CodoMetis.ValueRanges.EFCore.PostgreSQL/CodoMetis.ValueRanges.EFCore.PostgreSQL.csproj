@@ -6,7 +6,6 @@
         <Nullable>enable</Nullable>
         <RootNamespace>CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL</RootNamespace>
         <PackageId>CodoMetis.ValueRanges.EFCore.PostgreSQL</PackageId>
-        <Version>4.0.0</Version>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <Description>Entity Framework Core (Npgsql) plugin for CodoMetis.ValueRanges: maps the six range types to the PostgreSQL range columns (int4range, int8range, numrange, daterange, tsrange, tstzrange) and RangeSet&lt;TRange, T&gt; to the corresponding multirange columns — no manual value converters required.
