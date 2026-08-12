@@ -7,10 +7,14 @@ In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six bui
 
 ## Structure
 - `CodoMetis.ValueRanges/` — Core library: range types, interfaces, set ops
+- `CodoMetis.ValueRanges.NodaTime/` — NodaTime satellite: LocalDateRange, LocalDateTimeRange, InstantRange (namespace stays `CodoMetis.ValueRanges`; uses core internals via InternalsVisibleTo)
 - `CodoMetis.ValueRanges.EFCore.PostgreSQL/` — EF Core provider for LINQ-to-SQL translation
+- `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/` — EF satellite: registers NodaTime RangeTypeDefinitions, `UseValueRangesNodaTime()`
 - `CodoMetis.ValueRanges.Tests/` — Unit tests (one file per operation)
+- `CodoMetis.ValueRanges.NodaTime.Tests/` — NodaTime satellite unit tests
 - `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without). Authority on PostgreSQL semantics — run when changing translations or range algebra
+- `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
+- `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
 - `docs/` — Agent docs (read relevant doc before starting work)
 
 ## Commands
@@ -35,4 +39,5 @@ dotnet pack                           # Pack NuGet packages
 ## Critical Rules
 - **NEVER** create external subtypes of range base records — the private constructor enforces exhaustive pattern matching; breaking this removes compiler guarantees
 - **ALWAYS** preserve RangeSet's invariant (sorted, disjoint, non-adjacent, no empties) on every code path that constructs or mutates a set
-- **Do NOT** add new range types without adding corresponding `IntersectEngine`/`MergeEngine` per-shape implementations in `Internals/`
+- **Do NOT** add new range types without verifying the generic engines cover them — a new type must implement `IRange<T>` + `IRangeFactory<TRange, T>` with the five sealed variants; the engines in `Internals/` dispatch per shape through the structural interfaces
+- **EF Core**: new range types are wired exclusively through `RangeTypeRegistry.Register` (satellites call it from their options-builder extension); never bypass the registry

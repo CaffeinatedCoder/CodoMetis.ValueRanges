@@ -9,9 +9,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Query;
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
-/// Translates the <see cref="RangeAggregateExtensions"/> aggregates to their PostgreSQL
-/// counterparts: <c>RangeAgg</c> to <c>range_agg</c> (returning a multirange) and
-/// <c>RangeIntersectAgg</c> to <c>range_intersect_agg</c> (returning a range).
+/// Translates the <c>RangeAgg</c>/<c>RangeIntersectAgg</c> aggregates to their PostgreSQL
+/// counterparts, <c>range_agg</c> (returning a multirange) and <c>range_intersect_agg</c>
+/// (returning a range) — for <see cref="RangeAggregateExtensions"/> and for any satellite
+/// overload class registered via <c>RangeTypeRegistry.RegisterAggregateExtensions</c>.
 /// </summary>
 internal sealed class ValueRangesAggregateMethodCallTranslator(
     NpgsqlSqlExpressionFactory sqlExpressionFactory
@@ -25,7 +26,7 @@ internal sealed class ValueRangesAggregateMethodCallTranslator(
         IDiagnosticsLogger<DbLoggerCategory.Query> logger
     )
     {
-        if (method.DeclaringType != typeof(RangeAggregateExtensions)
+        if (!RangeTypeRegistry.IsAggregateDeclaringType(method.DeclaringType)
             || source.Selector is not SqlExpression selector
             || !RangeTypeRegistry.TryGetByClrType(method.ReturnType, out var definition, out var isSet))
         {

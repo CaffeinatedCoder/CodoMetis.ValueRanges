@@ -19,6 +19,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\CodoMetis.ValueRanges.EFCore.PostgreSQL\CodoMetis.ValueRanges.EFCore.PostgreSQL.csproj" />
+        <ProjectReference Include="..\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.csproj" />
     </ItemGroup>
 
 </Project>

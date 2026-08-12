@@ -44,6 +44,15 @@ DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a
 
 The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](#entity-framework-core-postgresql) for how that round-trips.
 
+## What's new in v4.1
+
+**NodaTime satellites** — two new packages bring the range model to NodaTime-based projects:
+
+- **[CodoMetis.ValueRanges.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.NodaTime)** — `LocalDateRange` (`daterange`), `LocalDateTimeRange` (`tsrange`) and `InstantRange` (`tstzrange`) with the complete algebra, multiranges, literals and JSON support, plus conversions to and from NodaTime's own `Interval` and `DateInterval`. See [NodaTime](#nodatime).
+- **[CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime)** — maps them to PostgreSQL via `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`: `options.UseNpgsql(..., npgsql => npgsql.UseValueRangesNodaTime())`.
+
+The core and base EF packages are unchanged apart from the EF plugin's internal type registry becoming extensible for satellites. No source changes are required.
+
 ## What's new in v4.0
 
 **PostgreSQL feature-matrix completion** — every remaining range/multirange operator and function now has an in-memory implementation and a LINQ-to-SQL translation:
@@ -94,6 +103,25 @@ The list is closed on purpose. Interval algebra needs a total order that the typ
 `double` and `float` have neither, and fail *quietly*. `double.CompareTo` reports `NaN` as less than every value and equal to itself, which is a total order; the IEEE operators disagree, since `NaN < 5.0`, `NaN > 5.0` and `NaN == NaN` are all `false`. A range library generic over `IComparable<T>` therefore accepts `double` without complaint and answers containment against a `NaN` bound with a straight face. There is no exception to catch and no bound to reject at construction — the result is simply wrong. Restricting `T` to a vetted set is what makes the algebra sound, not a limitation left in for later.
 
 `Guid` is absent for a different reason: v7 values are ordered, so the algebra would be well-defined, but "every GUID between these two" is not a question with a domain meaning.
+
+### NodaTime
+
+For projects that build on NodaTime's primitives instead of the BCL date/time types, the satellite package **[CodoMetis.ValueRanges.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.NodaTime)** provides the three NodaTime types that clear the same bar — a total order the type's own comparisons agree with, mapping onto a PostgreSQL built-in:
+
+| .NET type              | PostgreSQL equivalent | Element type     | Discrete |
+|------------------------|-----------------------|------------------|----------|
+| `LocalDateRange`       | `daterange`           | `LocalDate`      | ✓        |
+| `LocalDateTimeRange`   | `tsrange`             | `LocalDateTime`  | —        |
+| `InstantRange`         | `tstzrange`           | `Instant`        | —        |
+
+The same algebra, literals, JSON support and `RangeSet` multiranges apply unchanged. Notably, the two timestamp caveats documented [below](#entity-framework-core-postgresql) do not arise there: `LocalDateTime` is wall-clock time by construction and `Instant` is an instant by construction, so there is no `Kind` to reinterpret and no offset to normalize away. `ZonedDateTime` and `OffsetDateTime` are excluded by the same reasoning as `double` — NodaTime deliberately gives them no default ordering (instant order and local order disagree), so the `IComparable<T>` constraint rejects them at compile time. See the satellite's README for the full rationale and the `Interval`/`DateInterval` interop.
+
+A companion EF Core package, **[CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime)**, maps them to the same PostgreSQL columns through `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`:
+
+```csharp
+options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRangesNodaTime());
+// implies UseNodaTime() and UseValueRanges() — BCL and NodaTime ranges coexist in one model
+```
 
 One point where the model is *stricter* than the database it mirrors: PostgreSQL's `numeric` has a `NaN` value (sorted above all others by fiat), so a `numrange` bound can be `NaN`. .NET's `decimal` has no such value, so `DecimalRange` cannot form one — the case that `numrange` has to define away does not arise.
 

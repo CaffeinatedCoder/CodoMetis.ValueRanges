@@ -17,6 +17,22 @@ CodoMetis.ValueRanges is a .NET 10 class library providing type-safe range types
 
 Discrete types (int, long, DateOnly) implement `NextValueAfter`/`PreviousValueBefore` to return the adjacent value. Continuous types leave them returning `null`. Discrete ranges canonicalize to closed `[lower, upper]` at construction (`Internals/DiscreteCanonical.cs`); continuous ranges default to half-open `[lower, upper)`.
 
+## NodaTime Satellites
+
+`CodoMetis.ValueRanges.NodaTime` adds three range types over NodaTime elements, following the identical discriminated-union pattern:
+
+| C# Type | PostgreSQL | Element Type | Discrete |
+|---|---|---|---|
+| `LocalDateRange` | `daterange` | `LocalDate` | ✓ |
+| `LocalDateTimeRange` | `tsrange` | `LocalDateTime` | — |
+| `InstantRange` | `tstzrange` | `Instant` | — |
+
+Because the whole algebra (extensions, engines, `RangeSet`, parsing defaults, JSON factory) is generic over `IRange<T>`/`IRangeFactory<TRange, T>`, the satellite only defines the unions themselves plus per-type `RangeAgg`/`RangeIntersectAgg` overloads (`NodaTimeRangeAggregateExtensions`) and `Interval`/`DateInterval` interop adapters. It accesses `Internals/` (`DiscreteCanonical`, `RangeFormat`) via `InternalsVisibleTo` — the public API stays closed to third parties, preserving the exhaustive-matching guarantee. Types live in the shared `CodoMetis.ValueRanges` namespace (a `NodaTime` namespace segment would shadow the NodaTime root namespace).
+
+Satellite-specific construction rules: `LocalDate`/`LocalDateTime` bounds normalize to the ISO calendar (`WithCalendar`) so `CompareTo` can never see mixed calendars; text I/O uses NodaTime's culture-free ISO patterns, with PostgreSQL wire-form fallbacks (space separator, numeric offsets) on parse.
+
+`CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime` registers three `RangeTypeDefinition`s and the aggregate overload class via `UseValueRangesNodaTime()`, which also chains Npgsql's `UseNodaTime()` (element mappings) and `UseValueRanges()`.
+
 ## Discriminated Union Pattern
 
 Every range type is an abstract record with five sealed nested variants:
@@ -82,9 +98,10 @@ See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBou
 ## EF Core PostgreSQL (`CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
 
 - **`ValueRangesMethodCallTranslator`** — translates LINQ methods to PostgreSQL operators (`@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>`, `-|-`, `*`, `+`, `-`) and functions (`lower`, `upper`, `lower_inc`, `upper_inc`, `isempty`, `lower_inf`, `upper_inf`, `range_merge`), for ranges and multiranges
-- **`ValueRangesAggregateMethodCallTranslator`** — translates `RangeAgg`/`RangeIntersectAgg` to `range_agg`/`range_intersect_agg` inside grouped queries
+- **`ValueRangesAggregateMethodCallTranslator`** — translates `RangeAgg`/`RangeIntersectAgg` to `range_agg`/`range_intersect_agg` inside grouped queries, for every declaring class registered via `RangeTypeRegistry.RegisterAggregateExtensions`
 - **Type mapping** — maps range types to PostgreSQL range columns, RangeSet to multirange columns
-- **Enable**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());`
+- **`RangeTypeRegistry`** (`Internal/`) — the single wiring point. Process-wide and additive: the six built-ins are registered up front; satellites contribute `RangeTypeDefinition`s at options-configuration time via `Register` (idempotent per range CLR type, thread-safe immutable-snapshot swap). Lookups: by range/set CLR type, by element type (the `IRange<T>`-typed-operand fallback — one range type per element type, enforced), and by store type name (first registration owns the name; BCL and NodaTime types share `daterange` etc., so store-name-only resolution stays with the BCL types)
+- **Enable**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());` — or `npgsql.UseValueRangesNodaTime()` from the NodaTime satellite, which implies it
 
 ## Engine Internals (`Internals/`)
 

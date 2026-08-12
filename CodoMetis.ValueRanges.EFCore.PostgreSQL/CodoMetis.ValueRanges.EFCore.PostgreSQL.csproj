@@ -20,6 +20,7 @@ Translates the full range algebra from LINQ to SQL: Contains, Overlaps, IsContai
 
     <ItemGroup>
         <InternalsVisibleTo Include="CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests" />
+        <InternalsVisibleTo Include="CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime" />
     </ItemGroup>
 
     <ItemGroup>

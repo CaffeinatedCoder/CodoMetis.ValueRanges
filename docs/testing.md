@@ -34,7 +34,9 @@ One test file per operation, named `Range[Operation]Tests.cs`:
 | `RangeSetOptimizationTests.cs` | Performance-critical invariants |
 | `RangeJsonConverterTests.cs` | JSON serialization round-trips |
 
-EF Core translation tests live in `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — they assert generated SQL via `ToQueryString()` without a database.
+`CodoMetis.ValueRanges.NodaTime.Tests/` covers what is new in the NodaTime satellite — type wiring, the one-day discrete step, ISO calendar normalization, wire-form parsing, `Interval`/`DateInterval` interop — with representative shape coverage; the engines themselves are exhaustively covered by the core tests.
+
+EF Core translation tests live in `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — they assert generated SQL via `ToQueryString()` without a database. `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` does the same for the NodaTime types, proving every translation path (operators, functions, factories, aggregates, multiranges, BCL coexistence).
 
 `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` executes against **live PostgreSQL** via Testcontainers (Docker required; tests report Inconclusive without it): round-trips for every range/multirange type, timestamp normalization rules, and SQL-vs-in-memory parity assertions for the v4 operations. These tests are the authority on PostgreSQL semantics — they caught the discrete `upper()` canonicalization offset and the directional multirange adjacency rule.
 

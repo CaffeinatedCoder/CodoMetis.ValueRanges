@@ -16,4 +16,8 @@ Includes the full PostgreSQL interval algebra — Contains, Overlaps, IsAdjacent
     <ItemGroup>
         <None Include="../README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="CodoMetis.ValueRanges.NodaTime" />
+    </ItemGroup>
 </Project>

@@ -1,0 +1,99 @@
+# CodoMetis.ValueRanges.NodaTime
+
+NodaTime range types for [CodoMetis.ValueRanges](https://www.nuget.org/packages/CodoMetis.ValueRanges): the full PostgreSQL interval algebra over NodaTime's temporal primitives.
+
+| Type                 | Element         | PostgreSQL equivalent | Discrete |
+|----------------------|-----------------|-----------------------|----------|
+| `LocalDateRange`     | `LocalDate`     | `daterange`           | ✓ (step: one day) |
+| `LocalDateTimeRange` | `LocalDateTime` | `tsrange`             | —        |
+| `InstantRange`       | `Instant`       | `tstzrange`           | —        |
+
+Each type is the same discriminated union of five sealed variants as the core package (`Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`), and every operation of the core algebra works unchanged: `Contains`, `Overlaps`, `IsAdjacentTo`, the directional comparisons, `Intersect`, `Union`, `Except`, `Merge`, bound accessors, `RangeAgg`/`RangeIntersectAgg`, `RangeSet<TRange, T>` multiranges, PostgreSQL literal parsing/formatting, and `System.Text.Json` serialization.
+
+```csharp
+using CodoMetis.ValueRanges;
+using NodaTime;
+
+var sprint = LocalDateRange.CreateFinite(new LocalDate(2025, 1, 6), new LocalDate(2025, 1, 17));
+sprint.Contains(new LocalDate(2025, 1, 10));   // true
+
+var deploy = InstantRange.CreateFinite(
+    Instant.FromUtc(2025, 6, 1, 22, 0),
+    Instant.FromUtc(2025, 6, 2, 2, 0));        // [start, end) — half-open, like tstzrange
+
+var blocked = RangeSet<LocalDateRange, LocalDate>.From([
+    LocalDateRange.CreateFinite(new LocalDate(2025, 1, 1), new LocalDate(2025, 1, 31)),
+    LocalDateRange.CreateFinite(new LocalDate(2025, 2, 1), new LocalDate(2025, 2, 28))
+]);   // { [2025-01-01,2025-02-28] } — adjacent months merge (discrete step)
+```
+
+## Installation
+
+```sh
+dotnet add package CodoMetis.ValueRanges.NodaTime
+```
+
+> Requires .NET 10 or later. A companion EF Core package, [CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime), maps these types to PostgreSQL columns via `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`.
+
+## Two documented caveats, dissolved
+
+The core package documents two reinterpretation rules at the database boundary for the BCL-based types. With NodaTime they do not arise, because the types cannot express the ambiguity in the first place:
+
+- **`tsrange` / `DateTimeRange`**: a UTC-kinded `DateTime` is *reinterpreted* as wall-clock time. A `LocalDateTime` **is** wall-clock time by construction — there is no `Kind` to reinterpret.
+- **`tstzrange` / `DateTimeOffsetRange`**: bounds are *normalized* to UTC and the original offset is not round-tripped. An `Instant` **is** what `timestamptz` stores — a point on the global timeline with no offset attached — so there is nothing to normalize and nothing to lose. Zoned or offset values convert explicitly (`zonedDateTime.ToInstant()`) before entering a range, which is exactly NodaTime's own philosophy.
+
+This is the same design move the core package makes for unboundedness: the invalid state is not validated away, it is unrepresentable.
+
+## Why these three
+
+The core package restricts its element types to domains with a total order that the type's own comparisons agree with, plus — for adjacency — a defined step between neighbours ("Why these six element types" in the core README). Applying the same bar to NodaTime:
+
+- **`LocalDate`, `LocalDateTime`, `Instant`** pass, and each maps onto a PostgreSQL built-in range domain. They are the complete intersection of the two requirements.
+- **`ZonedDateTime` and `OffsetDateTime`** have *no default ordering at all* — NodaTime deliberately declines to implement `IComparable<T>` on them, because ordering by instant and ordering by local time give different answers, and ships named comparers (`Comparer.Instant`, `Comparer.Local`) instead. The core's `T : struct, IComparable<T>, IEquatable<T>` constraint therefore rejects them **at compile time**. This is the `double`/`NaN` argument from the core README with the enforcement moved a level earlier: `double` slipped through the constraint and had to be excluded by policy; here the type system does the excluding. Hold instants in an `InstantRange` and convert at the boundary — the zone is presentation, the instant is the value (and the offset is exactly what `tstzrange` discards on the server, too).
+- **`LocalTime`, `Duration`, `Offset`** are totally ordered but have no built-in PostgreSQL range domain (there is no built-in `timerange`), so including them would break the package's contract of mirroring PostgreSQL's built-ins.
+- **`Period`** is not comparable at all — NodaTime refuses to rank 30 days against 1 month, for the same reason this library refuses `double`: an ordering would have to lie.
+
+## Semantics worth knowing
+
+- **Defaults match the core conventions.** `LocalDateRange.CreateFinite` is closed `[start, end]` (discrete); `LocalDateTimeRange`/`InstantRange` default to half-open `[start, end)` (continuous timestamp convention). Discrete canonicalization applies: `(2025-01-01, 2025-01-31)` normalizes to `[2025-01-02, 2025-01-30]`.
+- **The ISO calendar is a construction rule.** `LocalDate.CompareTo` is only defined between dates of the same calendar system, and PostgreSQL `date`/`timestamp` are proleptic Gregorian. `LocalDateRange` and `LocalDateTimeRange` therefore normalize bounds to the ISO calendar at construction (`WithCalendar(CalendarSystem.Iso)` — same day on the timeline, ISO representation). Ranges never hold mixed-calendar bounds, so comparisons cannot throw. A date outside the ISO calendar's year range (far-future non-ISO dates) throws `ArgumentOutOfRangeException` at construction.
+- **Formatting is culture-free.** Literals use NodaTime's ISO patterns: `[2025-01-01,2025-03-31]`, `[2024-06-01T08:00:00,2024-06-01T17:30:00)`, `[2024-06-01T00:00:00Z,2024-07-01T00:00:00Z)`. Subsecond digits appear only when present, up to nanosecond precision.
+- **Parsing accepts the PostgreSQL wire form too.** Besides its own canonical output, `Parse` handles literals as `psql` prints them: space-separated timestamps (`"2024-06-01 00:00:00"`) and numeric offsets (`"2024-06-01 14:30:00+02"` — converted to the instant they denote).
+- **Precision at the database boundary.** NodaTime carries nanoseconds; PostgreSQL stores microseconds. Sub-microsecond precision is reduced when persisting through the EF Core package (pinned by the live-PostgreSQL integration suite). In-memory operations keep full nanosecond precision.
+- **`Instant.MinValue` / `Instant.MaxValue`** map to PostgreSQL `-infinity` / `infinity` by default (an Npgsql rule) — a *finite bound that happens to be infinite*, still distinct from an unbounded side, exactly as the core README describes for `DateTime.MinValue`/`MaxValue`.
+
+## Interop with NodaTime's own interval types
+
+NodaTime ships two interval types of its own; both are deliberately narrower than the range model, and conversions are provided in both directions:
+
+| NodaTime type  | Shape it can express                          | Conversions |
+|----------------|-----------------------------------------------|-------------|
+| `Interval`     | `[start, end)` over instants; ends may be absent; no empty | `interval.ToInstantRange()` (total) · `range.ToInterval()` (throws for shapes an `Interval` cannot express) |
+| `DateInterval` | finite, fully closed `[start, end]` over dates | `dateInterval.ToLocalDateRange()` (total) · `finite.ToDateInterval()` (declared on `LocalDateRange.Finite` — pattern match first) |
+
+```csharp
+var interval = new Interval(Instant.FromUtc(2025, 1, 1, 0, 0), Instant.FromUtc(2025, 2, 1, 0, 0));
+InstantRange range = interval.ToInstantRange();          // [start, end) Finite
+Interval back      = range.ToInterval();                 // round-trips
+
+if (LocalDateRange.Parse("[2025-01-01,2025-01-31]", null) is LocalDateRange.Finite finite)
+    DateInterval dates = finite.ToDateInterval();
+```
+
+What the range types add over `Interval`/`DateInterval`: the empty range, unbounded date ranges, all four bound-inclusiveness combinations, the full set algebra (`Union`/`Except`/`Intersect`/`Merge`/`Complement`), multiranges, PostgreSQL literals, and LINQ-to-SQL translation.
+
+## Entity Framework Core
+
+```sh
+dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime
+```
+
+```csharp
+options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRangesNodaTime());
+```
+
+One line — it implies both `UseNodaTime()` (the Npgsql NodaTime plugin) and `UseValueRanges()` (the base plugin), so BCL-based and NodaTime-based range types coexist in one model. The full algebra translates to SQL exactly as documented in the core README, including the discrete `upper(x) - 1` compensation for `LocalDateRange` and the satellite's `RangeAgg`/`RangeIntersectAgg` overloads inside `GroupBy` projections.
+
+## License
+
+MIT — see [LICENSE](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/LICENSE).
