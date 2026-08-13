@@ -776,6 +776,24 @@ Everything else is automatic: all range and multirange operators, functions and 
 
 The NodaTime satellite stores `YearMonthRange` as a **month-aligned `daterange`** — `[2024-01, 2024-03]` becomes `[2024-01-01, 2024-04-01)` — so no custom database type is involved and every operator, bound accessor and aggregate translates and agrees with the in-memory results (`upper()` compensation lands on the last day of the end month, whose month is the model's inclusive upper bound). Reads validate month alignment: a `daterange` covering a partial month fails loudly instead of silently shifting boundaries. The one restriction: because months are coarser than the `date` subtype, the `CreateFinite`/`CreateUnbounded*` factories cannot be built *in SQL from column values* — constant and parameter ranges work as usual, and a column-dependent factory call fails translation with a clear error.
 
+In practice the restriction only bites when a query constructs the range *from a column*:
+
+```csharp
+// Factories over constants and locals never reach the translator — EF evaluates
+// them client-side and the result renders as a month-aligned daterange literal:
+// r."BillingPeriod" && '[2024-01-01,2024-06-30]'::daterange
+var from = new YearMonth(2024, 1); var to = new YearMonth(2024, 6);
+reservations.Where(r => r.BillingPeriod.Overlaps(YearMonthRange.CreateFinite(from, to)));
+
+// Building the range from a column would need month arithmetic in SQL — a closed
+// upper bound must expand to first-of-next-month, which the element-wise bound
+// conversion cannot express. Fails with the standard EF translation error:
+reservations.Where(r => YearMonthRange.CreateUnboundedEnd(r.Day.ToYearMonth())
+                                      .Contains(month));  // ⛔ InvalidOperationException
+```
+
+For column-driven construction, fall back to a `LocalDateRange` built from the date column — `daterange` construction in SQL is fully supported there.
+
 ## Verified against PostgreSQL
 
 The library's core promise — identical results in memory and as SQL — is enforced by three test layers:
