@@ -45,6 +45,17 @@ DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a
 
 The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](#entity-framework-core-postgresql) for how that round-trips.
 
+## What's new in v6.1
+
+**A JSON audit, and three defects it found.** All three shared one shape: System.Text.Json fell back to reflection where the library expected a converter, and the result was silence rather than an exception. Nothing that previously worked changes — every fix replaces a crash or a wrong answer.
+
+- **⚠️ Value set elements without a converter now serialize as their text form, not as an object.** This is the one visible payload change. A validated wrapper — `StringSet<PermissionKey>`, `GuidSet<TenantId>`, … — whose element type carries no `[JsonConverter]` used to be handed to System.Text.Json's reflection path, which wrote `[{"Value":"users.read"}]`, or `[{}]` for the generator-typical shape of a record struct over a private field. The `[{}]` form destroyed data on read; both disagreed with the `{users.read}` stored in PostgreSQL. Elements now go through the family's own text form — `["users.read"]` for string- and Guid-backed sets, `[1,2]` for integer-backed ones, identical to the primitive each wraps — and reads re-run the element's `IParsable` validation. **If you serialize such a set and have persisted or published the old object form, that payload shape changes.** Registering a converter for the element type (on the options, the property, or the type) overrides this, exactly as before.
+- **The same fix reaches the NodaTime sets**, which had the identical failure — `[{"Calendar":{…},"Year":2024,…}]` on write, `default` on read. `AddRangeConverters()` alone is now enough; the satellite additionally exposes `AddNodaTimeRangeConverters()` for bare NodaTime values sitting *next to* a set, which the element hook does not reach. Composes with `ConfigureForNodaTime` in either registration order.
+- **Nullable range properties no longer throw.** `HandleNull` routed nulls into the write path, which dereferenced them: serializing an object with a null `Int32Range?` threw `NullReferenceException`. It writes `null`. Reads still reject a null token — use `"empty"`.
+- **Ranges reached through `object` no longer throw.** `Serialize<object>(range)`, an `object`-typed property and heterogeneous collections all present the union's sealed variant, for which the converter could not be constructed — a reflection `ArgumentException` escaped. Variants now serialize to the same literal, and reads into a variant-typed declaration reject a literal of the wrong shape.
+
+New API: `IValueSetFactory<TSet, T>.ElementJsonConverter` (a defaulted virtual static; the interface is closed to external implementation), `RangeVariantJsonConverter<TVariant, TRange, T>`, and `AddNodaTimeRangeConverters()`.
+
 ## What's new in v6.0
 
 **Value sets — a second type family.** The package's model was never "ranges" narrowly; it is *immutable, canonical-at-construction value domains with PostgreSQL-native storage shapes*. `RangeSet` has embodied "canonical set with a native store shape" (multirange) since v2; v6 applies the same concept one level down: **canonical sets of scalar values, stored as native PostgreSQL arrays** (`text[]`, `uuid[]`, `integer[]`, …) — deduplicated, sorted, structurally equal, with the membership algebra PostgreSQL's own array operators speak.
@@ -547,6 +558,8 @@ StringSet<AccessRight> rights = [AccessRight.Parse("users.read", null)];
 
 String-backed wrappers sort ordinal over their text form — deliberately not the element's own `IComparable`, whose generated implementations typically delegate to culture-sensitive string comparison.
 
+That same text form carries into JSON, so a wrapper set is indistinguishable on the wire from the primitive set it replaces — `StringSet<AccessRight>` writes `["users.read"]`, `Int32Set<OrderId>` writes `[1,2]` — and reads run `Parse`, so the validation above applies to deserialized payloads too. Give the element type its own `[JsonConverter]` if you want a different shape; it takes precedence.
+
 ### Why these element types
 
 The same vetting as [for ranges](#why-these-element-types) applies, with one notable difference: `Guid` is absent from ranges ("every GUID between these two" has no domain meaning) but present in sets — *membership* is exactly the question ID collections ask. Excluded, deliberately: `bool` (a set over a two-value domain), `float`/`double` (NaN breaks total order and equality — the same quiet failure as for ranges), `byte[]` (nested variable-length elements have no cheap canonical order), and `TimeSpan` (PostgreSQL `interval` is a months/days/microseconds triple that `TimeSpan` cannot represent losslessly).
@@ -561,7 +574,7 @@ Int32Set.Parse("{2,1,2}", null);             // {1,2} — normalizes on parse
 StringSet.Parse("{a,NULL}", null);           // FormatException — sets never contain null
 ```
 
-JSON serialization goes through the same converter factory as the ranges (`options.AddRangeConverters()`) and produces plain JSON arrays (`["alpha","beta"]`), delegating element serialization to System.Text.Json — element converters (including NodaTime's `ConfigureForNodaTime`) apply. Reads normalize and reject null elements.
+JSON serialization goes through the same converter factory as the ranges (`options.AddRangeConverters()`) and produces plain JSON arrays (`["alpha","beta"]`), delegating element serialization to System.Text.Json — element converters apply. Reads normalize and reject null elements. Element types the serializer does not know natively are covered by the family's own [element converter](#element-converters).
 
 ### When not to use a set
 
@@ -705,7 +718,35 @@ var dates = JsonSerializer.Serialize(
 // "\"[2025-01-01,2025-12-31]\""
 ```
 
-A null JSON token is rejected with `JsonException`; use the literal `"empty"` to represent an empty range.
+A null JSON *token* is rejected on read with `JsonException` — use the literal `"empty"` for the empty range, so that a missing value and an empty range never collapse into each other. A null *reference* writes as `null`, so `Int32Range?` properties serialize the way any other nullable property does.
+
+The union's sealed variants serialize to the same literal, so a range reached through `object` — a boxed value, an `object`-typed property, a heterogeneous collection — is not a special case:
+
+```csharp
+JsonSerializer.Serialize<object>(Int32Range.CreateFinite(1, 5), options);   // "\"[1,5]\""
+JsonSerializer.Serialize(new List<object> { range, dateRange }, options);   // ["[1,5]","[2024-01-01,2024-03-01]"]
+```
+
+Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `"empty"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening. A property declared as the `IRange<T>` interface is *not* covered — the interface carries no factory to parse back through; declare it as the union type.
+
+### Element converters
+
+Value sets serialize as plain JSON arrays and delegate their elements to System.Text.Json, which keeps element converters authoritative — registered on the options, on the property, or on the element type. For element types the serializer knows nothing about, that delegation would silently produce an object of the element's properties on write and `default` on read. A set family closes that hole by supplying a fallback:
+
+```csharp
+static JsonConverter<LocalDate>? IValueSetFactory<LocalDateSet, LocalDate>.ElementJsonConverter
+    => /* ISO 8601, the same text form the array literals use */;
+```
+
+It is consulted last — only when System.Text.Json has no scalar converter for the element type at all — so registering one by any of the three normal routes still wins. The primitive-backed families serialize natively and leave it at the default `null`. The four wrapper arities define one, because their element type is whatever you supply: string- and Guid-backed sets write the element's text form as a JSON string, integer-backed sets write a JSON number, so `Int32Set<OrderId>` and `Int32Set` produce identical payloads. The five NodaTime sets define one too, which is why they need no configuration:
+
+```csharp
+var options = new JsonSerializerOptions().AddRangeConverters();
+
+JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)), options);   // ["2024-01-01"]
+```
+
+The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](CodoMetis.ValueRanges.NodaTime/README.md#json).
 
 ## Interface Overview
 
