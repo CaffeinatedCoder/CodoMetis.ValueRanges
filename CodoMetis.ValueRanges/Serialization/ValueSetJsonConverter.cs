@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using CodoMetis.ValueRanges.Core;
 
 namespace CodoMetis.ValueRanges.Serialization;
@@ -10,6 +11,11 @@ namespace CodoMetis.ValueRanges.Serialization;
 /// <typeparamref name="T"/> apply. Reads normalize to canonical form and reject
 /// <see langword="null"/> elements.
 /// </summary>
+/// <remarks>
+/// When <see cref="System.Text.Json"/> has no scalar converter for <typeparamref name="T"/> and
+/// would fall back to writing it as an object of its properties, the set family's
+/// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/> is used instead, if it defines one.
+/// </remarks>
 /// <typeparam name="TSet">The concrete set type.</typeparam>
 /// <typeparam name="T">The element type of the set.</typeparam>
 public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
@@ -22,13 +28,17 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
         if (reader.TokenType != JsonTokenType.StartArray)
             throw new JsonException($"Expected a JSON array for {typeof(TSet).Name}.");
 
-        var values = new List<T>();
+        var fallback = ResolveElementConverter(options);
+        var values   = new List<T>();
         while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
         {
             if (reader.TokenType == JsonTokenType.Null)
                 throw new JsonException($"{typeof(TSet).Name} cannot contain null elements.");
 
-            var element = JsonSerializer.Deserialize<T>(ref reader, options);
+            var element = fallback is null
+                              ? JsonSerializer.Deserialize<T>(ref reader, options)
+                              : fallback.Read(ref reader, typeof(T), options);
+
             if (element is null)
                 throw new JsonException($"{typeof(TSet).Name} cannot contain null elements.");
 
@@ -48,13 +58,40 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, TSet value, JsonSerializerOptions options)
     {
+        var fallback = ResolveElementConverter(options);
+
         writer.WriteStartArray();
         foreach (var element in ((IValueSet<T>)value).Values)
         {
-            JsonSerializer.Serialize(writer, element, options);
+            if (fallback is null)
+                JsonSerializer.Serialize(writer, element, options);
+            else
+                fallback.Write(writer, element, options);
         }
 
         writer.WriteEndArray();
+    }
+
+    /// <summary>
+    /// Returns the family's element converter when — and only when — System.Text.Json has
+    /// nothing better. Anything it can already write as a scalar (a built-in converter, one
+    /// registered on the options, or a <see cref="JsonConverterAttribute"/> on the element type)
+    /// reports <see cref="JsonTypeInfoKind.None"/> and stays authoritative; only the reflection
+    /// fallback, which would property-dump the element, hands over.
+    /// </summary>
+    private static JsonConverter<T>? ResolveElementConverter(JsonSerializerOptions options)
+    {
+        try
+        {
+            return options.GetTypeInfo(typeof(T)).Kind == JsonTypeInfoKind.None
+                       ? null
+                       : TSet.ElementJsonConverter;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
+        {
+            // No contract resolvable for T. Leave the decision with System.Text.Json.
+            return null;
+        }
     }
 }
 

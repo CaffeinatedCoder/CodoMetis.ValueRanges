@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges.Core;
@@ -61,6 +62,29 @@ public interface IValueSetFactory<TSet, T> : IParsable<TSet>, IFormattable
     /// </summary>
     virtual static string FormatValue(T value, string? format, IFormatProvider? provider)
         => value is IFormattable f ? f.ToString(format, provider) : value.ToString()!;
+
+    /// <summary>
+    /// A last-resort element converter for JSON, used only when
+    /// <see cref="System.Text.Json"/> has no scalar converter for <typeparamref name="T"/> at
+    /// all and would otherwise serialize it as a property dump.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Value sets serialize as plain JSON arrays and delegate their elements to
+    /// <see cref="System.Text.Json"/>, which is the right default: it keeps element converters
+    /// registered on the options, on the property and on the element type authoritative. It is
+    /// also a trap for element types the serializer does not know — a type with no converter
+    /// anywhere is written out as an object of its properties and read back as
+    /// <see langword="default"/>, silently, on both legs.
+    /// </para>
+    /// <para>
+    /// A set family whose element type is not natively serializable must override this to close
+    /// that hole. It is consulted last, so registering a converter — by any of the three normal
+    /// routes — still overrides it. The default is <see langword="null"/>: no fallback, delegate
+    /// to <see cref="System.Text.Json"/> as before.
+    /// </para>
+    /// </remarks>
+    virtual static JsonConverter<T>? ElementJsonConverter => null;
 
     // -----------------------------------------------------------------------
     // IParsable<TSet> — default implementations

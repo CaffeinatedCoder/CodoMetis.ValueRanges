@@ -2,8 +2,10 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges;
 
@@ -158,6 +160,16 @@ public sealed class GuidSet<TElement> :
     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text form.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
         => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The JSON fallback for elements that carry no converter of their own: a JSON string holding
+    /// the same text form as <see cref="FormatValue"/>, so the wrapper serializes exactly like the
+    /// primitive it wraps and <see cref="ParseValue"/> re-runs its validation on the way in.
+    /// Consulted only when nothing else has claimed <typeparamref name="TElement"/> — see
+    /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
+    /// </summary>
+    static JsonConverter<TElement>? IValueSetFactory<GuidSet<TElement>, TElement>.ElementJsonConverter
+        => ValueSetTextElementJsonConverter<GuidSet<TElement>, TElement>.Instance;
 
     /// <summary>
     /// Parses a PostgreSQL array literal into a <see cref="GuidSet{TElement}"/>, re-validating
