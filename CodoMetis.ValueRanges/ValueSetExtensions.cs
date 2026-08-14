@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.Contracts;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 
@@ -25,6 +26,7 @@ public static class ValueSetExtensions
         /// The probe is normalized the way <c>From</c> normalizes elements, so it is
         /// comparable with the stored ones.
         /// </summary>
+        [Pure]
         public bool Contains(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
@@ -40,6 +42,7 @@ public static class ValueSetExtensions
         /// Determines whether this set and <paramref name="other"/> share at least one element —
         /// PostgreSQL <c>&amp;&amp;</c>.
         /// </summary>
+        [Pure]
         public bool Overlaps(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -50,6 +53,7 @@ public static class ValueSetExtensions
         /// Determines whether every element of this set is contained in <paramref name="other"/> —
         /// PostgreSQL <c>&lt;@</c>.
         /// </summary>
+        [Pure]
         public bool IsSubsetOf(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -60,6 +64,7 @@ public static class ValueSetExtensions
         /// Determines whether this set contains every element of <paramref name="other"/> —
         /// PostgreSQL <c>@&gt;</c>.
         /// </summary>
+        [Pure]
         public bool IsSupersetOf(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -74,6 +79,7 @@ public static class ValueSetExtensions
         /// The cardinality check is exact rather than a shortcut: both operands are
         /// deduplicated, so a subset with fewer elements is precisely a proper subset.
         /// </remarks>
+        [Pure]
         public bool IsProperSubsetOf(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -87,6 +93,7 @@ public static class ValueSetExtensions
         /// the two are not equal — PostgreSQL <c>@&gt;</c> combined with <c>NOT &lt;@</c>.
         /// </summary>
         /// <inheritdoc cref="IsProperSubsetOf" path="/remarks"/>
+        [Pure]
         public bool IsProperSupersetOf(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -99,6 +106,7 @@ public static class ValueSetExtensions
         /// Returns the union of this set and <paramref name="other"/> — PostgreSQL <c>||</c>
         /// (the server-side result re-canonicalizes on read).
         /// </summary>
+        [Pure]
         public TSet Union(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -110,6 +118,7 @@ public static class ValueSetExtensions
         /// Returns the elements present in both this set and <paramref name="other"/>.
         /// Client-side only — PostgreSQL has no native array intersection operator.
         /// </summary>
+        [Pure]
         public TSet Intersect(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -121,6 +130,7 @@ public static class ValueSetExtensions
         /// Returns the elements of this set not present in <paramref name="other"/>.
         /// Client-side only — PostgreSQL has no native array difference operator.
         /// </summary>
+        [Pure]
         public TSet Except(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -133,6 +143,7 @@ public static class ValueSetExtensions
         /// already present. The element is normalized the way <c>From</c> normalizes it, so the
         /// result holds the canonical invariant. Client-side only.
         /// </summary>
+        [Pure]
         public TSet Add(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
@@ -152,6 +163,7 @@ public static class ValueSetExtensions
         /// deduplicated, and against a non-canonical row <c>array_remove</c> strips every
         /// occurrence, which is still the right set semantics.
         /// </remarks>
+        [Pure]
         public TSet Remove(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
