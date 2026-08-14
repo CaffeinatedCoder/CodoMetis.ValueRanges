@@ -28,7 +28,10 @@ public static class NpgsqlValueRangesServiceCollectionExtensions
 
         new EntityFrameworkNpgsqlServicesBuilder(serviceCollection)
            .TryAdd<IRelationalTypeMappingSourcePlugin, ValueRangesTypeMappingSourcePlugin>()
+           .TryAdd<IRelationalTypeMappingSourcePlugin, ValueSetsTypeMappingSourcePlugin>()
            .TryAdd<IMethodCallTranslatorPlugin, ValueRangesMethodCallTranslatorPlugin>()
+           .TryAdd<IMethodCallTranslatorPlugin, ValueSetsMethodCallTranslatorPlugin>()
+           .TryAdd<IMemberTranslatorPlugin, ValueSetsMemberTranslatorPlugin>()
            .TryAdd<IAggregateMethodCallTranslatorPlugin, ValueRangesAggregateMethodCallTranslatorPlugin>()
            .TryAdd<IInterceptor, ValueRangesQueryExpressionInterceptor>();
 
