@@ -5,7 +5,7 @@ using NodaTime;
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
 using DateSet    = RangeSet<LocalDateRange, LocalDate>;
-using InstantSet = RangeSet<InstantRange, Instant>;
+using InstantRangeSet = RangeSet<InstantRange, Instant>;
 
 /// <summary>
 /// Live-PostgreSQL coverage for the NodaTime range types: value round-trips (including the
@@ -105,7 +105,7 @@ public class NodaTimeIntegrationTests
                 LocalDateRange.CreateFinite(D(2024, 3, 1), D(2024, 3, 10)),
                 LocalDateRange.CreateFinite(D(2024, 1, 1), D(2024, 1, 31))
             ]),
-            NodaWindows     = InstantSet.From([
+            NodaWindows     = InstantRangeSet.From([
                 InstantRange.CreateFinite(I(2024, 6, 1), I(2024, 6, 15)),
                 InstantRange.CreateFinite(I(2024, 7, 1), I(2024, 7, 15))
             ])

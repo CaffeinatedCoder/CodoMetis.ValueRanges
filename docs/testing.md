@@ -75,8 +75,11 @@ Use MSTest assertions (`Assert.IsTrue`, `Assert.IsFalse`, `Assert.AreEqual`, `As
 Use local type aliases for readability in tests:
 ```csharp
 using IntSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.Int32Range, int>;
-using DecimalSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
+using DecimalRangeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
 ```
+Alias names must not collide with the value set types (`DecimalSet`, `DateSet`, `TimeSet`, …):
+test namespaces live under `CodoMetis.ValueRanges`, and namespace-member lookup beats file-level
+aliases — prefer the `*RangeSet` naming.
 
 ## What to Test
 

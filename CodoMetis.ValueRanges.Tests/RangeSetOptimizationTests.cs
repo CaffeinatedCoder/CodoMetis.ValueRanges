@@ -1,7 +1,7 @@
 using System.Globalization;
 using CodoMetis.ValueRanges.Core;
 using IntSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.Int32Range, int>;
-using DecimalSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
+using DecimalRangeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -288,11 +288,11 @@ public class RangeSetOptimizationTests
         // a = [1.0, 10.0] [20.0, 30.0]
         // b = (5.0, 25.0]
         // Intersections: (5.0, 10.0] [20.0, 25.0]
-        var a = DecimalSet.From([
+        var a = DecimalRangeSet.From([
             DecimalRange.CreateFinite(1m, 10m, startInclusive: true,  endInclusive: true),
             DecimalRange.CreateFinite(20m, 30m, startInclusive: true, endInclusive: true)
         ]);
-        var b = DecimalSet.From([
+        var b = DecimalRangeSet.From([
             DecimalRange.CreateFinite(5m, 25m, startInclusive: false, endInclusive: true)
         ]);
 
@@ -499,7 +499,7 @@ public class RangeSetOptimizationTests
         // set = [1.0, 5.0) [10.0, 15.0]
         // complement = (-∞, 1.0) [5.0, 10.0) (15.0, +∞)
         //            = (-∞, 1.0) [5.0, 10.0) (15.0, +∞)
-        var set = DecimalSet.From([
+        var set = DecimalRangeSet.From([
             DecimalRange.CreateFinite(1m, 5m, startInclusive: true,  endInclusive: false),
             DecimalRange.CreateFinite(10m, 15m, startInclusive: true, endInclusive: true)
         ]);

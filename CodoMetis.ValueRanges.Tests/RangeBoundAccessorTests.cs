@@ -1,4 +1,4 @@
-using DateSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DateRange, System.DateOnly>;
+using DateRangeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DateRange, System.DateOnly>;
 using IntSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.Int32Range, int>;
 
 namespace CodoMetis.ValueRanges.Tests;
@@ -172,7 +172,7 @@ public class RangeBoundAccessorTests
     [TestMethod]
     public void RangeSet_UnboundedStartElement_LowerIsNull()
     {
-        var set = DateSet.From([
+        var set = DateRangeSet.From([
             DateRange.CreateUnboundedStart(new DateOnly(2024, 3, 1), endInclusive: true),
             DateRange.CreateFinite(new DateOnly(2024, 6, 1), new DateOnly(2024, 6, 30))
         ]); // {(,2024-03-01], [2024-06-01,2024-06-30]}

@@ -6,7 +6,7 @@ namespace CodoMetis.ValueRanges.NodaTime.Tests;
 
 using CodoMetis.ValueRanges;
 
-using DateSet = RangeSet<LocalDateRange, LocalDate>;
+using LocalDateRangeSet = RangeSet<LocalDateRange, LocalDate>;
 
 [TestClass]
 public class NodaTimeJsonTests
@@ -46,13 +46,13 @@ public class NodaTimeJsonTests
     [TestMethod]
     public void RoundTrip_RangeSet()
     {
-        var set = DateSet.From([
+        var set = LocalDateRangeSet.From([
             LocalDateRange.CreateFinite(new LocalDate(2025, 1, 1), new LocalDate(2025, 1, 31)),
             LocalDateRange.CreateFinite(new LocalDate(2025, 6, 1), new LocalDate(2025, 6, 30))
         ]);
 
         var json = JsonSerializer.Serialize(set, Options);
         Assert.AreEqual("\"{[2025-01-01,2025-01-31],[2025-06-01,2025-06-30]}\"", json);
-        Assert.AreEqual(set, JsonSerializer.Deserialize<DateSet>(json, Options));
+        Assert.AreEqual(set, JsonSerializer.Deserialize<LocalDateRangeSet>(json, Options));
     }
 }

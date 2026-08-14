@@ -5,7 +5,7 @@ namespace CodoMetis.ValueRanges.NodaTime.Tests;
 using CodoMetis.ValueRanges;
 
 using DateSet    = RangeSet<LocalDateRange, LocalDate>;
-using InstantSet = RangeSet<InstantRange, Instant>;
+using InstantRangeSet = RangeSet<InstantRange, Instant>;
 
 [TestClass]
 public class NodaTimeRangeSetTests
@@ -55,7 +55,7 @@ public class NodaTimeRangeSetTests
     [TestMethod]
     public void Complement_OfFiniteSet()
     {
-        var set        = InstantSet.From([InstantRange.CreateFinite(I(2025, 1, 1), I(2025, 2, 1))]);
+        var set        = InstantRangeSet.From([InstantRange.CreateFinite(I(2025, 1, 1), I(2025, 2, 1))]);
         var complement = set.Complement();
 
         Assert.AreEqual(2, complement.Count);

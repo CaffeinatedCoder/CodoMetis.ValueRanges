@@ -1,6 +1,6 @@
 using System.Globalization;
 using NodaTime;
-using YearMonthSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.YearMonthRange, NodaTime.YearMonth>;
+using YearMonthRangeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.YearMonthRange, NodaTime.YearMonth>;
 
 namespace CodoMetis.ValueRanges.NodaTime.Tests;
 
@@ -257,7 +257,7 @@ public class YearMonthRangeTests
     [TestMethod]
     public void RangeSet_NormalizesOnConstruction()
     {
-        var set = YearMonthSet.From(
+        var set = YearMonthRangeSet.From(
         [
             YearMonthRange.CreateFinite(Ym(2024, 4), Ym(2024, 6)),
             YearMonthRange.CreateFinite(Ym(2024, 1), Ym(2024, 5)),

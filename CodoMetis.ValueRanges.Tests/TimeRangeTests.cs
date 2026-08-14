@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Serialization;
-using TimeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.TimeRange, System.TimeOnly>;
+using TimeRangeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.TimeRange, System.TimeOnly>;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -129,7 +129,7 @@ public class TimeRangeTests
     [TestMethod]
     public void OvernightWindow_IsTwoElementSet()
     {
-        var nightShift = TimeSet.From(
+        var nightShift = TimeRangeSet.From(
         [
             TimeRange.CreateUnboundedStart(new TimeOnly(6, 0)),
             TimeRange.CreateUnboundedEnd(TenTwenty)
@@ -210,9 +210,9 @@ public class TimeRangeTests
         Assert.AreEqual("\"[09:00:00.0000000,17:00:00.0000000)\"", json);
         Assert.AreEqual(range, JsonSerializer.Deserialize<TimeRange>(json, JsonOptions));
 
-        var set     = TimeSet.From([range, TimeRange.CreateFinite(TenTwenty, new TimeOnly(23, 0))]);
+        var set     = TimeRangeSet.From([range, TimeRange.CreateFinite(TenTwenty, new TimeOnly(23, 0))]);
         var setJson = JsonSerializer.Serialize(set, JsonOptions);
-        Assert.AreEqual(set, JsonSerializer.Deserialize<TimeSet>(setJson, JsonOptions));
+        Assert.AreEqual(set, JsonSerializer.Deserialize<TimeRangeSet>(setJson, JsonOptions));
     }
 
     [TestMethod]

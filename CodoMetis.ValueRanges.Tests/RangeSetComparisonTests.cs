@@ -1,4 +1,4 @@
-using DecimalSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
+using DecimalRangeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
 using IntSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.Int32Range, int>;
 
 namespace CodoMetis.ValueRanges.Tests;
@@ -195,7 +195,7 @@ public class RangeSetComparisonTests
     [TestMethod]
     public void IsAdjacentTo_Continuous_RequiresComplementaryInclusiveness()
     {
-        var set = DecimalSet.From([DecimalRange.CreateFinite(1m, 5m)]); // [1, 5)
+        var set = DecimalRangeSet.From([DecimalRange.CreateFinite(1m, 5m)]); // [1, 5)
 
         Assert.IsTrue(set.IsAdjacentTo(DecimalRange.CreateFinite(5m, 9m)));        // [5, 9) — complementary at 5
         Assert.IsFalse(set.IsAdjacentTo(DecimalRange.CreateFinite(5m, 9m, false, false))); // (5, 9) — nobody claims 5

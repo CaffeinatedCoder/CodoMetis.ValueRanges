@@ -1,6 +1,6 @@
 using CodoMetis.ValueRanges.Core;
 using IntSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.Int32Range, int>;
-using DecimalSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
+using DecimalRangeSet = CodoMetis.ValueRanges.RangeSet<CodoMetis.ValueRanges.DecimalRange, decimal>;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -74,7 +74,7 @@ public class RangeSetTests
     [TestMethod]
     public void From_ContinuousAdjacentRanges_XorInclusiveness_MergesIntoOne()
     {
-        var result = DecimalSet.From([
+        var result = DecimalRangeSet.From([
             DecimalRange.CreateFinite(1m, 5m,  true, false), // [1, 5)
             DecimalRange.CreateFinite(5m, 10m, true, true)   // [5, 10]
         ]);
@@ -90,7 +90,7 @@ public class RangeSetTests
     public void From_ContinuousTouchingRanges_BothExclusive_StaySeparate()
     {
         // [1, 5) and (5, 10] — the point 5 is missing from both; not adjacent, not overlapping.
-        var result = DecimalSet.From([
+        var result = DecimalRangeSet.From([
             DecimalRange.CreateFinite(1m, 5m,  true,  false), // [1, 5)
             DecimalRange.CreateFinite(5m, 10m, false, true)   // (5, 10]
         ]);
