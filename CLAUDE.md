@@ -1,6 +1,8 @@
 # CodoMetis.ValueRanges
 
-In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`) plus two v5 additions: `TimeRange` over `TimeOnly` (maps to the custom `timerange` type — needs `HasPostgresRange` + `EnableUnmappedTypes` on the EF side) and, in the NodaTime satellite, `YearMonthRange` over `YearMonth` (stored as a month-aligned `daterange`). Each type is a discriminated union of five sealed variants with exhaustive pattern matching.
+In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`) plus two v5 additions: `TimeRange` over `TimeOnly` (maps to the custom `timerange` type — needs `HasPostgresRange` + `EnableUnmappedTypes` on the EF side) and, in the NodaTime satellite, `YearMonthRange` over `YearMonth` (stored as a month-aligned `daterange`). Each range type is a discriminated union of five sealed variants with exhaustive pattern matching.
+
+Since v6 there is a second type family: **value sets** (`Sets/`) — immutable, canonical (deduplicated, sorted, no nulls) sets of scalar values stored as native PostgreSQL arrays (`StringSet`/`text[]`, `GuidSet`/`uuid[]`, …), plus validated-wrapper arities (`StringSet<T>` etc.) constrained only on BCL interfaces. EF maps them as scalars with plugin-owned mappings and translators (`@>`, `&&`, `<@`, `cardinality`) — never through EF's primitive-collection machinery.
 
 ## Stack
 .NET 10 · C# 14 (extension methods) · MSTest 4.x · EF Core + Npgsql (PostgreSQL bridge)
@@ -41,3 +43,6 @@ dotnet pack                           # Pack NuGet packages
 - **ALWAYS** preserve RangeSet's invariant (sorted, disjoint, non-adjacent, no empties) on every code path that constructs or mutates a set
 - **Do NOT** add new range types without verifying the generic engines cover them — a new type must implement `IRange<T>` + `IRangeFactory<TRange, T>` with the five sealed variants; the engines in `Internals/` dispatch per shape through the structural interfaces
 - **EF Core**: new range types are wired exclusively through `RangeTypeRegistry.Register` (satellites call it from their options-builder extension); never bypass the registry
+- **Value sets — ALWAYS** preserve canonical form (deduplicated, sorted by the family's canonical comparer, no nulls) on every construction path, including reads. String-backed families sort **ordinal** — never culture, never the element's own `IComparable`
+- **Value sets — NEVER** implement `IEnumerable<T>` on a set type (EF would discover it as a primitive collection), and **never** let `SetTypeRegistry` match by store-type name (`text[]` belongs to the provider's native `string[]` mapping). New set types are wired exclusively through `SetTypeRegistry.Register`
+- **Value sets**: `Count`/`IsEmpty` must stay instance properties (extension properties cannot appear in expression trees — CS9296 — and would be untranslatable)

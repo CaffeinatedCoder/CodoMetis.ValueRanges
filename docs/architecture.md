@@ -93,10 +93,51 @@ Key methods:
 
 See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBoundComparer.cs`.
 
+## Value Set Types (`Sets/`, v6)
+
+The second type family: immutable, canonical sets of scalar values whose PostgreSQL storage
+shape is a native array — `StringSet`/`text[]` is to arrays what `RangeSet`/multirange is to
+ranges. Ten closed types (`StringSet`, `GuidSet`, `Int16Set`, `Int32Set`, `Int64Set`,
+`DecimalSet`, `DateSet`, `TimeSet`, `DateTimeSet`, `DateTimeOffsetSet`) plus validated-wrapper
+arities (`StringSet<T>`, `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>`) whose `TElement` is
+constrained **only on BCL interfaces** (`struct, IEquatable, IFormattable, IParsable`, numeric
+families add `IComparable`) so generator-produced domain values never reference this package.
+The text-form contract (convention, not constraint): the element's invariant text form must be
+exactly the backing primitive's text form.
+
+- **Interfaces** (`Core/`): `IValueSet<T>` (public `Values`) + `IValueSetFactory<TSet, T>`
+  (abstract static `Empty`/`From`, internal abstract static `FromTrusted` — which is what keeps
+  the family closed to external implementations — and `static virtual` policy hooks
+  `CanonicalComparer`/`ParseValue`/`FormatValue`, mirroring `IRangeFactory`).
+- **Canonical form** enforced on every construction path (`From`, parse, JSON, materialization):
+  deduplicated, sorted, no nulls. String-backed families sort **ordinal** (never culture, never
+  the element's own `IComparable` — generated wrappers delegate to culture-sensitive
+  `string.CompareTo`); all others sort by element comparison. Load-bearing twice: cheap
+  EF change detection and SQL `=` ⇔ set equality.
+- **Algebra** lives in one `ValueSetExtensions` class (two C# 14 extension blocks over the
+  interfaces) backed by `Internals/ValueSetCore` (stable-sort canonicalization, O(n+m) merge
+  scans, instance-preserving results). `Count`/`IsEmpty` are **instance properties** on each
+  concrete type — C# forbids extension properties in expression trees (CS9296), which would
+  make them untranslatable.
+- Deliberately **no `IEnumerable<T>`** (duck-typed struct `GetEnumerator()` + `Values` only):
+  EF's conventions discover `IEnumerable<primitive>` types as primitive collections, the exact
+  machinery the scalar-mapping design avoids. `[CollectionBuilder]` enables collection
+  expressions.
+- **NodaTime satellite** adds `LocalDateSet`, `LocalDateTimeSet`, `InstantSet`, `LocalTimeSet`
+  (native `time[]` — no `CREATE TYPE`, unlike `timerange`) and `YearMonthSet`. `LocalDate`/
+  `LocalDateTime` elements normalize to ISO calendar at construction; `YearMonth` rejects
+  non-ISO (no lossless conversion) — mirroring the range types.
+- `Internals/SetFormat` implements PostgreSQL array-literal parse/format (quoting, escaping,
+  unquoted `NULL` rejected — sets never contain null; reads throw on corrupt data).
+
 ## JSON Serialization (`Serialization/`)
 
 - `RangeJsonConverter<TRange, T>` — serializes to/from PostgreSQL range literal strings
-- `RangeJsonConverterFactory` — auto-registers for any type implementing `IRangeFactory<TRange, T>` or `RangeSet<TRange, T>`
+- `ValueSetJsonConverter<TSet, T>` — serializes value sets as plain JSON arrays, delegating
+  element serialization to System.Text.Json (element converters apply); reads normalize and
+  reject null elements
+- `RangeJsonConverterFactory` — auto-registers for any type implementing `IRangeFactory<TRange, T>`
+  or `IValueSetFactory<TSet, T>`, or `RangeSet<TRange, T>`
 - Extension: `AddRangeConverters()` registers all at once
 
 ## EF Core PostgreSQL (`CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
@@ -106,6 +147,12 @@ See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBou
 - **Type mapping** — maps range types to PostgreSQL range columns, RangeSet to multirange columns
 - **`RangeTypeRegistry`** (`Internal/`) — the single wiring point. Process-wide and additive: the seven core types (six built-ins + `timerange`) are registered up front; satellites contribute `RangeTypeDefinition`s at options-configuration time via `Register` (idempotent per range CLR type, thread-safe immutable-snapshot swap). Lookups: by range/set CLR type, by element type (the `IRange<T>`-typed-operand fallback — one range type per element type, enforced), and by store type name (first registration owns the name; BCL and NodaTime types share `daterange` etc., so store-name-only resolution stays with the BCL types)
 - **`IRangeTypeDefinition` extension points** — `ElementTypeMapping` (default `null`: resolve the subtype mapping from the type mapping source) lets a definition supply a converting element mapping when the element CLR type is unknown to the provider (NodaTime `YearMonth` ⇄ `date`); `SupportsSqlConstruction` (default `true`) lets a definition whose model granularity is coarser than its store subtype opt out of server-side factory-constructor translation
+- **Value sets** (v6) — mirror wiring beside the range machinery:
+  - **`SetTypeRegistry`** (`Internal/`, sibling of `RangeTypeRegistry`): ten closed core definitions up front; the four wrapper families are matched by **open generic definition** with closed instantiations built lazily and cached — no per-element registration exists, so there is nothing to misconfigure. Satellites register closed definitions (the NodaTime satellite adds its five from `UseValueRangesNodaTime()`). **Deliberately no store-name lookup**: `text[]` etc. stay with the provider's native array mappings, so plain `string[]` properties and scaffolding are untouched
+  - **`ValueSetTypeMapping<TSet, TElement, TPrimitive>`** converts sets to primitive arrays at the provider boundary (Npgsql binds those natively); reads route through `From` — non-canonical rows normalize, null elements throw. Literals render uniformly as `ARRAY['…',…]::type[]`, with a per-definition literal-text hook (NodaTime's null-format `IFormattable` is the culture long form, not ISO)
+  - **Wrapper element mappings** (`BridgedElementTypeMapping`): a bare wrapper parameter in `col @> ARRAY[@p]` binds as its backing primitive — the same definition-supplied converting-element-mapping seam `YearMonth` uses. The text-form contract fails loudly here with an error naming it
+  - **Translators**: `ValueSetsMethodCallTranslator` (Contains → `@>` `ARRAY[value]` unconditionally — always GIN-servable; Overlaps/IsSubsetOf/IsSupersetOf → `&&`/`<@`/`@>`; Union → `array_cat`) and `ValueSetsMemberTranslator` (`Count`/`IsEmpty` → `cardinality`). Set `==` is translated by EF itself as `col = @p` and assumes canonical writers; all package-translated operators are order-insensitive and stay correct against non-canonical rows
+  - `YearMonthSet` gets a hand-written `YearMonthSetTypeDefinition` (month-aligned `date[]`, reads throw on non-aligned dates), reusing the range family's `YearMonthTypeMapping` as its element mapping
 - **Enable**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());` — or `npgsql.UseValueRangesNodaTime()` from the NodaTime satellite, which implies it
 
 ## Engine Internals (`Internals/`)
@@ -114,3 +161,5 @@ See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBou
 - `ExceptEngine.cs` — set difference with boundary inversion at cut points
 - `DiscreteCanonical.cs` — canonicalizes discrete ranges to closed form
 - `RangeBoundHelpers.cs`, `RangeFormat.cs`, `RangeSetHelpers.cs` — shared utilities
+- `ValueSetCore.cs` — the value set engine: canonicalization, membership, equality, merge-scan algebra
+- `SetFormat.cs` — PostgreSQL array-literal parse/format for value sets (sibling of `RangeFormat`)

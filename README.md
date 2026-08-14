@@ -8,13 +8,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com)
 
-Fully functional, in-memory range types for .NET — complete interval algebra without any database dependency.
+Fully functional, in-memory range and set types for .NET — complete interval and membership algebra without any database dependency.
 
 ## Overview
 
-`CodoMetis.ValueRanges` provides concrete, type-safe range types covering the same six value domains as PostgreSQL's built-in range types (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`), together with a full in-memory implementation of every range operation PostgreSQL exposes.
+`CodoMetis.ValueRanges` provides immutable, canonical-at-construction value domain types with PostgreSQL-native storage shapes: concrete, type-safe **range types** covering the same six value domains as PostgreSQL's built-in range types (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`) with a full in-memory implementation of every range operation PostgreSQL exposes, their **multirange** counterpart `RangeSet<TRange, T>`, and — since v6 — **[value sets](#value-sets)**, canonical sets of scalar values whose storage shape is a native PostgreSQL array.
 
-The library is designed to stand on its own: all operations execute in process, with no ORM or database driver required. A companion EF Core package ([CodoMetis.ValueRanges.EFCore.PostgreSQL](#entity-framework-core-postgresql)) bridges these types to `NpgsqlRange<T>` for automatic LINQ-to-SQL translation, making the same code work both in memory and as PostgreSQL queries.
+The library is designed to stand on its own: all operations execute in process, with no ORM or database driver required. A companion EF Core package ([CodoMetis.ValueRanges.EFCore.PostgreSQL](#entity-framework-core-postgresql)) bridges the range types to `NpgsqlRange<T>` and the set types to native arrays for automatic LINQ-to-SQL translation, making the same code work both in memory and as PostgreSQL queries.
 
 ### Design
 
@@ -44,6 +44,17 @@ DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a
 ```
 
 The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](#entity-framework-core-postgresql) for how that round-trips.
+
+## What's new in v6.0
+
+**Value sets — a second type family.** The package's model was never "ranges" narrowly; it is *immutable, canonical-at-construction value domains with PostgreSQL-native storage shapes*. `RangeSet` has embodied "canonical set with a native store shape" (multirange) since v2; v6 applies the same concept one level down: **canonical sets of scalar values, stored as native PostgreSQL arrays** (`text[]`, `uuid[]`, `integer[]`, …) — deduplicated, sorted, structurally equal, with the membership algebra PostgreSQL's own array operators speak.
+
+- **Ten closed types** in the core package — `StringSet`, `GuidSet`, `Int16Set`, `Int32Set`, `Int64Set`, `DecimalSet`, `DateSet`, `TimeSet`, `DateTimeSet`, `DateTimeOffsetSet` — plus **validated-wrapper arities** `StringSet<T>`, `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>` for generator-produced domain values (Vogen, Metalama aspects, StronglyTypedId, hand-written wrappers), constrained only on BCL interfaces so domain types never reference this package. See [Value Sets](#value-sets).
+- **Five NodaTime types** in the satellite: `LocalDateSet`, `LocalDateTimeSet`, `InstantSet`, `LocalTimeSet`, and the month-granularity `YearMonthSet` (stored as a month-aligned `date[]`, like `YearMonthRange`'s `daterange`).
+- **Membership algebra** — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `Union`, `Count`, `IsEmpty` (plus client-side `Intersect`/`Except`/`Add`/`Remove`) — PostgreSQL array literals (`{a,b}`), JSON support through the existing converter factory, and collection expressions (`StringSet tags = ["a", "b"];`).
+- The **EF Core packages map them by convention** to native array columns — no configuration, no registration, wrapper instantiations recognized automatically — with LINQ translation to the array operator algebra (`@>`, `&&`, `<@`, `cardinality`, `array_cat`). Containment always translates as `@>`, so a plain GIN index serves it. See [Value set columns](#value-set-columns).
+
+v6.0 contains **no breaking changes**; the major marks the package growing a second type family.
 
 ## What's new in v5.0
 
@@ -461,6 +472,99 @@ unsorted.Sort(RangeSet<Int32Range, int>.LowerBoundComparer);
 
 The same instance is available as `RangeLowerBoundComparer<Int32Range, int>.Instance` for contexts where you only have the comparer type and not the set type.
 
+## Value Sets
+
+A value set is an immutable, **canonical** set of scalar values: deduplicated, sorted, never containing null, with structural equality. It relates to a PostgreSQL array column exactly as `RangeSet<DateRange, DateOnly>` relates to `datemultirange` — the CLR type models the domain concept (a set), the column is its storage encoding (an array):
+
+| CLR type | Canonical set of… | PostgreSQL shape |
+|---|---|---|
+| `RangeSet<DateRange, DateOnly>` | ranges | `datemultirange` |
+| `StringSet` | values | `text[]` |
+
+| .NET type | Element type | PostgreSQL column | Wrapper arity |
+|---|---|---|---|
+| `StringSet` | `string` | `text[]` | `StringSet<TElement>` |
+| `GuidSet` | `Guid` | `uuid[]` | `GuidSet<TElement>` |
+| `Int16Set` | `short` | `smallint[]` | — |
+| `Int32Set` | `int` | `integer[]` | `Int32Set<TElement>` |
+| `Int64Set` | `long` | `bigint[]` | `Int64Set<TElement>` |
+| `DecimalSet` | `decimal` | `numeric[]` | — |
+| `DateSet` | `DateOnly` | `date[]` | — |
+| `TimeSet` | `TimeOnly` | `time[]` | — |
+| `DateTimeSet` | `DateTime` | `timestamp[]` | — |
+| `DateTimeOffsetSet` | `DateTimeOffset` | `timestamptz[]` | — |
+
+The NodaTime satellite adds `LocalDateSet` (`date[]`), `LocalDateTimeSet` (`timestamp[]`), `InstantSet` (`timestamptz[]`), `LocalTimeSet` (`time[]` — a built-in array type, so unlike `timerange` no `CREATE TYPE` is needed) and `YearMonthSet` (month-aligned `date[]`). `LocalDate`/`LocalDateTime` elements normalize to the ISO calendar at construction; `YearMonth` elements must already be ISO, mirroring the range types.
+
+```csharp
+var tags = StringSet.From("beta", "alpha", "beta");   // {alpha,beta} — deduplicated, sorted
+StringSet more = ["gamma", "alpha"];                  // collection expressions work
+
+tags.Contains("alpha");      // true
+tags.Overlaps(more);         // true  — shares "alpha"
+tags.IsSubsetOf(more);       // false
+tags.Union(more);            // {alpha,beta,gamma}
+tags.Count;                  // 2
+tags.IsEmpty;                // false
+```
+
+`Intersect`, `Except`, `Add` and `Remove` are also available; they evaluate client-side only (PostgreSQL has no native array intersection/difference operator), and operations that change nothing return the same instance.
+
+### Canonical form is the contract
+
+Every construction path deduplicates and sorts — `From`, parsing, JSON, and materialization from the database. This is load-bearing twice: the EF `ValueComparer` collapses to a cheap equality with no false diffs in change detection, and SQL `=` on the stored array coincides with set equality.
+
+The order rules are deliberate:
+
+- **String-backed sets sort ordinal** — never a culture-sensitive comparison. Canonical form is a cross-writer storage contract, not a display order; a culture sort would make two machines disagree about the same set.
+- **Everything else sorts by the element's own comparison** (numeric, chronological, `Guid.CompareTo`).
+
+PostgreSQL itself motivates the design: its array *query* algebra is already set-semantic — `@>`, `<@` and `&&` ignore both order and duplicates (`ARRAY[1,1] <@ ARRAY[1]` is true) — while only `=` compares arrays as sequences. Canonical form closes that split, the same way PostgreSQL itself canonicalizes discrete ranges and multiranges. Arrays that need to be *lists* (ordered, duplicates preserved) are a different concept — and one Npgsql already maps natively as `T[]`/`List<T>`.
+
+### Validated wrapper elements
+
+The wrapper arities carry domain values — typed keys, strongly typed IDs — without the domain type referencing this package. `TElement` is constrained only on BCL interfaces, which validated-value generators emit out of the box:
+
+```csharp
+// A generator-shaped wrapper: struct, IEquatable (record), IFormattable, IParsable.
+public readonly record struct AccessRight : IFormattable, IParsable<AccessRight>
+{
+    private readonly string _value;
+    private AccessRight(string value) => _value = value;
+
+    public static AccessRight Parse(string s, IFormatProvider? provider)
+        => Validate(s) ? new(s.Trim().ToLowerInvariant()) : throw new FormatException(…);
+    public string ToString(string? format, IFormatProvider? formatProvider) => _value;
+    // TryParse elided
+}
+
+StringSet<AccessRight> rights = [AccessRight.Parse("users.read", null)];
+```
+
+`IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain. `GuidSet<T>`, `Int32Set<T>` and `Int64Set<T>` additionally require `IComparable<TElement>` (canonical order delegates to the backing primitive). One contract cannot be expressed in constraints and is convention instead: *the element's invariant text form must be exactly the backing primitive's text form* — a decorative format (`"CUST-{value}"`) fails loudly at the persistence boundary with an error naming the contract.
+
+String-backed wrappers sort ordinal over their text form — deliberately not the element's own `IComparable`, whose generated implementations typically delegate to culture-sensitive string comparison.
+
+### Why these element types
+
+The same vetting as [for ranges](#why-these-element-types) applies, with one notable difference: `Guid` is absent from ranges ("every GUID between these two" has no domain meaning) but present in sets — *membership* is exactly the question ID collections ask. Excluded, deliberately: `bool` (a set over a two-value domain), `float`/`double` (NaN breaks total order and equality — the same quiet failure as for ranges), `byte[]` (nested variable-length elements have no cheap canonical order), and `TimeSpan` (PostgreSQL `interval` is a months/days/microseconds triple that `TimeSpan` cannot represent losslessly).
+
+### Literals, parsing, JSON
+
+`ToString()` produces the PostgreSQL array literal, with the same quoting rules the server uses; `Parse`/`TryParse` accept it back, normalizing to canonical form:
+
+```csharp
+StringSet.From("a b", "plain").ToString();   // {"a b",plain}
+Int32Set.Parse("{2,1,2}", null);             // {1,2} — normalizes on parse
+StringSet.Parse("{a,NULL}", null);           // FormatException — sets never contain null
+```
+
+JSON serialization goes through the same converter factory as the ranges (`options.AddRangeConverters()`) and produces plain JSON arrays (`["alpha","beta"]`), delegating element serialization to System.Text.Json — element converters (including NodaTime's `ConfigureForNodaTime`) apply. Reads normalize and reject null elements.
+
+### When not to use a set
+
+A value set is for *value catalogs*: tags, codes, keys, dates — elements that are data, not entity references. If the elements are rows in another table and you need referential integrity, PostgreSQL cannot put a foreign key on array elements (a long-standing limitation); use a junction table. If you need order-as-data or duplicates, you want a list, which Npgsql's native `T[]`/`List<T>` mapping already serves.
+
 ## Parsing and Formatting
 
 All range types and `RangeSet<TRange, T>` implement `IParsable<T>` and `IFormattable`. The canonical string representation is the PostgreSQL range literal format — the same syntax PostgreSQL uses on the wire.
@@ -751,6 +855,56 @@ Timestamp semantics:
 - `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified` — a UTC-kinded `DateTime` is reinterpreted as wall-clock time, not converted. `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz`: the instant is preserved, but the original offset is not round-tripped (values read back carry offset `+00:00` and compare equal to what was written, since `DateTimeOffset` equality is instant-based).
 - Npgsql by default maps `DateTime.MinValue`/`MaxValue` to PostgreSQL `-infinity`/`infinity`. A *finite* bound of `DateTime.MaxValue` therefore becomes an explicit `infinity` bound in the database — which is distinct from an *unbounded* side (`upper_inf` stays `false`), so shape checks behave consistently.
 - Reverse engineering (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`, not to these types — the plugin provides no design-time services. Apply the range types manually after scaffolding.
+
+### Value set columns
+
+The same package maps every [value set type](#value-sets) to its native PostgreSQL array column — by convention, with nothing to configure. Wrapper instantiations (`StringSet<AccessRight>`) are recognized automatically from the open generic; there is no per-element registration to forget:
+
+| Property type | Column type |
+|---|---|
+| `StringSet`, `StringSet<TElement>` | `text[]` |
+| `GuidSet`, `GuidSet<TElement>` | `uuid[]` |
+| `Int32Set`, `Int32Set<TElement>` | `integer[]` |
+| `DateSet` | `date[]` |
+| `YearMonthSet` (NodaTime) | `date[]` (month-aligned) |
+| … and so on for all types | |
+
+The set algebra translates to PostgreSQL's array operators:
+
+```csharp
+// b."Tags" @> ARRAY[@tag]::text[]   — containment, not = ANY: a GIN index always serves it
+bookings.Where(b => b.Tags.Contains(tag));
+
+// b."Tags" && @wanted               — order- and duplicate-insensitive, like all of these
+bookings.Where(b => b.Tags.Overlaps(wanted));
+
+// b."Tags" <@ @allowed  /  b."Tags" @> @required
+bookings.Where(b => b.Tags.IsSubsetOf(allowed));
+bookings.Where(b => b.Tags.IsSupersetOf(required));
+
+// cardinality(b."Tags") > 2  /  cardinality(b."Tags") = 0
+bookings.Where(b => b.Tags.Count > 2);
+bookings.Where(b => b.Tags.IsEmpty);
+
+// array_cat(b."Tags", @more) @> ARRAY[@tag]::text[]
+bookings.Where(b => b.Tags.Union(more).Contains(tag));
+```
+
+`Intersect`, `Except`, `Add` and `Remove` are client-side only and fail query translation by design. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
+
+**Indexing** is ordinary EF configuration — no package involvement:
+
+```csharp
+modelBuilder.Entity<Booking>()
+    .HasIndex(b => b.Tags)
+    .HasMethod("GIN");
+```
+
+`Contains` deliberately translates as containment (`@>`) rather than `= ANY(...)`, because only containment is GIN-servable — one code path, always indexable.
+
+**Set equality** (`==`) translates to SQL `=`, which is order-sensitive on arrays: it means set equality exactly because every writer stores canonical form. Rows written by other tools in non-canonical order are still matched correctly by all the operators above (they ignore order and duplicates) and normalize when materialized — only `==` carries the canonical-writers precondition. The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is the property's own concern.
+
+Two boundary notes: plain `T[]`/`List<T>` properties keep their native Npgsql mapping — both can coexist in one model — and database scaffolding produces plain arrays, since opting into a set type is a model decision. The NodaTime satellite registers its five set types via the same `UseValueRangesNodaTime()` call; `YearMonthSet` persists first-of-month dates and reads validate alignment, exactly like `YearMonthRange`.
 
 ### TimeRange and the custom timerange type
 
