@@ -82,6 +82,51 @@ public class NodaTimeSetTests
     public void LocalDateSet_EmptySingleton()
         => Assert.AreSame(LocalDateSet.Empty, LocalDateSet.From());
 
+    // Element-level operations normalize their probe the way From does. Without that,
+    // Contains/Remove silently miss (LocalDate.Equals is calendar-sensitive) and Add either
+    // smuggles a non-ISO element into an empty set or throws out of LocalDate.CompareTo.
+
+    [TestMethod]
+    public void LocalDateSet_Contains_NormalizesNonIsoProbe()
+    {
+        var coptic = new LocalDate(2024, 6, 1).WithCalendar(CalendarSystem.Coptic);
+
+        Assert.IsTrue(LocalDateSet.From(coptic).Contains(coptic));
+        Assert.IsTrue(LocalDateSet.From(new LocalDate(2024, 6, 1)).Contains(coptic));
+    }
+
+    [TestMethod]
+    public void LocalDateSet_Add_NormalizesNonIsoElement()
+    {
+        var coptic = new LocalDate(2024, 6, 1).WithCalendar(CalendarSystem.Coptic);
+
+        var fromEmpty = LocalDateSet.Empty.Add(coptic);
+        Assert.AreEqual(CalendarSystem.Iso, fromEmpty.Values[0].Calendar);
+
+        var fromNonEmpty = LocalDateSet.From(new LocalDate(2024, 1, 1)).Add(coptic);
+        Assert.AreEqual(2, fromNonEmpty.Count);
+        Assert.AreEqual(CalendarSystem.Iso, fromNonEmpty.Values[1].Calendar);
+    }
+
+    [TestMethod]
+    public void LocalDateSet_Add_NonIsoDuplicateIsNoOp()
+    {
+        var set = LocalDateSet.From(new LocalDate(2024, 6, 1));
+
+        Assert.AreSame(set, set.Add(new LocalDate(2024, 6, 1).WithCalendar(CalendarSystem.Coptic)));
+    }
+
+    [TestMethod]
+    public void LocalDateSet_Remove_NormalizesNonIsoProbe()
+    {
+        var set = LocalDateSet.From(new LocalDate(2024, 1, 1), new LocalDate(2024, 6, 1));
+
+        var removed = set.Remove(new LocalDate(2024, 6, 1).WithCalendar(CalendarSystem.Coptic));
+
+        Assert.AreEqual(1, removed.Count);
+        Assert.AreEqual(new LocalDate(2024, 1, 1), removed.Values[0]);
+    }
+
     // -----------------------------------------------------------------------
     // LocalDateTimeSet
     // -----------------------------------------------------------------------
@@ -113,6 +158,17 @@ public class NodaTimeSetTests
         var coptic = iso.WithCalendar(CalendarSystem.Coptic);
 
         Assert.AreEqual(LocalDateTimeSet.From(iso), LocalDateTimeSet.From(coptic));
+    }
+
+    [TestMethod]
+    public void LocalDateTimeSet_ElementOperations_NormalizeNonIsoProbe()
+    {
+        var iso    = new LocalDateTime(2024, 6, 1, 8, 0, 0);
+        var coptic = iso.WithCalendar(CalendarSystem.Coptic);
+
+        Assert.IsTrue(LocalDateTimeSet.From(iso).Contains(coptic));
+        Assert.AreEqual(CalendarSystem.Iso, LocalDateTimeSet.Empty.Add(coptic).Values[0].Calendar);
+        Assert.IsTrue(LocalDateTimeSet.From(iso).Remove(coptic).IsEmpty);
     }
 
     // -----------------------------------------------------------------------
@@ -183,6 +239,20 @@ public class NodaTimeSetTests
         var copticYearMonth = new LocalDate(2024, 6, 1).WithCalendar(CalendarSystem.Coptic).ToYearMonth();
 
         Assert.ThrowsExactly<ArgumentException>(() => YearMonthSet.From(copticYearMonth));
+    }
+
+    [TestMethod]
+    public void YearMonthSet_ElementOperations_RejectNonIsoCalendar()
+    {
+        // A non-ISO year-month has no lossless ISO equivalent, so every entry point rejects it
+        // rather than silently missing or smuggling it past the ISO invariant.
+        var coptic   = new LocalDate(2024, 6, 1).WithCalendar(CalendarSystem.Coptic).ToYearMonth();
+        var populated = YearMonthSet.From(new YearMonth(2024, 6));
+
+        Assert.ThrowsExactly<ArgumentException>(() => YearMonthSet.Empty.Add(coptic));
+        Assert.ThrowsExactly<ArgumentException>(() => populated.Add(coptic));
+        Assert.ThrowsExactly<ArgumentException>(() => populated.Contains(coptic));
+        Assert.ThrowsExactly<ArgumentException>(() => populated.Remove(coptic));
     }
 
     [TestMethod]

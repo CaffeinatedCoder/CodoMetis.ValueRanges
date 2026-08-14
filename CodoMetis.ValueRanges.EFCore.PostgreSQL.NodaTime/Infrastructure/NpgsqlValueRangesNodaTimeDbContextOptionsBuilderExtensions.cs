@@ -36,18 +36,27 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
         [
             // Literal texts use the ISO patterns explicitly: NodaTime's IFormattable with a
             // null format produces the culture's long form, not ISO.
+            //
+            // The calendar-bearing types normalize to ISO, mirroring what their From methods
+            // do. Stored elements are already ISO — a set can only be built through From — but
+            // the normalization also backs the element mapping used for a bare probe in
+            // `column @> ARRAY[@p]`, where a non-ISO value would otherwise bind its own
+            // calendar's year/month/day as if they were ISO.
             new SetTypeDefinition<LocalDateSet, LocalDate>(
-                "date", literalText: NodaTime.Text.LocalDatePattern.Iso.Format),
+                "date",
+                static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
+                NodaTime.Text.LocalDatePattern.Iso.Format),
             new SetTypeDefinition<LocalDateTimeSet, LocalDateTime>(
-                "timestamp without time zone", literalText: NodaTime.Text.LocalDateTimePattern.ExtendedIso.Format),
+                "timestamp without time zone",
+                static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
+                NodaTime.Text.LocalDateTimePattern.ExtendedIso.Format),
+
+            // No normalization: an Instant is an instant and a LocalTime a time of day by
+            // construction — neither carries a calendar.
             new SetTypeDefinition<InstantSet, Instant>(
                 "timestamp with time zone", literalText: NodaTime.Text.InstantPattern.ExtendedIso.Format),
             new SetTypeDefinition<LocalTimeSet, LocalTime>(
                 "time without time zone", literalText: NodaTime.Text.LocalTimePattern.ExtendedIso.Format),
-
-            // No element normalization anywhere: the set types normalize calendars at
-            // construction, a LocalDateTime is wall-clock time by construction, and an
-            // Instant is an instant by construction.
 
             // YearMonth has no PostgreSQL representation: this definition stores the set
             // as a month-aligned date[], converting every element through its first day.

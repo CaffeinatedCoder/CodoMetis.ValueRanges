@@ -22,11 +22,13 @@ public static class ValueSetExtensions
         /// <summary>
         /// Determines whether <paramref name="value"/> is an element of the set —
         /// PostgreSQL containment <c>column @&gt; ARRAY[value]</c> (GIN-servable).
+        /// The probe is normalized the way <c>From</c> normalizes elements, so it is
+        /// comparable with the stored ones.
         /// </summary>
         public bool Contains(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
-            return ValueSetCore.Contains(set.Values, value);
+            return ValueSetCore.Contains(set.Values, set.NormalizeElement(value));
         }
     }
 
@@ -99,23 +101,27 @@ public static class ValueSetExtensions
 
         /// <summary>
         /// Returns a set with <paramref name="value"/> added, or this set when the element is
-        /// already present. Client-side only.
+        /// already present. The element is normalized the way <c>From</c> normalizes it, so the
+        /// result holds the canonical invariant. Client-side only.
         /// </summary>
         public TSet Add(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
-            var added = ValueSetCore.Add(((IValueSet<T>)set).Values, value, TSet.CanonicalComparer);
+            var element = ((IValueSet<T>)set).NormalizeElement(value);
+            var added   = ValueSetCore.Add(((IValueSet<T>)set).Values, element, TSet.CanonicalComparer);
             return WithElements<TSet, T>(set, null, added);
         }
 
         /// <summary>
         /// Returns a set with <paramref name="value"/> removed, or this set when the element is
-        /// absent. Client-side only.
+        /// absent. The element is normalized the way <c>From</c> normalizes it, so it is
+        /// comparable with the stored ones. Client-side only.
         /// </summary>
         public TSet Remove(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
-            var removed = ValueSetCore.Remove(((IValueSet<T>)set).Values, value);
+            var element = ((IValueSet<T>)set).NormalizeElement(value);
+            var removed = ValueSetCore.Remove(((IValueSet<T>)set).Values, element);
             return WithElements<TSet, T>(set, null, removed);
         }
     }

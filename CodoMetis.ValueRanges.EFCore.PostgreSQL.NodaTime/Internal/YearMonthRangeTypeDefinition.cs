@@ -206,12 +206,26 @@ internal sealed class YearMonthRangeSetTypeMapping : RelationalTypeMapping
 /// </summary>
 internal sealed class YearMonthTypeMapping : RelationalTypeMapping
 {
+    /// <summary>
+    /// The first day of the month, rejecting a non-ISO calendar. Both families already reject
+    /// non-ISO at construction (<c>YearMonthRange</c> and <c>YearMonthSet</c> alike), but a bare
+    /// operand — <c>column @&gt; ARRAY[@p]</c>, a range bound comparison — reaches this mapping
+    /// without passing either constructor. Silently taking <c>OnDayOfMonth(1)</c> of a non-ISO
+    /// value would bind that calendar's year and month as if they were ISO.
+    /// </summary>
+    private static LocalDate FirstOfMonth(YearMonth value)
+        => value.Calendar == CalendarSystem.Iso
+               ? value.OnDayOfMonth(1)
+               : throw new ArgumentException(
+                     $"A YearMonth operand must be in the ISO calendar; got {value} ({value.Calendar}). "
+                   + "A non-ISO year-month spans parts of two ISO months and has no lossless ISO equivalent.");
+
     internal YearMonthTypeMapping()
         : base(new RelationalTypeMappingParameters(
                    new CoreTypeMappingParameters(
                        typeof(YearMonth),
                        new ValueConverter<YearMonth, LocalDate>(
-                           model => model.OnDayOfMonth(1),
+                           model => FirstOfMonth(model),
                            provider => provider.ToYearMonth())),
                    "date"))
     {
@@ -234,7 +248,7 @@ internal sealed class YearMonthTypeMapping : RelationalTypeMapping
         if (parameter is not NpgsqlParameter npgsqlParameter) return;
 
         if (npgsqlParameter.Value is YearMonth model)
-            npgsqlParameter.Value = model.OnDayOfMonth(1);
+            npgsqlParameter.Value = FirstOfMonth(model);
 
         npgsqlParameter.DataTypeName = StoreType;
     }
@@ -244,7 +258,7 @@ internal sealed class YearMonthTypeMapping : RelationalTypeMapping
     {
         var date = value switch
                    {
-                       YearMonth model    => model.OnDayOfMonth(1),
+                       YearMonth model    => FirstOfMonth(model),
                        LocalDate provider => provider,
                        _ => throw new InvalidOperationException(
                                 $"Cannot generate a '{StoreType}' SQL literal for a value of type '{value.GetType()}'.")

@@ -127,6 +127,14 @@ exactly the backing primitive's text form.
   (native `time[]` — no `CREATE TYPE`, unlike `timerange`) and `YearMonthSet`. `LocalDate`/
   `LocalDateTime` elements normalize to ISO calendar at construction; `YearMonth` rejects
   non-ISO (no lossless conversion) — mirroring the range types.
+- `IValueSet<T>.NormalizeElement` (internal, default identity) is the seam that extends that
+  normalization past `From` to the **element-level** operations — `Contains`, `Add`, `Remove`
+  take a bare element, not a set, and would otherwise compare an un-normalized probe against
+  normalized storage. A set type that normalizes or validates elements **must** override it:
+  `LocalDate.CompareTo` throws across calendars and `Equals` silently returns `false`, so the
+  failure modes are a wrong answer, a leaked NodaTime exception, or a non-ISO element smuggled
+  into an empty set. The EF satellite mirrors it through the definition's `normalizeValue`,
+  which now also backs an `ElementTypeMapping` so the same probe normalizes on the server.
 - `Internals/SetFormat` implements PostgreSQL array-literal parse/format (quoting, escaping,
   unquoted `NULL` rejected — sets never contain null; reads throw on corrupt data).
 
@@ -150,7 +158,7 @@ exactly the backing primitive's text form.
 - **Value sets** (v6) — mirror wiring beside the range machinery:
   - **`SetTypeRegistry`** (`Internal/`, sibling of `RangeTypeRegistry`): ten closed core definitions up front; the four wrapper families are matched by **open generic definition** with closed instantiations built lazily and cached — no per-element registration exists, so there is nothing to misconfigure. Satellites register closed definitions (the NodaTime satellite adds its five from `UseValueRangesNodaTime()`). **Deliberately no store-name lookup**: `text[]` etc. stay with the provider's native array mappings, so plain `string[]` properties and scaffolding are untouched
   - **`ValueSetTypeMapping<TSet, TElement, TPrimitive>`** converts sets to primitive arrays at the provider boundary (Npgsql binds those natively); reads route through `From` — non-canonical rows normalize, null elements throw. Literals render uniformly as `ARRAY['…',…]::type[]`, with a per-definition literal-text hook (NodaTime's null-format `IFormattable` is the culture long form, not ISO)
-  - **Wrapper element mappings** (`BridgedElementTypeMapping`): a bare wrapper parameter in `col @> ARRAY[@p]` binds as its backing primitive — the same definition-supplied converting-element-mapping seam `YearMonth` uses. The text-form contract fails loudly here with an error naming it
+  - **Element mappings** (`BridgedElementTypeMapping`): a bare element parameter in `col @> ARRAY[@p]` binds as its backing primitive — the same definition-supplied converting-element-mapping seam `YearMonth` uses. Two producers: the wrapper families (text-form contract fails loudly here with an error naming it), and any `SetTypeDefinition` carrying a `normalizeValue`, which gets an element mapping applying that same normalization (the server-side half of `NormalizeElement`)
   - **Translators**: `ValueSetsMethodCallTranslator` (Contains → `@>` `ARRAY[value]` unconditionally — always GIN-servable; Overlaps/IsSubsetOf/IsSupersetOf → `&&`/`<@`/`@>`; Union → `array_cat`) and `ValueSetsMemberTranslator` (`Count`/`IsEmpty` → `cardinality`). Set `==` is translated by EF itself as `col = @p` and assumes canonical writers; all package-translated operators are order-insensitive and stay correct against non-canonical rows
   - `YearMonthSet` gets a hand-written `YearMonthSetTypeDefinition` (month-aligned `date[]`, reads throw on non-aligned dates), reusing the range family's `YearMonthTypeMapping` as its element mapping
 - **Enable**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());` — or `npgsql.UseValueRangesNodaTime()` from the NodaTime satellite, which implies it

@@ -392,4 +392,27 @@ public class SetIntegrationTests
         // re-canonicalizes, so it equals the in-memory union.
         Assert.AreEqual(tags.Union(wanted), server.Union);
     }
+
+    [TestMethod]
+    public async Task NonIsoProbe_MatchesTheSameRowOnTheServerAsInMemory()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        // A LocalDateSet stores ISO elements. A probe in another calendar names the same
+        // physical day, so both the server and in-memory Contains must find it — the element
+        // mapping normalizes it rather than binding the Coptic fields as if they were ISO.
+        var iso     = new LocalDate(2024, 6, 15);
+        var coptic  = iso.WithCalendar(CalendarSystem.Coptic);
+        var holidays = LocalDateSet.From(iso);
+
+        await Seed(new Reservation { Id = 8051, NodaHolidays = holidays });
+
+        await using var context = new IntegrationDbContext();
+        var matched = await context.Reservations
+            .Where(r => r.Id == 8051 && r.NodaHolidays.Contains(coptic))
+            .AnyAsync();
+
+        Assert.IsTrue(holidays.Contains(coptic), "in-memory Contains missed the equivalent date");
+        Assert.IsTrue(matched, "server-side Contains missed the equivalent date");
+    }
 }

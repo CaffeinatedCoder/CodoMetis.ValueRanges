@@ -46,6 +46,11 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
                      $"YearMonthSet elements must be in the ISO calendar; got {value} ({value.Calendar}). "
                    + "A non-ISO year-month spans parts of two ISO months and has no lossless ISO equivalent.");
 
+    // Element-level operations (Contains, Add, Remove) validate their probe through the same
+    // helper as From, so a non-ISO year-month is rejected at every entry point rather than
+    // silently missing (Equals) or throwing from the comparer mid-operation.
+    YearMonth IValueSet<YearMonth>.NormalizeElement(YearMonth value) => RequireIso(value);
+
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.Empty"/>
     public static YearMonthSet Empty { get; } = new([]);
 

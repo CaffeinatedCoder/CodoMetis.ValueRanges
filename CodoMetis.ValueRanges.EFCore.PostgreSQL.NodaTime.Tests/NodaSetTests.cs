@@ -64,8 +64,24 @@ public sealed class NodaSetTests
     [TestMethod]
     public void LocalDateSet_Contains_Constant()
     {
+        // The element renders through the definition's ISO literal formatter, the same way set
+        // operands do (see LocalDateSet_Overlaps_Constant) — the array cast types it.
         var sql = Sql(db => db.Reservations.Where(r => r.Holidays.Contains(new LocalDate(2024, 6, 15))));
-        StringAssert.Contains(sql, "r.\"Holidays\" @> ARRAY[DATE '2024-06-15']::date[]");
+        StringAssert.Contains(sql, "r.\"Holidays\" @> ARRAY['2024-06-15']::date[]");
+    }
+
+    [TestMethod]
+    public void LocalDateSet_Contains_NormalizesNonIsoProbeToIso()
+    {
+        // Without normalization the Coptic year/month/day (1740-09-24) bind as if they were
+        // ISO, silently querying 284 years off. A captured local binds as a parameter, whose
+        // converted value ToQueryString reports in the leading comment.
+        var coptic = new LocalDate(2024, 6, 15).WithCalendar(CalendarSystem.Coptic);
+        var sql    = Sql(db => db.Reservations.Where(r => r.Holidays.Contains(coptic)));
+
+        StringAssert.Contains(sql, "r.\"Holidays\" @> ARRAY[@");
+        StringAssert.Contains(sql, "2024");
+        Assert.IsFalse(sql.Contains("1740"), "the probe bound its Coptic fields instead of the ISO date");
     }
 
     [TestMethod]
@@ -129,6 +145,17 @@ public sealed class NodaSetTests
         var month = new YearMonth(2024, 6);
         var sql = Sql(db => db.Reservations.Where(r => r.BillingMonths.Contains(month)));
         StringAssert.Contains(sql, "r.\"BillingMonths\" @> ARRAY[@");
+    }
+
+    [TestMethod]
+    public void YearMonthSet_Contains_RejectsNonIsoProbe()
+    {
+        // A bare operand never passes YearMonthSet.From, so the element mapping is the only
+        // place left to reject it — otherwise the Coptic year and month bind as if ISO.
+        var coptic = new LocalDate(2024, 6, 1).WithCalendar(CalendarSystem.Coptic).ToYearMonth();
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => Sql(db => db.Reservations.Where(r => r.BillingMonths.Contains(coptic))));
     }
 
     [TestMethod]

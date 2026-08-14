@@ -30,6 +30,16 @@ internal sealed class SetTypeDefinition<TSet, T> : ISetTypeDefinition
             normalizeValue ?? (static value => value),
             static value => value,
             literalText);
+
+        // The same normalization has to reach a bare element operand: in `column @> ARRAY[@p]`
+        // the probe bypasses the set mapping entirely, and the provider's default mapping for
+        // the element CLR type does not normalize. Without this, a probe that From would have
+        // normalized binds raw — a non-ISO NodaTime date silently queries for its own
+        // calendar's field values read as ISO.
+        ElementTypeMapping = normalizeValue is null
+                                 ? null
+                                 : new BridgedElementTypeMapping<T, T>(
+                                     elementStoreType, normalizeValue, static value => value, literalText);
     }
 
     public Type SetClrType => typeof(TSet);
@@ -41,6 +51,8 @@ internal sealed class SetTypeDefinition<TSet, T> : ISetTypeDefinition
     public string ArrayStoreType { get; }
 
     public RelationalTypeMapping SetTypeMapping { get; }
+
+    public RelationalTypeMapping? ElementTypeMapping { get; }
 
     public object EmptySet => TSet.Empty;
 }

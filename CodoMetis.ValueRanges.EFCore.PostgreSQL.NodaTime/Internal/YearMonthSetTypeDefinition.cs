@@ -13,7 +13,12 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Internal
 /// </summary>
 internal sealed class YearMonthSetTypeDefinition : ISetTypeDefinition
 {
-    private static LocalDate ToPrimitive(YearMonth element) => element.OnDayOfMonth(1);
+    private static LocalDate ToPrimitive(YearMonth element)
+        => element.Calendar == CalendarSystem.Iso
+               ? element.OnDayOfMonth(1)
+               : throw new ArgumentException(
+                     $"YearMonthSet elements must be in the ISO calendar; got {element} ({element.Calendar}). "
+                   + "A non-ISO year-month spans parts of two ISO months and has no lossless ISO equivalent.");
 
     private static YearMonth FromPrimitive(LocalDate primitive)
         => primitive.Day == 1

@@ -16,4 +16,19 @@ public interface IValueSet<T> where T : IEquatable<T>
 {
     /// <summary>The canonical elements: deduplicated, sorted, never containing <see langword="null"/>.</summary>
     ImmutableArray<T> Values { get; }
+
+    /// <summary>
+    /// Applies the same element normalization the type's factory methods apply, so that the
+    /// element-level operations (<c>Contains</c>, <c>Add</c>, <c>Remove</c>) agree with
+    /// <c>From</c> on what counts as the same value.
+    /// </summary>
+    /// <remarks>
+    /// The default is the identity — the element type is already its own canonical form.
+    /// Types that normalize or validate elements at construction override it, which is what
+    /// keeps a probe comparable with the stored elements: the NodaTime calendar-bearing sets
+    /// store ISO elements, and <c>LocalDate.CompareTo</c> throws (while <c>Equals</c> silently
+    /// returns <see langword="false"/>) across calendar systems.
+    /// An element the type rejects at construction throws here too.
+    /// </remarks>
+    internal T NormalizeElement(T value) => value;
 }

@@ -17,14 +17,15 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 /// <typeparam name="TElement">The validated wrapper element type.</typeparam>
 /// <typeparam name="TPrimitive">The primitive store representation.</typeparam>
 internal sealed class BridgedElementTypeMapping<TElement, TPrimitive> : RelationalTypeMapping
-    where TElement : struct
 {
     private readonly Func<TElement, TPrimitive> _toPrimitive;
+    private readonly Func<TPrimitive, string>   _literalText;
 
     internal BridgedElementTypeMapping(
         string                     storeType,
         Func<TElement, TPrimitive> toPrimitive,
-        Func<TPrimitive, TElement> fromPrimitive
+        Func<TPrimitive, TElement> fromPrimitive,
+        Func<TPrimitive, string>?  literalText = null
     )
         : base(new RelationalTypeMappingParameters(
                    new CoreTypeMappingParameters(
@@ -33,15 +34,25 @@ internal sealed class BridgedElementTypeMapping<TElement, TPrimitive> : Relation
                            model => toPrimitive(model),
                            provider => fromPrimitive(provider))),
                    storeType))
-        => _toPrimitive = toPrimitive;
+    {
+        _toPrimitive = toPrimitive;
+        _literalText = literalText ?? SetProviderText.Of;
+    }
 
-    private BridgedElementTypeMapping(RelationalTypeMappingParameters parameters, Func<TElement, TPrimitive> toPrimitive)
+    private BridgedElementTypeMapping(
+        RelationalTypeMappingParameters parameters,
+        Func<TElement, TPrimitive>      toPrimitive,
+        Func<TPrimitive, string>        literalText
+    )
         : base(parameters)
-        => _toPrimitive = toPrimitive;
+    {
+        _toPrimitive = toPrimitive;
+        _literalText = literalText;
+    }
 
     /// <inheritdoc />
     protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
-        => new BridgedElementTypeMapping<TElement, TPrimitive>(parameters, _toPrimitive);
+        => new BridgedElementTypeMapping<TElement, TPrimitive>(parameters, _toPrimitive, _literalText);
 
     /// <inheritdoc />
     protected override void ConfigureParameter(DbParameter parameter)
@@ -57,8 +68,8 @@ internal sealed class BridgedElementTypeMapping<TElement, TPrimitive> : Relation
     {
         var text = value switch
                    {
-                       TElement element => SetProviderText.Of(_toPrimitive(element)),
-                       TPrimitive primitive => SetProviderText.Of(primitive),
+                       TElement element => _literalText(_toPrimitive(element)),
+                       TPrimitive primitive => _literalText(primitive),
                        _ => throw new InvalidOperationException(
                                 $"Cannot generate a '{StoreType}' SQL literal for a value of type '{value.GetType()}'.")
                    };

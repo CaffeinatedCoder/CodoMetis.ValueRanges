@@ -40,6 +40,11 @@ public sealed class LocalDateSet : IValueSet<LocalDate>, IValueSetFactory<LocalD
     private static LocalDate ToIso(LocalDate value)
         => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso);
 
+    // Element-level operations (Contains, Add, Remove) normalize their probe through the same
+    // helper as From: LocalDate.CompareTo throws across calendar systems and Equals returns
+    // false, so an un-normalized probe would neither match nor sort against stored elements.
+    LocalDate IValueSet<LocalDate>.NormalizeElement(LocalDate value) => ToIso(value);
+
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.Empty"/>
     public static LocalDateSet Empty { get; } = new([]);
 
