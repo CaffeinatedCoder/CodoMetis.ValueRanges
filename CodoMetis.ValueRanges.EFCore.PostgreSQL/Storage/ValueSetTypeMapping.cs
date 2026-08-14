@@ -28,11 +28,13 @@ internal sealed class ValueSetTypeMapping<TSet, TElement, TPrimitive> : Relation
 {
     private readonly Func<TElement, TPrimitive> _toPrimitive;
     private readonly Func<TPrimitive, TElement> _fromPrimitive;
+    private readonly Func<TPrimitive, string>   _literalText;
 
     internal ValueSetTypeMapping(
         string                      storeType,
         Func<TElement, TPrimitive>  toPrimitive,
-        Func<TPrimitive, TElement>  fromPrimitive
+        Func<TPrimitive, TElement>  fromPrimitive,
+        Func<TPrimitive, string>?   literalText = null
     )
         : base(new RelationalTypeMappingParameters(
                    new CoreTypeMappingParameters(
@@ -46,22 +48,25 @@ internal sealed class ValueSetTypeMapping<TSet, TElement, TPrimitive> : Relation
     {
         _toPrimitive   = toPrimitive;
         _fromPrimitive = fromPrimitive;
+        _literalText   = literalText ?? SetProviderText.Of;
     }
 
     private ValueSetTypeMapping(
         RelationalTypeMappingParameters parameters,
         Func<TElement, TPrimitive>      toPrimitive,
-        Func<TPrimitive, TElement>      fromPrimitive
+        Func<TPrimitive, TElement>      fromPrimitive,
+        Func<TPrimitive, string>        literalText
     )
         : base(parameters)
     {
         _toPrimitive   = toPrimitive;
         _fromPrimitive = fromPrimitive;
+        _literalText   = literalText;
     }
 
     /// <inheritdoc />
     protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
-        => new ValueSetTypeMapping<TSet, TElement, TPrimitive>(parameters, _toPrimitive, _fromPrimitive);
+        => new ValueSetTypeMapping<TSet, TElement, TPrimitive>(parameters, _toPrimitive, _fromPrimitive, _literalText);
 
     private static TPrimitive[] ToProvider(TSet set, Func<TElement, TPrimitive> toPrimitive)
     {
@@ -118,15 +123,15 @@ internal sealed class ValueSetTypeMapping<TSet, TElement, TPrimitive> : Relation
         switch (value)
         {
             case TSet model:
-                // The set's own element formatter produces the per-family canonical text
-                // (ISO 8601 for temporal types, invariant numerics, backing text for wrappers).
+                // Elements format through their primitive store representation — the model's
+                // own text form can be coarser than the store type (YearMonth vs date).
                 foreach (var element in model.Values)
-                    yield return TSet.FormatValue(element, null, CultureInfo.InvariantCulture);
+                    yield return _literalText(_toPrimitive(element));
                 break;
 
             case TPrimitive[] provider:
                 foreach (var primitive in provider)
-                    yield return SetProviderText.Of(primitive);
+                    yield return _literalText(primitive);
                 break;
 
             default:

@@ -32,12 +32,37 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             new YearMonthRangeTypeDefinition()
         ];
 
+    private static readonly ISetTypeDefinition[] SetDefinitions =
+        [
+            // Literal texts use the ISO patterns explicitly: NodaTime's IFormattable with a
+            // null format produces the culture's long form, not ISO.
+            new SetTypeDefinition<LocalDateSet, LocalDate>(
+                "date", literalText: NodaTime.Text.LocalDatePattern.Iso.Format),
+            new SetTypeDefinition<LocalDateTimeSet, LocalDateTime>(
+                "timestamp without time zone", literalText: NodaTime.Text.LocalDateTimePattern.ExtendedIso.Format),
+            new SetTypeDefinition<InstantSet, Instant>(
+                "timestamp with time zone", literalText: NodaTime.Text.InstantPattern.ExtendedIso.Format),
+            new SetTypeDefinition<LocalTimeSet, LocalTime>(
+                "time without time zone", literalText: NodaTime.Text.LocalTimePattern.ExtendedIso.Format),
+
+            // No element normalization anywhere: the set types normalize calendars at
+            // construction, a LocalDateTime is wall-clock time by construction, and an
+            // Instant is an instant by construction.
+
+            // YearMonth has no PostgreSQL representation: this definition stores the set
+            // as a month-aligned date[], converting every element through its first day.
+            new YearMonthSetTypeDefinition()
+        ];
+
     /// <summary>
     /// Enables mapping of the CodoMetis.ValueRanges NodaTime range types to the PostgreSQL
     /// range and multirange types — <c>LocalDateRange</c> to <c>daterange</c>,
     /// <c>LocalDateTimeRange</c> to <c>tsrange</c>, <c>InstantRange</c> to <c>tstzrange</c>,
     /// and their <see cref="CodoMetis.ValueRanges.RangeSet{TRange,T}"/> counterparts to the
-    /// corresponding multiranges — including LINQ translation of the full range algebra:
+    /// corresponding multiranges — as well as the NodaTime value set types to native arrays
+    /// (<c>LocalDateSet</c> to <c>date[]</c>, <c>InstantSet</c> to <c>timestamptz[]</c>,
+    /// <c>YearMonthSet</c> to a month-aligned <c>date[]</c>, …) — including LINQ translation
+    /// of the full range and set algebra:
     /// <code>
     /// options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRangesNodaTime());
     /// </code>
@@ -58,6 +83,9 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
 
         foreach (var definition in Definitions)
             RangeTypeRegistry.Register(definition);
+
+        foreach (var definition in SetDefinitions)
+            SetTypeRegistry.Register(definition);
 
         RangeTypeRegistry.RegisterAggregateExtensions(typeof(NodaTimeRangeAggregateExtensions));
 

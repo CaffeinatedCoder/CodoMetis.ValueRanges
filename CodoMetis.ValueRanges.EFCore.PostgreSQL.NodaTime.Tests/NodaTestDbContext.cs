@@ -39,6 +39,22 @@ public class Reservation
 
     // BCL range in the same model — both plugins are active side by side.
     public DateRange LegacyPeriod { get; set; } = DateRange.Empty;
+
+    // -- NodaTime value set properties --
+
+    public LocalDateSet Holidays { get; set; } = LocalDateSet.Empty;
+
+    public LocalDateTimeSet WallClockMarks { get; set; } = LocalDateTimeSet.Empty;
+
+    public InstantSet Occurrences { get; set; } = InstantSet.Empty;
+
+    public LocalTimeSet Slots { get; set; } = LocalTimeSet.Empty;
+
+    // Month granularity, stored as a month-aligned date[].
+    public YearMonthSet BillingMonths { get; set; } = YearMonthSet.Empty;
+
+    // BCL set in the same model — both set families coexist.
+    public StringSet Tags { get; set; } = StringSet.Empty;
 }
 
 public sealed class NodaTestDbContext : DbContext

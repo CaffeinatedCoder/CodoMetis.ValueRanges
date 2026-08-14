@@ -17,14 +17,19 @@ internal sealed class SetTypeDefinition<TSet, T> : ISetTypeDefinition
     where TSet : class, IValueSetFactory<TSet, T>, IValueSet<T>
     where T : IEquatable<T>
 {
-    internal SetTypeDefinition(string elementStoreType, Func<T, T>? normalizeValue = null)
+    internal SetTypeDefinition(
+        string           elementStoreType,
+        Func<T, T>?      normalizeValue = null,
+        Func<T, string>? literalText    = null
+    )
     {
         ElementStoreType = elementStoreType;
         ArrayStoreType   = elementStoreType + "[]";
         SetTypeMapping   = new ValueSetTypeMapping<TSet, T, T>(
             ArrayStoreType,
             normalizeValue ?? (static value => value),
-            static value => value);
+            static value => value,
+            literalText);
     }
 
     public Type SetClrType => typeof(TSet);
