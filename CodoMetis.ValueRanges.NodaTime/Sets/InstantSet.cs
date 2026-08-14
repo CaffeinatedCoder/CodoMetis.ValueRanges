@@ -2,8 +2,10 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 using NodaTime;
 
 namespace CodoMetis.ValueRanges;
@@ -24,8 +26,12 @@ namespace CodoMetis.ValueRanges;
 /// ISO 8601 forms and the PostgreSQL wire form; formatting always produces UTC (<c>Z</c>).
 /// </para>
 /// <para>
-/// System.Text.Json serialization delegates elements to the configured serializer — register
-/// NodaTime.Serialization.SystemTextJson's converters for ISO 8601 element output.
+/// System.Text.Json serialization produces ISO 8601 element strings with no setup beyond the
+/// converter factory: System.Text.Json has no built-in converter for NodaTime types, so the
+/// family supplies its own through
+/// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>. Registering an element converter
+/// yourself takes precedence — <c>AddNodaTimeRangeConverters()</c> does that, and additionally
+/// covers bare elements outside a set.
 /// </para>
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
@@ -76,6 +82,15 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
         => format is null
                ? NodaPatterns.Instant.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The JSON fallback for <see cref="Instant"/> elements: the same ISO 8601 text form as
+    /// <see cref="FormatValue"/>, so JSON, array literals and the wire form agree. Consulted only
+    /// when no converter has claimed <see cref="Instant"/> — see
+    /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
+    /// </summary>
+    static JsonConverter<Instant>? IValueSetFactory<InstantSet, Instant>.ElementJsonConverter
+        => ValueSetTextElementJsonConverter<InstantSet, Instant>.Instance;
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{2024-06-01T08:00:00Z}</c>, <c>{}</c>) into a
