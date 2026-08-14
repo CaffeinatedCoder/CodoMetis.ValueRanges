@@ -114,6 +114,49 @@ public class SetAlgebraTests
     }
 
     // -----------------------------------------------------------------------
+    // IsProperSubsetOf / IsProperSupersetOf
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public void IsProperSubsetOf_ProperSubset_True()
+        => Assert.IsTrue(Int32Set.From(1, 2).IsProperSubsetOf(Int32Set.From(1, 2, 3)));
+
+    [TestMethod]
+    public void IsProperSubsetOf_EqualSets_False()
+    {
+        // The difference from IsSubsetOf, which is reflexive.
+        var set = Int32Set.From(1, 2);
+
+        Assert.IsTrue(set.IsSubsetOf(set));
+        Assert.IsFalse(set.IsProperSubsetOf(set));
+    }
+
+    [TestMethod]
+    public void IsProperSubsetOf_MissingElement_False()
+        => Assert.IsFalse(Int32Set.From(1, 4).IsProperSubsetOf(Int32Set.From(1, 2, 3)));
+
+    [TestMethod]
+    public void IsProperSubsetOf_Empty()
+    {
+        Assert.IsTrue(Int32Set.Empty.IsProperSubsetOf(Int32Set.From(1)));
+        Assert.IsFalse(Int32Set.Empty.IsProperSubsetOf(Int32Set.Empty));
+    }
+
+    [TestMethod]
+    public void IsProperSupersetOf_MirrorsProperSubset()
+    {
+        Assert.IsTrue(Int32Set.From(1, 2, 3).IsProperSupersetOf(Int32Set.From(1, 2)));
+        Assert.IsFalse(Int32Set.From(1, 2).IsProperSupersetOf(Int32Set.From(1, 2)));
+        Assert.IsFalse(Int32Set.From(1, 2).IsProperSupersetOf(Int32Set.From(1, 2, 3)));
+        Assert.IsTrue(Int32Set.From(1).IsProperSupersetOf(Int32Set.Empty));
+        Assert.IsFalse(Int32Set.Empty.IsProperSupersetOf(Int32Set.Empty));
+    }
+
+    [TestMethod]
+    public void IsProperSubsetOf_NullOther_Throws()
+        => Assert.ThrowsExactly<ArgumentNullException>(() => Int32Set.From(1).IsProperSubsetOf(null!));
+
+    // -----------------------------------------------------------------------
     // Union / Intersect / Except
     // -----------------------------------------------------------------------
 

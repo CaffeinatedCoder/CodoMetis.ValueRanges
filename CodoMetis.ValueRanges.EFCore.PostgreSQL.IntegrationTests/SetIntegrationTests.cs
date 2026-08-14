@@ -361,8 +361,10 @@ public class SetIntegrationTests
     {
         ContainerLifecycle.RequireDatabase();
 
-        var tags   = StringSet.From("a", "b", "c");
-        var wanted = StringSet.From("b", "z");
+        var tags     = StringSet.From("a", "b", "c");
+        var wanted   = StringSet.From("b", "z");
+        var subset   = StringSet.From("a", "b");
+        var superset = StringSet.From("a", "b", "c", "d");
 
         await Seed(new Reservation { Id = 8050, Tags = tags });
 
@@ -377,7 +379,20 @@ public class SetIntegrationTests
                 IsSuperset = r.Tags.IsSupersetOf(wanted),
                 Count      = r.Tags.Count,
                 IsEmpty    = r.Tags.IsEmpty,
-                Union      = r.Tags.Union(wanted)
+                Union      = r.Tags.Union(wanted),
+
+                // Proper containment against a strict subset and against an equal set — the
+                // second is where it has to differ from IsSubsetOf/IsSupersetOf.
+                ProperSuperset      = r.Tags.IsProperSupersetOf(subset),
+                ProperSupersetEqual = r.Tags.IsProperSupersetOf(tags),
+                ProperSubset        = r.Tags.IsProperSubsetOf(superset),
+                ProperSubsetEqual   = r.Tags.IsProperSubsetOf(tags),
+
+                // array_remove keeps the array canonical, so the removal round-trips and its
+                // cardinality is correct — neither holds for a server-side Union.
+                Removed      = r.Tags.Remove("b"),
+                RemovedCount = r.Tags.Remove("b").Count,
+                RemovedAbsent = r.Tags.Remove("zzz")
             })
             .SingleAsync();
 
@@ -387,6 +402,17 @@ public class SetIntegrationTests
         Assert.AreEqual(tags.IsSupersetOf(wanted), server.IsSuperset);
         Assert.AreEqual(tags.Count, server.Count);
         Assert.AreEqual(tags.IsEmpty, server.IsEmpty);
+
+        Assert.AreEqual(tags.IsProperSupersetOf(subset), server.ProperSuperset);
+        Assert.AreEqual(tags.IsProperSupersetOf(tags), server.ProperSupersetEqual);
+        Assert.AreEqual(tags.IsProperSubsetOf(superset), server.ProperSubset);
+        Assert.AreEqual(tags.IsProperSubsetOf(tags), server.ProperSubsetEqual);
+        Assert.IsFalse(server.ProperSupersetEqual, "a set is not a proper superset of itself");
+        Assert.IsFalse(server.ProperSubsetEqual, "a set is not a proper subset of itself");
+
+        Assert.AreEqual(tags.Remove("b"), server.Removed);
+        Assert.AreEqual(tags.Remove("b").Count, server.RemovedCount);
+        Assert.AreEqual(tags.Remove("zzz"), server.RemovedAbsent);
 
         // array_cat's server value is unsorted/undeduplicated; materialization
         // re-canonicalizes, so it equals the in-memory union.

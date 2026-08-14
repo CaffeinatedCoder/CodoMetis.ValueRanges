@@ -2,7 +2,7 @@
 
 In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`) plus two v5 additions: `TimeRange` over `TimeOnly` (maps to the custom `timerange` type — needs `HasPostgresRange` + `EnableUnmappedTypes` on the EF side) and, in the NodaTime satellite, `YearMonthRange` over `YearMonth` (stored as a month-aligned `daterange`). Each range type is a discriminated union of five sealed variants with exhaustive pattern matching.
 
-Since v6 there is a second type family: **value sets** (`Sets/`) — immutable, canonical (deduplicated, sorted, no nulls) sets of scalar values stored as native PostgreSQL arrays (`StringSet`/`text[]`, `GuidSet`/`uuid[]`, …), plus validated-wrapper arities (`StringSet<T>` etc.) constrained only on BCL interfaces. EF maps them as scalars with plugin-owned mappings and translators (`@>`, `&&`, `<@`, `cardinality`) — never through EF's primitive-collection machinery.
+Since v6 there is a second type family: **value sets** (`Sets/`) — immutable, canonical (deduplicated, sorted, no nulls) sets of scalar values stored as native PostgreSQL arrays (`StringSet`/`text[]`, `GuidSet`/`uuid[]`, …), plus validated-wrapper arities (`StringSet<T>` etc.) constrained only on BCL interfaces. EF maps them as scalars with plugin-owned mappings and translators (`@>`, `&&`, `<@`, `cardinality`, `array_cat`, `array_remove`) — never through EF's primitive-collection machinery. `Intersect`/`Except`/`Add` are deliberately client-side only: PostgreSQL's array type has no intersection, difference, or sorted insert.
 
 ## Stack
 .NET 10 · C# 14 (extension methods) · MSTest 4.x · EF Core + Npgsql (PostgreSQL bridge)

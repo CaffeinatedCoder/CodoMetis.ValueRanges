@@ -67,6 +67,35 @@ public static class ValueSetExtensions
         }
 
         /// <summary>
+        /// Determines whether every element of this set is contained in <paramref name="other"/>
+        /// and the two are not equal — PostgreSQL <c>&lt;@</c> combined with <c>NOT @&gt;</c>.
+        /// </summary>
+        /// <remarks>
+        /// The cardinality check is exact rather than a shortcut: both operands are
+        /// deduplicated, so a subset with fewer elements is precisely a proper subset.
+        /// </remarks>
+        public bool IsProperSubsetOf(TSet other)
+        {
+            ArgumentNullException.ThrowIfNull(other);
+            var mine   = ((IValueSet<T>)set).Values;
+            var theirs = ((IValueSet<T>)other).Values;
+            return mine.Length < theirs.Length && ValueSetCore.IsSubsetOf(mine, theirs, TSet.CanonicalComparer);
+        }
+
+        /// <summary>
+        /// Determines whether this set contains every element of <paramref name="other"/> and
+        /// the two are not equal — PostgreSQL <c>@&gt;</c> combined with <c>NOT &lt;@</c>.
+        /// </summary>
+        /// <inheritdoc cref="IsProperSubsetOf" path="/remarks"/>
+        public bool IsProperSupersetOf(TSet other)
+        {
+            ArgumentNullException.ThrowIfNull(other);
+            var mine   = ((IValueSet<T>)set).Values;
+            var theirs = ((IValueSet<T>)other).Values;
+            return theirs.Length < mine.Length && ValueSetCore.IsSubsetOf(theirs, mine, TSet.CanonicalComparer);
+        }
+
+        /// <summary>
         /// Returns the union of this set and <paramref name="other"/> — PostgreSQL <c>||</c>
         /// (the server-side result re-canonicalizes on read).
         /// </summary>
@@ -114,9 +143,15 @@ public static class ValueSetExtensions
 
         /// <summary>
         /// Returns a set with <paramref name="value"/> removed, or this set when the element is
-        /// absent. The element is normalized the way <c>From</c> normalizes it, so it is
-        /// comparable with the stored ones. Client-side only.
+        /// absent — PostgreSQL <c>array_remove</c>. The element is normalized the way
+        /// <c>From</c> normalizes it, so it is comparable with the stored ones.
         /// </summary>
+        /// <remarks>
+        /// Unlike <c>Union</c>, this composes safely with <c>Count</c> and <c>==</c> on the
+        /// server: removing from a sorted, deduplicated array leaves it sorted and
+        /// deduplicated, and against a non-canonical row <c>array_remove</c> strips every
+        /// occurrence, which is still the right set semantics.
+        /// </remarks>
         public TSet Remove(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));

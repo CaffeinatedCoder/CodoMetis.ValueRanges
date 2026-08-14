@@ -21,6 +21,12 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 ///   <item><c>Overlaps</c> / <c>IsSubsetOf</c> / <c>IsSupersetOf</c> — <c>&amp;&amp;</c> /
 ///   <c>&lt;@</c> / <c>@&gt;</c>; all three are order- and multiplicity-insensitive, so they
 ///   remain correct even against non-canonical rows written by other tools.</item>
+///   <item><c>IsProperSubsetOf</c> / <c>IsProperSupersetOf</c> — the same operators paired with
+///   the negated converse (<c>a &lt;@ b AND NOT a @&gt; b</c>), which keeps them
+///   multiplicity-insensitive where <c>&lt;&gt;</c> would not.</item>
+///   <item><c>Remove</c> — <c>array_remove</c>, which preserves canonical form and therefore
+///   composes safely with <c>Count</c> and equality (see the Union note below for the
+///   contrast). <c>Add</c> has no counterpart: PostgreSQL cannot insert at a sorted position.</item>
 ///   <item><c>Union</c> — <c>array_cat</c> (the function form of <c>||</c>).</item>
 ///   <item><c>Count</c> / <c>IsEmpty</c> — <c>cardinality</c>.</item>
 /// </list>
@@ -79,6 +85,31 @@ internal sealed class ValueSetsMethodCallTranslator(
 
             case nameof(ValueSetExtensions.IsSupersetOf) when arguments.Count == 2:
                 return sqlExpressionFactory.Contains(Set(0), Set(1));
+
+            // Proper containment as `<@ AND NOT @>` rather than `<@ AND <>`: both halves stay
+            // order- and multiplicity-insensitive, so these keep working against a row some
+            // other writer left non-canonical, which `<>` would not.
+            case nameof(ValueSetExtensions.IsProperSubsetOf) when arguments.Count == 2:
+                return sqlExpressionFactory.AndAlso(
+                    sqlExpressionFactory.ContainedBy(Set(0), Set(1)),
+                    sqlExpressionFactory.Not(sqlExpressionFactory.Contains(Set(0), Set(1))));
+
+            case nameof(ValueSetExtensions.IsProperSupersetOf) when arguments.Count == 2:
+                return sqlExpressionFactory.AndAlso(
+                    sqlExpressionFactory.Contains(Set(0), Set(1)),
+                    sqlExpressionFactory.Not(sqlExpressionFactory.ContainedBy(Set(0), Set(1))));
+
+            // array_remove preserves canonical form — a sorted, deduplicated array stays sorted
+            // and deduplicated once an element is dropped — so unlike Union this composes
+            // safely with Count and equality.
+            case nameof(ValueSetExtensions.Remove) when arguments.Count == 2:
+                return sqlExpressionFactory.Function(
+                    "array_remove",
+                    [Set(0), ApplyElementMapping(arguments[1], definition)],
+                    nullable: true,
+                    argumentsPropagateNullability: [true, true],
+                    definition.SetClrType,
+                    definition.SetTypeMapping);
 
             case nameof(ValueSetExtensions.Union) when arguments.Count == 2:
                 // The server-side result is unsorted and undeduplicated — fine inside

@@ -51,8 +51,8 @@ The two are not interchangeable, and the compiler will not let them be confused.
 
 - **Ten closed types** in the core package — `StringSet`, `GuidSet`, `Int16Set`, `Int32Set`, `Int64Set`, `DecimalSet`, `DateSet`, `TimeSet`, `DateTimeSet`, `DateTimeOffsetSet` — plus **validated-wrapper arities** `StringSet<T>`, `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>` for generator-produced domain values (Vogen, Metalama aspects, StronglyTypedId, hand-written wrappers), constrained only on BCL interfaces so domain types never reference this package. See [Value Sets](#value-sets).
 - **Five NodaTime types** in the satellite: `LocalDateSet`, `LocalDateTimeSet`, `InstantSet`, `LocalTimeSet`, and the month-granularity `YearMonthSet` (stored as a month-aligned `date[]`, like `YearMonthRange`'s `daterange`).
-- **Membership algebra** — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `Union`, `Count`, `IsEmpty` (plus client-side `Intersect`/`Except`/`Add`/`Remove`) — PostgreSQL array literals (`{a,b}`), JSON support through the existing converter factory, and collection expressions (`StringSet tags = ["a", "b"];`).
-- The **EF Core packages map them by convention** to native array columns — no configuration, no registration, wrapper instantiations recognized automatically — with LINQ translation to the array operator algebra (`@>`, `&&`, `<@`, `cardinality`, `array_cat`). Containment always translates as `@>`, so a plain GIN index serves it. See [Value set columns](#value-set-columns).
+- **Membership algebra** — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `IsProperSubsetOf`, `IsProperSupersetOf`, `Union`, `Remove`, `Count`, `IsEmpty` (plus client-side `Intersect`/`Except`/`Add`) — PostgreSQL array literals (`{a,b}`), JSON support through the existing converter factory, and collection expressions (`StringSet tags = ["a", "b"];`).
+- The **EF Core packages map them by convention** to native array columns — no configuration, no registration, wrapper instantiations recognized automatically — with LINQ translation to the array operator algebra (`@>`, `&&`, `<@`, `cardinality`, `array_cat`, `array_remove`). Containment always translates as `@>`, so a plain GIN index serves it. See [Value set columns](#value-set-columns).
 
 v6.0 contains **no breaking changes**; the major marks the package growing a second type family.
 
@@ -503,12 +503,14 @@ StringSet more = ["gamma", "alpha"];                  // collection expressions 
 tags.Contains("alpha");      // true
 tags.Overlaps(more);         // true  — shares "alpha"
 tags.IsSubsetOf(more);       // false
+tags.IsProperSubsetOf(more); // false — proper containment excludes equality
 tags.Union(more);            // {alpha,beta,gamma}
+tags.Remove("beta");         // {alpha}
 tags.Count;                  // 2
 tags.IsEmpty;                // false
 ```
 
-`Intersect`, `Except`, `Add` and `Remove` are also available; they evaluate client-side only (PostgreSQL has no native array intersection/difference operator), and operations that change nothing return the same instance.
+`Intersect`, `Except` and `Add` are also available; they evaluate client-side only (PostgreSQL has no native array intersection or difference operator, and cannot insert at a sorted position), and operations that change nothing return the same instance.
 
 ### Canonical form is the contract
 
@@ -882,15 +884,28 @@ bookings.Where(b => b.Tags.Overlaps(wanted));
 bookings.Where(b => b.Tags.IsSubsetOf(allowed));
 bookings.Where(b => b.Tags.IsSupersetOf(required));
 
+// b."Tags" <@ @allowed AND NOT (b."Tags" @> @allowed)   — the negated converse, not <>,
+// so proper containment stays duplicate-insensitive like everything else here
+bookings.Where(b => b.Tags.IsProperSubsetOf(allowed));
+
 // cardinality(b."Tags") > 2  /  cardinality(b."Tags") = 0
 bookings.Where(b => b.Tags.Count > 2);
 bookings.Where(b => b.Tags.IsEmpty);
+
+// array_remove(b."Tags", @tag)  — preserves canonical form, so it composes freely
+bookings.Where(b => b.Tags.Remove(tag).Count > 1);
 
 // array_cat(b."Tags", @more) @> ARRAY[@tag]::text[]
 bookings.Where(b => b.Tags.Union(more).Contains(tag));
 ```
 
-`Intersect`, `Except`, `Add` and `Remove` are client-side only and fail query translation by design. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
+`Intersect`, `Except` and `Add` are client-side only and fail query translation by design.
+
+`Union` is the one translated operation whose result is **not** canonical — `array_cat`
+concatenates. That is invisible to the operators above (all duplicate-insensitive) and to
+materialization (reads re-canonicalize), but `Count` over a union is refused rather than
+counting duplicates, and comparing a union with `==` is unreliable. `Remove` has no such
+caveat: `array_remove` leaves the array sorted and deduplicated. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
 
 **Indexing** is ordinary EF configuration — no package involvement:
 

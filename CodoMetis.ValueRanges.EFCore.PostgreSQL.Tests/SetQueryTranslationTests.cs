@@ -123,6 +123,58 @@ public sealed class SetQueryTranslationTests
     }
 
     // -------------------------------------------------------------------------
+    // Proper containment — the operator paired with its negated converse, so both
+    // halves stay multiplicity-insensitive (`<>` would not be)
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void IsProperSubsetOf_Constant()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.IsProperSubsetOf(Wanted)));
+        StringAssert.Contains(
+            sql, "b.\"Tags\" <@ ARRAY['a','b']::text[] AND NOT (b.\"Tags\" @> ARRAY['a','b']::text[])");
+    }
+
+    [TestMethod]
+    public void IsProperSupersetOf_Constant()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.IsProperSupersetOf(Wanted)));
+        StringAssert.Contains(
+            sql, "b.\"Tags\" @> ARRAY['a','b']::text[] AND NOT (b.\"Tags\" <@ ARRAY['a','b']::text[])");
+    }
+
+    // -------------------------------------------------------------------------
+    // Remove — array_remove, which preserves canonical form
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void Remove_TranslatesToArrayRemove()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.Remove("x").IsEmpty));
+        StringAssert.Contains(sql, "array_remove(b.\"Tags\", 'x')");
+    }
+
+    [TestMethod]
+    public void Remove_Count_StaysTranslated()
+    {
+        // The contrast with Union: array_remove keeps the array canonical, so cardinality
+        // over it is correct and the Count guard must not refuse it.
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.Remove("x").Count > 1));
+        StringAssert.Contains(sql, "cardinality(array_remove(b.\"Tags\", 'x')) > 1");
+    }
+
+    [TestMethod]
+    public void Add_StillFailsTranslation()
+    {
+        // PostgreSQL cannot insert at a sorted position: array_append would break canonical
+        // order, and array_sort orders by collation rather than ordinal.
+        using var context = new TestDbContext();
+        var query = context.Bookings.Where(b => b.Tags.Add("x").IsEmpty);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+    }
+
+    // -------------------------------------------------------------------------
     // Cardinality
     // -------------------------------------------------------------------------
 
