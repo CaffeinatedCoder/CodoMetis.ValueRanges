@@ -26,6 +26,21 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// </list>
 /// Set equality (<c>==</c>) needs no translator: EF translates scalar-mapped equality to
 /// <c>=</c> itself, which matches set equality exactly when all writers canonicalize.
+/// <para>
+/// <b>Composing on a translated <c>Union</c>.</b> <c>array_cat</c> concatenates rather than
+/// canonicalizing, which is invisible to the operators above (all order- and
+/// multiplicity-insensitive) and to materialization (reads route through <c>From</c>), but not
+/// to everything: <c>Count</c> over a union is refused by <c>ValueSetsMemberTranslator</c>
+/// rather than counting duplicates, and <b>equality over a union is wrong and cannot be
+/// intercepted</b> — EF emits the <c>=</c> itself, so <c>Tags.Union(x) == y</c> compares a
+/// concatenated array against a canonical one and is false even where the in-memory union
+/// equals <c>y</c>. Canonicalizing server-side is not an option: PostgreSQL has no
+/// array-distinct function (verified against 18.4), so it needs a
+/// <c>SELECT DISTINCT … ORDER BY</c> subquery, and the ordering could not match CLR canonical
+/// order anyway (<c>text</c> orders by database collation, not ordinal; <c>uuid</c> orders
+/// byte-wise where <see cref="Guid.CompareTo(Guid)"/> orders field-wise). Materialize the
+/// union and compare in memory.
+/// </para>
 /// </summary>
 internal sealed class ValueSetsMethodCallTranslator(
     NpgsqlSqlExpressionFactory   sqlExpressionFactory,

@@ -27,6 +27,15 @@ internal sealed class ValueSetsMemberTranslator(ISqlExpressionFactory sqlExpress
             || !SetTypeRegistry.TryGetByClrType(declaringType, out var definition))
             return null;
 
+        // Union translates to array_cat, whose result is concatenated rather than
+        // deduplicated. cardinality would then count shared elements twice — {a,c} unioned
+        // with {a,b} is 4 on the server and 3 in memory. PostgreSQL has no array_distinct to
+        // wrap it in, so Count over a server-computed union is refused: EF reports the query
+        // as untranslatable, which beats returning a number that is quietly too large.
+        // IsEmpty stays translatable — a concatenation is empty exactly when both sides are.
+        if (member.Name == nameof(StringSet.Count) && IsUnion(instance))
+            return null;
+
         var set = sqlExpressionFactory.ApplyTypeMapping(instance, definition.SetTypeMapping);
 
         return member.Name switch
@@ -36,6 +45,9 @@ internal sealed class ValueSetsMemberTranslator(ISqlExpressionFactory sqlExpress
                    _                         => null
                };
     }
+
+    private static bool IsUnion(SqlExpression expression)
+        => expression is SqlFunctionExpression { Name: "array_cat" };
 
     private SqlExpression Cardinality(SqlExpression set)
         => sqlExpressionFactory.Function(

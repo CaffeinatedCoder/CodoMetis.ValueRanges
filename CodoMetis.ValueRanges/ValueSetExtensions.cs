@@ -128,7 +128,9 @@ public static class ValueSetExtensions
 
     /// <summary>
     /// Wraps an operation result, preserving instance identity when the result is one of the
-    /// operands' element arrays (the engine returns operand arrays unchanged in that case).
+    /// operands' element arrays (the engine returns operand arrays unchanged in that case —
+    /// the right operand's only where it is the whole answer, e.g. an empty left in
+    /// <c>Union</c>, never as a stand-in for a merge that chose left's representatives).
     /// </summary>
     private static TSet WithElements<TSet, T>(IValueSetFactory<TSet, T> set, TSet? other, ImmutableArray<T> result)
         where TSet : class, IValueSetFactory<TSet, T>, IValueSet<T>

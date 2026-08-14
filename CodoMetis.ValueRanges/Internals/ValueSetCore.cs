@@ -112,8 +112,11 @@ internal static class ValueSetCore
     }
 
     /// <summary>
-    /// The union of two canonical arrays. Returns one of the operands unchanged when the other
-    /// contributes nothing, so callers can preserve instance identity.
+    /// The union of two canonical arrays, keeping <paramref name="left"/>'s representative
+    /// among comparer-equal elements — the same "first in input order survives" tie-break
+    /// <see cref="Canonicalize{T}(IEnumerable{T}, IComparer{T})"/> applies. Returns
+    /// <paramref name="left"/> unchanged when the other side contributes nothing, so callers
+    /// can preserve instance identity.
     /// </summary>
     internal static ImmutableArray<T> Union<T>(ImmutableArray<T> left, ImmutableArray<T> right, IComparer<T> comparer)
     {
@@ -137,9 +140,13 @@ internal static class ValueSetCore
         while (i < left.Length) builder.Add(left[i++]);
         while (j < right.Length) builder.Add(right[j++]);
 
-        if (builder.Count == left.Length) return left;
-        if (builder.Count == right.Length) return right;
-        return builder.ToImmutable();
+        // Only the left-hand shortcut is sound. Every left element is added exactly once, so
+        // a count equal to left's length proves nothing else was added and the result is left.
+        // The mirrored check on right does NOT prove the same thing: it holds whenever left is
+        // a subset, where the builder carries left's representatives for the comparer-equal
+        // pairs and right carries its own — returning right would silently swap them (a
+        // DecimalSet {1.0} unioned into {1.00,2} would come back as {1.00,2}).
+        return builder.Count == left.Length ? left : builder.ToImmutable();
     }
 
     /// <summary>

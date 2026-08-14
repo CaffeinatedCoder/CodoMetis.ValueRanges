@@ -108,6 +108,29 @@ public class SetAlgebraTests
     }
 
     [TestMethod]
+    public void Union_KeepsLeftRepresentative_AmongComparerEqualElements()
+    {
+        // decimal compares equal across scales, so {1.0} and {1.00} are the same element with
+        // two representations. Canonicalize documents that the first in input order survives;
+        // Union follows the same tie-break, including where the left side is a proper subset
+        // and returning the right operand wholesale would have been a tempting shortcut.
+        var left  = DecimalSet.From(1.0m);
+        var right = DecimalSet.From(1.00m, 2m);
+
+        Assert.AreEqual("{1.0,2}", left.Union(right).ToString());
+        Assert.AreEqual("{1.00,2}", right.Union(left).ToString());
+    }
+
+    [TestMethod]
+    public void Union_SubsetOperand_StillEqualsTheSuperset()
+    {
+        var left  = Int32Set.From(2);
+        var right = Int32Set.From(1, 2, 3);
+
+        Assert.AreEqual(right, left.Union(right));
+    }
+
+    [TestMethod]
     public void Intersect_KeepsSharedElements()
     {
         var intersection = Int32Set.From(1, 2, 3).Intersect(Int32Set.From(2, 3, 4));

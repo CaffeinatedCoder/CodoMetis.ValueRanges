@@ -158,6 +158,33 @@ public sealed class SetQueryTranslationTests
         StringAssert.Contains(sql, "array_cat(b.\"Tags\", ARRAY['a','b']::text[]) @> ARRAY['x']::text[]");
     }
 
+    [TestMethod]
+    public void Union_Count_FailsTranslation()
+    {
+        // array_cat concatenates, so cardinality would count shared elements twice.
+        // Refusing beats a silently inflated number.
+        using var context = new TestDbContext();
+        var query = context.Bookings.Where(b => b.Tags.Union(Wanted).Count > 2);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+    }
+
+    [TestMethod]
+    public void Union_IsEmpty_StaysTranslated()
+    {
+        // A concatenation is empty exactly when both sides are, so duplicates cannot affect it.
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).IsEmpty));
+        StringAssert.Contains(sql, "cardinality(array_cat(b.\"Tags\", ARRAY['a','b']::text[])) = 0");
+    }
+
+    [TestMethod]
+    public void Count_OnAPlainColumn_StillTranslates()
+    {
+        // The Union guard keys off array_cat, so an ordinary set column is unaffected.
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.Count > 2));
+        StringAssert.Contains(sql, "cardinality(b.\"Tags\") > 2");
+    }
+
     // -------------------------------------------------------------------------
     // Equality — translated by EF itself; assumes canonical writers (documented)
     // -------------------------------------------------------------------------
