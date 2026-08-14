@@ -24,6 +24,10 @@ internal static class NodaPatterns
     private static readonly LocalDateTimePattern DateTimeSpace =
         LocalDateTimePattern.CreateWithInvariantCulture("uuuu'-'MM'-'dd' 'HH':'mm':'ss;FFFFFFFFF");
 
+    /// <summary>ISO 8601 time of day with optional subsecond digits: <c>12:30:00.123456789</c>.
+    /// Also the PostgreSQL wire form.</summary>
+    internal static readonly LocalTimePattern Time = LocalTimePattern.ExtendedIso;
+
     /// <summary>ISO 8601 UTC instant: <c>2024-06-01T12:30:00.123456789Z</c>.</summary>
     internal static readonly InstantPattern Instant = InstantPattern.ExtendedIso;
 
@@ -40,6 +44,9 @@ internal static class NodaPatterns
 
     internal static YearMonth ParseYearMonth(string text)
         => YearMonth.Parse(text).GetValueOrThrow();
+
+    internal static LocalTime ParseTime(string text)
+        => Time.Parse(text).GetValueOrThrow();
 
     internal static LocalDateTime ParseDateTime(string text)
     {
