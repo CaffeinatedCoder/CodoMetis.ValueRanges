@@ -44,8 +44,6 @@ public sealed class DecimalSet : IValueSet<decimal>, IValueSetFactory<DecimalSet
     static DecimalSet IValueSetFactory<DecimalSet, decimal>.FromTrusted(ImmutableArray<decimal> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<decimal> IValueSet<decimal>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by numeric order.</summary>
     public ImmutableArray<decimal> Values => _elements;
 

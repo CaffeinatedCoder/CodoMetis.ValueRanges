@@ -53,8 +53,6 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
     static LocalTimeSet IValueSetFactory<LocalTimeSet, LocalTime>.FromTrusted(ImmutableArray<LocalTime> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<LocalTime> IValueSet<LocalTime>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by chronological order.</summary>
     public ImmutableArray<LocalTime> Values => _elements;
 

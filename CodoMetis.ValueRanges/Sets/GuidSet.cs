@@ -46,8 +46,6 @@ public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, 
     static GuidSet IValueSetFactory<GuidSet, Guid>.FromTrusted(ImmutableArray<Guid> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<Guid> IValueSet<Guid>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by <see cref="Guid.CompareTo(Guid)"/>.</summary>
     public ImmutableArray<Guid> Values => _elements;
 
@@ -131,8 +129,6 @@ public sealed class GuidSet<TElement> :
 
     static GuidSet<TElement> IValueSetFactory<GuidSet<TElement>, TElement>.FromTrusted(ImmutableArray<TElement> elements)
         => FromTrusted(elements);
-
-    ImmutableArray<TElement> IValueSet<TElement>.Elements => _elements;
 
     /// <summary>The canonical elements: deduplicated, sorted by the element's <see cref="IComparable{T}"/>.</summary>
     public ImmutableArray<TElement> Values => _elements;

@@ -64,8 +64,6 @@ public sealed class LocalDateSet : IValueSet<LocalDate>, IValueSetFactory<LocalD
     static LocalDateSet IValueSetFactory<LocalDateSet, LocalDate>.FromTrusted(ImmutableArray<LocalDate> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<LocalDate> IValueSet<LocalDate>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by chronological order.</summary>
     public ImmutableArray<LocalDate> Values => _elements;
 

@@ -44,8 +44,6 @@ public sealed class DateTimeSet : IValueSet<DateTime>, IValueSetFactory<DateTime
     static DateTimeSet IValueSetFactory<DateTimeSet, DateTime>.FromTrusted(ImmutableArray<DateTime> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<DateTime> IValueSet<DateTime>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by chronological order.</summary>
     public ImmutableArray<DateTime> Values => _elements;
 

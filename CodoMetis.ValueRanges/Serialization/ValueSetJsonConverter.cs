@@ -49,7 +49,7 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     public override void Write(Utf8JsonWriter writer, TSet value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
-        foreach (var element in ((IValueSet<T>)value).Elements)
+        foreach (var element in ((IValueSet<T>)value).Values)
         {
             JsonSerializer.Serialize(writer, element, options);
         }

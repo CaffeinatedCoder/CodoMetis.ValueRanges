@@ -46,8 +46,6 @@ public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>
     static Int64Set IValueSetFactory<Int64Set, long>.FromTrusted(ImmutableArray<long> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<long> IValueSet<long>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, numerically sorted.</summary>
     public ImmutableArray<long> Values => _elements;
 
@@ -131,8 +129,6 @@ public sealed class Int64Set<TElement> :
 
     static Int64Set<TElement> IValueSetFactory<Int64Set<TElement>, TElement>.FromTrusted(ImmutableArray<TElement> elements)
         => FromTrusted(elements);
-
-    ImmutableArray<TElement> IValueSet<TElement>.Elements => _elements;
 
     /// <summary>The canonical elements: deduplicated, sorted by the element's <see cref="IComparable{T}"/>.</summary>
     public ImmutableArray<TElement> Values => _elements;

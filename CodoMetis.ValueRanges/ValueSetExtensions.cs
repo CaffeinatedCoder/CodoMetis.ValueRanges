@@ -17,10 +17,10 @@ public static class ValueSetExtensions
     extension<T>(IValueSet<T> set) where T : IEquatable<T>
     {
         /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
-        public int Count => set.Elements.Length;
+        public int Count => set.Values.Length;
 
         /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
-        public bool IsEmpty => set.Elements.IsEmpty;
+        public bool IsEmpty => set.Values.IsEmpty;
 
         /// <summary>
         /// Determines whether <paramref name="value"/> is an element of the set —
@@ -29,7 +29,7 @@ public static class ValueSetExtensions
         public bool Contains(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
-            return ValueSetCore.Contains(set.Elements, value);
+            return ValueSetCore.Contains(set.Values, value);
         }
     }
 
@@ -44,7 +44,7 @@ public static class ValueSetExtensions
         public bool Overlaps(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
-            return ValueSetCore.Overlaps(((IValueSet<T>)set).Elements, ((IValueSet<T>)other).Elements, TSet.CanonicalComparer);
+            return ValueSetCore.Overlaps(((IValueSet<T>)set).Values, ((IValueSet<T>)other).Values, TSet.CanonicalComparer);
         }
 
         /// <summary>
@@ -54,7 +54,7 @@ public static class ValueSetExtensions
         public bool IsSubsetOf(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
-            return ValueSetCore.IsSubsetOf(((IValueSet<T>)set).Elements, ((IValueSet<T>)other).Elements, TSet.CanonicalComparer);
+            return ValueSetCore.IsSubsetOf(((IValueSet<T>)set).Values, ((IValueSet<T>)other).Values, TSet.CanonicalComparer);
         }
 
         /// <summary>
@@ -64,7 +64,7 @@ public static class ValueSetExtensions
         public bool IsSupersetOf(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
-            return ValueSetCore.IsSubsetOf(((IValueSet<T>)other).Elements, ((IValueSet<T>)set).Elements, TSet.CanonicalComparer);
+            return ValueSetCore.IsSubsetOf(((IValueSet<T>)other).Values, ((IValueSet<T>)set).Values, TSet.CanonicalComparer);
         }
 
         /// <summary>
@@ -74,7 +74,7 @@ public static class ValueSetExtensions
         public TSet Union(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
-            var merged = ValueSetCore.Union(((IValueSet<T>)set).Elements, ((IValueSet<T>)other).Elements, TSet.CanonicalComparer);
+            var merged = ValueSetCore.Union(((IValueSet<T>)set).Values, ((IValueSet<T>)other).Values, TSet.CanonicalComparer);
             return WithElements<TSet, T>(set, other, merged);
         }
 
@@ -85,7 +85,7 @@ public static class ValueSetExtensions
         public TSet Intersect(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
-            var intersection = ValueSetCore.Intersect(((IValueSet<T>)set).Elements, ((IValueSet<T>)other).Elements, TSet.CanonicalComparer);
+            var intersection = ValueSetCore.Intersect(((IValueSet<T>)set).Values, ((IValueSet<T>)other).Values, TSet.CanonicalComparer);
             return WithElements<TSet, T>(set, other, intersection);
         }
 
@@ -96,7 +96,7 @@ public static class ValueSetExtensions
         public TSet Except(TSet other)
         {
             ArgumentNullException.ThrowIfNull(other);
-            var difference = ValueSetCore.Except(((IValueSet<T>)set).Elements, ((IValueSet<T>)other).Elements, TSet.CanonicalComparer);
+            var difference = ValueSetCore.Except(((IValueSet<T>)set).Values, ((IValueSet<T>)other).Values, TSet.CanonicalComparer);
             return WithElements<TSet, T>(set, other, difference);
         }
 
@@ -107,7 +107,7 @@ public static class ValueSetExtensions
         public TSet Add(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
-            var added = ValueSetCore.Add(((IValueSet<T>)set).Elements, value, TSet.CanonicalComparer);
+            var added = ValueSetCore.Add(((IValueSet<T>)set).Values, value, TSet.CanonicalComparer);
             return WithElements<TSet, T>(set, null, added);
         }
 
@@ -118,7 +118,7 @@ public static class ValueSetExtensions
         public TSet Remove(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
-            var removed = ValueSetCore.Remove(((IValueSet<T>)set).Elements, value);
+            var removed = ValueSetCore.Remove(((IValueSet<T>)set).Values, value);
             return WithElements<TSet, T>(set, null, removed);
         }
     }
@@ -131,8 +131,8 @@ public static class ValueSetExtensions
         where TSet : class, IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
     {
-        if (result == ((IValueSet<T>)set).Elements) return (TSet)set;
-        if (other is not null && result == ((IValueSet<T>)other).Elements) return other;
+        if (result == ((IValueSet<T>)set).Values) return (TSet)set;
+        if (other is not null && result == ((IValueSet<T>)other).Values) return other;
         return TSet.FromTrusted(result);
     }
 }

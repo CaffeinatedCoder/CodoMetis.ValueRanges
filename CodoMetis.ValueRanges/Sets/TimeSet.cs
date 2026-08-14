@@ -43,8 +43,6 @@ public sealed class TimeSet : IValueSet<TimeOnly>, IValueSetFactory<TimeSet, Tim
     static TimeSet IValueSetFactory<TimeSet, TimeOnly>.FromTrusted(ImmutableArray<TimeOnly> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<TimeOnly> IValueSet<TimeOnly>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by chronological order.</summary>
     public ImmutableArray<TimeOnly> Values => _elements;
 

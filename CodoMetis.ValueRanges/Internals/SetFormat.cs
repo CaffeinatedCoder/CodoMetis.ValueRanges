@@ -14,7 +14,7 @@ internal static class SetFormat
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
     {
-        var elements = set.Elements;
+        var elements = set.Values;
         if (elements.IsEmpty) return "{}";
 
         provider ??= CultureInfo.InvariantCulture;

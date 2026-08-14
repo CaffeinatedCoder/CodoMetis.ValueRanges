@@ -44,8 +44,6 @@ public sealed class DateTimeOffsetSet : IValueSet<DateTimeOffset>, IValueSetFact
     static DateTimeOffsetSet IValueSetFactory<DateTimeOffsetSet, DateTimeOffset>.FromTrusted(ImmutableArray<DateTimeOffset> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<DateTimeOffset> IValueSet<DateTimeOffset>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by instant order (UTC ticks).</summary>
     public ImmutableArray<DateTimeOffset> Values => _elements;
 

@@ -70,8 +70,6 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
     static YearMonthSet IValueSetFactory<YearMonthSet, YearMonth>.FromTrusted(ImmutableArray<YearMonth> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<YearMonth> IValueSet<YearMonth>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by chronological order.</summary>
     public ImmutableArray<YearMonth> Values => _elements;
 

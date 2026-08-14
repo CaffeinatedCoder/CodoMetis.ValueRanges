@@ -53,8 +53,6 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
     static InstantSet IValueSetFactory<InstantSet, Instant>.FromTrusted(ImmutableArray<Instant> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<Instant> IValueSet<Instant>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by instant order.</summary>
     public ImmutableArray<Instant> Values => _elements;
 

@@ -41,8 +41,6 @@ public sealed class Int16Set : IValueSet<short>, IValueSetFactory<Int16Set, shor
     static Int16Set IValueSetFactory<Int16Set, short>.FromTrusted(ImmutableArray<short> elements)
         => FromTrusted(elements);
 
-    ImmutableArray<short> IValueSet<short>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, sorted by numeric order.</summary>
     public ImmutableArray<short> Values => _elements;
 

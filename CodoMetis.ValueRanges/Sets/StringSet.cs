@@ -53,8 +53,6 @@ public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, s
     /// </summary>
     public static IComparer<string> CanonicalComparer => StringComparer.Ordinal;
 
-    ImmutableArray<string> IValueSet<string>.Elements => _elements;
-
     /// <summary>The canonical elements: deduplicated, ordinal-sorted.</summary>
     public ImmutableArray<string> Values => _elements;
 
@@ -156,8 +154,6 @@ public sealed class StringSet<TElement> :
         static (x, y) => string.CompareOrdinal(
             x.ToString(null, CultureInfo.InvariantCulture),
             y.ToString(null, CultureInfo.InvariantCulture)));
-
-    ImmutableArray<TElement> IValueSet<TElement>.Elements => _elements;
 
     /// <summary>The canonical elements: deduplicated, sorted ordinal over the invariant text form.</summary>
     public ImmutableArray<TElement> Values => _elements;
