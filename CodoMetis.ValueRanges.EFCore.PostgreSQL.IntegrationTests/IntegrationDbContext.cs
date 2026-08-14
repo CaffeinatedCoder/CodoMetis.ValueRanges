@@ -52,6 +52,80 @@ public class Reservation
     public RangeSet<YearMonthRange, YearMonth> BillingPeriods { get; set; } = RangeSet<YearMonthRange, YearMonth>.Empty;
 
     public int GroupKey { get; set; }
+
+    // -- Value set properties: BCL closed types --
+
+    public StringSet Tags { get; set; } = StringSet.Empty;
+
+    /// <summary>Nullable on purpose: NULL column and empty array are distinct states.</summary>
+    public StringSet? OptionalTags { get; set; }
+
+    public StringSet<TestKey> Permissions { get; set; } = StringSet<TestKey>.Empty;
+
+    public GuidSet Uuids { get; set; } = GuidSet.Empty;
+
+    public Int16Set SmallCodes { get; set; } = Int16Set.Empty;
+
+    public Int32Set Codes { get; set; } = Int32Set.Empty;
+
+    public Int64Set BigCodes { get; set; } = Int64Set.Empty;
+
+    public DecimalSet Rates { get; set; } = DecimalSet.Empty;
+
+    public DateSet BlackoutDates { get; set; } = DateSet.Empty;
+
+    public TimeSet Slots { get; set; } = TimeSet.Empty;
+
+    public DateTimeSet Marks { get; set; } = DateTimeSet.Empty;
+
+    public DateTimeOffsetSet Stamps { get; set; } = DateTimeOffsetSet.Empty;
+
+    // -- Value set properties: NodaTime satellite --
+
+    public LocalDateSet NodaHolidays { get; set; } = LocalDateSet.Empty;
+
+    public LocalDateTimeSet NodaMarks { get; set; } = LocalDateTimeSet.Empty;
+
+    public InstantSet NodaOccurrences { get; set; } = InstantSet.Empty;
+
+    public LocalTimeSet NodaSlots { get; set; } = LocalTimeSet.Empty;
+
+    // Month granularity, stored as a month-aligned date[].
+    public YearMonthSet BillingMonths { get; set; } = YearMonthSet.Empty;
+}
+
+/// <summary>
+/// A generator-shaped validated wrapper (string-backed) — the consumer shape for
+/// <see cref="StringSet{TElement}"/>, exercised end to end against live PostgreSQL.
+/// </summary>
+public readonly record struct TestKey : IFormattable, IParsable<TestKey>
+{
+    private readonly string _value;
+
+    private TestKey(string value) => _value = value;
+
+    public static TestKey Parse(string s, IFormatProvider? provider)
+        => string.IsNullOrWhiteSpace(s) || !s.Contains('.')
+               ? throw new FormatException($"'{s}' is not a valid key.")
+               : new TestKey(s.Trim().ToLowerInvariant());
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestKey result)
+    {
+        try
+        {
+            result = Parse(s!, provider);
+            return true;
+        }
+        catch
+        {
+            result = default;
+            return false;
+        }
+    }
+
+    public string ToString(string? format, IFormatProvider? formatProvider) => _value;
+
+    public override string ToString() => _value;
 }
 
 public sealed class IntegrationDbContext : DbContext
