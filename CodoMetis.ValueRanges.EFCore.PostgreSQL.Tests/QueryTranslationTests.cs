@@ -184,6 +184,43 @@ public sealed class QueryTranslationTests
     }
 
     [TestMethod]
+    public void Range_StateChecks_TranslateToRangeFunctions()
+    {
+        var sql = Sql(db => db.Bookings.Where(b =>
+            b.Period.IsEmpty()
+            || b.Period.IsUnboundedStart()
+            || b.Period.IsUnboundedEnd()));
+
+        StringAssert.Contains(sql, "isempty(b.\"Period\")");
+        StringAssert.Contains(sql, "lower_inf(b.\"Period\")");
+        StringAssert.Contains(sql, "upper_inf(b.\"Period\")");
+    }
+
+    /// <summary>
+    /// PostgreSQL has no <c>isinfinity</c>, so the two derived predicates compose the primitives:
+    /// unbounded on both sides, and bounded on both sides while non-empty.
+    /// </summary>
+    [TestMethod]
+    public void Range_IsInfinity_ComposesBothUnboundedChecks()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.IsInfinity()));
+
+        StringAssert.Contains(sql, "lower_inf(b.\"Period\")");
+        StringAssert.Contains(sql, "upper_inf(b.\"Period\")");
+        StringAssert.Contains(sql, "AND");
+    }
+
+    [TestMethod]
+    public void Range_IsFinite_ComposesNegatedUnboundedAndEmptyChecks()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.IsFinite()));
+
+        StringAssert.Contains(sql, "NOT (lower_inf(b.\"Period\"))");
+        StringAssert.Contains(sql, "NOT (upper_inf(b.\"Period\"))");
+        StringAssert.Contains(sql, "NOT (isempty(b.\"Period\"))");
+    }
+
+    [TestMethod]
     public void RangeSet_BoundAccessors_TranslateToMultirangeFunctions()
     {
         var sql = Sql(db => db.Bookings
