@@ -47,17 +47,6 @@ internal sealed class ValueSetsMethodCallTranslator(
     IRelationalTypeMappingSource typeMappingSource
 ) : IMethodCallTranslator
 {
-    private static readonly FrozenSetLookup KnownMethods = new(
-        typeof(ValueSetExtensions)
-           .GetMethods(BindingFlags.Public | BindingFlags.Static)
-           .Select(method => method.Name)
-           .ToHashSet());
-
-    private readonly struct FrozenSetLookup(HashSet<string> names)
-    {
-        public bool Contains(string name) => names.Contains(name);
-    }
-
     /// <inheritdoc />
     public SqlExpression? Translate(
         SqlExpression?                             instance,
@@ -66,7 +55,9 @@ internal sealed class ValueSetsMethodCallTranslator(
         IDiagnosticsLogger<DbLoggerCategory.Query> logger
     )
     {
-        if (method.DeclaringType != typeof(ValueSetExtensions) || !KnownMethods.Contains(method.Name))
+        // The switch below is the name filter: anything it does not recognize falls through to
+        // null, so no separate set of known names is needed.
+        if (method.DeclaringType != typeof(ValueSetExtensions))
             return null;
 
         if (!TryResolveDefinition(method, arguments, out var definition))

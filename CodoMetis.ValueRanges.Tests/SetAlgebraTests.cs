@@ -32,6 +32,33 @@ public class SetAlgebraTests
     public void Contains_NullValue_Throws()
         => Assert.ThrowsExactly<ArgumentNullException>(() => StringSet.From("a").Contains(null!));
 
+    [TestMethod]
+    public void Contains_And_Remove_SearchInOrdinalOrder_NotCultureOrder()
+    {
+        // Membership binary-searches the canonical array, so it has to use the same order the
+        // array was sorted with. StringSet sorts ordinal, where 'B' (U+0042) precedes 'a'
+        // (U+0061) and 'z' precedes 'ä' — every culture-aware comparison disagrees on both, so
+        // a search using Comparer<string>.Default would walk into the wrong half and miss.
+        var set = StringSet.From("a", "B", "ä", "z");
+
+        Assert.AreEqual("{B,a,z,ä}", set.ToString());
+
+        foreach (var element in new[] { "a", "B", "ä", "z" })
+            Assert.IsTrue(set.Contains(element), $"Contains missed the stored element '{element}'");
+
+        Assert.AreEqual(StringSet.From("B", "z", "ä"), set.Remove("a"));
+        Assert.AreEqual(StringSet.From("a", "B", "z"), set.Remove("ä"));
+    }
+
+    [TestMethod]
+    public void Contains_ScalesToLargeSets()
+    {
+        var set = Int32Set.From(Enumerable.Range(0, 1000).Select(i => i * 3));
+
+        Assert.IsTrue(set.Contains(2997));
+        Assert.IsFalse(set.Contains(2998));
+    }
+
     // -----------------------------------------------------------------------
     // Overlaps
     // -----------------------------------------------------------------------

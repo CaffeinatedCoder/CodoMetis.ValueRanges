@@ -67,17 +67,12 @@ internal static class ValueSetCore
         return builder.Count == builder.Capacity ? builder.MoveToImmutable() : builder.ToImmutable();
     }
 
-    /// <summary>Membership by element equality.</summary>
-    internal static bool Contains<T>(ImmutableArray<T> elements, T value)
-        where T : IEquatable<T>
-    {
-        foreach (var element in elements)
-        {
-            if (element.Equals(value)) return true;
-        }
-
-        return false;
-    }
+    /// <summary>
+    /// Membership, by binary search over the canonical order — the array is sorted by
+    /// construction, so there is no reason to scan it.
+    /// </summary>
+    internal static bool Contains<T>(ImmutableArray<T> elements, T value, IComparer<T> comparer)
+        => elements.AsSpan().BinarySearch(value, comparer) >= 0;
 
     /// <summary>Whether the operands share at least one element.</summary>
     internal static bool Overlaps<T>(ImmutableArray<T> left, ImmutableArray<T> right, IComparer<T> comparer)
@@ -213,18 +208,14 @@ internal static class ValueSetCore
     }
 
     /// <summary>
-    /// Removes an element by equality. Returns the input array unchanged when the element is
-    /// absent, so callers can preserve instance identity.
+    /// Removes an element found at its canonical position — the mirror of <see cref="Add{T}"/>,
+    /// so the two agree on what counts as the same element. Returns the input array unchanged
+    /// when the element is absent, so callers can preserve instance identity.
     /// </summary>
-    internal static ImmutableArray<T> Remove<T>(ImmutableArray<T> elements, T value)
-        where T : IEquatable<T>
+    internal static ImmutableArray<T> Remove<T>(ImmutableArray<T> elements, T value, IComparer<T> comparer)
     {
-        for (var i = 0; i < elements.Length; i++)
-        {
-            if (elements[i].Equals(value)) return elements.RemoveAt(i);
-        }
-
-        return elements;
+        var index = elements.AsSpan().BinarySearch(value, comparer);
+        return index >= 0 ? elements.RemoveAt(index) : elements;
     }
 
     /// <summary>Element-wise equality over canonical form — equivalent to set equality.</summary>

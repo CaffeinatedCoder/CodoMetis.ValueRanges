@@ -31,4 +31,18 @@ public interface IValueSet<T> where T : IEquatable<T>
     /// An element the type rejects at construction throws here too.
     /// </remarks>
     internal T NormalizeElement(T value) => value;
+
+    /// <summary>
+    /// The order <see cref="Values"/> is sorted by — the instance-side view of
+    /// <c>IValueSetFactory&lt;TSet,T&gt;.CanonicalComparer</c>, which the element-level
+    /// operations need but cannot reach statically. It lets membership binary-search the
+    /// canonical array instead of scanning it, which matters for the large sets this package
+    /// supports.
+    /// </summary>
+    /// <remarks>
+    /// Must return the same order as the type's <c>CanonicalComparer</c>: a mismatch would make
+    /// the binary search miss elements that are present. Only the string-backed families need
+    /// to override the default.
+    /// </remarks>
+    internal IComparer<T> CanonicalOrder => Comparer<T>.Default;
 }

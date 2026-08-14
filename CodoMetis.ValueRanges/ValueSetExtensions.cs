@@ -28,7 +28,7 @@ public static class ValueSetExtensions
         public bool Contains(T value)
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
-            return ValueSetCore.Contains(set.Values, set.NormalizeElement(value));
+            return ValueSetCore.Contains(set.Values, set.NormalizeElement(value), set.CanonicalOrder);
         }
     }
 
@@ -121,7 +121,7 @@ public static class ValueSetExtensions
         {
             if (value is null) throw new ArgumentNullException(nameof(value));
             var element = ((IValueSet<T>)set).NormalizeElement(value);
-            var removed = ValueSetCore.Remove(((IValueSet<T>)set).Values, element);
+            var removed = ValueSetCore.Remove(((IValueSet<T>)set).Values, element, TSet.CanonicalComparer);
             return WithElements<TSet, T>(set, null, removed);
         }
     }
