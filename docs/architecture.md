@@ -140,13 +140,65 @@ exactly the backing primitive's text form.
 
 ## JSON Serialization (`Serialization/`)
 
-- `RangeJsonConverter<TRange, T>` — serializes to/from PostgreSQL range literal strings
+- `RangeJsonConverter<TRange, T>` — serializes to/from PostgreSQL range literal strings.
+  `HandleNull` is `true` so reads can reject a null token with a directed message (`"empty"` is
+  the empty range); that also routes nulls into `Write`, which must emit `null` rather than
+  dereference
 - `ValueSetJsonConverter<TSet, T>` — serializes value sets as plain JSON arrays, delegating
   element serialization to System.Text.Json (element converters apply); reads normalize and
   reject null elements
+- `RangeVariantJsonConverter<TVariant, TRange, T>` — the same literal for a value reached as one
+  of the union's sealed variants; parses through the union and narrows, rejecting a literal of a
+  different shape
 - `RangeJsonConverterFactory` — auto-registers for any type implementing `IRangeFactory<TRange, T>`
   or `IValueSetFactory<TSet, T>`, or `RangeSet<TRange, T>`
 - Extension: `AddRangeConverters()` registers all at once
+
+### Variants and the factory
+
+The sealed variants inherit the union's `IRangeFactory<TRange, T>` but do not satisfy
+`TRange : IRangeFactory<TRange, T>` themselves — `Int32Range.Finite` implements
+`IRangeFactory<Int32Range, int>`, not `IRangeFactory<Int32Range.Finite, int>`. So the factory reads
+`TRange` off the interface and compares it to the type it was handed: equal means the union and
+`RangeJsonConverter`, unequal means a variant and `RangeVariantJsonConverter`. Constructing the
+plain converter for a variant instead throws a reflection `ArgumentException` out of
+`MakeGenericType`, which is what used to happen for `object`-typed values.
+
+This is not an edge case — System.Text.Json resolves converters by the type it is handed, so
+`Serialize<object>(range)`, an `object`-typed property and an `object`-typed collection all present
+the *runtime* type, which is always a variant.
+
+Value set types have no variants and are sealed; the factory rejects a hypothetical subclass with a
+directed `NotSupportedException` rather than the same reflection failure. A property declared as the
+`IRange<T>`/`IValueSet<T>` *interface* is not handled — the interface carries no factory to parse
+back through, so it falls to System.Text.Json's default handling.
+
+### Element converters (`IValueSetFactory<TSet, T>.ElementJsonConverter`)
+
+Delegating elements to System.Text.Json is right for element types it knows, and a silent trap for
+types it does not: no converter anywhere means a property dump on write and `default` on read, with
+no exception on either leg. `ElementJsonConverter` is the family's fallback for exactly that case.
+
+`ValueSetJsonConverter` picks between the two per call via `options.GetTypeInfo(typeof(T)).Kind`:
+`JsonTypeInfoKind.None` means System.Text.Json already resolves a scalar converter — built-in, on
+the options, or a `[JsonConverter]` on the element type — and stays authoritative. Any other kind
+means the reflection fallback, so the family's converter takes over. That ordering is the point:
+the hook is last, never an override. Resolution failures (no contract for `T`) fall back to
+delegation, preserving the previous behaviour.
+
+The primitive-backed families serialize natively and leave the default `null`. The wrapper arities
+(`StringSet<T>`, `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>`) always define one, since their element type
+is arbitrary — `ValueSetTextElementJsonConverter` for the string- and Guid-backed pair, and
+`ValueSetIntegerElementJsonConverter` for the integer-backed pair, so a wrapper's payload is byte-for-byte
+what its primitive sibling produces. The NodaTime satellite defines
+one per set (`Serialization/NodaTimeElementJsonConverter.cs`, namespace
+`CodoMetis.ValueRanges.Serialization`), each reusing the family's own `ParseValue`/`FormatValue` so
+JSON, array literals and the wire form share one text form. The satellite additionally exposes
+`AddNodaTimeRangeConverters()`, which puts those same converters on the options — the hook only
+reaches set elements, so this is what covers bare NodaTime properties alongside a set. It skips
+element types an existing converter already claims, which makes it idempotent and
+order-independent against `ConfigureForNodaTime`. Range types are unaffected throughout — they
+format themselves.
 
 ## EF Core PostgreSQL (`CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
 

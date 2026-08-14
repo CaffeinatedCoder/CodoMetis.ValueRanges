@@ -25,7 +25,7 @@ A range says *"every moment between these two"*; a set says *"exactly these mome
 | `LocalTimeSet`     | `LocalTime`     | `time[]`              |
 | `YearMonthSet`     | `YearMonth`     | `date[]` (month-aligned) |
 
-The whole core set algebra applies: `Contains`, `Overlaps`, `IsSubsetOf`/`IsSupersetOf` and their proper variants, `Union`, `Remove`, `Count`, `IsEmpty`, plus client-side `Intersect`/`Except`/`Add` — along with array-literal parsing/formatting, JSON, and collection expressions.
+The whole core set algebra applies: `Contains`, `Overlaps`, `IsSubsetOf`/`IsSupersetOf` and their proper variants, `Union`, `Remove`, `Count`, `IsEmpty`, plus client-side `Intersect`/`Except`/`Add` — along with array-literal parsing/formatting, JSON ([one call to set up](#json)), and collection expressions.
 
 ```csharp
 using CodoMetis.ValueRanges;
@@ -65,6 +65,40 @@ dotnet add package CodoMetis.ValueRanges.NodaTime
 ```
 
 > Requires .NET 10 or later. A companion EF Core package, [CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime), maps these types to PostgreSQL columns via `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`.
+
+## JSON
+
+Ranges and value sets both work under the core package's `AddRangeConverters()`, with no NodaTime-specific setup:
+
+```csharp
+using CodoMetis.ValueRanges.Serialization;
+
+var options = new JsonSerializerOptions().AddRangeConverters();
+
+JsonSerializer.Serialize(sprint, options);      // "[2025-01-06,2025-01-17]"
+JsonSerializer.Serialize(holidays, options);    // ["2025-01-01","2025-12-26"]
+```
+
+The range types format themselves. The set types get there differently: they delegate elements to System.Text.Json, which has no built-in converter for NodaTime types, so each family supplies an ISO 8601 fallback through `IValueSetFactory<TSet, T>.ElementJsonConverter` — the same text form its array literals use. The fallback is consulted last, so any converter you register for the element type still wins.
+
+Use `AddNodaTimeRangeConverters()` when the payload also carries **bare** NodaTime values next to the sets:
+
+```csharp
+var options = new JsonSerializerOptions().AddNodaTimeRangeConverters();
+
+JsonSerializer.Serialize(new { Day = new LocalDate(2025, 1, 1), Days = holidays }, options);
+// {"Day":"2025-01-01","Days":["2025-01-01","2025-12-26"]}
+```
+
+It registers the converter factory plus the same five element converters on the options, so a `LocalDate` property outside a set gets the ISO 8601 form too. Element types already claimed by a registered converter are left alone, which makes it idempotent and order-independent against NodaTime.Serialization.SystemTextJson:
+
+```csharp
+var options = new JsonSerializerOptions()
+    .ConfigureForNodaTime(DateTimeZoneProviders.Tzdb)   // Duration, Period, ZonedDateTime, …
+    .AddNodaTimeRangeConverters();                      // ranges, sets, and anything left over
+```
+
+Reach for that package when the payload carries NodaTime types beyond these five.
 
 ## Two documented caveats, dissolved
 
