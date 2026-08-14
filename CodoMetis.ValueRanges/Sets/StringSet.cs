@@ -56,6 +56,12 @@ public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, s
     /// <summary>The canonical elements: deduplicated, ordinal-sorted.</summary>
     public ImmutableArray<string> Values => _elements;
 
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
+
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<string>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
@@ -157,6 +163,12 @@ public sealed class StringSet<TElement> :
 
     /// <summary>The canonical elements: deduplicated, sorted ordinal over the invariant text form.</summary>
     public ImmutableArray<TElement> Values => _elements;
+
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
 
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();

@@ -47,6 +47,12 @@ public sealed class DateTimeOffsetSet : IValueSet<DateTimeOffset>, IValueSetFact
     /// <summary>The canonical elements: deduplicated, sorted by instant order (UTC ticks).</summary>
     public ImmutableArray<DateTimeOffset> Values => _elements;
 
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
+
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<DateTimeOffset>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 

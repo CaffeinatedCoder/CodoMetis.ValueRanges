@@ -14,14 +14,11 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 public static class ValueSetExtensions
 {
+    // Count and IsEmpty are instance properties on the concrete set types rather than
+    // extension members: C# forbids extension property accesses inside expression trees
+    // (CS9296), which would make them untranslatable in LINQ queries.
     extension<T>(IValueSet<T> set) where T : IEquatable<T>
     {
-        /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
-        public int Count => set.Values.Length;
-
-        /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
-        public bool IsEmpty => set.Values.IsEmpty;
-
         /// <summary>
         /// Determines whether <paramref name="value"/> is an element of the set —
         /// PostgreSQL containment <c>column @&gt; ARRAY[value]</c> (GIN-servable).

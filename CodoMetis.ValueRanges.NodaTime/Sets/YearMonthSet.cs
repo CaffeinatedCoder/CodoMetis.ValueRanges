@@ -73,6 +73,12 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
     /// <summary>The canonical elements: deduplicated, sorted by chronological order.</summary>
     public ImmutableArray<YearMonth> Values => _elements;
 
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
+
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<YearMonth>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 

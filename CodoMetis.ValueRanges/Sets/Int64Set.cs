@@ -49,6 +49,12 @@ public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>
     /// <summary>The canonical elements: deduplicated, numerically sorted.</summary>
     public ImmutableArray<long> Values => _elements;
 
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
+
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<long>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
@@ -132,6 +138,12 @@ public sealed class Int64Set<TElement> :
 
     /// <summary>The canonical elements: deduplicated, sorted by the element's <see cref="IComparable{T}"/>.</summary>
     public ImmutableArray<TElement> Values => _elements;
+
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
 
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();

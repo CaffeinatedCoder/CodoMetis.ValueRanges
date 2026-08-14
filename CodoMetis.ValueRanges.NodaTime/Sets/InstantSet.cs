@@ -56,6 +56,12 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
     /// <summary>The canonical elements: deduplicated, sorted by instant order.</summary>
     public ImmutableArray<Instant> Values => _elements;
 
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
+
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<Instant>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 

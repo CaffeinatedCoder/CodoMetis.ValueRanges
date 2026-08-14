@@ -49,6 +49,12 @@ public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, 
     /// <summary>The canonical elements: deduplicated, sorted by <see cref="Guid.CompareTo(Guid)"/>.</summary>
     public ImmutableArray<Guid> Values => _elements;
 
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
+
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<Guid>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
@@ -132,6 +138,12 @@ public sealed class GuidSet<TElement> :
 
     /// <summary>The canonical elements: deduplicated, sorted by the element's <see cref="IComparable{T}"/>.</summary>
     public ImmutableArray<TElement> Values => _elements;
+
+    /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
+    public int Count => _elements.Length;
+
+    /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
+    public bool IsEmpty => _elements.IsEmpty;
 
     /// <summary>Enumerates the canonical elements (supports <see langword="foreach"/>).</summary>
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();
