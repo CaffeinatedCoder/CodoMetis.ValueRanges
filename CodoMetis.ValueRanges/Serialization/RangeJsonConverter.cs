@@ -10,13 +10,21 @@ namespace CodoMetis.ValueRanges.Serialization;
 /// Serializes a range value as a PostgreSQL range literal JSON string, e.g. <c>"[1,5)"</c>,
 /// <c>"empty"</c>, or <c>"(,)"</c>.
 /// </summary>
+/// <remarks>
+/// Reads reject a null token so that <c>null</c> is never silently confused with the empty
+/// range; writes emit <c>null</c> for a null reference, as any other converter would.
+/// </remarks>
 /// <typeparam name="TRange">The concrete range type.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
 public class RangeJsonConverter<TRange, T> : JsonConverter<TRange>
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// <see langword="true"/> so that <see cref="Read"/> sees the null token and can reject it
+    /// with a directed message. This also routes null values into <see cref="Write"/>, which
+    /// writes them out as <c>null</c>.
+    /// </summary>
     public override bool HandleNull => true;
 
     /// <inheritdoc />
@@ -37,7 +45,79 @@ public class RangeJsonConverter<TRange, T> : JsonConverter<TRange>
 
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
-        => writer.WriteStringValue(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+    {
+        // HandleNull routes nulls here too: a nullable range property must write as null
+        // rather than dereferencing.
+        if (value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        writer.WriteStringValue(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+    }
+}
+
+/// <summary>
+/// Serializes one sealed variant of a range union — <c>Int32Range.Finite</c>,
+/// <c>Int32Range.EmptyRange</c>, … — to the same literal string as the union itself.
+/// </summary>
+/// <remarks>
+/// <para>
+/// System.Text.Json resolves converters by the type it is handed, which for a value reached
+/// through <see langword="object"/>, an <c>object</c>-typed collection, or a variant-typed
+/// declaration is the variant rather than the union. Only the union satisfies
+/// <c>TRange : IRangeFactory&lt;TRange, T&gt;</c>, so the variant needs its own converter; it
+/// parses through the union and narrows.
+/// </para>
+/// <para>
+/// A literal that parses to a different variant is a read error, not a silent widening:
+/// <c>"empty"</c> cannot be read into a declaration of type <c>Finite</c>.
+/// </para>
+/// </remarks>
+/// <typeparam name="TVariant">The sealed variant type being converted.</typeparam>
+/// <typeparam name="TRange">The range union that declares the variant.</typeparam>
+/// <typeparam name="T">The element type of the range.</typeparam>
+public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVariant>
+    where TVariant : TRange
+    where TRange : IRangeFactory<TRange, T>
+    where T : struct, IComparable<T>, IEquatable<T>
+{
+    /// <inheritdoc cref="RangeJsonConverter{TRange,T}.HandleNull"/>
+    public override bool HandleNull => true;
+
+    /// <inheritdoc />
+    public override TVariant Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            throw new JsonException(
+                $"Expected a JSON string for {typeof(TVariant).Name}, got null. Use \"empty\" to represent an empty range.");
+
+        var s = reader.GetString()
+             ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TVariant).Name} value.");
+
+        if (!TRange.TryParse(s, CultureInfo.InvariantCulture, out var parsed))
+            throw new JsonException($"Cannot parse '{s}' as {typeof(TRange).Name}.");
+
+        if (parsed is not TVariant variant)
+            throw new JsonException(
+                $"Cannot read '{s}' as {typeof(TRange).Name}.{typeof(TVariant).Name}: "
+              + $"the literal is a {parsed!.GetType().Name}.");
+
+        return variant;
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, TVariant value, JsonSerializerOptions options)
+    {
+        if (value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        writer.WriteStringValue(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+    }
 }
 
 /// <summary>

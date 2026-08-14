@@ -113,6 +113,32 @@ public class RangeJsonConverterTests
         => Assert.ThrowsExactly<JsonException>(
             () => JsonSerializer.Deserialize<Int32Range>("null", Options));
 
+    // -----------------------------------------------------------------------
+    // Null writes — HandleNull routes nulls into Write as well as Read
+    // -----------------------------------------------------------------------
+
+    private sealed record NullableHolder(Int32Range? Range);
+
+    [TestMethod]
+    public void Serialize_NullRangeProperty_WritesNull()
+        => Assert.AreEqual("{\"Range\":null}", JsonSerializer.Serialize(new NullableHolder(null), Options));
+
+    [TestMethod]
+    public void Serialize_NullRange_TopLevel_WritesNull()
+        => Assert.AreEqual("null", JsonSerializer.Serialize<Int32Range>(null!, Options));
+
+    [TestMethod]
+    public void Serialize_NullRangeInCollection_WritesNull()
+        => Assert.AreEqual("[\"[1,10]\",null]",
+            JsonSerializer.Serialize(new[] { Int32Range.CreateFinite(1, 10), null }, Options));
+
+    [TestMethod]
+    public void Serialize_NullRangeSetProperty_WritesNull()
+        => Assert.AreEqual("{\"Set\":null}",
+            JsonSerializer.Serialize(new NullableSetHolder(null), Options));
+
+    private sealed record NullableSetHolder(RangeSet<Int32Range, int>? Set);
+
     [TestMethod]
     public void Deserialize_InvalidLiteral_ThrowsJsonException()
         => Assert.ThrowsExactly<JsonException>(
@@ -200,6 +226,86 @@ public class RangeJsonConverterTests
         var parsed = JsonSerializer.Deserialize<RangeSet<DecimalRange, decimal>>(json, Options);
         Assert.AreEqual(original, parsed);
     }
+
+    // -----------------------------------------------------------------------
+    // Union variants — System.Text.Json resolves converters by the type it is handed,
+    // which for object-typed and variant-typed declarations is the variant, not the union
+    // -----------------------------------------------------------------------
+
+    private sealed record ObjectHolder(object Range);
+
+    private sealed record FiniteHolder(Int32Range.Finite Range);
+
+    private sealed record NullableFiniteHolder(Int32Range.Finite? Range);
+
+    [TestMethod]
+    public void Serialize_ObjectTyped_UsesRangeLiteral()
+    {
+        Assert.AreEqual("\"[1,5]\"",   JsonSerializer.Serialize<object>(Int32Range.CreateFinite(1, 5), Options));
+        Assert.AreEqual("\"empty\"",   JsonSerializer.Serialize<object>(Int32Range.Empty, Options));
+        Assert.AreEqual("\"(,)\"",     JsonSerializer.Serialize<object>(Int32Range.Infinite, Options));
+        Assert.AreEqual("\"(,50]\"",   JsonSerializer.Serialize<object>(Int32Range.CreateUnboundedStart(50, true), Options));
+        Assert.AreEqual("\"[10,)\"",   JsonSerializer.Serialize<object>(Int32Range.CreateUnboundedEnd(10, true), Options));
+    }
+
+    [TestMethod]
+    public void Serialize_ObjectTypedProperty_UsesRangeLiteral()
+        => Assert.AreEqual("{\"Range\":\"[1,5]\"}",
+            JsonSerializer.Serialize(new ObjectHolder(Int32Range.CreateFinite(1, 5)), Options));
+
+    [TestMethod]
+    public void Serialize_ObjectTypedCollection_UsesRangeLiterals()
+        => Assert.AreEqual("[\"[1,5]\",\"[2024-01-01,2024-03-01]\"]",
+            JsonSerializer.Serialize(new List<object>
+            {
+                Int32Range.CreateFinite(1, 5),
+                DateRange.CreateFinite(new DateOnly(2024, 1, 1), new DateOnly(2024, 3, 1))
+            }, Options));
+
+    [TestMethod]
+    public void Serialize_VariantTypedProperty_UsesRangeLiteral()
+        => Assert.AreEqual("{\"Range\":\"[1,5]\"}",
+            JsonSerializer.Serialize(new FiniteHolder((Int32Range.Finite)Int32Range.CreateFinite(1, 5)), Options));
+
+    [TestMethod]
+    public void Serialize_NullVariantProperty_WritesNull()
+        => Assert.AreEqual("{\"Range\":null}",
+            JsonSerializer.Serialize(new NullableFiniteHolder(null), Options));
+
+    [TestMethod]
+    public void JsonRoundtrip_VariantTyped()
+    {
+        var original = (Int32Range.Finite)Int32Range.CreateFinite(1, 5);
+
+        var json = JsonSerializer.Serialize(original, Options);
+
+        Assert.AreEqual("\"[1,5]\"", json);
+        Assert.AreEqual(original, JsonSerializer.Deserialize<Int32Range.Finite>(json, Options));
+    }
+
+    [TestMethod]
+    public void Deserialize_VariantTyped_EachShape()
+    {
+        Assert.IsNotNull(JsonSerializer.Deserialize<Int32Range.EmptyRange>("\"empty\"", Options));
+        Assert.IsNotNull(JsonSerializer.Deserialize<Int32Range.Infinity>("\"(,)\"", Options));
+        Assert.IsNotNull(JsonSerializer.Deserialize<Int32Range.UnboundedStart>("\"(,50]\"", Options));
+        Assert.IsNotNull(JsonSerializer.Deserialize<Int32Range.UnboundedEnd>("\"[10,)\"", Options));
+    }
+
+    [TestMethod]
+    public void Deserialize_VariantTyped_WrongShape_ThrowsJsonException()
+        => Assert.ThrowsExactly<JsonException>(
+            () => JsonSerializer.Deserialize<Int32Range.Finite>("\"empty\"", Options));
+
+    [TestMethod]
+    public void Deserialize_VariantTyped_InvalidLiteral_ThrowsJsonException()
+        => Assert.ThrowsExactly<JsonException>(
+            () => JsonSerializer.Deserialize<Int32Range.Finite>("\"not-a-range\"", Options));
+
+    [TestMethod]
+    public void Deserialize_VariantTyped_Null_ThrowsJsonException()
+        => Assert.ThrowsExactly<JsonException>(
+            () => JsonSerializer.Deserialize<Int32Range.Finite>("null", Options));
 
     // -----------------------------------------------------------------------
     // Per-type converters (explicit registration)

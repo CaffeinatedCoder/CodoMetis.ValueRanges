@@ -40,14 +40,30 @@ public sealed class RangeJsonConverterFactory : JsonConverterFactory
 
         if (GetFactoryInterface(typeToConvert, ValueSetFactoryOpenType) is { } setIface)
         {
-            var elementType  = setIface.GetGenericArguments()[1]; // T in IValueSetFactory<TSet, T>
-            var setConverter = typeof(ValueSetJsonConverter<,>).MakeGenericType(typeToConvert, elementType);
+            var setArgs     = setIface.GetGenericArguments(); // TSet, T in IValueSetFactory<TSet, T>
+            var declaredSet = setArgs[0];
+
+            if (declaredSet != typeToConvert)
+                throw new NotSupportedException(
+                    $"'{typeToConvert}' derives from the value set type '{declaredSet}' and cannot be "
+                  + "serialized: only the type that declares IValueSetFactory<TSet, T> satisfies the "
+                  + "converter's constraints. Value set types are meant to be sealed.");
+
+            var setConverter = typeof(ValueSetJsonConverter<,>).MakeGenericType(typeToConvert, setArgs[1]);
             return (JsonConverter)Activator.CreateInstance(setConverter)!;
         }
 
-        var iface   = GetFactoryInterface(typeToConvert, RangeFactoryOpenType)!;
-        var tArg    = iface.GetGenericArguments()[1]; // T in IRangeFactory<TRange, T>
-        var rangeConverter = typeof(RangeJsonConverter<,>).MakeGenericType(typeToConvert, tArg);
+        var iface  = GetFactoryInterface(typeToConvert, RangeFactoryOpenType)!;
+        var args   = iface.GetGenericArguments(); // TRange, T in IRangeFactory<TRange, T>
+        var union  = args[0];
+        var tArg   = args[1];
+
+        // The union's sealed variants inherit its IRangeFactory interface but do not satisfy
+        // TRange : IRangeFactory<TRange, T> themselves, so they take the narrowing converter.
+        var rangeConverter = union == typeToConvert
+                                 ? typeof(RangeJsonConverter<,>).MakeGenericType(typeToConvert, tArg)
+                                 : typeof(RangeVariantJsonConverter<,,>).MakeGenericType(typeToConvert, union, tArg);
+
         return (JsonConverter)Activator.CreateInstance(rangeConverter)!;
     }
 
