@@ -6,9 +6,10 @@ namespace CodoMetis.ValueRanges.Serialization;
 
 /// <summary>
 /// A <see cref="JsonConverterFactory"/> that automatically handles any type that implements
-/// <see cref="IRangeFactory{TRange,T}"/> or is a <see cref="RangeSet{TRange,T}"/>.
-/// Register once via <see cref="JsonSerializerOptions.Converters"/> to cover all range and
-/// range set types without adding per-type converters explicitly.
+/// <see cref="IRangeFactory{TRange,T}"/> or <see cref="IValueSetFactory{TSet,T}"/>, or is a
+/// <see cref="RangeSet{TRange,T}"/>. Register once via
+/// <see cref="JsonSerializerOptions.Converters"/> to cover all range, range set, and value set
+/// types without adding per-type converters explicitly.
 /// </summary>
 /// <example>
 /// <code>
@@ -19,12 +20,13 @@ namespace CodoMetis.ValueRanges.Serialization;
 /// </example>
 public sealed class RangeJsonConverterFactory : JsonConverterFactory
 {
-    private static readonly Type RangeSetOpenType    = typeof(RangeSet<,>);
-    private static readonly Type RangeFactoryOpenType = typeof(IRangeFactory<,>);
+    private static readonly Type RangeSetOpenType        = typeof(RangeSet<,>);
+    private static readonly Type RangeFactoryOpenType    = typeof(IRangeFactory<,>);
+    private static readonly Type ValueSetFactoryOpenType = typeof(IValueSetFactory<,>);
 
     /// <inheritdoc />
     public override bool CanConvert(Type typeToConvert)
-        => IsRangeSet(typeToConvert) || IsRangeType(typeToConvert);
+        => IsRangeSet(typeToConvert) || IsRangeType(typeToConvert) || IsValueSetType(typeToConvert);
 
     /// <inheritdoc />
     public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
@@ -36,7 +38,14 @@ public sealed class RangeJsonConverterFactory : JsonConverterFactory
             return (JsonConverter)Activator.CreateInstance(converterType)!;
         }
 
-        var iface   = GetRangeFactoryInterface(typeToConvert)!;
+        if (GetFactoryInterface(typeToConvert, ValueSetFactoryOpenType) is { } setIface)
+        {
+            var elementType  = setIface.GetGenericArguments()[1]; // T in IValueSetFactory<TSet, T>
+            var setConverter = typeof(ValueSetJsonConverter<,>).MakeGenericType(typeToConvert, elementType);
+            return (JsonConverter)Activator.CreateInstance(setConverter)!;
+        }
+
+        var iface   = GetFactoryInterface(typeToConvert, RangeFactoryOpenType)!;
         var tArg    = iface.GetGenericArguments()[1]; // T in IRangeFactory<TRange, T>
         var rangeConverter = typeof(RangeJsonConverter<,>).MakeGenericType(typeToConvert, tArg);
         return (JsonConverter)Activator.CreateInstance(rangeConverter)!;
@@ -46,11 +55,14 @@ public sealed class RangeJsonConverterFactory : JsonConverterFactory
         => t.IsGenericType && t.GetGenericTypeDefinition() == RangeSetOpenType;
 
     private static bool IsRangeType(Type t)
-        => GetRangeFactoryInterface(t) is not null;
+        => GetFactoryInterface(t, RangeFactoryOpenType) is not null;
 
-    private static Type? GetRangeFactoryInterface(Type t)
+    private static bool IsValueSetType(Type t)
+        => GetFactoryInterface(t, ValueSetFactoryOpenType) is not null;
+
+    private static Type? GetFactoryInterface(Type t, Type openFactoryType)
         => Array.Find(t.GetInterfaces(),
-            i => i.IsGenericType && i.GetGenericTypeDefinition() == RangeFactoryOpenType);
+            i => i.IsGenericType && i.GetGenericTypeDefinition() == openFactoryType);
 }
 
 /// <summary>
@@ -59,7 +71,8 @@ public sealed class RangeJsonConverterFactory : JsonConverterFactory
 public static class RangeJsonSerializerOptionsExtensions
 {
     /// <summary>
-    /// Registers a <see cref="RangeJsonConverterFactory"/> that handles all range and range set types.
+    /// Registers a <see cref="RangeJsonConverterFactory"/> that handles all range, range set,
+    /// and value set types.
     /// </summary>
     public static JsonSerializerOptions AddRangeConverters(this JsonSerializerOptions options)
     {
