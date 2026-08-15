@@ -9,7 +9,7 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
-## [Unreleased]
+## [6.2.0] — 2026-08-16
 
 ### Changed
 
@@ -215,6 +215,7 @@ Initial release: the six PostgreSQL range domains as discriminated unions of fiv
 (`Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`), the interval algebra, and
 `RangeSet<TRange, T>` as an always-normalized multirange.
 
+[6.2.0]: https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/releases/tag/v6.2.0
 [6.1.0]: https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/releases/tag/v6.1.0
 [6.0.0]: https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/releases/tag/v6.0.0
 [5.0.0]: https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/releases/tag/v5.0.0

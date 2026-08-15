@@ -3,6 +3,22 @@
 Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.2.0] — 2026-08-16
+
+No source change in this package, but its behaviour changes with the packages it depends on.
+
+### Changed
+
+- **`Count` over a union reached through `Remove` is now refused rather than counted twice.** The
+  NodaTime set types are translated by the base plugin's member translator, not one of their own,
+  so `Holidays.Union(other).Remove(d).Count` had the same defect: `array_remove` preserves
+  canonical form rather than establishing it, so `cardinality` ran over a concatenation and
+  counted shared elements twice. Fixed in `CodoMetis.ValueRanges.EFCore.PostgreSQL` 6.2.0 and
+  inherited here. In a predicate the expression now fails translation; in a projection it falls
+  back to client evaluation and answers correctly.
+- **⚠️ A null NodaTime range now reads back as `null` instead of throwing** — see
+  `CodoMetis.ValueRanges.NodaTime` 6.2.0.
+
 ## [6.1.0] — 2026-08-15
 
 Version-alignment release — no changes to this package. 6.1.0 was a System.Text.Json audit

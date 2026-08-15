@@ -45,6 +45,15 @@ DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a
 
 The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](#entity-framework-core-postgresql) for how that round-trips.
 
+## What's new in v6.2
+
+**Two defects found by an audit, both of which had been documented as correct.** That is what made them survive review: reading the code confirmed the comment, and the comment was the bug. Neither changes an outcome that was previously right.
+
+- **⚠️ A null range now reads back as `null` instead of throwing.** A null `Int32Range?` property serialized to `{"Seats":null}` and threw `JsonException` on the way back in — the package could not read a document it had just written, so an API could return a body it was unable to accept. `null` is now left to System.Text.Json in both directions, as `RangeSet` and the value sets always did. `null` and the empty range stay distinct: absent is `null`, empty is the literal `"empty"`. **If you relied on the exception to reject a null where a non-nullable range was expected, that validation is gone** — the property now receives `null`, as any other reference-typed property would. Malformed literals are still rejected. Applies to the NodaTime ranges too, which serialize through the same factory.
+- **`Count` over a union reached through `Remove` counted shared elements twice.** `Union` translates to `array_cat`, which concatenates, so `Count` over a server-computed union has always been refused — but the check matched only the outermost call, and `array_remove` *preserves* canonical form rather than establishing it. Against live PostgreSQL, `{a,c}` unioned with `{a,b}` answered **4** where the in-memory expression is `{a,b,c}` — 3. **A query that previously ran now behaves differently:** in a predicate it fails translation rather than filtering on an inflated number, and in a projection it falls back to client evaluation and returns the correct count.
+
+Also in this release, for every package: symbol packages (`.snupkg`) and Source Link, so you can step into the code you are running and confirm it was built from the commit it claims; deterministic builds; and a CycloneDX SBOM per release. `CodoMetis.ValueRanges` and `CodoMetis.ValueRanges.EFCore.PostgreSQL` now ship their own package READMEs instead of this one.
+
 ## What's new in v6.1
 
 **A JSON audit, and three defects it found.** All three shared one shape: System.Text.Json fell back to reflection where the library expected a converter, and the result was silence rather than an exception. Nothing that previously worked changes — every fix replaces a crash or a wrong answer.

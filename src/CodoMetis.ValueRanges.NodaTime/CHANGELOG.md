@@ -3,6 +3,20 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.2.0] — 2026-08-16
+
+No source change in this package, but its behaviour changes with the core package it depends on.
+
+### Changed
+
+- **⚠️ A null NodaTime range now reads back as `null` instead of throwing.** The range types here
+  serialize through the core `RangeJsonConverterFactory` rather than converters of their own, so
+  `LocalDateRange?`, `LocalDateTimeRange?`, `InstantRange?` and `YearMonthRange?` all had the core
+  package's asymmetry: the property wrote as `null` and threw `JsonException` on the way back in.
+  Fixed in `CodoMetis.ValueRanges` 6.2.0 and inherited here. `null` and `"empty"` stay distinct.
+  **If you relied on the exception to reject a null where a non-nullable range was expected, that
+  validation is gone.**
+
 ## [6.1.0] — 2026-08-15
 
 ### Fixed
