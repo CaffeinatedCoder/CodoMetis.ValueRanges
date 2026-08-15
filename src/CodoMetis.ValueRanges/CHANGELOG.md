@@ -3,6 +3,19 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [Unreleased]
+
+### Changed
+
+- **⚠️ A null range now reads back as `null` instead of throwing.** Writing a null `Int32Range?`
+  property emitted `{"Seats":null}`, and reading that same document threw `JsonException` — the
+  package could not read a payload it had just written, so an ASP.NET Core API could return a body
+  it was unable to accept. `null` is now left to System.Text.Json in both directions, as for any
+  other reference type, matching what `RangeSet` and the value sets already did. `null` and the
+  empty range stay distinct: absent is `null`, empty is the literal `"empty"`. **If you relied on
+  the exception to reject a null where a non-nullable range was expected, that validation is
+  gone.** Malformed literals are still rejected.
+
 ## [6.1.0] — 2026-08-15
 
 ### Fixed

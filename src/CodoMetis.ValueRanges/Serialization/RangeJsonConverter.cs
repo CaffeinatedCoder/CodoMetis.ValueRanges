@@ -11,8 +11,20 @@ namespace CodoMetis.ValueRanges.Serialization;
 /// <c>"empty"</c>, or <c>"(,)"</c>.
 /// </summary>
 /// <remarks>
-/// Reads reject a null token so that <c>null</c> is never silently confused with the empty
-/// range; writes emit <c>null</c> for a null reference, as any other converter would.
+/// <para>
+/// <c>null</c> is left to System.Text.Json in both directions, as for any other reference type:
+/// a null property writes as <c>null</c> and reads back as <c>null</c>. It stays distinct from
+/// the empty range, which is the literal <c>"empty"</c> — an absent value and an empty interval
+/// are different facts and have different wire forms.
+/// </para>
+/// <para>
+/// This converter previously declared <c>HandleNull</c> so that <see cref="Read"/> could reject
+/// a null token with a directed message. The cost was that the package could not read a document
+/// it had just written: a null <c>Int32Range?</c> property serialized to <c>null</c> and threw
+/// <see cref="JsonException"/> on the way back in, so an API could return a payload it was unable
+/// to accept. The message was not worth that, and it guarded against a confusion the obvious
+/// behaviour does not create — reading null yields null, never the empty range.
+/// </para>
 /// </remarks>
 /// <typeparam name="TRange">The concrete range type.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
@@ -20,20 +32,9 @@ public class RangeJsonConverter<TRange, T> : JsonConverter<TRange>
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
-    /// <summary>
-    /// <see langword="true"/> so that <see cref="Read"/> sees the null token and can reject it
-    /// with a directed message. This also routes null values into <see cref="Write"/>, which
-    /// writes them out as <c>null</c>.
-    /// </summary>
-    public override bool HandleNull => true;
-
     /// <inheritdoc />
     public override TRange Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonTokenType.Null)
-            throw new JsonException(
-                $"Expected a JSON string for {typeof(TRange).Name}, got null. Use \"empty\" to represent an empty range.");
-
         var s = reader.GetString()
              ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TRange).Name} value.");
 
@@ -46,8 +47,9 @@ public class RangeJsonConverter<TRange, T> : JsonConverter<TRange>
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
     {
-        // HandleNull routes nulls here too: a nullable range property must write as null
-        // rather than dereferencing.
+        // System.Text.Json writes null itself and does not call this converter for it. The guard
+        // is kept so that re-declaring HandleNull could never reintroduce the dereference it
+        // caused before 6.1.0.
         if (value is null)
         {
             writer.WriteNullValue();
@@ -83,16 +85,9 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
-    /// <inheritdoc cref="RangeJsonConverter{TRange,T}.HandleNull"/>
-    public override bool HandleNull => true;
-
     /// <inheritdoc />
     public override TVariant Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonTokenType.Null)
-            throw new JsonException(
-                $"Expected a JSON string for {typeof(TVariant).Name}, got null. Use \"empty\" to represent an empty range.");
-
         var s = reader.GetString()
              ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TVariant).Name} value.");
 

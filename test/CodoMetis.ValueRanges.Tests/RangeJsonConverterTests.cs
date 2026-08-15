@@ -108,14 +108,36 @@ public class RangeJsonConverterTests
         Assert.AreEqual(new DateOnly(2024, 12, 31), finite.End);
     }
 
-    [TestMethod]
-    public void Deserialize_NullJson_ThrowsJsonException()
-        => Assert.ThrowsExactly<JsonException>(
-            () => JsonSerializer.Deserialize<Int32Range>("null", Options));
+    // -----------------------------------------------------------------------
+    // null round-trips as null, and stays distinct from the empty range
+    // -----------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------
-    // Null writes — HandleNull routes nulls into Write as well as Read
-    // -----------------------------------------------------------------------
+    [TestMethod]
+    public void Deserialize_NullJson_ReturnsNull()
+        => Assert.IsNull(JsonSerializer.Deserialize<Int32Range>("null", Options));
+
+    [TestMethod]
+    public void NullRangeProperty_RoundTrips()
+    {
+        // The defect this replaces: the property wrote as null and threw on the way back in,
+        // so an API could return a payload it was unable to accept.
+        var json = JsonSerializer.Serialize(new NullableHolder(null), Options);
+
+        Assert.AreEqual("{\"Range\":null}", json);
+        Assert.IsNull(JsonSerializer.Deserialize<NullableHolder>(json, Options)!.Range);
+    }
+
+    [TestMethod]
+    public void NullAndEmpty_StayDistinctAcrossARoundTrip()
+    {
+        // Absent and empty are different facts, and reading null as null does not blur them —
+        // which was the stated reason for rejecting the null token.
+        var withNull  = JsonSerializer.Deserialize<NullableHolder>("{\"Range\":null}", Options)!;
+        var withEmpty = JsonSerializer.Deserialize<NullableHolder>("{\"Range\":\"empty\"}", Options)!;
+
+        Assert.IsNull(withNull.Range);
+        Assert.IsInstanceOfType<Int32Range.EmptyRange>(withEmpty.Range!);
+    }
 
     private sealed record NullableHolder(Int32Range? Range);
 
@@ -303,9 +325,19 @@ public class RangeJsonConverterTests
             () => JsonSerializer.Deserialize<Int32Range.Finite>("\"not-a-range\"", Options));
 
     [TestMethod]
-    public void Deserialize_VariantTyped_Null_ThrowsJsonException()
-        => Assert.ThrowsExactly<JsonException>(
-            () => JsonSerializer.Deserialize<Int32Range.Finite>("null", Options));
+    public void Deserialize_VariantTyped_Null_ReturnsNull()
+        => Assert.IsNull(JsonSerializer.Deserialize<Int32Range.Finite>("null", Options));
+
+    [TestMethod]
+    public void NullVariantProperty_RoundTrips()
+    {
+        var json = JsonSerializer.Serialize(new NullableVariantHolder(null), Options);
+
+        Assert.AreEqual("{\"Range\":null}", json);
+        Assert.IsNull(JsonSerializer.Deserialize<NullableVariantHolder>(json, Options)!.Range);
+    }
+
+    private sealed record NullableVariantHolder(Int32Range.Finite? Range);
 
     // -----------------------------------------------------------------------
     // Per-type converters (explicit registration)

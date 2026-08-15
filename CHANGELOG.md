@@ -11,6 +11,18 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
 
 ## [Unreleased]
 
+### Changed
+
+- **⚠️ A null range now reads back as `null` instead of throwing.** Writing a null `Int32Range?`
+  property emitted `{"Seats":null}`, and reading that same document threw `JsonException` — the
+  package could not read a payload it had just written, so an ASP.NET Core API could return a
+  body it was unable to accept. `null` is now left to System.Text.Json in both directions, as for
+  any other reference type, matching what `RangeSet` and the value sets already did.
+  `null` and the empty range stay distinct: absent is `null`, empty is the literal `"empty"`.
+  **If you relied on the exception to reject a null where a non-nullable range was expected, that
+  validation is gone** — the property now receives `null`, exactly as any other reference-typed
+  property would. Malformed literals are still rejected.
+
 ### Fixed
 
 - **`Count` over a union wrapped in `Remove` counted shared elements twice.** `Union` translates
