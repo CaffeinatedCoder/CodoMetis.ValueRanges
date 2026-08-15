@@ -1,11 +1,16 @@
 <Solution>
-    <Project Path="CodoMetis.ValueRanges.EFCore.PostgreSQL\CodoMetis.ValueRanges.EFCore.PostgreSQL.csproj" />
-    <Project Path="CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.csproj" />
-    <Project Path="CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.csproj" />
-    <Project Path="CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests.csproj" />
-    <Project Path="CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests.csproj" />
-    <Project Path="CodoMetis.ValueRanges.NodaTime/CodoMetis.ValueRanges.NodaTime.csproj" />
-    <Project Path="CodoMetis.ValueRanges.NodaTime.Tests/CodoMetis.ValueRanges.NodaTime.Tests.csproj" />
-    <Project Path="CodoMetis.ValueRanges.Tests/CodoMetis.ValueRanges.Tests.csproj" />
-    <Project Path="CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj" />
+    <Folder Name="/src/">
+        <Project Path="src/CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj" />
+        <Project Path="src/CodoMetis.ValueRanges.NodaTime/CodoMetis.ValueRanges.NodaTime.csproj" />
+        <Project Path="src/CodoMetis.ValueRanges.EFCore.PostgreSQL/CodoMetis.ValueRanges.EFCore.PostgreSQL.csproj" />
+        <Project Path="src/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.csproj" />
+    </Folder>
+    <Folder Name="/test/">
+        <Project Path="test/CodoMetis.ValueRanges.Tests/CodoMetis.ValueRanges.Tests.csproj" />
+        <Project Path="test/CodoMetis.ValueRanges.NodaTime.Tests/CodoMetis.ValueRanges.NodaTime.Tests.csproj" />
+        <Project Path="test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests.csproj" />
+        <Project Path="test/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests.csproj" />
+        <Project Path="test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.csproj" />
+        <Project Path="test/CodoMetis.ValueRanges.Conventions.Tests/CodoMetis.ValueRanges.Conventions.Tests.csproj" />
+    </Folder>
 </Solution>

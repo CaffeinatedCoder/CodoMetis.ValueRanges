@@ -51,7 +51,7 @@ The two are not interchangeable, and the compiler will not let them be confused.
 
 - **⚠️ Value set elements without a converter now serialize as their text form, not as an object.** This is the one visible payload change. A validated wrapper — `StringSet<PermissionKey>`, `GuidSet<TenantId>`, … — whose element type carries no `[JsonConverter]` used to be handed to System.Text.Json's reflection path, which wrote `[{"Value":"users.read"}]`, or `[{}]` for the generator-typical shape of a record struct over a private field. The `[{}]` form destroyed data on read; both disagreed with the `{users.read}` stored in PostgreSQL. Elements now go through the family's own text form — `["users.read"]` for string- and Guid-backed sets, `[1,2]` for integer-backed ones, identical to the primitive each wraps — and reads re-run the element's `IParsable` validation. **If you serialize such a set and have persisted or published the old object form, that payload shape changes.** Registering a converter for the element type (on the options, the property, or the type) overrides this, exactly as before.
 - **The same fix reaches the NodaTime sets**, which had the identical failure — `[{"Calendar":{…},"Year":2024,…}]` on write, `default` on read. `AddRangeConverters()` alone is now enough; the satellite additionally exposes `AddNodaTimeRangeConverters()` for bare NodaTime values sitting *next to* a set, which the element hook does not reach. Composes with `ConfigureForNodaTime` in either registration order.
-- **Nullable range properties no longer throw.** `HandleNull` routed nulls into the write path, which dereferenced them: serializing an object with a null `Int32Range?` threw `NullReferenceException`. It writes `null`. Reads still reject a null token — use `"empty"`.
+- **Nullable range properties no longer throw.** `HandleNull` routed nulls into the write path, which dereferenced them: serializing an object with a null `Int32Range?` threw `NullReferenceException`. It writes `null`. *(Reads rejected a null token in 6.1.0; since then they return `null` — see [JSON Serialization](#json-serialization).)*
 - **Ranges reached through `object` no longer throw.** `Serialize<object>(range)`, an `object`-typed property and heterogeneous collections all present the union's sealed variant, for which the converter could not be constructed — a reflection `ArgumentException` escaped. Variants now serialize to the same literal, and reads into a variant-typed declaration reject a literal of the wrong shape.
 
 New API: `IValueSetFactory<TSet, T>.ElementJsonConverter` (a defaulted virtual static; the interface is closed to external implementation), `RangeVariantJsonConverter<TVariant, TRange, T>`, and `AddNodaTimeRangeConverters()`.
@@ -718,7 +718,9 @@ var dates = JsonSerializer.Serialize(
 // "\"[2025-01-01,2025-12-31]\""
 ```
 
-A null JSON *token* is rejected on read with `JsonException` — use the literal `"empty"` for the empty range, so that a missing value and an empty range never collapse into each other. A null *reference* writes as `null`, so `Int32Range?` properties serialize the way any other nullable property does.
+`null` round-trips as `null`, in both directions and for every type here — ranges, variants, `RangeSet` and the value sets — exactly as any other reference-typed property does. It stays distinct from the empty range, which is the literal `"empty"`: a missing value and an empty interval are different facts with different wire forms, and neither is read as the other. A malformed literal is still rejected with `JsonException`.
+
+> Before 6.2, the range converters rejected a null *token* on read while writing `null` on the way out — so a payload the package produced could not be read back. If you depended on that exception to reject a null where a non-nullable range was expected, the property now receives `null` instead.
 
 The union's sealed variants serialize to the same literal, so a range reached through `object` — a boxed value, an `object`-typed property, a heterogeneous collection — is not a special case:
 
@@ -746,7 +748,7 @@ var options = new JsonSerializerOptions().AddRangeConverters();
 JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)), options);   // ["2024-01-01"]
 ```
 
-The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](CodoMetis.ValueRanges.NodaTime/README.md#json).
+The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](src/CodoMetis.ValueRanges.NodaTime/README.md#json).
 
 ## Interface Overview
 
@@ -1014,7 +1016,15 @@ The library's core promise — identical results in memory and as SQL — is enf
 
 The live suite is the authority on semantics, and the model bends to it rather than the other way around: it is what established the discrete `upper()` canonicalization compensation and PostgreSQL's directional multirange adjacency rule documented above — before any user could trip over them. The NodaTime satellite types run through the same three layers, including the `Instant` sub-microsecond precision reduction and the `±infinity` boundary mapping.
 
-All three layers run in CI on every push and pull request — the badge at the top of this page is the current state of the whole suite, live database included.
+All three layers run in CI on every push and pull request — the badge at the top of this page is the current state of the whole suite, live database included. A fourth, repo-level layer checks the things that compile and pack cleanly and only fail once a package is installed: that every shipped version is documented, that each package ships its own README, and that the value set contracts above hold for every set type that exists.
+
+## Contributing and project practices
+
+Bug reports and pull requests are welcome — [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup and the quality bar this package holds itself to. Security reports go privately through [SECURITY.md](SECURITY.md).
+
+Packages are published through GitHub Actions Trusted Publishing, carry Source Link metadata and symbol packages, and ship a CycloneDX SBOM per release.
+
+A substantial portion of this codebase was written with AI assistance, under maintainer direction and review. [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-development) explains what that means in practice, and how every change is verified before it ships.
 
 ## License
 

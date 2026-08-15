@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PackageId>CodoMetis.ValueRanges</PackageId>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <Description>In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (int4range, int8range, numrange, daterange, tsrange, tstzrange) plus TimeRange over TimeOnly — the time-of-day range PostgreSQL users conventionally add as CREATE TYPE timerange AS RANGE (subtype = time). Each type is a discriminated union of five sealed variants (Finite, UnboundedStart, UnboundedEnd, EmptyRange, Infinity) with invalid states unrepresentable at compile time.
+
+Includes the full PostgreSQL interval algebra — Contains, Overlaps, IsAdjacentTo, Intersect, Union, Except, Complement, Merge (range_merge), bound accessors (lower/upper/lower_inc/upper_inc), and the RangeAgg/RangeIntersectAgg aggregates — plus RangeSet&lt;TRange, T&gt; as an immutable, always-normalized multirange with the complete multirange operator matrix.
+
+v6 adds value sets: immutable, canonical (deduplicated, sorted, null-free) sets of scalar values whose PostgreSQL storage shape is a native array — StringSet (text[]), GuidSet (uuid[]), Int16Set/Int32Set/Int64Set, DecimalSet, DateSet, TimeSet, DateTimeSet, DateTimeOffsetSet — plus validated-wrapper arities (StringSet&lt;T&gt;, GuidSet&lt;T&gt;, Int32Set&lt;T&gt;, Int64Set&lt;T&gt;) for Vogen/Metalama/StronglyTypedId-style domain values, constrained only on BCL interfaces. Membership algebra (Contains, Overlaps, IsSubsetOf, IsSupersetOf, Union), PostgreSQL array literals, and collection expressions included.
+
+All types implement IParsable&lt;T&gt; and IFormattable using PostgreSQL literal syntax, and ship with System.Text.Json converters for direct use in ASP.NET Core APIs. No database dependency.</Description>
+        <PackageTags>range;interval;multirange;postgresql;postgres;int4range;int8range;numrange;daterange;tsrange;tstzrange;discriminated-union;set-operations;json-serialization;iparsable;iformattable;value-types;ddd;value-set;set;array;text-array</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="CodoMetis.ValueRanges.NodaTime" />
+    </ItemGroup>
+</Project>

@@ -8,15 +8,20 @@ Since v6 there is a second type family: **value sets** (`Sets/`) — immutable, 
 .NET 10 · C# 14 (extension methods) · MSTest 4.x · EF Core + Npgsql (PostgreSQL bridge)
 
 ## Structure
-- `CodoMetis.ValueRanges/` — Core library: range types, interfaces, set ops
-- `CodoMetis.ValueRanges.NodaTime/` — NodaTime satellite: LocalDateRange, LocalDateTimeRange, InstantRange (namespace stays `CodoMetis.ValueRanges`; uses core internals via InternalsVisibleTo)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL/` — EF Core provider for LINQ-to-SQL translation
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/` — EF satellite: registers NodaTime RangeTypeDefinitions, `UseValueRangesNodaTime()`
-- `CodoMetis.ValueRanges.Tests/` — Unit tests (one file per operation)
-- `CodoMetis.ValueRanges.NodaTime.Tests/` — NodaTime satellite unit tests
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without, but hard failure under CI=true). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
+Shipping projects live under `src/`, test projects under `test/`. Never hard-code a positional
+path (`../../`) to reach the repo root — walk up to the `CodoMetis.ValueRanges.slnx` marker file,
+so moving a project cannot silently retarget a test.
+
+- `src/CodoMetis.ValueRanges/` — Core library: range types, interfaces, set ops
+- `src/CodoMetis.ValueRanges.NodaTime/` — NodaTime satellite: LocalDateRange, LocalDateTimeRange, InstantRange (namespace stays `CodoMetis.ValueRanges`; uses core internals via InternalsVisibleTo)
+- `src/CodoMetis.ValueRanges.EFCore.PostgreSQL/` — EF Core provider for LINQ-to-SQL translation
+- `src/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/` — EF satellite: registers NodaTime RangeTypeDefinitions, `UseValueRangesNodaTime()`
+- `test/CodoMetis.ValueRanges.Tests/` — Unit tests (one file per operation)
+- `test/CodoMetis.ValueRanges.NodaTime.Tests/` — NodaTime satellite unit tests
+- `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
+- `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
+- `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without, but hard failure under CI=true). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
+- `test/CodoMetis.ValueRanges.Conventions.Tests/` — Repo-level conventions: changelog consistency, packaging metadata, value set contract compliance, EF mapping parity. Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
 - `docs/` — Agent docs (read relevant doc before starting work)
 
 ## Commands
@@ -25,14 +30,21 @@ dotnet build                          # Build everything
 dotnet test                           # Run all tests
 dotnet test --filter "ClassName=RangeContainsTests"   # Single test class
 dotnet test --filter "FullyQualifiedName~Contains_FiniteRange"  # Single method
-dotnet pack                           # Pack NuGet packages
+dotnet build -c Release && dotnet pack -c Release --no-build   # Pack NuGet packages
 ```
+
+`dotnet pack` on its own fails with `NU5026`: `GeneratePackageOnBuild` makes pack race the
+compile. Build first, then pack with `--no-build`.
 
 ## Workflow
 1. Read `docs/architecture.md` before modifying range types or interfaces
 2. Explore the codebase — range operations are per-shape (Finite, UnboundedStart, etc.)
 3. Run `dotnet test` after each change; tests are method-level parallel
-4. Commit with conventional format: `feat:`, `fix:`, `refactor:`, `docs:`
+4. **Prove every fix by reverting it.** Strip only the fix, confirm the new test fails for the
+   expected reason, restore. A test that passes with and without the fix is not a regression
+   test — and one written against broken code can assert nothing at all without looking any
+   different. The same applies to a new convention test: seed the defect it claims to catch
+5. Commit with conventional format: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `build:`
 
 ## Docs
 - `docs/architecture.md` — Discriminated union pattern, interface hierarchy, RangeSet internals

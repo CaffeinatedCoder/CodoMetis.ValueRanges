@@ -1,5 +1,10 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+# Build and test on every push to main and every PR.
+#
+# Split by test project rather than by category: the integration suite is its own project and
+# needs Docker, so it runs on Linux only, while everything else runs on all three runner OSes.
+#
+# For information on GitHub Actions with .NET, see:
+# https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
 
 name: .NET
 
@@ -8,20 +13,171 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+# A new push to a PR makes the in-flight run pointless; main is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
 jobs:
-  build:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      # The matrix earns its keep on the conventions project, which does real path work —
+      # locating the repository by its .slnx marker, globbing src/, reading csproj and changelog
+      # files — and that is where separator handling differs between Windows and the Unix runners.
+      #
+      # Everything except the integration project, which is the next job.
+      - name: Unit and convention tests
+        run: |
+          for project in test/*/; do
+            case "$project" in
+              *IntegrationTests/) continue ;;
+            esac
+            echo "==> $project"
+            dotnet test "$project" -c Release --no-build \
+              --logger "trx;LogFileName=$(basename "$project")-${{ matrix.os }}.trx" \
+              --results-directory TestResults
+          done
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  integration:
+    name: Integration (live PostgreSQL)
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v6
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: 10.0.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    - name: Test
-      run: dotnet test --no-build --verbosity normal
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      # CI=true turns an unavailable container into a failure instead of an inconclusive skip.
+      # Without it a broken Docker setup would retire the layer that is the authority on
+      # PostgreSQL semantics, and the build would still report green.
+      - name: Integration tests
+        env:
+          CI: true
+        run: >
+          dotnet test test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests
+          -c Release --no-build
+          --logger "trx;LogFileName=integration.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-results-integration
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  pack:
+    name: Pack
+    runs-on: ubuntu-latest
+    needs: [ test, integration ]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # Packing is itself a check: a package that declares PackageReadmeFile without packing the
+      # file fails here with NU5019.
+      #
+      # Build first, then pack --no-build. A bare `dotnet pack` fails with NU5026 because
+      # GeneratePackageOnBuild makes pack race the compile.
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Pack
+        run: dotnet pack -c Release --no-build -o dist
+
+      # Reads each README back out of the package rather than trusting the property that
+      # declared it — the check that caught two packages shipping the root README.
+      - name: Verify each package ships its own README
+        run: |
+          for package in dist/*.nupkg; do
+            id="$(basename "$package" .nupkg)"
+            heading="$(unzip -p "$package" README.md 2>/dev/null | head -1)"
+            if [[ -z "$heading" ]]; then
+              echo "::error::$id contains no README.md"
+              exit 1
+            fi
+            printf '%-60s %s\n' "$id" "$heading"
+          done
+
+      # Generating here too means a broken SBOM step surfaces on a PR rather than on release day.
+      #
+      # No --exclude-filter: unlike sibling projects, nothing here is referenced with
+      # PrivateAssets=all, so every dependency in the graph is one a consumer actually takes on.
+      # ReleaseWiringConventionTests asserts that stays true.
+      - name: Generate SBOMs
+        run: |
+          dotnet tool restore
+          version="$(dotnet msbuild src/CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj -getProperty:Version)"
+          for directory in src/*/; do
+            id="$(basename "$directory")"
+            dotnet cyclonedx "$directory$id.csproj" \
+              --output dist --filename "$id.$version.cdx.json" --output-format Json \
+              --set-type Library --set-nuget-purl --set-name "$id" --set-version "$version" \
+              --include-project-references
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v6
+        with:
+          name: nupkg
+          path: |
+            dist/*.nupkg
+            dist/*.snupkg
+            dist/*.cdx.json
