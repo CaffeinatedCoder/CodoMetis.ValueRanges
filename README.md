@@ -1014,7 +1014,15 @@ The library's core promise — identical results in memory and as SQL — is enf
 
 The live suite is the authority on semantics, and the model bends to it rather than the other way around: it is what established the discrete `upper()` canonicalization compensation and PostgreSQL's directional multirange adjacency rule documented above — before any user could trip over them. The NodaTime satellite types run through the same three layers, including the `Instant` sub-microsecond precision reduction and the `±infinity` boundary mapping.
 
-All three layers run in CI on every push and pull request — the badge at the top of this page is the current state of the whole suite, live database included.
+All three layers run in CI on every push and pull request — the badge at the top of this page is the current state of the whole suite, live database included. A fourth, repo-level layer checks the things that compile and pack cleanly and only fail once a package is installed: that every shipped version is documented, that each package ships its own README, and that the value set contracts above hold for every set type that exists.
+
+## Contributing and project practices
+
+Bug reports and pull requests are welcome — [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup and the quality bar this package holds itself to. Security reports go privately through [SECURITY.md](SECURITY.md).
+
+Packages are published through GitHub Actions Trusted Publishing, carry Source Link metadata and symbol packages, and ship a CycloneDX SBOM per release.
+
+A substantial portion of this codebase was written with AI assistance, under maintainer direction and review. [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-development) explains what that means in practice, and how every change is verified before it ships.
 
 ## License
 
