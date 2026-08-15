@@ -11,5 +11,6 @@
         <Project Path="test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests.csproj" />
         <Project Path="test/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests.csproj" />
         <Project Path="test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.csproj" />
+        <Project Path="test/CodoMetis.ValueRanges.Conventions.Tests/CodoMetis.ValueRanges.Conventions.Tests.csproj" />
     </Folder>
 </Solution>
