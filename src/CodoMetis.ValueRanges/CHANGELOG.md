@@ -1,0 +1,137 @@
+# Changelog — CodoMetis.ValueRanges
+
+Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
+covers all four packages, which share one version number and release together.
+
+## [6.1.0] — 2026-08-15
+
+### Fixed
+
+- **Value set elements without a converter serialized as objects.** A validated wrapper —
+  `StringSet<PermissionKey>`, `GuidSet<TenantId>`, … — whose element type carried no
+  `[JsonConverter]` was handed to System.Text.Json's reflection path, which wrote
+  `[{"Value":"users.read"}]`, or `[{}]` for the generator-typical record struct over a private
+  field. The `[{}]` form destroyed data on read, and both disagreed with the `{users.read}` stored
+  in PostgreSQL. Elements now go through the family's own text form, and reads re-run the element's
+  `IParsable` validation. **Payload change:** string- and Guid-backed sets now write
+  `["users.read"]`, integer-backed ones write `[1,2]` — indistinguishable from the primitive each
+  wraps. A registered converter still wins.
+- **Nullable range properties threw.** `HandleNull` routed nulls into the write path, which
+  dereferenced them: serializing an object with a null `Int32Range?` threw
+  `NullReferenceException`. It now writes `null`. Reads still reject a null token — use `"empty"`.
+- **Ranges reached through `object` threw.** `Serialize<object>(range)`, an `object`-typed property
+  and heterogeneous collections all present the union's sealed variant, for which the converter
+  could not be constructed, and a reflection `ArgumentException` escaped.
+
+### Added
+
+- `IValueSetFactory<TSet, T>.ElementJsonConverter` — a defaulted virtual static hook consulted only
+  when the element type has no registered converter. The interface stays closed to external
+  implementation.
+- `RangeVariantJsonConverter<TVariant, TRange, T>`.
+
+## [6.0.0] — 2026-08-14
+
+### Added
+
+- **Value sets — a second type family:** immutable, canonical (deduplicated, sorted, null-free)
+  sets of scalar values whose PostgreSQL storage shape is a native array. Ten closed types —
+  `StringSet`, `GuidSet`, `Int16Set`, `Int32Set`, `Int64Set`, `DecimalSet`, `DateSet`, `TimeSet`,
+  `DateTimeSet`, `DateTimeOffsetSet` — plus the validated-wrapper arities `StringSet<T>`,
+  `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>` for generator-produced domain values, constrained only
+  on BCL interfaces so domain types never reference this package.
+- **Membership algebra** — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`,
+  `IsProperSubsetOf`, `IsProperSupersetOf`, `Union`, `Remove`, `Count`, `IsEmpty`, plus
+  client-side-only `Intersect`, `Except` and `Add` (PostgreSQL's array type has no intersection,
+  difference or sorted insert) — with array literals, JSON support and collection expressions.
+
+No breaking changes; the major marks the package growing a second type family.
+
+## [5.0.0] — 2026-08-13
+
+### Added
+
+- **`TimeRange`** — a time-of-day range over `TimeOnly`, matching the most common custom range type
+  in PostgreSQL practice (`CREATE TYPE timerange AS RANGE (subtype = time)`). Continuous and
+  half-open by default, so `[09:00, 12:00)` and `[12:00, 17:00)` compose the way shifts do; a
+  window crossing midnight is two ranges, which `RangeSet` represents naturally.
+
+No breaking changes.
+
+## [4.1.0] — 2026-08-12
+
+Version-alignment release — no changes to this package. The NodaTime satellites were introduced in
+4.1.0; see the [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md).
+
+## [4.0.0] — 2026-08-10
+
+### Added
+
+- **Bound accessors** — `LowerBound()`/`UpperBound()` returning `T?` with PostgreSQL's `NULL`
+  semantics, and `LowerBoundInclusive()`/`UpperBoundInclusive()` mirroring `lower_inc`/`upper_inc`,
+  on ranges and on `RangeSet`.
+- **`Merge`** — the smallest single range spanning both operands including any gap.
+- **Aggregates** — `RangeAgg()` and `RangeIntersectAgg()` over sequences of ranges.
+- **Multirange operator parity** — `Contains`, `Overlaps`, `IsAdjacentTo`,
+  `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` on `RangeSet`, plus `IsEmpty()`,
+  `IsUnboundedStart()`, `IsUnboundedEnd()`.
+
+### Changed
+
+- **Breaking — `==`/`!=` on `RangeSet` is now structural equality**, consistent with the range
+  records and with the SQL `=` the EF provider generates. Call sites relying on reference identity
+  must switch to `ReferenceEquals`.
+- **Breaking — `DoesNotExtendRightOf`/`LeftOf` now match PostgreSQL for infinite bounds.** An
+  infinite bound compares equal to another infinite bound (`+∞ ≤ +∞`), so an unbounded receiver no
+  longer always returns `false`. Results against finite-bounded or empty operands are unchanged.
+
+### Fixed
+
+- `RangeSet.Infinite.Contains(range)` and `.Overlaps(range)` threw `InvalidOperationException` for
+  operands with a finite bound.
+
+## [3.1.0] — 2026-06-17
+
+### Changed
+
+- **Performance** — `RangeSet<TRange, T>` now exploits its sorted, disjoint, non-adjacent
+  invariant: `Contains`/`Overlaps` go from O(n) to O(log n), `Union`/`Intersect`/`Except` become
+  merge-joins over two pre-sorted streams, `Except` from `Infinite` becomes a single-pass
+  complement walk, and single-element `From` takes a zero-allocation fast path. No public API or
+  result changed.
+
+### Added
+
+- `RangeSet<TRange, T>.LowerBoundComparer`, exposing the set's internal lower-bound ordering as a
+  public `IComparer<TRange>` singleton (also `RangeLowerBoundComparer<TRange, T>.Instance`).
+
+### Fixed
+
+- Quoted range bounds now unescape `\"` → `"` and `\\` → `\` on parse, so element types whose
+  stringification contains quotes or backslashes round-trip correctly.
+
+## [3.0.0] — 2026-06-11
+
+### Changed
+
+- **Breaking — the state checks are extension methods, not extension properties.** `IsEmpty`,
+  `IsFinite`, `IsInfinity`, `IsUnboundedStart` and `IsUnboundedEnd` need parentheses at every call
+  site. Extension properties cannot appear in LINQ expression trees, which blocked SQL
+  translation; as methods they translate.
+
+## [2.0.0] — 2026-06-11
+
+### Added
+
+- `Parse`/`TryParse` and `ToString` support for PostgreSQL range literals.
+
+### Changed
+
+- **Breaking — `ToString()` returns a PostgreSQL range literal** (`[1,10]`) rather than the default
+  C# record representation. Code depending on the old format must be updated.
+
+## [1.0.0] — 2026-06-10
+
+Initial release: the six PostgreSQL range domains as discriminated unions of five sealed variants
+(`Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`), the interval algebra, and
+`RangeSet<TRange, T>` as an always-normalized multirange.
