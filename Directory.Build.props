@@ -7,5 +7,21 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageProjectUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</PackageProjectUrl>
         <RepositoryUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
     </PropertyGroup>
-</Project> 
+
+    <!-- Provenance: a consumer stepping into this code gets the exact source it is running.
+         Source Link ships in the SDK, so no PackageReference is needed. -->
+    <PropertyGroup>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <!-- CI only: normalizes source paths for a reproducible build, which is right for a
+         published package and breaks local step-into debugging. -->
+    <PropertyGroup Condition="'$(CI)' == 'true' or '$(CI)' == '1'">
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    </PropertyGroup>
+</Project>
