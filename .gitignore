@@ -1,8 +1,26 @@
+# Build output
 bin/
 obj/
 /packages/
+/artifacts/
+
+# Pack / publish output
+dist/
+
+# Test output
+TestResults/
+*.trx
+*.coverage
+coverage*.xml
+
+# IDE / tooling
+.idea/
+.vs/
 riderModule.iml
 /_ReSharper.Caches/
+*.DotSettings.user
+.code-review-graph/
+
+# OS
 .DS_Store
-TestResults/
-dist/
+Thumbs.db

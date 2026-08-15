@@ -18,7 +18,7 @@ All types implement IParsable&lt;T&gt; and IFormattable using PostgreSQL literal
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="../README.md" Pack="true" PackagePath="\" />
+        <None Include="../../README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
     <ItemGroup>

@@ -67,7 +67,7 @@ Uses the C# 14 `extension` keyword. Two `extension<T>` blocks:
 1. **Query operations** on `IRange<T>` — state checks (`IsEmpty`, `IsInfinity`, etc.), bound accessors (`LowerBound`/`UpperBound` returning `T?`, `LowerBoundInclusive`/`UpperBoundInclusive` — PostgreSQL `lower`/`upper`/`lower_inc`/`upper_inc`), containment, overlap, adjacency, directional comparisons
 2. **Set operations** on `IRangeFactory<TRange, T>` — `Intersect` (returns `TRange`), `Merge` (convex hull, `range_merge`, returns `TRange`), `Union`/`Except` (return `RangeSet<TRange, T>`)
 
-See `CodoMetis.ValueRanges/RangeExtensions.cs` for the full implementation.
+See `src/CodoMetis.ValueRanges/RangeExtensions.cs` for the full implementation.
 
 ## Aggregates (`RangeAggregateExtensions.cs`)
 
@@ -91,7 +91,7 @@ Key methods:
 - Positional comparisons (`IsAdjacentTo`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf`) mirror PostgreSQL exactly: they consult the **outermost elements only**, and adjacency is **directional through the outer edges** — the operand must end where the set begins or begin where the set ends; interior boundaries (even the inner side of the first/last element) never count. Verified against live PostgreSQL in the integration suite.
 - `LowerBoundComparer` — static `IComparer<TRange>` for external sorting
 
-See `CodoMetis.ValueRanges/RangeSet.cs` and `CodoMetis.ValueRanges/RangeLowerBoundComparer.cs`.
+See `src/CodoMetis.ValueRanges/RangeSet.cs` and `src/CodoMetis.ValueRanges/RangeLowerBoundComparer.cs`.
 
 ## Value Set Types (`Sets/`, v6)
 
@@ -200,7 +200,7 @@ element types an existing converter already claims, which makes it idempotent an
 order-independent against `ConfigureForNodaTime`. Range types are unaffected throughout — they
 format themselves.
 
-## EF Core PostgreSQL (`CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
+## EF Core PostgreSQL (`src/CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
 
 - **`ValueRangesMethodCallTranslator`** — translates LINQ methods to PostgreSQL operators (`@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>`, `-|-`, `*`, `+`, `-`) and functions (`lower`, `upper`, `lower_inc`, `upper_inc`, `isempty`, `lower_inf`, `upper_inf`, `range_merge`), for ranges and multiranges
 - **`ValueRangesAggregateMethodCallTranslator`** — translates `RangeAgg`/`RangeIntersectAgg` to `range_agg`/`range_intersect_agg` inside grouped queries, for every declaring class registered via `RangeTypeRegistry.RegisterAggregateExtensions`

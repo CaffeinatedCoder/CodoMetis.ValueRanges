@@ -8,15 +8,19 @@ Since v6 there is a second type family: **value sets** (`Sets/`) — immutable, 
 .NET 10 · C# 14 (extension methods) · MSTest 4.x · EF Core + Npgsql (PostgreSQL bridge)
 
 ## Structure
-- `CodoMetis.ValueRanges/` — Core library: range types, interfaces, set ops
-- `CodoMetis.ValueRanges.NodaTime/` — NodaTime satellite: LocalDateRange, LocalDateTimeRange, InstantRange (namespace stays `CodoMetis.ValueRanges`; uses core internals via InternalsVisibleTo)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL/` — EF Core provider for LINQ-to-SQL translation
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/` — EF satellite: registers NodaTime RangeTypeDefinitions, `UseValueRangesNodaTime()`
-- `CodoMetis.ValueRanges.Tests/` — Unit tests (one file per operation)
-- `CodoMetis.ValueRanges.NodaTime.Tests/` — NodaTime satellite unit tests
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
-- `CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without, but hard failure under CI=true). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
+Shipping projects live under `src/`, test projects under `test/`. Never hard-code a positional
+path (`../../`) to reach the repo root — walk up to the `CodoMetis.ValueRanges.slnx` marker file,
+so moving a project cannot silently retarget a test.
+
+- `src/CodoMetis.ValueRanges/` — Core library: range types, interfaces, set ops
+- `src/CodoMetis.ValueRanges.NodaTime/` — NodaTime satellite: LocalDateRange, LocalDateTimeRange, InstantRange (namespace stays `CodoMetis.ValueRanges`; uses core internals via InternalsVisibleTo)
+- `src/CodoMetis.ValueRanges.EFCore.PostgreSQL/` — EF Core provider for LINQ-to-SQL translation
+- `src/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/` — EF satellite: registers NodaTime RangeTypeDefinitions, `UseValueRangesNodaTime()`
+- `test/CodoMetis.ValueRanges.Tests/` — Unit tests (one file per operation)
+- `test/CodoMetis.ValueRanges.NodaTime.Tests/` — NodaTime satellite unit tests
+- `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
+- `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
+- `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without, but hard failure under CI=true). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
 - `docs/` — Agent docs (read relevant doc before starting work)
 
 ## Commands

@@ -50,7 +50,7 @@ fi
 
 # --- Version (MSBuild evaluation, not XML regex) ------------------------------
 
-VERSION="$(dotnet msbuild CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj -getProperty:Version)"
+VERSION="$(dotnet msbuild src/CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj -getProperty:Version)"
 if [[ -z "$VERSION" ]]; then
     echo "error: could not evaluate the Version property" >&2
     exit 1

@@ -746,7 +746,7 @@ var options = new JsonSerializerOptions().AddRangeConverters();
 JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)), options);   // ["2024-01-01"]
 ```
 
-The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](CodoMetis.ValueRanges.NodaTime/README.md#json).
+The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](src/CodoMetis.ValueRanges.NodaTime/README.md#json).
 
 ## Interface Overview
 
