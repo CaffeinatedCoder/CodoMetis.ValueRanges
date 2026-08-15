@@ -222,6 +222,37 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
+    public void Union_Remove_Count_FailsTranslation()
+    {
+        // array_remove preserves canonical form rather than establishing it, so a concatenation
+        // wrapped in one is still a concatenation. Matching only the outermost call let this
+        // through: against live PostgreSQL, {a,c}.Union({a,b}).Remove("x") counted 4 where the
+        // in-memory expression is {a,b,c} — 3.
+        using var context = new TestDbContext();
+        var query = context.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x").Count > 2);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+    }
+
+    [TestMethod]
+    public void Remove_Count_OnACanonicalOperand_StillTranslates()
+    {
+        // The refusal must not overreach: array_remove over a column preserves canonical form,
+        // so cardinality is exact.
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.Remove("x").Count > 2));
+        StringAssert.Contains(sql, "cardinality(array_remove(b.\"Tags\", 'x')) > 2");
+    }
+
+    [TestMethod]
+    public void Union_Remove_IsEmpty_StaysTranslated()
+    {
+        // Still duplicate-insensitive: the result is empty exactly when every element of both
+        // sides was removed.
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x").IsEmpty));
+        StringAssert.Contains(sql, "cardinality(array_remove(array_cat(b.\"Tags\", ARRAY['a','b']::text[]), 'x')) = 0");
+    }
+
+    [TestMethod]
     public void Union_IsEmpty_StaysTranslated()
     {
         // A concatenation is empty exactly when both sides are, so duplicates cannot affect it.

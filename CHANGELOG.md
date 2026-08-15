@@ -9,6 +9,21 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [Unreleased]
+
+### Fixed
+
+- **`Count` over a union wrapped in `Remove` counted shared elements twice.** `Union` translates
+  to `array_cat`, which concatenates rather than deduplicating, so `Count` over a server-computed
+  union has always been refused rather than answered. The refusal matched only the outermost call,
+  and `array_remove` *preserves* canonical form rather than establishing it — so
+  `Tags.Union(Other).Remove(x).Count` slipped through to `cardinality` over the concatenation.
+  Against live PostgreSQL, `{a,c}` unioned with `{a,b}` counted **4** where the in-memory
+  expression is `{a,b,c}` — **3**. A `Where` on that count filtered on a number that was quietly
+  too large; a `Select` returned it. Canonicality-preserving wrappers are now looked through, so
+  the expression is refused in a predicate and falls back to client evaluation in a projection,
+  where it answers 3.
+
 ## [6.1.0] — 2026-08-15
 
 A System.Text.Json audit and the three defects it found. All three shared one shape: the

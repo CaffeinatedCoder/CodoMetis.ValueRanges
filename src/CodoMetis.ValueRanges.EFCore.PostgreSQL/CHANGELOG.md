@@ -3,6 +3,17 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [Unreleased]
+
+### Fixed
+
+- **`Count` over a union wrapped in `Remove` counted shared elements twice.** The refusal that
+  keeps `Count` off a server-computed `array_cat` matched only the outermost call, and
+  `array_remove` preserves canonical form rather than establishing it — so
+  `Tags.Union(Other).Remove(x).Count` reached `cardinality` over the concatenation. Against live
+  PostgreSQL, `{a,c}` unioned with `{a,b}` counted **4** where the in-memory expression is 3.
+  Canonicality-preserving wrappers are now looked through.
+
 ## [6.1.0] — 2026-08-15
 
 Version-alignment release — no changes to this package. 6.1.0 was a System.Text.Json audit

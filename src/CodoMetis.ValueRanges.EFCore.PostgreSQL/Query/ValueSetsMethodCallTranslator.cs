@@ -24,9 +24,12 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 ///   <item><c>IsProperSubsetOf</c> / <c>IsProperSupersetOf</c> — the same operators paired with
 ///   the negated converse (<c>a &lt;@ b AND NOT a @&gt; b</c>), which keeps them
 ///   multiplicity-insensitive where <c>&lt;&gt;</c> would not.</item>
-///   <item><c>Remove</c> — <c>array_remove</c>, which preserves canonical form and therefore
-///   composes safely with <c>Count</c> and equality (see the Union note below for the
-///   contrast). <c>Add</c> has no counterpart: PostgreSQL cannot insert at a sorted position.</item>
+///   <item><c>Remove</c> — <c>array_remove</c>, which <em>preserves</em> canonical form rather
+///   than establishing it: a sorted, deduplicated array stays sorted and deduplicated once an
+///   element is dropped, but a concatenation stays a concatenation. It therefore composes safely
+///   with <c>Count</c> and equality only when its operand was already canonical — see the Union
+///   note below. <c>Add</c> has no counterpart: PostgreSQL cannot insert at a sorted
+///   position.</item>
 ///   <item><c>Union</c> — <c>array_cat</c> (the function form of <c>||</c>).</item>
 ///   <item><c>Count</c> / <c>IsEmpty</c> — <c>cardinality</c>.</item>
 /// </list>
@@ -37,10 +40,12 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// canonicalizing, which is invisible to the operators above (all order- and
 /// multiplicity-insensitive) and to materialization (reads route through <c>From</c>), but not
 /// to everything: <c>Count</c> over a union is refused by <c>ValueSetsMemberTranslator</c>
-/// rather than counting duplicates, and <b>equality over a union is wrong and cannot be
-/// intercepted</b> — EF emits the <c>=</c> itself, so <c>Tags.Union(x) == y</c> compares a
-/// concatenated array against a canonical one and is false even where the in-memory union
-/// equals <c>y</c>. Canonicalizing server-side is not an option: PostgreSQL has no
+/// rather than counting duplicates — including through a wrapping <c>Remove</c>, which
+/// preserves the concatenation rather than canonicalizing it — and <b>equality over a union is
+/// wrong and cannot be intercepted</b> — EF emits the <c>=</c> itself, so
+/// <c>Tags.Union(x) == y</c> compares a concatenated array against a canonical one and is false
+/// even where the in-memory union equals <c>y</c>. The same applies to
+/// <c>Tags.Union(x).Remove(e) == y</c>, for the same reason and with the same remedy. Canonicalizing server-side is not an option: PostgreSQL has no
 /// array-distinct function (verified against 18.4), so it needs a
 /// <c>SELECT DISTINCT … ORDER BY</c> subquery, and the ordering could not match CLR canonical
 /// order anyway (<c>text</c> orders by database collation, not ordinal; <c>uuid</c> orders
