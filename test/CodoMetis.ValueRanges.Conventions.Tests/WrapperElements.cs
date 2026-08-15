@@ -8,9 +8,11 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 // upholds the contract constraints cannot express: the invariant text form is exactly the
 // backing primitive's text form.
 //
-// TextKey deliberately normalizes in Parse (trim, lowercase). That is what makes the
-// contract tests meaningful for the string-backed family: a probe parsed from "  Admin  "
-// must still be found in a set built from it.
+// TextKey validates and trims in Parse, and — deliberately — implements IComparable with a
+// culture-sensitive comparison, which is what the generators actually emit and what
+// StringSet<TElement>'s ordinal CanonicalComparer exists to override. An ordinal CompareTo
+// here would make the type agree with the canonical order by accident and hide a real defect:
+// with one, removing StringSet's CanonicalOrder override left the contract tests passing.
 
 public readonly record struct TextKey : IFormattable, IParsable<TextKey>, IComparable<TextKey>
 {
@@ -21,7 +23,7 @@ public readonly record struct TextKey : IFormattable, IParsable<TextKey>, ICompa
     public static TextKey Parse(string s, IFormatProvider? provider)
         => string.IsNullOrWhiteSpace(s)
                ? throw new FormatException($"'{s}' is not a valid key.")
-               : new TextKey(s.Trim().ToLowerInvariant());
+               : new TextKey(s.Trim());
 
     public static bool TryParse(string? s, IFormatProvider? provider, out TextKey result)
     {
@@ -31,11 +33,11 @@ public readonly record struct TextKey : IFormattable, IParsable<TextKey>, ICompa
             return false;
         }
 
-        result = new TextKey(s.Trim().ToLowerInvariant());
+        result = new TextKey(s.Trim());
         return true;
     }
 
-    public int CompareTo(TextKey other) => string.CompareOrdinal(_value, other._value);
+    public int CompareTo(TextKey other) => string.Compare(_value, other._value, StringComparison.CurrentCulture);
 
     public string ToString(string? format, IFormatProvider? formatProvider) => _value ?? "";
 

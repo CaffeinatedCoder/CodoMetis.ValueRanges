@@ -37,7 +37,10 @@ public sealed class ValueSetContractTests
     /// </summary>
     private static readonly Dictionary<Type, object[]> Probes = new()
     {
-        [typeof(string)]         = ["beta", "Alpha", "gamma delta"],
+        // "Zebra" and "apple" are load-bearing: ordinal puts 'Z' (90) before 'a' (97), a culture
+        // comparison puts apple first. Probes that both orders agree on would let the
+        // CanonicalOrder rule pass while broken — they did, until a seeded defect showed it.
+        [typeof(string)]         = ["beta", "Alpha", "gamma delta", "Zebra", "apple"],
         [typeof(Guid)]           = [Guid.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff"), Guid.Empty],
         [typeof(short)]          = [(short)-7, (short)0, (short)32767],
         [typeof(int)]            = [-7, 0, 42],
@@ -73,7 +76,13 @@ public sealed class ValueSetContractTests
         [typeof(YearMonth)]      = [new YearMonth(2024, 6), new YearMonth(1970, 1)],
 
         // Validated wrapper elements, one per family arity.
-        [typeof(TextKey)]        = [TextKey.Parse("users.read", null), TextKey.Parse("  Admin  ", null)],
+        // Same ordinal-vs-culture split as the plain string probes, for the wrapper arity.
+        [typeof(TextKey)]        = [
+            TextKey.Parse("users.read", null),
+            TextKey.Parse("  Admin  ", null),
+            TextKey.Parse("Zebra", null),
+            TextKey.Parse("apple", null)
+        ],
         [typeof(TenantId)]       = [TenantId.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff", null)],
         [typeof(SmallCode)]      = [SmallCode.Parse("42", null), SmallCode.Parse("-7", null)],
         [typeof(LargeCode)]      = [LargeCode.Parse("9000000000", null), LargeCode.Parse("0", null)]
