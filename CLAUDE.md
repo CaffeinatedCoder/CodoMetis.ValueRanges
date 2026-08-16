@@ -21,7 +21,7 @@ so moving a project cannot silently retarget a test.
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without, but hard failure under CI=true). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
-- `test/CodoMetis.ValueRanges.Conventions.Tests/` — Repo-level conventions: changelog consistency, packaging metadata, value set contract compliance, EF mapping parity. Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
+- `test/CodoMetis.ValueRanges.Conventions.Tests/` — Repo-level conventions: changelog consistency, packaging metadata, release wiring, the SECURITY.md supported-versions table, value set contract compliance, EF mapping parity. Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
 - `docs/` — Agent docs (read relevant doc before starting work)
 
 ## Commands
@@ -30,11 +30,13 @@ dotnet build                          # Build everything
 dotnet test                           # Run all tests
 dotnet test --filter "ClassName=RangeContainsTests"   # Single test class
 dotnet test --filter "FullyQualifiedName~Contains_FiniteRange"  # Single method
-dotnet build -c Release && dotnet pack -c Release --no-build   # Pack NuGet packages
+dotnet pack -c Release                # Pack NuGet packages (builds first)
 ```
 
-`dotnet pack` on its own fails with `NU5026`: `GeneratePackageOnBuild` makes pack race the
-compile. Build first, then pack with `--no-build`.
+The build treats warnings as errors (`Directory.Build.props`), including CS1591 on the public
+surface of the shipping projects — the shipped `.xml` is what IntelliSense shows. Deliberate
+internal-API usage (EF1001) is acknowledged with a file-level pragma next to the reason, never
+repo-wide.
 
 ## Workflow
 1. Read `docs/architecture.md` before modifying range types or interfaces
