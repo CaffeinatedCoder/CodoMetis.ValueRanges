@@ -21,7 +21,7 @@ so moving a project cannot silently retarget a test.
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests/` — EF Core SQL translation tests (no database)
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.Tests/` — NodaTime EF translation tests (no database)
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests/` — Live PostgreSQL via Testcontainers (needs Docker; Inconclusive without, but hard failure under CI=true). Covers BCL and NodaTime types. Authority on PostgreSQL semantics — run when changing translations or range algebra
-- `test/CodoMetis.ValueRanges.Conventions.Tests/` — Repo-level conventions: changelog consistency, packaging metadata, value set contract compliance, EF mapping parity. Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
+- `test/CodoMetis.ValueRanges.Conventions.Tests/` — Repo-level conventions: changelog consistency, packaging metadata, release wiring, the SECURITY.md supported-versions table, value set contract compliance, EF mapping parity. Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
 - `docs/` — Agent docs (read relevant doc before starting work)
 
 ## Commands

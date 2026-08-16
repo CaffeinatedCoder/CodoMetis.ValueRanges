@@ -51,8 +51,8 @@ remedy for those is to upgrade.
 
 | Version | Supported |
 |---|---|
-| 6.1.x | ✅ |
-| < 6.1 | ❌ |
+| 6.2.x | ✅ |
+| < 6.2 | ❌ |
 
 ## Where this package sits
 
