@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges.Serialization;
 
@@ -25,7 +26,10 @@ internal static class ValueSetElementJson
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException or OverflowException)
         {
-            throw new JsonException($"Cannot parse '{s}' as {typeof(T).Name}.", ex);
+            // Not chained: the BCL's format error embeds the whole offending text. The reason
+            // survives as a bounded excerpt, which keeps a validated wrapper's own message.
+            throw new JsonException(
+                $"Cannot parse '{LiteralExcerpt.Of(s)}' as {typeof(T).Name}: {LiteralExcerpt.Of(ex.Message)}");
         }
     }
 }
