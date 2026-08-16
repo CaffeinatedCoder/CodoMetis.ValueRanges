@@ -75,9 +75,11 @@ through, so there is no documented "you asked for it" escape hatch here.
 
 Published packages carry Source Link metadata (repository and commit) and symbol packages, and are
 published through GitHub Actions Trusted Publishing — no long-lived credential exists that could
-publish on this project's behalf. Each release also ships a CycloneDX SBOM (`*.cdx.json`). Nothing
-in this repository is referenced with `PrivateAssets=all`, so those SBOMs list exactly the
-dependencies a consumer receives, and a convention test fails the build if that stops being true.
+publish on this project's behalf. Each release also carries a CycloneDX SBOM per package
+(`*.cdx.json`), attached to the [GitHub release](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/releases)
+for that version. Nothing in this repository is referenced with `PrivateAssets=all`, so those SBOMs
+list exactly the dependencies a consumer receives, and a convention test fails the build if that
+stops being true.
 
 ## In scope
 
