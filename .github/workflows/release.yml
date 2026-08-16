@@ -18,6 +18,10 @@
 # The job that can mint a token cannot write to the repository, and the job that can write to
 # the repository cannot mint a token.
 #
+# Actions are pinned to commit SHAs, not tags — this is the publish path, and NuGet/login runs in
+# the one job that can mint a token. A moved tag reaches every workflow trusting it; a SHA does
+# not. The trailing `# vX.Y.Z` is what Dependabot reads to propose an update; keep it by the SHA.
+#
 # Three names must agree with the nuget.org policy, or it silently stops matching: this file's
 # *name* (release.yml), the environment (`nuget`), and the repository owner/name.
 # ReleaseWiringConventionTests pins the first two.
@@ -63,10 +67,10 @@ jobs:
       version: ${{ steps.version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.0.x
 
@@ -108,6 +112,12 @@ jobs:
       - name: Pack
         run: dotnet pack -c Release --no-build -o dist
 
+      # Installs the packages just packed into throwaway projects outside this repository and runs
+      # real code against them. Passing dist means the artifacts published are the artifacts tested,
+      # rather than a fresh pack that happens to be built from the same commit.
+      - name: Consumer smoke test
+        run: ./test/consumer-smoke-test.sh dist
+
       # No --exclude-filter: nothing in this repository is referenced with PrivateAssets=all, so
       # every dependency in the graph is one a consumer actually takes on and the SBOM matches
       # the nuspec. ReleaseWiringConventionTests fails if that stops being true.
@@ -140,7 +150,7 @@ jobs:
           printf '    %s\n' "${packages[@]##*/}"
 
       - name: Upload packages
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: nupkg-${{ steps.version.outputs.version }}
           path: |
@@ -165,13 +175,13 @@ jobs:
 
     steps:
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: 10.0.x
 
       # Publishes exactly what was verified — the packages are not rebuilt here.
       - name: Download packages
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: nupkg-${{ needs.verify.outputs.version }}
           path: dist
@@ -189,7 +199,7 @@ jobs:
       # publishing policy, valid for one hour. The token is single-use and nothing is stored.
       - name: NuGet login (OIDC)
         id: login
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
           user: ${{ secrets.NUGET_USER }}
 
@@ -252,10 +262,10 @@ jobs:
 
     steps:
       # The checkout is for CHANGELOG.md, the source of the release notes.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Download packages
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: nupkg-${{ needs.verify.outputs.version }}
           path: dist
