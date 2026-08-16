@@ -22,6 +22,26 @@ dotnet add package CodoMetis.ValueRanges
 
 > Requires .NET 10 or later.
 
+## Why not `NpgsqlRange<T>`?
+
+Because it cannot live in a domain model. `NpgsqlRange<T>` is declared in `NpgsqlTypes`, in
+`Npgsql.dll`, so a model that uses it references the database driver — and the struct carries no
+interval algebra of its own. `Contains`, `Overlaps`, `Union` and the rest are EF Core extension
+methods, each documented as *"only intended for use via SQL translation as part of an EF Core LINQ
+query"*; calling one from a unit test or a domain service throws. The algebra exists only inside a
+query, on a type that only exists inside the driver.
+
+These types are the other way round. The algebra runs in process with no database dependency, and
+the [EF Core companion](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL)
+translates the same calls to the same PostgreSQL operators, verified against a live server.
+
+The rest of the ecosystem covers the pieces separately: NodaTime's `Interval`/`DateInterval` are
+real domain types the Npgsql plugin maps, but only two date/time shapes, and `DateInterval` is
+always closed and bounded — never half-open, unbounded or empty. In-memory range libraries such as
+[FRange](https://www.nuget.org/packages/FRange/) carry an algebra but no persistence. And a
+PostgreSQL array maps to `T[]` or `List<T>`, a list rather than a set, with order and duplicates
+part of the value.
+
 ## Range types
 
 | .NET type             | PostgreSQL equivalent | Element type     | Discrete |
@@ -125,7 +145,7 @@ Every type implements `IParsable<T>` and `IFormattable` using PostgreSQL literal
 System.Text.Json converters for direct use in ASP.NET Core APIs:
 
 ```csharp
-Int32Range.Parse("[1,10)", null).ToString();   // [1,10)
+Int32Range.Parse("[1,10)", null).ToString();   // [1,9] — discrete ranges canonicalize
 StringSet.Parse("{alpha,beta}", null);         // {alpha,beta}
 
 options.AddRangeConverters();                  // registers both families

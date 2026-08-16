@@ -45,6 +45,39 @@ DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a
 
 The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](docs/efcore.md) for how that round-trips.
 
+## Why this exists
+
+Every piece of this problem already has a solution in .NET. The gap is that no single type holds
+them at once.
+
+| What you would reach for today | Where it stops |
+|---|---|
+| Two properties (`From`, `To`) | No algebra, no empty or unbounded case; "no end date" becomes a nullable that every reader reinterprets |
+| [`NpgsqlRange<T>`](https://www.npgsql.org/doc/api/NpgsqlTypes.NpgsqlRange-1.html) | Declared in `NpgsqlTypes`, in `Npgsql.dll` — a domain model that uses it references the database driver. The struct carries no algebra of its own ([and reconciles unboundedness at runtime](#unboundedness-is-a-shape-not-a-bound-value)) |
+| NodaTime `Interval` / `DateInterval` with the [Npgsql NodaTime plugin](https://www.npgsql.org/efcore/mapping/nodatime.html) | Two date/time shapes only, and `DateInterval` is always closed and always bounded — no half-open, no unbounded, no empty |
+| [FRange](https://www.nuget.org/packages/FRange/), [Open.Range](https://www.nuget.org/packages/Open.Range) | In-memory only — no PostgreSQL mapping, no SQL translation, no range literals |
+| `T[]` / `List<T>` with EF Core primitive collections | A list, not a set: order and multiplicity are part of the value, so equality is sequence equality |
+
+**On the range side, the SQL translation is not what is missing.** Npgsql already translates the
+full operator set, and this package does not improve on that. What is missing is a domain type to
+hang it on. `NpgsqlRange<T>`'s operations are EF Core extension methods, each documented as *"only
+intended for use via SQL translation as part of an EF Core LINQ query"* — call one from a unit test
+or a domain service and it throws. The algebra therefore exists only inside a query, on a type that
+only exists inside the driver. A domain model that wants both has neither.
+
+**On the set side there is no equivalent at all.** Persisting a PostgreSQL array today means
+exposing `T[]` or `List<T>`, which makes order and duplicates part of the value and leaves canonical
+form to each writer to remember. A set of tags, permissions or IDs has no type that says so.
+
+This package is the two halves joined: immutable domain types carrying the complete algebra in
+process with no database dependency, which the EF Core companion also translates to the same
+PostgreSQL operators — [checked against a live server](#verified-against-postgresql) rather than
+asserted.
+
+*Landscape surveyed August 2026. If something here is out of date or a comparable library was
+missed, please [open an issue](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues) —
+the claim is meant to be falsifiable.*
+
 ## Supported Types
 
 | .NET type              | PostgreSQL equivalent | Element type     | Discrete |
