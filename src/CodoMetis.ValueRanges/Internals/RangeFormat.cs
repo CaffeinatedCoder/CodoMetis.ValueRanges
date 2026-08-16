@@ -15,15 +15,15 @@ internal static class RangeFormat
             return TRange.Empty;
 
         if (s.Length < 3)
-            throw new FormatException($"The input string '{s.ToString()}' is not a valid range literal.");
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range literal.");
 
         var startBracket = s[0];
         var endBracket   = s[^1];
 
         if (startBracket is not '[' and not '(')
-            throw new FormatException($"The input string '{s.ToString()}' is not a valid range literal.");
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range literal.");
         if (endBracket is not ']' and not ')')
-            throw new FormatException($"The input string '{s.ToString()}' is not a valid range literal.");
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range literal.");
 
         var startInclusive = startBracket == '[';
         var endInclusive   = endBracket   == ']';
@@ -32,7 +32,7 @@ internal static class RangeFormat
         var commaIdx = FindComma(inner);
 
         if (commaIdx < 0)
-            throw new FormatException($"The input string '{s.ToString()}' is not a valid range literal.");
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range literal.");
 
         var startPart = UnquoteValue(inner[..commaIdx].Trim());
         var endPart   = UnquoteValue(inner[(commaIdx + 1)..].Trim());
@@ -43,14 +43,37 @@ internal static class RangeFormat
         return (hasStart, hasEnd) switch
         {
             (false, false) => TRange.Infinite,
-            (false, true)  => TRange.CreateUnboundedStart(TRange.ParseValue(endPart,   provider), endInclusive),
-            (true,  false) => TRange.CreateUnboundedEnd  (TRange.ParseValue(startPart, provider), startInclusive),
+            (false, true)  => TRange.CreateUnboundedStart(ParseBound<TRange, T>(endPart,   s, provider), endInclusive),
+            (true,  false) => TRange.CreateUnboundedEnd  (ParseBound<TRange, T>(startPart, s, provider), startInclusive),
             (true,  true)  => TRange.CreateFinite(
-                TRange.ParseValue(startPart, provider),
-                TRange.ParseValue(endPart,   provider),
+                ParseBound<TRange, T>(startPart, s, provider),
+                ParseBound<TRange, T>(endPart,   s, provider),
                 startInclusive,
                 endInclusive)
         };
+    }
+
+    /// <summary>
+    /// A bound through the element parser, with its failure re-thrown as a bounded message. The
+    /// element parser is not chained as the inner exception: the BCL's format error embeds the
+    /// whole offending text, which is exactly what <see cref="LiteralExcerpt"/> exists to cut.
+    /// Its reason survives as an excerpt. Overflow is left alone — the BCL message names the type,
+    /// not the input.
+    /// </summary>
+    private static T ParseBound<TRange, T>(ReadOnlySpan<char> part, ReadOnlySpan<char> literal, IFormatProvider? provider)
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        try
+        {
+            return TRange.ParseValue(part, provider);
+        }
+        catch (FormatException ex)
+        {
+            throw new FormatException(
+                $"The bound '{LiteralExcerpt.Of(part)}' in the range literal '{LiteralExcerpt.Of(literal)}' "
+              + $"is not a valid {typeof(T).Name}: {LiteralExcerpt.Of(ex.Message)}");
+        }
     }
 
     internal static bool TryParse<TRange, T>(
@@ -81,7 +104,7 @@ internal static class RangeFormat
         s = s.Trim();
 
         if (s.Length < 2 || s[0] != '{' || s[^1] != '}')
-            throw new FormatException($"The input string '{s.ToString()}' is not a valid range set literal.");
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range set literal.");
 
         var inner  = s[1..^1].Trim();
         var result = new List<string>();

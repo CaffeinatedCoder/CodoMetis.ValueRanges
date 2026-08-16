@@ -36,7 +36,7 @@ internal static class SetFormat
         s = s.Trim();
 
         if (s.Length < 2 || s[0] != '{' || s[^1] != '}')
-            throw new FormatException($"The input string '{s.ToString()}' is not a valid array literal.");
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid array literal.");
 
         var inner = s[1..^1].Trim();
         if (inner.IsEmpty) return TSet.Empty;
@@ -53,7 +53,7 @@ internal static class SetFormat
             if (position == inner.Length) break;
 
             if (inner[position] != ',')
-                throw new FormatException($"The input string '{{{inner.ToString()}}}' is not a valid array literal.");
+                throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal.");
             position++;
         }
 
@@ -85,7 +85,7 @@ internal static class SetFormat
         while (position < inner.Length && char.IsWhiteSpace(inner[position])) position++;
 
         if (position == inner.Length)
-            throw new FormatException($"The input string '{{{inner.ToString()}}}' is not a valid array literal.");
+            throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal.");
 
         if (inner[position] == '"')
         {
@@ -96,18 +96,18 @@ internal static class SetFormat
             while (true)
             {
                 if (position == inner.Length)
-                    throw new FormatException($"The input string '{{{inner.ToString()}}}' has an unterminated quoted element.");
+                    throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' has an unterminated quoted element.");
 
                 var c = inner[position++];
                 if (c == '\\')
                 {
                     if (position == inner.Length)
-                        throw new FormatException($"The input string '{{{inner.ToString()}}}' has an unterminated escape sequence.");
+                        throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' has an unterminated escape sequence.");
                     sb.Append(inner[position++]);
                 }
                 else if (c == '"')
                 {
-                    return TSet.ParseValue(sb.ToString(), provider);
+                    return ParseElementValue<TSet, T>(sb.ToString(), inner, provider);
                 }
                 else
                 {
@@ -123,17 +123,39 @@ internal static class SetFormat
         }
 
         if (position < inner.Length && inner[position] == '"')
-            throw new FormatException($"The input string '{{{inner.ToString()}}}' is not a valid array literal.");
+            throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal.");
 
         var text = inner[start..position].Trim();
 
         if (text.IsEmpty)
-            throw new FormatException($"The input string '{{{inner.ToString()}}}' is not a valid array literal.");
+            throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal.");
 
         if (text.Equals("NULL", StringComparison.OrdinalIgnoreCase))
             throw new FormatException("Value sets cannot contain null elements.");
 
-        return TSet.ParseValue(text, provider);
+        return ParseElementValue<TSet, T>(text, inner, provider);
+    }
+
+    /// <summary>
+    /// An element through the family's parser, with its failure re-thrown as a bounded message.
+    /// Not chained: the BCL's format error embeds the whole offending text, which is what
+    /// <see cref="LiteralExcerpt"/> exists to cut. A validated wrapper's own reason survives as
+    /// an excerpt.
+    /// </summary>
+    private static T ParseElementValue<TSet, T>(ReadOnlySpan<char> text, ReadOnlySpan<char> inner, IFormatProvider? provider)
+        where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
+        where T : IEquatable<T>
+    {
+        try
+        {
+            return TSet.ParseValue(text, provider);
+        }
+        catch (FormatException ex)
+        {
+            throw new FormatException(
+                $"The element '{LiteralExcerpt.Of(text)}' in the array literal '{{{LiteralExcerpt.Of(inner)}}}' "
+              + $"is not a valid {typeof(T).Name}: {LiteralExcerpt.Of(ex.Message)}");
+        }
     }
 
     private static void AppendElement(StringBuilder sb, string text)
