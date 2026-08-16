@@ -3,6 +3,16 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.2.1] — 2026-08-16
+
+### Fixed
+
+- **⚠️ `IsAdjacentTo` answered `false` whenever the receiver was unbounded**, and the NodaTime
+  range types share the core predicate, so `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`
+  and `YearMonthRange` all had it — along with the `RangeSet` normalization built on top of it.
+  Fixed in `CodoMetis.ValueRanges` 6.2.1 and inherited here. **Results change for any range or set
+  with an unbounded element adjacent to its neighbour**, from a wrong answer to PostgreSQL's.
+
 ## [6.2.0] — 2026-08-16
 
 No source change in this package, but its behaviour changes with the core package it depends on.

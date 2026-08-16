@@ -278,6 +278,24 @@ var y = DecimalRange.CreateFinite(5m, 10m, startInclusive: false);  // (5, 10)
 x.IsAdjacentTo(y);  // true — one side claims 5, the other does not
 ```
 
+An unbounded range is adjacent on its bounded edge, and the relation is symmetric — the receiver's shape does not change the answer, matching PostgreSQL's `-|-`:
+
+```csharp
+var upTo    = Int32Range.CreateUnboundedStart(0, true);  // (-∞, 0]
+var from    = Int32Range.CreateUnboundedEnd(1);          // [1, +∞)
+var between = Int32Range.CreateFinite(1, 3);             // [1, 3]
+
+upTo.IsAdjacentTo(between);  // true      between.IsAdjacentTo(upTo);  // true
+upTo.IsAdjacentTo(from);     // true — the two halves close the domain with no overlap
+
+// The empty and infinite ranges are adjacent to nothing, and two ranges open at the
+// same end always overlap:
+Int32Range.Infinite.IsAdjacentTo(between);                        // false
+upTo.IsAdjacentTo(Int32Range.CreateUnboundedStart(9, true));      // false
+```
+
+> **Changed in 6.2.1.** Before 6.2.1 `IsAdjacentTo` answered `false` whenever the *receiver* was unbounded, so the relation was asymmetric and disagreed with PostgreSQL. Because `RangeSet` normalization merges neighbours after sorting by lower bound — which always puts an unbounded-start element in the receiver position — `RangeSet.From([(,0], [1,)])` returned `{(,0],[1,)}` instead of `{(,)}`. See the [changelog](CHANGELOG.md).
+
 ### Directional Comparisons
 
 ```csharp

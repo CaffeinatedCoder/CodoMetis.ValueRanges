@@ -3,6 +3,11 @@
 Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.2.1] — 2026-08-16
+
+No source change in this package. See `CodoMetis.ValueRanges` 6.2.1 for the `IsAdjacentTo`
+asymmetry fix, which the NodaTime range types inherit.
+
 ## [6.2.0] — 2026-08-16
 
 No source change in this package, but its behaviour changes with the packages it depends on.
