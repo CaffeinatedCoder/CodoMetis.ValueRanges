@@ -38,6 +38,18 @@ covers all four packages, which share one version number and release together.
   were already span-based internally; this exposes them, so a slice of a larger buffer no longer
   needs a substring allocation first. `IParsable<T>` is still satisfied.
 
+- **`Length`** on every range type: a count for the discrete domains (inclusive of both bounds),
+  a span for the continuous ones. Zero for the empty range, `null` for every unbounded shape.
+- **`Values()`** on `Int32Range`, `Int64Range` and `DateRange` — the contained values, ascending.
+  The continuous types do not declare it, so misuse is a compile error; an unbounded range throws
+  eagerly.
+- **`ToRangeSet()` / `ToInt32Set()` / `ToInt64Set()` / `ToDateSet()`** — conversions between a
+  value set and a range set over the same discrete domain, collapsing runs of consecutive values
+  into ranges and expanding them back. Client-side only.
+- **`Clamp(value)`** on every range, and an **indexer** on every value set type.
+- **`IRangeFactory<TRange, T>.IsDiscrete`**, a defaulted virtual static reporting whether the
+  domain has a step.
+
 ## [6.2.1] — 2026-08-16
 
 ### Fixed

@@ -52,6 +52,10 @@ The two are not interchangeable, and the compiler will not let them be confused.
 - **`RangeSet` gains `IsInfinity()` and `IsFinite()`**, the two shape predicates a single range already had. The distinction that makes them worth stating: `IsInfinity()` is *not* `IsUnboundedStart() && IsUnboundedEnd()`. That equivalence holds for a range, which is contiguous, and fails for a set — `{(,5],[10,)}` runs to infinity in both directions and does not contain 7. The EF translation keeps the distinction, mapping the set predicate to equality against the infinite multirange rather than to `lower_inf AND upper_inf` ([verified against live PostgreSQL](#verified-against-postgresql)).
 - **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`, which the fifteen value set types have supported since v6.0. Normalization is the same as `From`'s.
 - **`ISpanParsable<T>` on every parsable type** — all eleven ranges, `RangeSet`, and all nineteen set types and arities now take `ReadOnlySpan<char>` in `Parse`/`TryParse`. The literal grammars were always parsed over spans internally; this exposes that entry point, so parsing a slice of a larger buffer no longer allocates a substring first.
+- **`Length`** — the measure of a range. Discrete domains count inclusively (`[2024-01-01, 2024-01-31]` is 31 days), continuous ones measure the span. Empty measures zero, unbounded measures `null`.
+- **`Values()`** on the discrete ranges, enumerating what they contain — declared only where a step exists, so asking a `DecimalRange` is a compile error.
+- **A bridge between the two type families** — `{1,2,3,7}` ↔ `{[1,3],[7,7]}` for the discrete domains, so the storage shape can follow the density of the data.
+- **`Clamp(value)`** on every range, and an **indexer** on the value sets.
 
 ## What's new in v6.2
 
@@ -303,6 +307,53 @@ upTo.IsAdjacentTo(Int32Range.CreateUnboundedStart(9, true));      // false
 ```
 
 > **Changed in 6.2.1.** Before 6.2.1 `IsAdjacentTo` answered `false` whenever the *receiver* was unbounded, so the relation was asymmetric and disagreed with PostgreSQL. Because `RangeSet` normalization merges neighbours after sorting by lower bound — which always puts an unbounded-start element in the receiver position — `RangeSet.From([(,0], [1,)])` returned `{(,0],[1,)}` instead of `{(,)}`. See the [changelog](CHANGELOG.md).
+
+### Measuring a range
+
+`Length` reports what a range covers. The convention follows the domain: a discrete one counts its values inclusive of both bounds, a continuous one measures the span between them.
+
+```csharp
+DateRange.CreateFinite(new DateOnly(2024, 1, 1), new DateOnly(2024, 1, 31)).Length;  // 31 (days)
+Int32Range.CreateFinite(1, 10).Length;                                              // 10 (integers)
+DecimalRange.CreateFinite(1m, 5m).Length;                                           // 4  (span)
+
+DateTimeRange.CreateFinite(nineAm, fiveThirtyPm).Length;  // TimeSpan of 8.5 hours
+```
+
+Empty and unbounded are different answers and stay distinguishable — the empty range contains nothing, an unbounded one contains too much to measure:
+
+```csharp
+Int32Range.Empty.Length;     // 0
+Int32Range.Infinite.Length;  // null
+```
+
+The type follows the domain: `long?` for the integer ranges, `int?` days for `DateRange`, `TimeSpan?` for the timestamp ranges, `decimal?` for `DecimalRange`, and `Duration?`/`Period?` for the NodaTime ranges — an instant range measures exact elapsed time, a wall-clock range a calendar quantity. `Length` is client-side and does not translate to SQL.
+
+### Enumerating a discrete range
+
+The discrete range types enumerate what they contain. The continuous ones do not declare `Values()` at all, so the mistake is caught at compile time rather than at runtime:
+
+```csharp
+foreach (var day in DateRange.CreateFinite(monday, friday).Values())
+    Schedule(day);
+
+Int32Range.CreateFinite(1, 5).Values();   // 1, 2, 3, 4, 5
+DecimalRange.CreateFinite(1m, 5m).Values();  // does not compile — no step to walk
+```
+
+An unbounded range throws `NotSupportedException` at the call rather than at the first iteration, so the failure points at the line that was wrong.
+
+### Clamping a value into a range
+
+```csharp
+var year = DateRange.CreateFinite(jan1, dec31);
+
+year.Clamp(new DateOnly(2020, 5, 5));  // jan1  — pulled up to the lower bound
+year.Clamp(new DateOnly(2024, 6, 15)); // unchanged — already inside
+DateRange.Empty.Clamp(anyDate);        // null — nothing to snap to
+```
+
+An unbounded side never constrains: clamping into `(-∞, 10]` only ever pulls a value down.
 
 ### Directional Comparisons
 
@@ -648,6 +699,22 @@ StringSet.Parse("{a,NULL}", null);           // FormatException — sets never c
 ```
 
 JSON serialization goes through the same converter factory as the ranges (`options.AddRangeConverters()`) and produces plain JSON arrays (`["alpha","beta"]`), delegating element serialization to System.Text.Json — element converters apply. Reads normalize and reject null elements. Element types the serializer does not know natively are covered by the family's own [element converter](#element-converters).
+
+### Converting between sets and ranges
+
+Over a discrete domain the same membership has two shapes: `{1,2,3,7}` and `{[1,3],[7,7]}` contain exactly the same values. Which one to store is a question of density, and the conversion moves between them:
+
+```csharp
+Int32Set.From(1, 2, 3, 7).ToRangeSet();   // { [1, 3], [7, 7] }
+DateSet.From(fri, sat, sun, mon).ToRangeSet();  // { [fri, mon] } — one range
+
+rangeSet.ToInt32Set();   // back to individual values
+rangeSet.ToDateSet();
+```
+
+A thousand consecutive dates are one `daterange` and a thousand-element `date[]`, and `@>` against the range column is the cheaper question by a wide margin. Sparse data goes the other way, where ranges of one value each cost more than the values do.
+
+Only the discrete families convert — `Int32Set`, `Int64Set`, `DateSet`, and `LocalDateSet`/`YearMonthSet` in the NodaTime satellite. The continuous domains have no step, so there is no set of values to expand to. Both directions run client-side and neither translates: PostgreSQL converts between arrays and multiranges only through `unnest` and a custom aggregate. Expanding an unbounded range set throws rather than hanging.
 
 ### When not to use a set
 

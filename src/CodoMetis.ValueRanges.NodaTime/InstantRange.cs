@@ -149,6 +149,22 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The elapsed time between the bounds, or <see langword="null"/> when the range is
+    /// unbounded. The empty range measures <see cref="Duration.Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Duration"/>, not a <see cref="Period"/>: both bounds are instants on the
+    /// time line, so the elapsed time is exact and calendar-independent.
+    /// </remarks>
+    public Duration? Length =>
+        this switch
+        {
+            IEmptyRange<Instant>    => Duration.Zero,
+            IFiniteRange<Instant> f => f.End - f.Start,
+            _                       => null
+        };
+
     /// <inheritdoc />
     public static Instant ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => NodaPatterns.ParseInstant(s.ToString());

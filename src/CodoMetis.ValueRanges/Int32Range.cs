@@ -149,10 +149,50 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
              : Empty;
 
     /// <inheritdoc />
+    public static bool IsDiscrete => true;
+
+    /// <inheritdoc />
     public static int? NextValueAfter(int value) => value == int.MaxValue ? null : value + 1;
 
     /// <inheritdoc />
     public static int? PreviousValueBefore(int value) => value == int.MinValue ? null : value - 1;
+
+    /// <summary>
+    /// Enumerates the integers the range contains, ascending and inclusive of both bounds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Available here because the domain is discrete. The continuous range types have no
+    /// step to walk and do not declare this member at all, so asking for the values of a
+    /// <c>DecimalRange</c> is a compile error rather than a runtime failure.
+    /// </para>
+    /// <para>
+    /// The empty range yields nothing. An unbounded range would not terminate and throws
+    /// immediately — the check is eager, so the failure surfaces at this call rather than at
+    /// the <c>foreach</c> that consumes it.
+    /// </para>
+    /// </remarks>
+    /// <returns>The contained integers, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    public IEnumerable<int> Values() => DiscreteEnumeration.Values<Int32Range, int>(this);
+
+    /// <summary>
+    /// The number of integers the range contains, or <see langword="null"/> when it is unbounded.
+    /// The empty range measures 0.
+    /// </summary>
+    /// <remarks>
+    /// A count rather than a span: <c>[1, 10]</c> measures 10, not 9, matching what PostgreSQL's
+    /// <c>upper(x) - lower(x)</c> yields for the half-open form it canonicalizes to. Widened to
+    /// <see cref="long"/> because the full <see cref="int"/> domain holds more values than an
+    /// <see cref="int"/> can count.
+    /// </remarks>
+    public long? Length =>
+        this switch
+        {
+            IEmptyRange<int>    => 0L,
+            IFiniteRange<int> f => (long)f.End - f.Start + 1,
+            _                   => null
+        };
 
     /// <inheritdoc />
     public static int ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)

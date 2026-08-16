@@ -52,6 +52,19 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
     abstract static TRange CreateUnboundedStart(T end, bool endInclusive);
 
     /// <summary>
+    /// Whether the element domain has a step: every value below the maximum has an immediate
+    /// successor. Discrete domains canonicalize to the closed form <c>[start, end]</c>, count
+    /// their values, and can be enumerated; continuous ones can do none of those.
+    /// </summary>
+    /// <remarks>
+    /// This cannot be derived from <see cref="NextValueAfter"/>, which returns
+    /// <see langword="null"/> both for a continuous domain and for the last representable value
+    /// of a discrete one. A type that overrides <see cref="NextValueAfter"/> must override this
+    /// too — <c>RangeFactoryContractTests</c> checks that the two agree.
+    /// </remarks>
+    virtual static bool IsDiscrete => false;
+
+    /// <summary>
     /// Returns the immediate successor of <paramref name="value"/> in a discrete domain.
     /// The default implementation returns <see langword="null"/>, marking the domain as continuous.
     /// Discrete domains also return <see langword="null"/> when <paramref name="value"/> is the

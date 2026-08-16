@@ -150,10 +150,48 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
              : Empty;
 
     /// <inheritdoc />
+    public static bool IsDiscrete => true;
+
+    /// <inheritdoc />
     public static DateOnly? NextValueAfter(DateOnly value) => value == DateOnly.MaxValue ? null : value.AddDays(1);
 
     /// <inheritdoc />
     public static DateOnly? PreviousValueBefore(DateOnly value) => value == DateOnly.MinValue ? null : value.AddDays(-1);
+
+    /// <summary>
+    /// Enumerates the dates the range contains, ascending and inclusive of both bounds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Available here because the domain is discrete. The continuous range types have no
+    /// step to walk and do not declare this member at all, so asking for the values of a
+    /// <c>DecimalRange</c> is a compile error rather than a runtime failure.
+    /// </para>
+    /// <para>
+    /// The empty range yields nothing. An unbounded range would not terminate and throws
+    /// immediately — the check is eager, so the failure surfaces at this call rather than at
+    /// the <c>foreach</c> that consumes it.
+    /// </para>
+    /// </remarks>
+    /// <returns>The contained dates, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    public IEnumerable<DateOnly> Values() => DiscreteEnumeration.Values<DateRange, DateOnly>(this);
+
+    /// <summary>
+    /// The number of days the range covers, or <see langword="null"/> when it is unbounded.
+    /// The empty range measures 0.
+    /// </summary>
+    /// <remarks>
+    /// Inclusive of both ends, because the domain is discrete and canonicalizes closed:
+    /// <c>[2024-01-01, 2024-01-31]</c> measures 31, which is the answer a calendar gives.
+    /// </remarks>
+    public int? Length =>
+        this switch
+        {
+            IEmptyRange<DateOnly>    => 0,
+            IFiniteRange<DateOnly> f => f.End.DayNumber - f.Start.DayNumber + 1,
+            _                        => null
+        };
 
     /// <inheritdoc />
     public static DateOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)

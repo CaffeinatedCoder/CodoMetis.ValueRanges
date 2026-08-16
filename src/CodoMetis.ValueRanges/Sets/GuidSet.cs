@@ -54,6 +54,10 @@ public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, 
     /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
     public int Count => _elements.Length;
 
+    /// <summary>Gets the element at <paramref name="index"/>, in canonical order.</summary>
+    /// <param name="index">The zero-based index.</param>
+    public Guid this[int index] => _elements[index];
+
     /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
     public bool IsEmpty => _elements.IsEmpty;
 
@@ -154,6 +158,10 @@ public sealed class GuidSet<TElement> :
 
     /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
     public int Count => _elements.Length;
+
+    /// <summary>Gets the element at <paramref name="index"/>, in canonical order.</summary>
+    /// <param name="index">The zero-based index.</param>
+    public TElement this[int index] => _elements[index];
 
     /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
     public bool IsEmpty => _elements.IsEmpty;

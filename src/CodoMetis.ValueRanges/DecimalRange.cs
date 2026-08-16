@@ -143,6 +143,23 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The span between the bounds, or <see langword="null"/> when the range is unbounded.
+    /// The empty range measures 0.
+    /// </summary>
+    /// <remarks>
+    /// A span rather than a count: the domain is continuous, so there is nothing to count.
+    /// Bound inclusiveness does not affect the span — <c>[1, 5]</c> and <c>[1, 5)</c> both
+    /// measure 4.
+    /// </remarks>
+    public decimal? Length =>
+        this switch
+        {
+            IEmptyRange<decimal>    => 0m,
+            IFiniteRange<decimal> f => f.End - f.Start,
+            _                       => null
+        };
+
     /// <inheritdoc />
     public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => decimal.Parse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture);

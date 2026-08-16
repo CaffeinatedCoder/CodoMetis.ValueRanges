@@ -69,6 +69,40 @@ breaking changes.
   a `string` argument binds to the span overload through the implicit conversion. Every type's two
   overloads are the same call, so results do not change.
 
+- **`Length`** on every range type — the measure of what it covers. A discrete domain counts its
+  values inclusive of both ends (`[2024-01-01, 2024-01-31]` measures 31 days, `[1, 10]` measures
+  10 integers), a continuous one measures the span between the bounds. The empty range measures
+  zero and every unbounded shape measures `null`: the two are different answers and stay
+  distinguishable. The type follows the domain — `long?` for `Int32Range`/`Int64Range`, `int?`
+  days for `DateRange`, `TimeSpan?` for the timestamp ranges, `decimal?` for `DecimalRange`, and
+  `Duration?`/`Period?` for the NodaTime ranges, which distinguish elapsed time from a calendar
+  quantity. Client-side only; it does not translate to SQL.
+
+- **`Values()`** on the discrete range types — enumerates the contained values ascending,
+  inclusive of both bounds. Declared only by `Int32Range`, `Int64Range`, `DateRange`,
+  `LocalDateRange` and `YearMonthRange`, so asking a continuous range for its values is a compile
+  error rather than a runtime failure. An unbounded range throws immediately rather than at the
+  first iteration, so the failure points at the call rather than at the `foreach`.
+
+- **A bridge between the value sets and the range sets** over the same discrete domain:
+  `Int32Set`/`Int64Set`/`DateSet` (plus `LocalDateSet`/`YearMonthSet` in the NodaTime satellite)
+  gain `ToRangeSet()`, which collapses runs of consecutive values — `{1,2,3,7}` becomes
+  `{[1,3],[7,7]}` — and the matching `ToInt32Set()`/`ToDateSet()`/… expand back. The two shapes
+  describe the same membership; which to store is a question of density, and a thousand
+  consecutive dates are better served by one `daterange` than by a thousand-element array. Both
+  directions are client-side: PostgreSQL converts between arrays and multiranges only through
+  `unnest` and a custom aggregate.
+
+- **`Clamp(value)`** on every range — the contained value nearest the argument, or `null` for the
+  empty range. An unbounded side never constrains.
+
+- **An indexer on the value set types**, `set[0]`, matching what `RangeSet` already offered.
+
+- **`IRangeFactory<TRange, T>.IsDiscrete`** — a defaulted virtual static reporting whether the
+  domain has a step, for generic code that cannot see which concrete type it holds. It cannot be
+  derived from `NextValueAfter`, which returns `null` both for a continuous domain and for the
+  last value of a discrete one; a convention test now holds the two to agreement.
+
 ## [6.2.1] — 2026-08-16
 
 ### Fixed

@@ -196,6 +196,23 @@ public abstract record LocalDateTimeRange : IRange<LocalDateTime>, IRangeFactory
         };
     }
 
+    /// <summary>
+    /// The calendar period between the bounds, or <see langword="null"/> when the range is
+    /// unbounded. The empty range measures <see cref="Period.Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Period"/> rather than a <see cref="Duration"/>, because the bounds are
+    /// wall-clock and a period is what NodaTime defines between them: months and years are
+    /// calendar quantities whose length in time depends on where they start.
+    /// </remarks>
+    public Period? Length =>
+        this switch
+        {
+            IEmptyRange<LocalDateTime>    => Period.Zero,
+            IFiniteRange<LocalDateTime> f => Period.Between(f.Start, f.End),
+            _                             => null
+        };
+
     /// <inheritdoc />
     public static LocalDateTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => NodaPatterns.ParseDateTime(s.ToString());

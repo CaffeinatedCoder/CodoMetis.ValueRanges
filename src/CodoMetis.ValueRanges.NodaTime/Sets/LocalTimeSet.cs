@@ -65,6 +65,10 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
     /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
     public int Count => _elements.Length;
 
+    /// <summary>Gets the element at <paramref name="index"/>, in canonical order.</summary>
+    /// <param name="index">The zero-based index.</param>
+    public LocalTime this[int index] => _elements[index];
+
     /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
     public bool IsEmpty => _elements.IsEmpty;
 

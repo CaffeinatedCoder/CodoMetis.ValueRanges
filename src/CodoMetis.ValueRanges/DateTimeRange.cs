@@ -144,6 +144,23 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The elapsed time between the bounds, or <see langword="null"/> when the range is
+    /// unbounded. The empty range measures <see cref="TimeSpan.Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// A span rather than a count: the domain is continuous. Bound inclusiveness does not affect
+    /// it. The bounds are wall-clock times, so the result does not account for any offset or
+    /// daylight-saving transition between them.
+    /// </remarks>
+    public TimeSpan? Length =>
+        this switch
+        {
+            IEmptyRange<DateTime>    => TimeSpan.Zero,
+            IFiniteRange<DateTime> f => f.End - f.Start,
+            _                        => null
+        };
+
     /// <inheritdoc />
     public static DateTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);

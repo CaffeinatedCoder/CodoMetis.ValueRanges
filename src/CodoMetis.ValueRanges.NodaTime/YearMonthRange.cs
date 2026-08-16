@@ -195,12 +195,50 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
              : Empty;
 
     /// <inheritdoc />
+    public static bool IsDiscrete => true;
+
+    /// <inheritdoc />
     public static YearMonth? NextValueAfter(YearMonth value)
         => value == MaxIso ? null : value.PlusMonths(1);
 
     /// <inheritdoc />
     public static YearMonth? PreviousValueBefore(YearMonth value)
         => value == MinIso ? null : value.PlusMonths(-1);
+
+    /// <summary>
+    /// Enumerates the months the range contains, ascending and inclusive of both bounds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Available here because the domain is discrete. The continuous range types have no
+    /// step to walk and do not declare this member at all, so asking for the values of a
+    /// <c>DecimalRange</c> is a compile error rather than a runtime failure.
+    /// </para>
+    /// <para>
+    /// The empty range yields nothing. An unbounded range would not terminate and throws
+    /// immediately — the check is eager, so the failure surfaces at this call rather than at
+    /// the <c>foreach</c> that consumes it.
+    /// </para>
+    /// </remarks>
+    /// <returns>The contained months, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    public IEnumerable<YearMonth> Values() => DiscreteEnumeration.Values<YearMonthRange, YearMonth>(this);
+
+    /// <summary>
+    /// The number of months the range covers, or <see langword="null"/> when it is unbounded.
+    /// The empty range measures 0.
+    /// </summary>
+    /// <remarks>
+    /// Inclusive of both ends, because the domain is discrete with a one-month step:
+    /// <c>[2024-01, 2024-03]</c> measures 3, which is the answer a billing period gives.
+    /// </remarks>
+    public int? Length =>
+        this switch
+        {
+            IEmptyRange<YearMonth>    => 0,
+            IFiniteRange<YearMonth> f => (f.End.Year - f.Start.Year) * 12 + (f.End.Month - f.Start.Month) + 1,
+            _                         => null
+        };
 
     /// <inheritdoc />
     public static YearMonth ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)

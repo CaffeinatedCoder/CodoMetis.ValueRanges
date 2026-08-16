@@ -15,6 +15,16 @@ covers all four packages, which share one version number and release together.
   surface: `RangeSet<LocalDateRange, LocalDate>` and its siblings gain `IsInfinity()`/`IsFinite()`
   and collection-expression support. See `CodoMetis.ValueRanges` 6.3.0.
 
+- **`Length`** on the NodaTime ranges: `int?` days for `LocalDateRange`, `int?` months for
+  `YearMonthRange`, `Duration?` for `InstantRange` — exact elapsed time — and `Period?` for
+  `LocalDateTimeRange`, whose wall-clock bounds bound a calendar quantity rather than a fixed
+  span.
+- **`Values()`** on `LocalDateRange` and `YearMonthRange`, the two discrete NodaTime domains.
+  `InstantRange`, `LocalDateTimeRange` and the time sets are continuous and do not declare it.
+- **`ToRangeSet()` / `ToLocalDateSet()` / `ToYearMonthSet()`** — the value-set ↔ range-set bridge
+  for the discrete NodaTime domains.
+- **`Clamp(value)`** on every NodaTime range, and an **indexer** on the five NodaTime set types.
+
 ## [6.2.1] — 2026-08-16
 
 ### Fixed

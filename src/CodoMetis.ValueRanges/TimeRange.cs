@@ -154,6 +154,22 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The elapsed time between the bounds, or <see langword="null"/> when the range is
+    /// unbounded. The empty range measures <see cref="TimeSpan.Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// A span rather than a count: the domain is continuous. A window crossing midnight is two
+    /// ranges rather than one, so this never wraps — measure the set, not a single range.
+    /// </remarks>
+    public TimeSpan? Length =>
+        this switch
+        {
+            IEmptyRange<TimeOnly>    => TimeSpan.Zero,
+            IFiniteRange<TimeOnly> f => f.End - f.Start,
+            _                        => null
+        };
+
     /// <inheritdoc />
     public static TimeOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => TimeOnly.Parse(s, provider ?? CultureInfo.InvariantCulture);
