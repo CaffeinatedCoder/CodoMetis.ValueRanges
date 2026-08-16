@@ -33,13 +33,13 @@ env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
 jobs:
+  # Linux runs the whole suite, because Linux is sufficient to validate the product: nothing in
+  # the four shipping packages reads the environment. There is no TimeZoneInfo, no DateTime.Now,
+  # no CurrentCulture, no file or path access anywhere in src/ — the library is pure managed code
+  # on a single TFM, invariant by contract. It cannot behave differently per OS.
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, windows-latest, macos-latest ]
+    name: Test (ubuntu-latest)
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
@@ -55,10 +55,6 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
-      # The matrix earns its keep on the conventions project, which does real path work —
-      # locating the repository by its .slnx marker, globbing src/, reading csproj and changelog
-      # files — and that is where separator handling differs between Windows and the Unix runners.
-      #
       # Everything except the integration project, which is the next job.
       - name: Unit and convention tests
         run: |
@@ -68,7 +64,7 @@ jobs:
             esac
             echo "==> $project"
             dotnet test "$project" -c Release --no-build \
-              --logger "trx;LogFileName=$(basename "$project")-${{ matrix.os }}.trx" \
+              --logger "trx;LogFileName=$(basename "$project")-ubuntu.trx" \
               --results-directory TestResults
           done
 
@@ -76,7 +72,45 @@ jobs:
         uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-results-${{ matrix.os }}
+          name: test-results-ubuntu
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  # The only job that exists for a second OS, and it defends contributors rather than consumers.
+  #
+  # The conventions project is the sole place in the repository that touches Path, Directory and
+  # File — it locates the repository by walking up to the .slnx marker, globs src/, and reads
+  # csproj and changelog files. Backslash-versus-forward-slash is a real divergence there, and a
+  # Windows contributor hitting a suite that cannot find the repository root is a papercut worth
+  # preventing. It is *not* product validation, and nothing here justifies running the other 930
+  # tests a second time.
+  #
+  # macOS is deliberately absent: it is POSIX like Linux for separators, and its case-insensitive
+  # filesystem would mask a path bug rather than reveal one.
+  conventions-windows:
+    name: Conventions (windows-latest)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Convention tests
+        run: >
+          dotnet test test/CodoMetis.ValueRanges.Conventions.Tests
+          -c Release
+          --logger "trx;LogFileName=conventions-windows.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-results-conventions-windows
           path: TestResults/*.trx
           if-no-files-found: ignore
 
@@ -121,7 +155,7 @@ jobs:
   pack:
     name: Pack
     runs-on: ubuntu-latest
-    needs: [ test, integration ]
+    needs: [ test, integration, conventions-windows ]
 
     steps:
       - uses: actions/checkout@v6
