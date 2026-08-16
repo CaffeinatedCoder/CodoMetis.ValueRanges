@@ -54,7 +54,7 @@ public sealed class ParserResilienceTests
 
     // ---- bounded time, documented failure modes ------------------------------------------------
 
-    [DataTestMethod, DynamicData(nameof(HostileRangeLiterals)), Timeout(10_000)]
+    [TestMethod, DynamicData(nameof(HostileRangeLiterals)), Timeout(10_000)]
     public void RangeParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name, string input)
     {
         AssertRejectedOrParsed(() => Int32Range.Parse(input, null));
@@ -64,14 +64,14 @@ public sealed class ParserResilienceTests
         Assert.IsFalse(Throws(() => DateTimeRange.TryParse(input, null, out _)), "DateTimeRange.TryParse threw on hostile input.");
     }
 
-    [DataTestMethod, DynamicData(nameof(HostileSetLiterals)), Timeout(10_000)]
+    [TestMethod, DynamicData(nameof(HostileSetLiterals)), Timeout(10_000)]
     public void RangeSetParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name, string input)
     {
         AssertRejectedOrParsed(() => RangeSet<Int32Range, int>.Parse(input, null));
         Assert.IsFalse(Throws(() => RangeSet<Int32Range, int>.TryParse(input, null, out _)), "RangeSet.TryParse threw on hostile input.");
     }
 
-    [DataTestMethod, DynamicData(nameof(HostileArrayLiterals)), Timeout(10_000)]
+    [TestMethod, DynamicData(nameof(HostileArrayLiterals)), Timeout(10_000)]
     public void SetParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name, string input)
     {
         AssertRejectedOrParsed(() => StringSet.Parse(input, null));
@@ -80,7 +80,7 @@ public sealed class ParserResilienceTests
         Assert.IsFalse(Throws(() => Int32Set.TryParse(input, null, out _)),  "Int32Set.TryParse threw on hostile input.");
     }
 
-    [DataTestMethod, DynamicData(nameof(HostileRangeLiterals)), Timeout(10_000)]
+    [TestMethod, DynamicData(nameof(HostileRangeLiterals)), Timeout(10_000)]
     public void JsonRead_HostileRangeString_IsAcceptedOrRejectedInBoundedTime(string name, string input)
     {
         var payload = JsonSerializer.Serialize(input);
