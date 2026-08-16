@@ -27,6 +27,34 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
   are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
   payload.
 
+## [6.2.1] — 2026-08-16
+
+### Fixed
+
+- **⚠️ `IsAdjacentTo` answered `false` whenever the receiver was unbounded, and normalization
+  inherited it.** The predicate switched on the receiver's shape and handled only
+  `IFiniteRange<T>`; every other shape fell through to `false`. Its *inner* switch did handle
+  unbounded operands, so the relation was asymmetric — `[1,3].IsAdjacentTo((,0])` was `true` while
+  `(,0].IsAdjacentTo([1,3])` was `false`. PostgreSQL's `-|-` is symmetric and answers `true` for
+  both; the XML doc asserted the broken behaviour as if it were intended, which is why reading the
+  code confirmed it.
+
+  The consequence was not confined to the predicate. `RangeSet.From` and `RangeSet.Union` merge
+  neighbours with `current.IsAdjacentTo(next)` after sorting by lower bound, so an unbounded-start
+  element is *always* the receiver and always took the broken direction. Sets were built violating
+  the invariant they document:
+
+  ```
+  RangeSet.From([(,0], [1,)])          was {(,0],[1,)}   now {(,)}
+  blocks.Union(blocks.Complement())    was {(,0],[1,)}   now the Infinite set
+  ```
+
+  Two sets that should be equal compared unequal depending on how they were built, and a set
+  covering the whole domain did not equal `RangeSet.Infinite`. **Results change for any range or
+  set involving an unbounded element adjacent to its neighbour** — always from a wrong answer to
+  the one PostgreSQL gives. Model-versus-server agreement is now pinned by the live suite for
+  every affected shape pair. Applies to the NodaTime range types, which share the predicate.
+
 ## [6.2.0] — 2026-08-16
 
 ### Changed

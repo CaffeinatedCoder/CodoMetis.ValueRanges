@@ -3,6 +3,13 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.2.1] — 2026-08-16
+
+No source change in this package. The translation of `IsAdjacentTo` to `-|-` was always correct —
+PostgreSQL's operator is symmetric — but the in-memory predicate it mirrors was not, so client-side
+and server-side answers disagreed for unbounded operands. Fixed in `CodoMetis.ValueRanges` 6.2.1;
+the live-PostgreSQL suite here now pins the agreement for every affected shape pair.
+
 ## [6.2.0] — 2026-08-16
 
 ### Fixed

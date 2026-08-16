@@ -127,6 +127,64 @@ public class RangeSetTests
         Assert.AreEqual(9, merged.End);
     }
 
+    /// <summary>
+    /// The invariant says pairwise non-adjacent, and an unbounded element is not exempt.
+    /// Normalization sorts by lower bound, so an unbounded-start element is always the *left*
+    /// operand of the neighbour check — the direction that used to answer false unconditionally.
+    /// </summary>
+    [TestMethod]
+    public void From_UnboundedStartAdjacentToItsSuccessor_Merges()
+    {
+        var result = IntSet.From([
+            Int32Range.CreateUnboundedStart(0, true),  // (-∞, 0]
+            Int32Range.CreateFinite(1, 3)              // [1, 3]
+        ]);
+
+        Assert.AreEqual(1, result.Count, $"expected a single merged element, got '{result}'");
+        Assert.AreEqual(Int32Range.CreateUnboundedStart(3, true), result[0]);
+    }
+
+    [TestMethod]
+    public void From_UnboundedStartMeetingUnboundedEnd_CollapsesToInfinite()
+    {
+        var result = IntSet.From([
+            Int32Range.CreateUnboundedStart(0, true),  // (-∞, 0]
+            Int32Range.CreateUnboundedEnd(1)           // [1, +∞)
+        ]);
+
+        Assert.AreSame(IntSet.Infinite, result, $"the two halves cover every int, got '{result}'");
+    }
+
+    /// <summary>
+    /// A set unioned with its own complement is the whole domain — the identity that fails
+    /// loudest when normalization leaves an adjacent pair unmerged.
+    /// </summary>
+    [TestMethod]
+    public void Union_WithOwnComplement_IsTheInfiniteSet()
+    {
+        var blocks = IntSet.From([Int32Range.CreateFinite(1, 3), Int32Range.CreateFinite(20, 22)]);
+
+        var covered = blocks.Union(blocks.Complement());
+
+        Assert.AreSame(IntSet.Infinite, covered, $"got '{covered}'");
+    }
+
+    /// <summary>
+    /// Equality is over normalized form, so two spellings of the same set must not depend on
+    /// which construction path built them.
+    /// </summary>
+    [TestMethod]
+    public void From_AdjacentUnboundedHalves_EqualsTheInfiniteSet()
+    {
+        var built = IntSet.From([
+            Int32Range.CreateUnboundedStart(0, true),
+            Int32Range.CreateUnboundedEnd(1)
+        ]);
+
+        Assert.AreEqual(IntSet.Infinite, built);
+        Assert.AreEqual(IntSet.Infinite.GetHashCode(), built.GetHashCode());
+    }
+
     [TestMethod]
     public void From_UnboundedStartAndDisjointFinite_SortsUnboundedStartFirst()
     {

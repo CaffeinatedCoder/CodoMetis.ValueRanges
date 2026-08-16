@@ -21,6 +21,21 @@ covers all four packages, which share one version number and release together.
   are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
   payload.
 
+## [6.2.1] — 2026-08-16
+
+### Fixed
+
+- **⚠️ `IsAdjacentTo` answered `false` whenever the receiver was unbounded.** The predicate
+  switched on the receiver and handled only `IFiniteRange<T>`, while its inner switch handled
+  unbounded *operands* — so the relation was asymmetric: `[1,3].IsAdjacentTo((,0])` was `true`,
+  `(,0].IsAdjacentTo([1,3])` was `false`. PostgreSQL's `-|-` answers `true` for both.
+  `RangeSet.From` and `RangeSet.Union` merge neighbours after sorting by lower bound, which puts an
+  unbounded-start element in the receiver position every time, so they built sets that violated the
+  pairwise-non-adjacent invariant: `From([(,0], [1,)])` returned `{(,0],[1,)}` rather than `{(,)}`,
+  and a set unioned with its complement did not equal `RangeSet.Infinite`. **Results change for any
+  range or set with an unbounded element adjacent to its neighbour**, in every case from a wrong
+  answer to PostgreSQL's.
+
 ## [6.2.0] — 2026-08-16
 
 ### Changed

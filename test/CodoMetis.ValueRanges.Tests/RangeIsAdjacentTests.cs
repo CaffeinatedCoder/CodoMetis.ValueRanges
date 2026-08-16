@@ -100,4 +100,96 @@ public class RangeIsAdjacentTests
         var openStart2 = Int32Range.CreateUnboundedStart(5, true);
         Assert.IsTrue(finite.IsAdjacentTo(openStart2));
     }
+
+    // -------------------------------------------------------------------------
+    // Symmetry — the receiver's shape must not decide the answer
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Adjacency is a symmetric relation, and PostgreSQL's <c>-|-</c> is symmetric too
+    /// (confirmed directly against the server). Answering on the receiver's shape rather than
+    /// on the pair breaks both.
+    /// </summary>
+    [TestMethod]
+    public void IsAdjacentTo_IsSymmetric_AcrossEveryShapePair()
+    {
+        Int32Range[] shapes =
+        [
+            Int32Range.Empty,
+            Int32Range.Infinite,
+            Int32Range.CreateFinite(1, 3),
+            Int32Range.CreateFinite(4, 6),
+            Int32Range.CreateUnboundedStart(0, true),  // (-∞, 0]
+            Int32Range.CreateUnboundedEnd(1),          // [1, +∞)
+            Int32Range.CreateUnboundedEnd(4),          // [4, +∞)
+            Int32Range.CreateUnboundedEnd(7)           // [7, +∞)
+        ];
+
+        foreach (var a in shapes)
+        foreach (var b in shapes)
+            Assert.AreEqual(
+                a.IsAdjacentTo(b), b.IsAdjacentTo(a),
+                $"'{a}' -|- '{b}' = {a.IsAdjacentTo(b)} but '{b}' -|- '{a}' = {b.IsAdjacentTo(a)}");
+    }
+
+    /// <summary>
+    /// The concrete pairs PostgreSQL was asked about directly, all of which it answers
+    /// <see langword="true"/> in both directions.
+    /// </summary>
+    [TestMethod]
+    public void IsAdjacentTo_UnboundedReceiver_MatchesPostgres()
+    {
+        var openStart = Int32Range.CreateUnboundedStart(0, true);  // (-∞, 0]
+        var finite    = Int32Range.CreateFinite(1, 3);             // [1, 3]
+        var openEnd   = Int32Range.CreateUnboundedEnd(4);          // [4, +∞)
+        var meeting   = Int32Range.CreateUnboundedEnd(1);          // [1, +∞)
+
+        Assert.IsTrue(openStart.IsAdjacentTo(finite), "(-∞,0] -|- [1,3]");
+        Assert.IsTrue(finite.IsAdjacentTo(openStart), "[1,3] -|- (-∞,0]");
+
+        Assert.IsTrue(openEnd.IsAdjacentTo(finite), "[4,+∞) -|- [1,3]");
+        Assert.IsTrue(finite.IsAdjacentTo(openEnd), "[1,3] -|- [4,+∞)");
+
+        Assert.IsTrue(openStart.IsAdjacentTo(meeting), "(-∞,0] -|- [1,+∞)");
+        Assert.IsTrue(meeting.IsAdjacentTo(openStart), "[1,+∞) -|- (-∞,0]");
+    }
+
+    [TestMethod]
+    public void IsAdjacentTo_Continuous_UnboundedReceiver_NeedsXorInclusiveness()
+    {
+        var openStart = DecimalRange.CreateUnboundedStart(5m, false); // (-∞, 5)
+        var claiming  = DecimalRange.CreateFinite(5m, 10m, true, true);  // [5, 10]
+        var leaving   = DecimalRange.CreateFinite(5m, 10m, false, true); // (5, 10]
+
+        Assert.IsTrue(openStart.IsAdjacentTo(claiming), "one side claims 5");
+        Assert.IsFalse(openStart.IsAdjacentTo(leaving), "neither side claims 5 — a gap");
+
+        var openEnd  = DecimalRange.CreateUnboundedEnd(5m, true);        // [5, +∞)
+        var upToFive = DecimalRange.CreateFinite(1m, 5m, true, false);   // [1, 5)
+
+        Assert.IsTrue(openEnd.IsAdjacentTo(upToFive));
+        Assert.IsFalse(openEnd.IsAdjacentTo(DecimalRange.CreateFinite(1m, 5m, true, true)), "both claim 5 — overlap");
+    }
+
+    /// <summary>
+    /// Widening the receiver must not make overlapping or degenerate operands adjacent.
+    /// </summary>
+    [TestMethod]
+    public void IsAdjacentTo_UnboundedReceiver_StillFalseWhenOverlappingOrDegenerate()
+    {
+        var openStart = Int32Range.CreateUnboundedStart(0, true);  // (-∞, 0]
+        var openEnd   = Int32Range.CreateUnboundedEnd(4);          // [4, +∞)
+
+        // Two ranges running to the same infinity always overlap.
+        Assert.IsFalse(openStart.IsAdjacentTo(Int32Range.CreateUnboundedStart(9, true)));
+        Assert.IsFalse(openEnd.IsAdjacentTo(Int32Range.CreateUnboundedEnd(9)));
+
+        // A gap, not a meeting point.
+        Assert.IsFalse(openStart.IsAdjacentTo(openEnd));
+
+        Assert.IsFalse(openStart.IsAdjacentTo(Int32Range.Infinite));
+        Assert.IsFalse(openStart.IsAdjacentTo(Int32Range.Empty));
+        Assert.IsFalse(Int32Range.Infinite.IsAdjacentTo(openStart));
+        Assert.IsFalse(Int32Range.Empty.IsAdjacentTo(openStart));
+    }
 }

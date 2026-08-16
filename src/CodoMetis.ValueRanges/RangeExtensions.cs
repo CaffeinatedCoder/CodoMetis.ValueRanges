@@ -403,41 +403,61 @@ public static class RangeExtensions
         /// complementary inclusiveness: one side must claim the boundary point and the other must not.
         /// </para>
         /// <para>
-        /// Only <see cref="IFiniteRange{T}"/> instances can be adjacent to other ranges;
-        /// <see cref="IUnboundedEndRange{T}"/>, <see cref="IUnboundedStartRange{T}"/>, and
-        /// <see cref="IInfinityRange{T}"/> always return <see langword="false"/>.
+        /// An unbounded range is adjacent on its bounded edge: <c>(-∞, e]</c> is adjacent to a
+        /// range starting immediately after <c>e</c>, and <c>[s, +∞)</c> to one ending
+        /// immediately before <c>s</c> — including to each other, where the two halves close
+        /// the domain. <see cref="IEmptyRange{T}"/> and <see cref="IInfinityRange{T}"/> are never
+        /// adjacent to anything, and two ranges open at the same end always overlap.
         /// </para>
         /// </remarks>
         /// <param name="other">The range to test against.</param>
         /// <returns>
         /// <see langword="true"/> if the ranges are contiguous with no gap and no overlap.
         /// </returns>
-        public bool IsAdjacentTo(IRange<T> other) =>
-            range switch
+        public bool IsAdjacentTo(IRange<T> other)
+        {
+            // Adjacency is symmetric — PostgreSQL's -|- is too — so each unordered pair of
+            // shapes is decided once and both receiver orders route to the same test. Deciding
+            // per receiver is how the two unbounded receivers came to answer false while their
+            // mirrored operand cases answered true.
+            static bool Meets(T leftEnd, bool leftInc, T rightStart, bool rightInc)
+                => BoundaryMeetsAdjacently<TRange, T>(leftEnd, leftInc, rightStart, rightInc);
+
+            // Either may come first, so both orders are tried.
+            static bool FiniteFinite(IFiniteRange<T> a, IFiniteRange<T> b)
+                => Meets(a.End, a.EndInclusive, b.Start, b.StartInclusive)
+                || Meets(b.End, b.EndInclusive, a.Start, a.StartInclusive);
+
+            // (-∞, s.End] runs to negative infinity, so it can only be followed by f.
+            static bool StartThenFinite(IUnboundedStartRange<T> s, IFiniteRange<T> f)
+                => Meets(s.End, s.EndInclusive, f.Start, f.StartInclusive);
+
+            // [e.Start, +∞) runs to positive infinity, so it can only follow f.
+            static bool FiniteThenEnd(IFiniteRange<T> f, IUnboundedEndRange<T> e)
+                => Meets(f.End, f.EndInclusive, e.Start, e.StartInclusive);
+
+            // The two halves meeting exactly: no gap, no overlap, and together the whole domain.
+            static bool StartThenEnd(IUnboundedStartRange<T> s, IUnboundedEndRange<T> e)
+                => Meets(s.End, s.EndInclusive, e.Start, e.StartInclusive);
+
+            return (range, other) switch
             {
-                IFiniteRange<T> b =>
-                    other switch
-                    {
-                        IFiniteRange<T> o => BoundaryMeetsAdjacently<TRange, T>(
-                                                 b.End, b.EndInclusive, o.Start, o.StartInclusive
-                                             ) ||
-                                             BoundaryMeetsAdjacently<TRange, T>(
-                                                 o.End, o.EndInclusive, b.Start, b.StartInclusive
-                                             ),
+                (IFiniteRange<T> a, IFiniteRange<T> b) => FiniteFinite(a, b),
 
-                        IUnboundedStartRange<T> s => BoundaryMeetsAdjacently<TRange, T>(
-                            s.End, s.EndInclusive, b.Start, b.StartInclusive
-                        ),
+                (IUnboundedStartRange<T> s, IFiniteRange<T> f) => StartThenFinite(s, f),
+                (IFiniteRange<T> f, IUnboundedStartRange<T> s) => StartThenFinite(s, f),
 
-                        IUnboundedEndRange<T> e => BoundaryMeetsAdjacently<TRange, T>(
-                            b.End, b.EndInclusive, e.Start, e.StartInclusive
-                        ),
+                (IFiniteRange<T> f, IUnboundedEndRange<T> e) => FiniteThenEnd(f, e),
+                (IUnboundedEndRange<T> e, IFiniteRange<T> f) => FiniteThenEnd(f, e),
 
-                        _ => false
-                    },
+                (IUnboundedStartRange<T> s, IUnboundedEndRange<T> e) => StartThenEnd(s, e),
+                (IUnboundedEndRange<T> e, IUnboundedStartRange<T> s) => StartThenEnd(s, e),
 
+                // Empty is adjacent to nothing; Infinity overlaps everything non-empty; two
+                // ranges open at the same end always overlap.
                 _ => false
             };
+        }
 
         /// <summary>
         /// Returns the smallest single range containing both this range and

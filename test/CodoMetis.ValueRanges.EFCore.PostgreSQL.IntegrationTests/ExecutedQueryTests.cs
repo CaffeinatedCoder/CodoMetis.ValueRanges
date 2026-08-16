@@ -123,6 +123,59 @@ public class ExecutedQueryTests
         Assert.AreEqual(period.Except(operand), server.Difference);
     }
 
+    /// <summary>
+    /// Adjacency against the server that defines it, across the shape pairs involving an
+    /// unbounded operand. The model answered <see langword="false"/> for every pair whose
+    /// *receiver* was unbounded while PostgreSQL answered <see langword="true"/>; this pins the
+    /// agreement in both directions.
+    /// </summary>
+    [TestMethod]
+    public async Task RangeAdjacency_UnboundedShapes_MatchPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var openStart = Int32Range.CreateUnboundedStart(0, true);  // (-∞, 0]
+        var openEnd   = Int32Range.CreateUnboundedEnd(4);          // [4, +∞)
+        var meeting   = Int32Range.CreateUnboundedEnd(1);          // [1, +∞)
+        var finite    = Int32Range.CreateFinite(1, 3);             // [1, 3]
+
+        await Seed(
+            new Reservation { Id = 2091, Seats = openStart },
+            new Reservation { Id = 2092, Seats = openEnd },
+            new Reservation { Id = 2093, Seats = finite });
+
+        await using var context = new IntegrationDbContext();
+
+        var server = await context.Reservations
+            .Where(r => r.Id >= 2091 && r.Id <= 2093)
+            .OrderBy(r => r.Id)
+            .Select(r => new
+            {
+                r.Id,
+                r.Seats,
+                ToFinite  = r.Seats.IsAdjacentTo(finite),
+                ToOpenEnd = r.Seats.IsAdjacentTo(openEnd),
+                ToMeeting = r.Seats.IsAdjacentTo(meeting)
+            })
+            .ToListAsync();
+
+        foreach (var row in server)
+        {
+            Assert.AreEqual(row.Seats.IsAdjacentTo(finite), row.ToFinite, $"'{row.Seats}' -|- '{finite}'");
+            Assert.AreEqual(row.Seats.IsAdjacentTo(openEnd), row.ToOpenEnd, $"'{row.Seats}' -|- '{openEnd}'");
+            Assert.AreEqual(row.Seats.IsAdjacentTo(meeting), row.ToMeeting, $"'{row.Seats}' -|- '{meeting}'");
+        }
+
+        // The three that used to disagree, pinned explicitly against the server's answers.
+        var fromOpenStart = server.Single(row => row.Id == 2091);
+        Assert.IsTrue(fromOpenStart.ToFinite, "(-∞,0] -|- [1,3]");
+        Assert.IsTrue(fromOpenStart.ToMeeting, "(-∞,0] -|- [1,+∞)");
+        Assert.IsFalse(fromOpenStart.ToOpenEnd, "(-∞,0] and [4,+∞) leave a gap");
+
+        var fromOpenEnd = server.Single(row => row.Id == 2092);
+        Assert.IsTrue(fromOpenEnd.ToFinite, "[4,+∞) -|- [1,3]");
+    }
+
     [TestMethod]
     public async Task MultirangeComparisons_MatchInMemory()
     {
