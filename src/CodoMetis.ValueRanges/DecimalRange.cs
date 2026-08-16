@@ -143,6 +143,23 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The span between the bounds, or <see langword="null"/> when the range is unbounded.
+    /// The empty range measures 0.
+    /// </summary>
+    /// <remarks>
+    /// A span rather than a count: the domain is continuous, so there is nothing to count.
+    /// Bound inclusiveness does not affect the span — <c>[1, 5]</c> and <c>[1, 5)</c> both
+    /// measure 4.
+    /// </remarks>
+    public decimal? Length =>
+        this switch
+        {
+            IEmptyRange<decimal>    => 0m,
+            IFiniteRange<decimal> f => f.End - f.Start,
+            _                       => null
+        };
+
     /// <inheritdoc />
     public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => decimal.Parse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture);
@@ -154,12 +171,23 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     public static DecimalRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<DecimalRange, decimal>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static DecimalRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<DecimalRange, decimal>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into a <see cref="DecimalRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out DecimalRange result)
         => RangeFormat.TryParse<DecimalRange, decimal>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DecimalRange result)
+        => RangeFormat.TryParse<DecimalRange, decimal>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

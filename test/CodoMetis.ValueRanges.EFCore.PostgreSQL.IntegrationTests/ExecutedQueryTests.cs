@@ -232,6 +232,136 @@ public class ExecutedQueryTests
         CollectionAssert.AreEqual(new[] { 2041 }, byEquality);
     }
 
+    /// <summary>
+    /// The shape predicates over a multirange column, against the server that defines them.
+    /// The row that matters is 2072: unbounded at both ends with a gap in the middle, so
+    /// <c>lower_inf AND upper_inf</c> — the translation that is correct for a single range —
+    /// answers true while the set does not cover the domain.
+    /// </summary>
+    [TestMethod]
+    public async Task MultirangeShapePredicates_MatchInMemory()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var infinite = RangeSet<Int32Range, int>.Infinite;
+
+        var gapped = RangeSet<Int32Range, int>.From([
+            Int32Range.CreateUnboundedStart(5, true),
+            Int32Range.CreateUnboundedEnd(10)
+        ]);
+
+        var bounded = RangeSet<Int32Range, int>.From([
+            Int32Range.CreateFinite(1, 3),
+            Int32Range.CreateFinite(20, 22)
+        ]);
+
+        var empty = RangeSet<Int32Range, int>.Empty;
+
+        await Seed(
+            new Reservation { Id = 2071, SeatBlocks = infinite },
+            new Reservation { Id = 2072, SeatBlocks = gapped },
+            new Reservation { Id = 2073, SeatBlocks = bounded },
+            new Reservation { Id = 2074, SeatBlocks = empty });
+
+        await using var context = new IntegrationDbContext();
+
+        var server = await context.Reservations
+            .Where(r => r.Id >= 2071 && r.Id <= 2074)
+            .OrderBy(r => r.Id)
+            .Select(r => new
+            {
+                r.Id,
+                Infinity        = r.SeatBlocks.IsInfinity(),
+                Finite          = r.SeatBlocks.IsFinite(),
+                UnboundedStart  = r.SeatBlocks.IsUnboundedStart(),
+                UnboundedEnd    = r.SeatBlocks.IsUnboundedEnd()
+            })
+            .ToListAsync();
+
+        var expected = new[] { infinite, gapped, bounded, empty };
+
+        for (var i = 0; i < expected.Length; i++)
+        {
+            var set = expected[i];
+            var row = server[i];
+
+            Assert.AreEqual(set.IsInfinity(), row.Infinity, $"IsInfinity on row {row.Id} ('{set}')");
+            Assert.AreEqual(set.IsFinite(), row.Finite, $"IsFinite on row {row.Id} ('{set}')");
+            Assert.AreEqual(set.IsUnboundedStart(), row.UnboundedStart, $"IsUnboundedStart on row {row.Id}");
+            Assert.AreEqual(set.IsUnboundedEnd(), row.UnboundedEnd, $"IsUnboundedEnd on row {row.Id}");
+        }
+
+        // Pinned explicitly: the case that separates full coverage from open at both ends.
+        var gappedRow = server.Single(row => row.Id == 2072);
+        Assert.IsTrue(gappedRow.UnboundedStart);
+        Assert.IsTrue(gappedRow.UnboundedEnd);
+        Assert.IsFalse(gappedRow.Infinity, "PostgreSQL agrees the gapped set is not the whole domain");
+
+        var onlyInfinite = await context.Reservations
+            .Where(r => r.Id >= 2071 && r.Id <= 2074 && r.SeatBlocks.IsInfinity())
+            .Select(r => r.Id)
+            .ToListAsync();
+        CollectionAssert.AreEqual(new[] { 2071 }, onlyInfinite);
+
+        var onlyBounded = await context.Reservations
+            .Where(r => r.Id >= 2071 && r.Id <= 2074 && r.SeatBlocks.IsFinite())
+            .Select(r => r.Id)
+            .ToListAsync();
+        CollectionAssert.AreEqual(new[] { 2073 }, onlyBounded);
+    }
+
+    /// <summary>
+    /// <c>IsInfinity</c> composes on a server-computed union, unlike the value sets' <c>Count</c>:
+    /// the multirange <c>+</c> operator returns a normalized multirange, where <c>array_cat</c>
+    /// merely concatenates, so equality against <c>'{(,)}'</c> stays meaningful through the
+    /// composition.
+    /// </summary>
+    /// <remarks>
+    /// The union with the set's own complement is the sharp case: it covers the domain only if
+    /// both sides normalize the unbounded halves together. It is also the case that failed while
+    /// <c>IsAdjacentTo</c> answered <see langword="false"/> for an unbounded receiver — the server
+    /// said <c>{(,)}</c> and the model said <c>{(,0],[1,)}</c>.
+    /// </remarks>
+    [TestMethod]
+    public async Task MultirangeIsInfinity_ComposesOnAServerComputedUnion()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var blocks = RangeSet<Int32Range, int>.From([
+            Int32Range.CreateFinite(1, 3),
+            Int32Range.CreateFinite(20, 22)
+        ]);
+        var bridging = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(4, 19)]);
+
+        await Seed(new Reservation { Id = 2081, SeatBlocks = blocks });
+
+        await using var context = new IntegrationDbContext();
+
+        var server = await context.Reservations
+            .Where(r => r.Id == 2081)
+            .Select(r => new
+            {
+                WithComplement = r.SeatBlocks.Union(r.SeatBlocks.Complement()).IsInfinity(),
+                WithBridging   = r.SeatBlocks.Union(bridging).IsInfinity(),
+                WithItself     = r.SeatBlocks.Union(r.SeatBlocks).IsInfinity(),
+                Bridged        = r.SeatBlocks.Union(bridging).Merge()
+            })
+            .SingleAsync();
+
+        Assert.AreEqual(blocks.Union(blocks.Complement()).IsInfinity(), server.WithComplement);
+        Assert.IsTrue(server.WithComplement, "a set unioned with its complement covers the domain");
+
+        // The union collapses three elements into one [1,22] — a real normalization on the
+        // server — and IsInfinity still answers over the composed expression.
+        Assert.AreEqual(blocks.Union(bridging).IsInfinity(), server.WithBridging);
+        Assert.IsFalse(server.WithBridging);
+        Assert.AreEqual(blocks.Union(bridging).Merge(), server.Bridged);
+        Assert.AreEqual(Int32Range.CreateFinite(1, 22), server.Bridged);
+
+        Assert.AreEqual(blocks.Union(blocks).IsInfinity(), server.WithItself);
+        Assert.IsFalse(server.WithItself);
+    }
+
     [TestMethod]
     public async Task UnboundedDoesNotExtend_MatchesPostgres()
     {

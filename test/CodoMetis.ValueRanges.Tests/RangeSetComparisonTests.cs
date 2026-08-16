@@ -46,6 +46,70 @@ public class RangeSetComparisonTests
         Assert.IsTrue(Set(R(1, 3), Int32Range.CreateUnboundedEnd(10)).IsUnboundedEnd());
     }
 
+    [TestMethod]
+    public void IsInfinity_TrueOnlyForTheInfiniteSet()
+    {
+        Assert.IsTrue(IntSet.Infinite.IsInfinity());
+        Assert.IsFalse(IntSet.Empty.IsInfinity());
+        Assert.IsFalse(Set(R(1, 3)).IsInfinity());
+        Assert.IsFalse(Set(Int32Range.CreateUnboundedStart(5, true), R(10, 12)).IsInfinity());
+    }
+
+    /// <summary>
+    /// The distinction the predicate exists for. On a single range, unbounded at both ends
+    /// means the whole domain; on a set it does not — this one runs to infinity in both
+    /// directions and still has a hole. Defining <c>IsInfinity</c> as
+    /// <c>IsUnboundedStart &amp;&amp; IsUnboundedEnd</c> would answer true here.
+    /// </summary>
+    [TestMethod]
+    public void IsInfinity_FalseWhenUnboundedAtBothEndsWithAGapBetween()
+    {
+        var gapped = Set(Int32Range.CreateUnboundedStart(5, true), Int32Range.CreateUnboundedEnd(10));
+
+        Assert.AreEqual(2, gapped.Count);
+        Assert.IsTrue(gapped.IsUnboundedStart());
+        Assert.IsTrue(gapped.IsUnboundedEnd());
+        Assert.IsFalse(gapped.Contains(7), "the gap is what makes the set less than the domain");
+        Assert.IsFalse(gapped.IsInfinity());
+    }
+
+    [TestMethod]
+    public void IsFinite_TrueOnlyForNonEmptySetsBoundedAtBothEnds()
+    {
+        Assert.IsTrue(Set(R(1, 3)).IsFinite());
+        Assert.IsTrue(Set(R(1, 3), R(10, 12)).IsFinite());
+
+        Assert.IsFalse(IntSet.Empty.IsFinite());
+        Assert.IsFalse(IntSet.Infinite.IsFinite());
+        Assert.IsFalse(Set(Int32Range.CreateUnboundedStart(5, true), R(10, 12)).IsFinite());
+        Assert.IsFalse(Set(R(1, 3), Int32Range.CreateUnboundedEnd(10)).IsFinite());
+    }
+
+    /// <summary>
+    /// The four state checks partition the sets the same way the five range shape predicates
+    /// partition the union: empty, infinite, and finite are mutually exclusive.
+    /// </summary>
+    [TestMethod]
+    public void EmptyInfiniteAndFinite_AreMutuallyExclusive()
+    {
+        IntSet[] sets =
+        [
+            IntSet.Empty,
+            IntSet.Infinite,
+            Set(R(1, 3)),
+            Set(R(1, 3), R(10, 12)),
+            Set(Int32Range.CreateUnboundedStart(5, true), R(10, 12)),
+            Set(R(1, 3), Int32Range.CreateUnboundedEnd(10)),
+            Set(Int32Range.CreateUnboundedStart(5, true), Int32Range.CreateUnboundedEnd(10))
+        ];
+
+        foreach (var set in sets)
+        {
+            var held = new[] { set.IsEmpty(), set.IsInfinity(), set.IsFinite() }.Count(x => x);
+            Assert.IsTrue(held <= 1, $"'{set}' satisfies {held} of IsEmpty/IsInfinity/IsFinite");
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Contains(RangeSet)
     // -------------------------------------------------------------------------

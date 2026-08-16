@@ -50,6 +50,10 @@ public sealed class DateTimeSet : IValueSet<DateTime>, IValueSetFactory<DateTime
     /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
     public int Count => _elements.Length;
 
+    /// <summary>Gets the element at <paramref name="index"/>, in canonical order.</summary>
+    /// <param name="index">The zero-based index.</param>
+    public DateTime this[int index] => _elements[index];
+
     /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
     public bool IsEmpty => _elements.IsEmpty;
 
@@ -71,12 +75,23 @@ public sealed class DateTimeSet : IValueSet<DateTime>, IValueSetFactory<DateTime
     public static DateTimeSet Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<DateTimeSet, DateTime>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static DateTimeSet Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<DateTimeSet, DateTime>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into a <see cref="DateTimeSet"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out DateTimeSet result)
         => SetFormat.TryParse<DateTimeSet, DateTime>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DateTimeSet result)
+        => SetFormat.TryParse<DateTimeSet, DateTime>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(DateTimeSet? other)

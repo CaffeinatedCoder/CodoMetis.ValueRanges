@@ -54,6 +54,10 @@ public sealed class Int32Set : IValueSet<int>, IValueSetFactory<Int32Set, int>, 
     /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
     public int Count => _elements.Length;
 
+    /// <summary>Gets the element at <paramref name="index"/>, in canonical order.</summary>
+    /// <param name="index">The zero-based index.</param>
+    public int this[int index] => _elements[index];
+
     /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
     public bool IsEmpty => _elements.IsEmpty;
 
@@ -71,12 +75,23 @@ public sealed class Int32Set : IValueSet<int>, IValueSetFactory<Int32Set, int>, 
     public static Int32Set Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<Int32Set, int>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static Int32Set Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<Int32Set, int>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into an <see cref="Int32Set"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out Int32Set result)
         => SetFormat.TryParse<Int32Set, int>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int32Set result)
+        => SetFormat.TryParse<Int32Set, int>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(Int32Set? other)
@@ -144,6 +159,10 @@ public sealed class Int32Set<TElement> :
     /// <summary>The number of elements — PostgreSQL <c>cardinality</c>.</summary>
     public int Count => _elements.Length;
 
+    /// <summary>Gets the element at <paramref name="index"/>, in canonical order.</summary>
+    /// <param name="index">The zero-based index.</param>
+    public TElement this[int index] => _elements[index];
+
     /// <summary>Whether the set contains no elements — PostgreSQL <c>cardinality(…) = 0</c>.</summary>
     public bool IsEmpty => _elements.IsEmpty;
 
@@ -178,12 +197,23 @@ public sealed class Int32Set<TElement> :
     public static Int32Set<TElement> Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<Int32Set<TElement>, TElement>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static Int32Set<TElement> Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<Int32Set<TElement>, TElement>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into an <see cref="Int32Set{TElement}"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out Int32Set<TElement> result)
         => SetFormat.TryParse<Int32Set<TElement>, TElement>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int32Set<TElement> result)
+        => SetFormat.TryParse<Int32Set<TElement>, TElement>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(Int32Set<TElement>? other)

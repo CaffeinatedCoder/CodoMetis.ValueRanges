@@ -137,6 +137,34 @@ public static class RangeExtensions
             };
 
         /// <summary>
+        /// Returns the value in the range closest to <paramref name="value"/> — the value itself
+        /// when the range contains it, otherwise the bound it falls outside of.
+        /// </summary>
+        /// <remarks>
+        /// Returns <see langword="null"/> for the empty range, which has no value to snap to.
+        /// An unbounded side never constrains: clamping into <c>(-∞, 10]</c> only ever pulls a
+        /// value down. On a continuous domain an exclusive bound is returned even though the
+        /// range does not contain it — the nearest contained value does not exist there, so
+        /// pair this with <c>Contains</c> when the distinction matters.
+        /// </remarks>
+        /// <param name="value">The value to bring into the range.</param>
+        /// <returns>The clamped value, or <see langword="null"/> for the empty range.</returns>
+        public T? Clamp(T value) =>
+            range switch
+            {
+                IInfinityRange<T> => value,
+
+                IFiniteRange<T> b => value.CompareTo(b.Start) < 0 ? b.Start
+                                   : value.CompareTo(b.End) > 0   ? b.End
+                                                                  : value,
+
+                IUnboundedStartRange<T> s => value.CompareTo(s.End) > 0 ? s.End : value,
+                IUnboundedEndRange<T> e   => value.CompareTo(e.Start) < 0 ? e.Start : value,
+
+                _ => null
+            };
+
+        /// <summary>
         /// Determines whether <paramref name="other"/> is entirely contained within this range.
         /// </summary>
         /// <param name="other">The range to test.</param>
@@ -599,5 +627,6 @@ public static class RangeExtensions
                        ? RangeSet<TRange, T>.From([left])
                        : RangeSet<TRange, T>.From([left, right]);
         }
+
     }
 }

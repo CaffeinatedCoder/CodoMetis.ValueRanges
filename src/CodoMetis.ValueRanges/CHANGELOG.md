@@ -3,7 +3,36 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
-## [Unreleased]
+## [6.3.0] — 2026-08-16
+
+### Added
+
+- **`RangeSet.IsInfinity()` and `RangeSet.IsFinite()`**, completing the shape predicates the single
+  ranges already had. `IsInfinity()` is true only for the set covering the whole domain — not the
+  same thing as unbounded at both ends, which `{(,5],[10,)}` satisfies while missing 7.
+  `IsFinite()` is true for a non-empty set bounded at both ends.
+- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`,
+  as the value set types already supported. Normalization is unchanged: empties dropped, sorted,
+  overlapping and adjacent neighbours merged. Adds `From(params ReadOnlySpan<TRange>)` and the
+  non-generic builder `RangeSet.Create<TRange, T>`.
+- **`ISpanParsable<T>`** on the seven range types, `RangeSet<TRange, T>`, and the fourteen set types
+  and arities, with `Parse`/`TryParse` overloads over `ReadOnlySpan<char>`. The literal parsers
+  were already span-based internally; this exposes them, so a slice of a larger buffer no longer
+  needs a substring allocation first. `IParsable<T>` is still satisfied.
+
+- **`Length`** on every range type: a count for the discrete domains (inclusive of both bounds),
+  a span for the continuous ones. Zero for the empty range, `null` for every unbounded shape.
+- **`Values()`** on `Int32Range`, `Int64Range` and `DateRange` — the contained values, ascending.
+  The continuous types do not declare it, so misuse is a compile error; an unbounded range throws
+  eagerly.
+- **`ToRangeSet()` / `ToInt32Set()` / `ToInt64Set()` / `ToDateSet()`** — conversions between a
+  value set and a range set over the same discrete domain, collapsing runs of consecutive values
+  into ranges and expanding them back. Client-side only.
+- **`Clamp(value)`** on every range, and an **indexer** on every value set type.
+- **`IRangeFactory<TRange, T>.IsDiscrete`**, a defaulted virtual static reporting whether the
+  domain has a step.
+
+## [6.2.1] — 2026-08-16
 
 ### Changed
 
@@ -20,8 +49,6 @@ covers all four packages, which share one version number and release together.
   through parsing" line in SECURITY.md — megabyte-scale malformed literals and 200,000-element sets
   are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
   payload.
-
-## [6.2.1] — 2026-08-16
 
 ### Fixed
 

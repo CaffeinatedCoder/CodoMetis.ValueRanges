@@ -9,7 +9,83 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
-## [Unreleased]
+## [6.3.0] — 2026-08-16
+
+Three additions that close gaps in the existing surface rather than extending the model. No
+breaking changes.
+
+### Added
+
+- **`RangeSet.IsInfinity()` and `RangeSet.IsFinite()`** — the two shape predicates a range had and
+  its multirange counterpart did not. `IsFinite()` is true for a non-empty set bounded at both
+  ends; `IsInfinity()` is true only for the set covering the whole domain.
+
+  `IsInfinity()` is deliberately **not** `IsUnboundedStart() && IsUnboundedEnd()`. That equivalence
+  holds for a single range, because a range is contiguous, and fails for a set:
+  `{(,5],[10,)}` is unbounded at both ends and does not contain 7. The EF translation reflects
+  the same distinction — the range predicate maps to `lower_inf(x) AND upper_inf(x)`, the set
+  predicate to equality against the infinite multirange literal, which is exact because
+  PostgreSQL canonicalizes multiranges the way the model does. `IsFinite()` maps to
+  `NOT lower_inf AND NOT upper_inf AND NOT isempty` for both.
+
+- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`,
+  matching what the nineteen value set types and arities already supported. Elements are normalized exactly as
+  `From` normalizes them: empties dropped, sorted by lower bound, overlapping and adjacent
+  neighbours merged, any infinity collapsing the set. A `From(params ReadOnlySpan<TRange>)`
+  overload comes with it, alongside the existing `From(IEnumerable<TRange>)`.
+
+  The builder is exposed as a non-generic `RangeSet.Create<TRange, T>`, because a
+  `[CollectionBuilder]` target cannot be generic. Prefer the collection expression: C# does not
+  infer type arguments from constraints, so a direct call has to name both `TRange` and `T`, which
+  is longer than `RangeSet<TRange, T>.From` already was.
+
+- **`ISpanParsable<T>` on every parsable type** — the eleven range types, `RangeSet<TRange, T>`, and
+  all nineteen value set types and arities, with public `Parse`/`TryParse` overloads over
+  `ReadOnlySpan<char>` beside the existing `string` ones. The literal grammars were already parsed
+  over spans internally, so this exposes the parser that was always there and lets a caller parse
+  a slice of a larger buffer without allocating a substring first. `IParsable<T>` remains
+  satisfied — `ISpanParsable<T>` extends it.
+
+  One consequence worth knowing if you write generic code over these types: where a type parameter
+  is constrained to `IRangeFactory`/`IValueSetFactory`, both `Parse` overloads are now visible, and
+  a `string` argument binds to the span overload through the implicit conversion. Every type's two
+  overloads are the same call, so results do not change.
+
+- **`Length`** on every range type — the measure of what it covers. A discrete domain counts its
+  values inclusive of both ends (`[2024-01-01, 2024-01-31]` measures 31 days, `[1, 10]` measures
+  10 integers), a continuous one measures the span between the bounds. The empty range measures
+  zero and every unbounded shape measures `null`: the two are different answers and stay
+  distinguishable. The type follows the domain — `long?` for `Int32Range`/`Int64Range`, `int?`
+  days for `DateRange`, `TimeSpan?` for the timestamp ranges, `decimal?` for `DecimalRange`, and
+  `Duration?`/`Period?` for the NodaTime ranges, which distinguish elapsed time from a calendar
+  quantity. Client-side only; it does not translate to SQL.
+
+- **`Values()`** on the discrete range types — enumerates the contained values ascending,
+  inclusive of both bounds. Declared only by `Int32Range`, `Int64Range`, `DateRange`,
+  `LocalDateRange` and `YearMonthRange`, so asking a continuous range for its values is a compile
+  error rather than a runtime failure. An unbounded range throws immediately rather than at the
+  first iteration, so the failure points at the call rather than at the `foreach`.
+
+- **A bridge between the value sets and the range sets** over the same discrete domain:
+  `Int32Set`/`Int64Set`/`DateSet` (plus `LocalDateSet`/`YearMonthSet` in the NodaTime satellite)
+  gain `ToRangeSet()`, which collapses runs of consecutive values — `{1,2,3,7}` becomes
+  `{[1,3],[7,7]}` — and the matching `ToInt32Set()`/`ToDateSet()`/… expand back. The two shapes
+  describe the same membership; which to store is a question of density, and a thousand
+  consecutive dates are better served by one `daterange` than by a thousand-element array. Both
+  directions are client-side: PostgreSQL converts between arrays and multiranges only through
+  `unnest` and a custom aggregate.
+
+- **`Clamp(value)`** on every range — the contained value nearest the argument, or `null` for the
+  empty range. An unbounded side never constrains.
+
+- **An indexer on the value set types**, `set[0]`, matching what `RangeSet` already offered.
+
+- **`IRangeFactory<TRange, T>.IsDiscrete`** — a defaulted virtual static reporting whether the
+  domain has a step, for generic code that cannot see which concrete type it holds. It cannot be
+  derived from `NextValueAfter`, which returns `null` both for a continuous domain and for the
+  last value of a discrete one; a convention test now holds the two to agreement.
+
+## [6.2.1] — 2026-08-16
 
 ### Changed
 
@@ -26,8 +102,6 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
   through parsing" line in SECURITY.md — megabyte-scale malformed literals and 200,000-element sets
   are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
   payload.
-
-## [6.2.1] — 2026-08-16
 
 ### Fixed
 

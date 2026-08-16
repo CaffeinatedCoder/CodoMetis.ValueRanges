@@ -2,11 +2,43 @@ using System.Collections;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges;
+
+/// <summary>
+/// The collection builder behind collection-expression support for
+/// <see cref="RangeSet{TRange,T}"/>.
+/// </summary>
+/// <remarks>
+/// A <see cref="CollectionBuilderAttribute"/> target must be a non-generic type, so the builder
+/// method cannot live on the set itself.
+/// </remarks>
+public static class RangeSet
+{
+    /// <summary>
+    /// Creates a normalized <see cref="RangeSet{TRange,T}"/> from a span of ranges.
+    /// Delegates to <see cref="RangeSet{TRange,T}.From(ReadOnlySpan{TRange})"/>, so the same
+    /// normalization applies: empty ranges are dropped, the rest are sorted by lower bound,
+    /// and overlapping or adjacent neighbours are merged.
+    /// </summary>
+    /// <remarks>
+    /// Prefer the collection expression at call sites — <c>RangeSet&lt;Int32Range, int&gt; set
+    /// = [a, b];</c> — which infers both type arguments from the target type. Calling this
+    /// method directly has to name both: C# does not infer type arguments from constraints, so
+    /// <typeparamref name="T"/> cannot be deduced from <typeparamref name="TRange"/>.
+    /// </remarks>
+    /// <param name="ranges">The ranges to build the set from, in any order.</param>
+    /// <typeparam name="TRange">The concrete range type the set is composed of.</typeparam>
+    /// <typeparam name="T">The element type of the ranges.</typeparam>
+    public static RangeSet<TRange, T> Create<TRange, T>(ReadOnlySpan<TRange> ranges)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => RangeSet<TRange, T>.From(ranges);
+}
 
 /// <summary>
 /// An immutable, normalized set of disjoint ranges — the in-memory counterpart of a
@@ -34,8 +66,9 @@ namespace CodoMetis.ValueRanges;
 /// <typeparam name="TRange">The concrete range type the set is composed of.</typeparam>
 /// <typeparam name="T">The element type of the ranges.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
+[CollectionBuilder(typeof(RangeSet), nameof(RangeSet.Create))]
 public sealed class RangeSet<TRange, T>
-    : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IFormattable, IParsable<RangeSet<TRange, T>>
+    : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IFormattable, ISpanParsable<RangeSet<TRange, T>>
     where TRange : IRangeFactory<TRange, T>, IRange<T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
@@ -47,9 +80,9 @@ public sealed class RangeSet<TRange, T>
 
     /// <summary>
     /// A singleton <see cref="IComparer{TRange}"/> that orders ranges by their lower bound,
-    /// matching the internal sort used by <see cref="From"/>. Use this to sort arbitrary
+    /// matching the internal sort used by <see cref="From(IEnumerable{TRange})"/>. Use this to sort arbitrary
     /// <see cref="List{TRange}"/>s the same way the set does — for example, to pre-sort inputs
-    /// before handing them to <see cref="From"/>, or to compare two sequences of ranges
+    /// before handing them to <see cref="From(IEnumerable{TRange})"/>, or to compare two sequences of ranges
     /// structurally. <see cref="IUnboundedStartRange{T}"/> sorts first; an inclusive lower
     /// bound sorts before an exclusive one at the same value.
     /// </summary>
@@ -76,6 +109,10 @@ public sealed class RangeSet<TRange, T>
     public static RangeSet<TRange, T> From(IEnumerable<TRange> ranges)
         => CollapseSingletons(Normalize(ranges));
 
+    /// <inheritdoc cref="From(IEnumerable{TRange})"/>
+    public static RangeSet<TRange, T> From(params ReadOnlySpan<TRange> ranges)
+        => CollapseSingletons(Normalize(ranges));
+
     // Applies the singleton collapses (empty → Empty, single Infinity → Infinite) to an
     // already-normalized array. Used by From and by the merge-join set operations, which
     // produce output that already satisfies the invariant and so can skip re-normalization.
@@ -94,12 +131,7 @@ public sealed class RangeSet<TRange, T>
         // This is the common case for RangeSet.From([range]) and the wrap path used by
         // RangeExtensions.Union/Except when one operand is a single range.
         if (ranges is IReadOnlyCollection<TRange> { Count: 1 } single)
-        {
-            var only = single.First();
-            if (only is IEmptyRange<T>) return [];
-            if (only is IInfinityRange<T>) return [TRange.Infinite];
-            return [only];
-        }
+            return NormalizeSingle(single.First());
 
         var working = new List<TRange>();
         foreach (var range in ranges)
@@ -109,13 +141,45 @@ public sealed class RangeSet<TRange, T>
             working.Add(range);
         }
 
-        return working.Count switch
-               {
-                   0 => [],
-                   1 => [working[0]], // already trivially sorted and merged
-                   _ => GreedyMerge(working, alreadySorted: false)
-               };
+        return NormalizeCollected(working);
     }
+
+    // The span counterpart of Normalize(IEnumerable). Shares the single-element fast path and
+    // the sort/merge tail with it, so the two entry points cannot drift apart on the invariant.
+    private static ImmutableArray<TRange> Normalize(ReadOnlySpan<TRange> ranges)
+    {
+        if (ranges.Length == 1)
+            return NormalizeSingle(ranges[0]);
+
+        var working = new List<TRange>(ranges.Length);
+        foreach (var range in ranges)
+        {
+            if (range is IEmptyRange<T>) continue;
+            if (range is IInfinityRange<T>) return [TRange.Infinite];
+            working.Add(range);
+        }
+
+        return NormalizeCollected(working);
+    }
+
+    // A lone range is already normalized once the two singleton inputs are folded away.
+    private static ImmutableArray<TRange> NormalizeSingle(TRange only)
+        => only switch
+           {
+               IEmptyRange<T>    => [],
+               IInfinityRange<T> => [TRange.Infinite],
+               _                 => [only]
+           };
+
+    // Sorts and merges the surviving ranges. The caller has already dropped empties and
+    // short-circuited on Infinity.
+    private static ImmutableArray<TRange> NormalizeCollected(List<TRange> working)
+        => working.Count switch
+           {
+               0 => [],
+               1 => [working[0]], // already trivially sorted and merged
+               _ => GreedyMerge(working, alreadySorted: false)
+           };
 
     // Greedy left-to-right merge of adjacent or overlapping neighbours. The input must be
     // sorted by lower bound (the RangeSet invariant); if `alreadySorted` is false the
@@ -213,6 +277,31 @@ public sealed class RangeSet<TRange, T>
     /// </summary>
     public bool IsUnboundedEnd() =>
         !_elements.IsEmpty && _elements[^1] is IUnboundedEndRange<T> or IInfinityRange<T>;
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the set covers the entire domain — the
+    /// <see cref="Infinite"/> set.
+    /// </summary>
+    /// <remarks>
+    /// This is <em>not</em> <see cref="IsUnboundedStart"/> combined with
+    /// <see cref="IsUnboundedEnd"/>. A set may run to infinity in both directions and still
+    /// have a hole in the middle: <c>{(,5],[10,)}</c> is unbounded at both ends yet does not
+    /// contain 7. Covering the whole domain means exactly one element, and that element an
+    /// <see cref="IInfinityRange{T}"/> — which the normalization invariant makes the unique
+    /// representation of full coverage.
+    /// </remarks>
+    public bool IsInfinity() => IsInfiniteSet;
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the set is non-empty and bounded on both sides —
+    /// every element has both a lower and an upper bound.
+    /// </summary>
+    /// <remarks>
+    /// Only the first and last elements need testing: the sorted, disjoint, non-adjacent
+    /// invariant leaves no way for an interior element to be unbounded.
+    /// </remarks>
+    public bool IsFinite() =>
+        !_elements.IsEmpty && !IsUnboundedStart() && !IsUnboundedEnd();
 
     // -------------------------------------------------------------------------
     // Bound accessors
@@ -622,7 +711,7 @@ public sealed class RangeSet<TRange, T>
     /// analysis on the pointer advance: each advance emits at most one intersection whose
     /// bounds lie strictly inside both input elements, so consecutive outputs inherit the
     /// real gaps of whichever input advanced — so the private constructor is used directly,
-    /// skipping the re-normalization that <see cref="From"/> would perform.
+    /// skipping the re-normalization that <see cref="From(IEnumerable{TRange})"/> would perform.
     /// </remarks>
     public RangeSet<TRange, T> Intersect(RangeSet<TRange, T> other)
     {
@@ -989,8 +1078,17 @@ public sealed class RangeSet<TRange, T>
     /// into a <see cref="RangeSet{TRange,T}"/>.
     /// </summary>
     public static RangeSet<TRange, T> Parse(string s, IFormatProvider? provider)
+        => Parse(s.AsSpan(), provider);
+
+    /// <inheritdoc cref="Parse(string, IFormatProvider)"/>
+    public static RangeSet<TRange, T> Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
     {
-        var literals = RangeFormat.SplitSetLiterals(s.AsSpan());
+        // TRange exposes both Parse overloads through ISpanParsable, so this string argument
+        // binds to the span one — it bound to the string overload before ISpanParsable was
+        // added. Harmless today: every range type's two overloads are the same RangeFormat
+        // call. A range type whose span parser diverged from its string parser would change
+        // this result silently, and nothing here would catch it.
+        var literals = RangeFormat.SplitSetLiterals(s);
         return From(literals.Select(l => TRange.Parse(l, provider)));
     }
 
@@ -999,10 +1097,14 @@ public sealed class RangeSet<TRange, T>
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out RangeSet<TRange, T> result)
+        => TryParse((s ?? string.Empty).AsSpan(), provider, out result);
+
+    /// <inheritdoc cref="TryParse(string, IFormatProvider, out RangeSet{TRange, T})"/>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out RangeSet<TRange, T> result)
     {
         try
         {
-            var literals = RangeFormat.SplitSetLiterals((s ?? string.Empty).AsSpan());
+            var literals = RangeFormat.SplitSetLiterals(s);
             result = From(literals.Select(l => TRange.Parse(l, provider)));
             return true;
         }
@@ -1018,5 +1120,11 @@ public sealed class RangeSet<TRange, T>
         => Parse(s, provider);
 
     static bool IParsable<RangeSet<TRange, T>>.TryParse(string? s, IFormatProvider? provider, out RangeSet<TRange, T> result)
+        => TryParse(s, provider, out result);
+
+    static RangeSet<TRange, T> ISpanParsable<RangeSet<TRange, T>>.Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => Parse(s, provider);
+
+    static bool ISpanParsable<RangeSet<TRange, T>>.TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out RangeSet<TRange, T> result)
         => TryParse(s, provider, out result);
 }

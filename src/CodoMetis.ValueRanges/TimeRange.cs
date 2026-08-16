@@ -154,6 +154,22 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The elapsed time between the bounds, or <see langword="null"/> when the range is
+    /// unbounded. The empty range measures <see cref="TimeSpan.Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// A span rather than a count: the domain is continuous. A window crossing midnight is two
+    /// ranges rather than one, so this never wraps — measure the set, not a single range.
+    /// </remarks>
+    public TimeSpan? Length =>
+        this switch
+        {
+            IEmptyRange<TimeOnly>    => TimeSpan.Zero,
+            IFiniteRange<TimeOnly> f => f.End - f.Start,
+            _                        => null
+        };
+
     /// <inheritdoc />
     public static TimeOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => TimeOnly.Parse(s, provider ?? CultureInfo.InvariantCulture);
@@ -172,12 +188,23 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
     public static TimeRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<TimeRange, TimeOnly>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static TimeRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<TimeRange, TimeOnly>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into a <see cref="TimeRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out TimeRange result)
         => RangeFormat.TryParse<TimeRange, TimeOnly>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out TimeRange result)
+        => RangeFormat.TryParse<TimeRange, TimeOnly>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

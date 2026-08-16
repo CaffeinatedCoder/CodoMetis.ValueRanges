@@ -146,6 +146,22 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The elapsed time between the bounds, or <see langword="null"/> when the range is
+    /// unbounded. The empty range measures <see cref="TimeSpan.Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// A span rather than a count: the domain is continuous. Both bounds denote instants, so the
+    /// result is the real elapsed time even when the two carry different offsets.
+    /// </remarks>
+    public TimeSpan? Length =>
+        this switch
+        {
+            IEmptyRange<DateTimeOffset>    => TimeSpan.Zero,
+            IFiniteRange<DateTimeOffset> f => f.End - f.Start,
+            _                              => null
+        };
+
     /// <inheritdoc />
     public static DateTimeOffset ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => DateTimeOffset.Parse(s, provider ?? CultureInfo.InvariantCulture);
@@ -163,12 +179,23 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     public static DateTimeOffsetRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<DateTimeOffsetRange, DateTimeOffset>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static DateTimeOffsetRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<DateTimeOffsetRange, DateTimeOffset>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into a <see cref="DateTimeOffsetRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out DateTimeOffsetRange result)
         => RangeFormat.TryParse<DateTimeOffsetRange, DateTimeOffset>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DateTimeOffsetRange result)
+        => RangeFormat.TryParse<DateTimeOffsetRange, DateTimeOffset>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

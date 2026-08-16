@@ -149,6 +149,22 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
             _ => new Finite(start, end, startInclusive, endInclusive)
         };
 
+    /// <summary>
+    /// The elapsed time between the bounds, or <see langword="null"/> when the range is
+    /// unbounded. The empty range measures <see cref="Duration.Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Duration"/>, not a <see cref="Period"/>: both bounds are instants on the
+    /// time line, so the elapsed time is exact and calendar-independent.
+    /// </remarks>
+    public Duration? Length =>
+        this switch
+        {
+            IEmptyRange<Instant>    => Duration.Zero,
+            IFiniteRange<Instant> f => f.End - f.Start,
+            _                       => null
+        };
+
     /// <inheritdoc />
     public static Instant ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
         => NodaPatterns.ParseInstant(s.ToString());
@@ -171,12 +187,23 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
     public static InstantRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<InstantRange, Instant>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static InstantRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<InstantRange, Instant>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into an <see cref="InstantRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out InstantRange result)
         => RangeFormat.TryParse<InstantRange, Instant>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out InstantRange result)
+        => RangeFormat.TryParse<InstantRange, Instant>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

@@ -3,6 +3,28 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.3.0] — 2026-08-16
+
+### Added
+
+- **`ISpanParsable<T>`** on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`,
+  `YearMonthRange` and the five NodaTime set types, with `Parse`/`TryParse` overloads over
+  `ReadOnlySpan<char>` beside the existing `string` ones. The NodaTime patterns were already
+  applied to spans internally; this exposes that entry point.
+- The core additions apply to the NodaTime types too, since they come from the shared generic
+  surface: `RangeSet<LocalDateRange, LocalDate>` and its siblings gain `IsInfinity()`/`IsFinite()`
+  and collection-expression support. See `CodoMetis.ValueRanges` 6.3.0.
+
+- **`Length`** on the NodaTime ranges: `int?` days for `LocalDateRange`, `int?` months for
+  `YearMonthRange`, `Duration?` for `InstantRange` — exact elapsed time — and `Period?` for
+  `LocalDateTimeRange`, whose wall-clock bounds bound a calendar quantity rather than a fixed
+  span.
+- **`Values()`** on `LocalDateRange` and `YearMonthRange`, the two discrete NodaTime domains.
+  `InstantRange`, `LocalDateTimeRange` and the time sets are continuous and do not declare it.
+- **`ToRangeSet()` / `ToLocalDateSet()` / `ToYearMonthSet()`** — the value-set ↔ range-set bridge
+  for the discrete NodaTime domains.
+- **`Clamp(value)`** on every NodaTime range, and an **indexer** on the five NodaTime set types.
+
 ## [6.2.1] — 2026-08-16
 
 ### Fixed

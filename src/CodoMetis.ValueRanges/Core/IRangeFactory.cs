@@ -12,7 +12,7 @@ namespace CodoMetis.ValueRanges.Core;
 /// </summary>
 /// <typeparam name="TRange">The concrete range type being constructed.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
-public interface IRangeFactory<TRange, T> : IParsable<TRange>, IFormattable
+public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
@@ -52,6 +52,19 @@ public interface IRangeFactory<TRange, T> : IParsable<TRange>, IFormattable
     abstract static TRange CreateUnboundedStart(T end, bool endInclusive);
 
     /// <summary>
+    /// Whether the element domain has a step: every value below the maximum has an immediate
+    /// successor. Discrete domains canonicalize to the closed form <c>[start, end]</c>, count
+    /// their values, and can be enumerated; continuous ones can do none of those.
+    /// </summary>
+    /// <remarks>
+    /// This cannot be derived from <see cref="NextValueAfter"/>, which returns
+    /// <see langword="null"/> both for a continuous domain and for the last representable value
+    /// of a discrete one. A type that overrides <see cref="NextValueAfter"/> must override this
+    /// too — <c>RangeFactoryContractTests</c> checks that the two agree.
+    /// </remarks>
+    virtual static bool IsDiscrete => false;
+
+    /// <summary>
     /// Returns the immediate successor of <paramref name="value"/> in a discrete domain.
     /// The default implementation returns <see langword="null"/>, marking the domain as continuous.
     /// Discrete domains also return <see langword="null"/> when <paramref name="value"/> is the
@@ -81,7 +94,10 @@ public interface IRangeFactory<TRange, T> : IParsable<TRange>, IFormattable
         => value is IFormattable f ? f.ToString(format, provider) : value.ToString()!;
 
     // -----------------------------------------------------------------------
-    // IParsable<TRange> — default implementations
+    // ISpanParsable<TRange> / IParsable<TRange> — default implementations
+    //
+    // The literal grammar is parsed over a span throughout, so the string overloads are the
+    // ones that widen: every entry point converges on RangeFormat's span parser.
     // -----------------------------------------------------------------------
 
     /// <inheritdoc cref="IParsable{TSelf}.Parse"/>
@@ -91,6 +107,14 @@ public interface IRangeFactory<TRange, T> : IParsable<TRange>, IFormattable
     /// <inheritdoc cref="IParsable{TSelf}.TryParse"/>
     static bool IParsable<TRange>.TryParse(string? s, IFormatProvider? provider, out TRange result)
         => RangeFormat.TryParse<TRange, T>(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc cref="ISpanParsable{TSelf}.Parse"/>
+    static TRange ISpanParsable<TRange>.Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<TRange, T>(s, provider);
+
+    /// <inheritdoc cref="ISpanParsable{TSelf}.TryParse"/>
+    static bool ISpanParsable<TRange>.TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out TRange result)
+        => RangeFormat.TryParse<TRange, T>(s, provider, out result);
 
     // -----------------------------------------------------------------------
     // IFormattable — default implementation

@@ -3,6 +3,13 @@
 Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.3.0] — 2026-08-16
+
+No source change in this package. The NodaTime range sets are translated by the base plugin, so
+`RangeSet<LocalDateRange, LocalDate>.IsFinite()` and `.IsInfinity()` translate here too — see
+`CodoMetis.ValueRanges.EFCore.PostgreSQL` 6.3.0 for the operators and for why `IsInfinity` does not
+translate to `lower_inf AND upper_inf`.
+
 ## [6.2.1] — 2026-08-16
 
 No source change in this package. See `CodoMetis.ValueRanges` 6.2.1 for the `IsAdjacentTo`

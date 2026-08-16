@@ -149,10 +149,57 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
              : Empty;
 
     /// <inheritdoc />
+    public static bool IsDiscrete => true;
+
+    /// <inheritdoc />
     public static long? NextValueAfter(long value) => value == long.MaxValue ? null : value + 1;
 
     /// <inheritdoc />
     public static long? PreviousValueBefore(long value) => value == long.MinValue ? null : value - 1;
+
+    /// <summary>
+    /// Enumerates the integers the range contains, ascending and inclusive of both bounds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Available here because the domain is discrete. The continuous range types have no
+    /// step to walk and do not declare this member at all, so asking for the values of a
+    /// <c>DecimalRange</c> is a compile error rather than a runtime failure.
+    /// </para>
+    /// <para>
+    /// The empty range yields nothing. An unbounded range would not terminate and throws
+    /// immediately — the check is eager, so the failure surfaces at this call rather than at
+    /// the <c>foreach</c> that consumes it.
+    /// </para>
+    /// </remarks>
+    /// <returns>The contained integers, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    public IEnumerable<long> Values() => DiscreteEnumeration.Values<Int64Range, long>(this);
+
+    /// <summary>
+    /// The number of integers the range contains, or <see langword="null"/> when it is unbounded
+    /// or the count is too large to represent. The empty range measures 0.
+    /// </summary>
+    /// <remarks>
+    /// A count rather than a span, as for <c>Int32Range</c>. Unlike it, the count can exceed the
+    /// widest integer available: a range spanning almost the whole <see cref="long"/> domain holds
+    /// more values than <see cref="long.MaxValue"/>. That case is computed in
+    /// <see cref="decimal"/> and returns <see langword="null"/> rather than wrapping to a
+    /// plausible-looking negative.
+    /// </remarks>
+    public long? Length =>
+        this switch
+        {
+            IEmptyRange<long>    => 0L,
+            IFiniteRange<long> f => FiniteLength(f.Start, f.End),
+            _                    => null
+        };
+
+    private static long? FiniteLength(long start, long end)
+    {
+        var count = (decimal)end - start + 1m;
+        return count <= long.MaxValue ? (long)count : null;
+    }
 
     /// <inheritdoc />
     public static long ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
@@ -165,12 +212,23 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     public static Int64Range Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<Int64Range, long>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static Int64Range Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<Int64Range, long>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into an <see cref="Int64Range"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out Int64Range result)
         => RangeFormat.TryParse<Int64Range, long>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int64Range result)
+        => RangeFormat.TryParse<Int64Range, long>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()
