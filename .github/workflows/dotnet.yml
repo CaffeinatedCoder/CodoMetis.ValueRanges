@@ -1,7 +1,16 @@
 # Build and test on every push to main and every PR.
 #
-# Split by test project rather than by category: the integration suite is its own project and
-# needs Docker, so it runs on Linux only, while everything else runs on all three runner OSes.
+# Linux only, deliberately. Nothing in the four shipping packages reads the environment — no
+# TimeZoneInfo, no DateTime.Now, no CurrentCulture, no file or path access anywhere in src/ — so
+# the library is pure managed code on a single TFM, invariant by contract, and cannot behave
+# differently per OS. A second runner would re-test the .NET runtime, not this library.
+#
+# A Windows job covering the conventions project (the one place that touches Path/Directory/File)
+# existed briefly and was removed: it took 92 seconds to run one second of tests, set the critical
+# path for the whole workflow, and defended a Windows contributor's ability to run the suite rather
+# than anything a consumer receives. That failure would surface on a contributor's first
+# `dotnet test` and cost minutes to fix — cheap to discover late. Reinstate it if outside PRs
+# become common.
 #
 # For information on GitHub Actions with .NET, see:
 # https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
@@ -76,44 +85,6 @@ jobs:
           path: TestResults/*.trx
           if-no-files-found: ignore
 
-  # The only job that exists for a second OS, and it defends contributors rather than consumers.
-  #
-  # The conventions project is the sole place in the repository that touches Path, Directory and
-  # File — it locates the repository by walking up to the .slnx marker, globs src/, and reads
-  # csproj and changelog files. Backslash-versus-forward-slash is a real divergence there, and a
-  # Windows contributor hitting a suite that cannot find the repository root is a papercut worth
-  # preventing. It is *not* product validation, and nothing here justifies running the other 930
-  # tests a second time.
-  #
-  # macOS is deliberately absent: it is POSIX like Linux for separators, and its case-insensitive
-  # filesystem would mask a path bug rather than reveal one.
-  conventions-windows:
-    name: Conventions (windows-latest)
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Convention tests
-        run: >
-          dotnet test test/CodoMetis.ValueRanges.Conventions.Tests
-          -c Release
-          --logger "trx;LogFileName=conventions-windows.trx"
-          --results-directory TestResults
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v6
-        if: always()
-        with:
-          name: test-results-conventions-windows
-          path: TestResults/*.trx
-          if-no-files-found: ignore
-
   integration:
     name: Integration (live PostgreSQL)
     runs-on: ubuntu-latest
@@ -155,7 +126,7 @@ jobs:
   pack:
     name: Pack
     runs-on: ubuntu-latest
-    needs: [ test, integration, conventions-windows ]
+    needs: [ test, integration ]
 
     steps:
       - uses: actions/checkout@v6
