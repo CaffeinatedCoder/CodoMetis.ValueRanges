@@ -149,6 +149,12 @@ jobs:
           printf 'Packages (%d):\n' "${#packages[@]}"
           printf '    %s\n' "${packages[@]##*/}"
 
+      # upload-artifact v6 and download-artifact v7 are the majors that switched to the Node 24
+      # runtime. Deliberately not the newest majors: upload v7 adds ESM and direct (unzipped)
+      # uploads, and download v8 turns a digest mismatch into a hard failure and stops
+      # auto-unzipping — which would leave the publish job's dist/*.nupkg glob finding a zip.
+      # Neither buys anything here, and this is the publish path; dependabot.yml excludes majors
+      # for that reason.
       - name: Upload packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:

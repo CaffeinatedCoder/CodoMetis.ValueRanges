@@ -2,6 +2,9 @@
 #
 # github-actions keeps the SHA-pinned actions in the workflows current — a pin without an update
 # path just ages. Weekly, one grouped PR, so a security release in an action is not waiting a month.
+# Majors are excluded: this is the publish path, and release.yml documents why upload-artifact
+# stays on v6 and download-artifact on v7 (v8 stops auto-unzipping, which would break the push
+# step). A major is a deliberate change with a test behind it, not a Monday PR.
 #
 # nuget covers the test projects only. The shipping projects under src/ are deliberately excluded:
 # their EF Core provider and NodaTime references are the floors consumers restore against —
@@ -18,6 +21,9 @@ updates:
     groups:
       actions:
         patterns: [ "*" ]
+    ignore:
+      - dependency-name: "*"
+        update-types: [ "version-update:semver-major" ]
 
   - package-ecosystem: nuget
     directories:
