@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
@@ -113,6 +114,66 @@ public sealed class PackagingConventionTests
             condition, "$(CI)",
             "ContinuousIntegrationBuild must be gated on the CI environment variable.");
     }
+
+    /// <summary>
+    /// The SDK's pack targets prepend <c>Build</c> to <c>GenerateNuspecDependsOn</c> only when
+    /// <c>NoBuild != true</c> <em>and</em> <c>GeneratePackageOnBuild != true</c>, so setting the
+    /// latter silently makes plain <c>dotnet pack</c> behave as if <c>--no-build</c> had been
+    /// passed: it packs whatever is in <c>bin/</c> — stale output on a laptop, NU5026 on a clean
+    /// checkout. The workflows always build first, which is why it never bit here; this keeps it
+    /// from being reintroduced as a convenience.
+    /// </summary>
+    [TestMethod]
+    public void SharedBuildProperties_DoNotSetGeneratePackageOnBuild()
+    {
+        var all = XDocument.Load(Path.Combine(RepoLayout.Root.FullName, "Directory.Build.props"))
+                           .Descendants("GeneratePackageOnBuild")
+                           .ToList();
+
+        Assert.IsEmpty(
+            all,
+            "Directory.Build.props sets GeneratePackageOnBuild. That makes plain `dotnet pack` skip the "
+          + "build and pack whatever is in bin/ — stale locally, NU5026 on a clean checkout. Build "
+          + "first and pack with --no-build instead, as the workflows do.");
+    }
+
+    /// <summary>
+    /// Package validation compares each pack against <c>PackageValidationBaselineVersion</c>. A
+    /// baseline left behind stops seeing API added since it — a member introduced in 6.3 and
+    /// removed in 6.4 is invisible to a 6.2 baseline — so it may be the version being shipped
+    /// (between releases, when <c>Version</c> is the last release) or the release directly before
+    /// it (once <c>Version</c> is bumped for the next one), and never older. That lags by at most
+    /// one release and forces the move at every version bump.
+    /// </summary>
+    [TestMethod]
+    public void PackageValidationBaseline_IsTheShippedVersionOrTheReleaseBeforeIt()
+    {
+        var properties = SharedBuildProperties();
+
+        Assert.AreEqual(
+            "true", properties.GetValueOrDefault("EnablePackageValidation"),
+            "Directory.Build.props does not enable package validation, so a removed public member "
+          + "packs cleanly and the 'no breaking changes' claim rests on reading the diff.");
+
+        var shipped  = Version.Parse(RepoLayout.ShippedVersion);
+        var previous = ChangelogVersions().Where(version => version < shipped).DefaultIfEmpty().Max();
+        var baseline = properties.GetValueOrDefault("PackageValidationBaselineVersion");
+
+        Assert.IsNotNull(baseline, "Directory.Build.props sets no PackageValidationBaselineVersion.");
+
+        var allowed = new[] { shipped, previous }.Where(version => version is not null).Distinct().ToList();
+
+        Assert.IsTrue(
+            allowed.Contains(Version.Parse(baseline)),
+            $"PackageValidationBaselineVersion is {baseline}, but Directory.Build.props ships {shipped} "
+          + $"and the release before it is {previous?.ToString() ?? "none"}. The baseline must be one of "
+          + "those two — move it to the release just superseded when bumping Version, or API added "
+          + "since the old baseline goes unvalidated.");
+    }
+
+    private static IEnumerable<Version> ChangelogVersions() =>
+        Regex.Matches(File.ReadAllText(RepoLayout.RootChangelog.FullName), @"^##\s*\[(?<version>\d+\.\d+\.\d+)\]", RegexOptions.Multiline)
+             .Select(match => Version.Parse(match.Groups["version"].Value));
 
     private static Dictionary<string, string> SharedBuildProperties()
     {

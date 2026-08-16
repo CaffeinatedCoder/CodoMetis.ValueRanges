@@ -10,6 +10,12 @@ using Npgsql;
 using NpgsqlTypes;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Internal;
+// EF1001 here is EF's analyzer reading CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal
+// as an internal namespace — it keys on the `EntityFrameworkCore.*.Internal` shape, not on an
+// attribute. That warning is aimed at consumers of the plugin; this satellite is the same codebase
+// and builds on those types by design.
+#pragma warning disable EF1001
+
 
 /// <summary>
 /// Binds <see cref="YearMonthRange"/> to a month-aligned PostgreSQL <c>daterange</c>.

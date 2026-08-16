@@ -7,6 +7,12 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 // ReSharper disable once CheckNamespace — conventional namespace for options builder extensions,
 // so UseValueRangesNodaTime is discoverable without an extra using.
 namespace Microsoft.EntityFrameworkCore;
+// EF1001 here is EF's analyzer reading CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal
+// as an internal namespace — it keys on the `EntityFrameworkCore.*.Internal` shape, not on an
+// attribute. That warning is aimed at consumers of the plugin; this satellite is the same codebase
+// and builds on those types by design.
+#pragma warning disable EF1001
+
 
 /// <summary>
 /// CodoMetis.ValueRanges NodaTime extension method for <see cref="NpgsqlDbContextOptionsBuilder"/>.
