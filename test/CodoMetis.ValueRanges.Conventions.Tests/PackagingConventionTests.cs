@@ -114,6 +114,28 @@ public sealed class PackagingConventionTests
             "ContinuousIntegrationBuild must be gated on the CI environment variable.");
     }
 
+    /// <summary>
+    /// The SDK's pack targets prepend <c>Build</c> to <c>GenerateNuspecDependsOn</c> only when
+    /// <c>NoBuild != true</c> <em>and</em> <c>GeneratePackageOnBuild != true</c>, so setting the
+    /// latter silently makes plain <c>dotnet pack</c> behave as if <c>--no-build</c> had been
+    /// passed: it packs whatever is in <c>bin/</c> — stale output on a laptop, NU5026 on a clean
+    /// checkout. The workflows always build first, which is why it never bit here; this keeps it
+    /// from being reintroduced as a convenience.
+    /// </summary>
+    [TestMethod]
+    public void SharedBuildProperties_DoNotSetGeneratePackageOnBuild()
+    {
+        var all = XDocument.Load(Path.Combine(RepoLayout.Root.FullName, "Directory.Build.props"))
+                           .Descendants("GeneratePackageOnBuild")
+                           .ToList();
+
+        Assert.IsEmpty(
+            all,
+            "Directory.Build.props sets GeneratePackageOnBuild. That makes plain `dotnet pack` skip the "
+          + "build and pack whatever is in bin/ — stale locally, NU5026 on a clean checkout. Build "
+          + "first and pack with --no-build instead, as the workflows do.");
+    }
+
     private static Dictionary<string, string> SharedBuildProperties()
     {
         var document = XDocument.Load(Path.Combine(RepoLayout.Root.FullName, "Directory.Build.props"));

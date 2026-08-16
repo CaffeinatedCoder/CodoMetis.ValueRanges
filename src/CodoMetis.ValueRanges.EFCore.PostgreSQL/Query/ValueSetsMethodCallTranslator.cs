@@ -11,6 +11,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Query;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Query.Expressions.Internal;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
+// PgNewArrayExpression is Npgsql-internal (EF1001): building an array literal in the SQL tree has
+// no public equivalent, and this translator only exists to build one. Acknowledged here, at the
+// usage, rather than suppressed repo-wide.
+#pragma warning disable EF1001
+
 
 /// <summary>
 /// Translates the value set algebra to PostgreSQL array operators, for every registered set
