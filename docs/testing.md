@@ -35,6 +35,7 @@ One test file per operation, named `Range[Operation]Tests.cs`:
 | `RangeJsonConverterTests.cs` | JSON serialization round-trips; null tokens rejected on read, null references written as `null`; variant-typed and `object`-typed declarations producing the same literal, with wrong-shape reads rejected |
 | `RangeShapePredicateTests.cs` | The five `IRange<T>` shape predicates as a one-hot matrix over all five variants, plus degenerate-bound normalization |
 | `NamedJsonConverterTests.cs` | The 24 pre-built named converters (ranges, multiranges and sets): the full inventory, each bound to the family it is named for, and each matching the factory's payload |
+| `ParserResilienceTests.cs` | Hostile input in the request path: megabyte-scale malformed literals and 200k-element sets parse or are rejected within a `[Timeout]`, `TryParse` never throws, and rejection messages carry an excerpt of the input, never the payload |
 | `TimeRangeTests.cs` | What is new with `TimeRange`: TimeOnly parse/format, half-open default, midnight-wrap sets (per-type file; the engines are covered by the per-operation files) |
 
 Value set tests (v6) follow the same one-file-per-concern pattern with a `Set` prefix:

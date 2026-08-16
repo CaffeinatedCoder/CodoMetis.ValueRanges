@@ -39,7 +39,7 @@ public class RangeJsonConverter<TRange, T> : JsonConverter<TRange>
              ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TRange).Name} value.");
 
         if (!TRange.TryParse(s, CultureInfo.InvariantCulture, out var result))
-            throw new JsonException($"Cannot parse '{s}' as {typeof(TRange).Name}.");
+            throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(s)}' as {typeof(TRange).Name}.");
 
         return result;
     }
@@ -92,11 +92,11 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
              ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TVariant).Name} value.");
 
         if (!TRange.TryParse(s, CultureInfo.InvariantCulture, out var parsed))
-            throw new JsonException($"Cannot parse '{s}' as {typeof(TRange).Name}.");
+            throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(s)}' as {typeof(TRange).Name}.");
 
         if (parsed is not TVariant variant)
             throw new JsonException(
-                $"Cannot read '{s}' as {typeof(TRange).Name}.{typeof(TVariant).Name}: "
+                $"Cannot read '{LiteralExcerpt.Of(s)}' as {typeof(TRange).Name}.{typeof(TVariant).Name}: "
               + $"the literal is a {parsed!.GetType().Name}.");
 
         return variant;
@@ -138,7 +138,7 @@ public class RangeSetJsonConverter<TRange, T> : JsonConverter<RangeSet<TRange, T
         }
         catch (Exception ex)
         {
-            throw new JsonException($"Cannot parse '{s}' as RangeSet<{typeof(TRange).Name}, {typeof(T).Name}>.", ex);
+            throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(s)}' as RangeSet<{typeof(TRange).Name}, {typeof(T).Name}>.", ex);
         }
     }
 

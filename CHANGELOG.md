@@ -9,6 +9,24 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [Unreleased]
+
+### Changed
+
+- **Parse and JSON rejections no longer echo the whole input.** A malformed range, multirange or
+  array literal used to come back in the `FormatException` — and a bad bound or element chained the
+  BCL's exception, whose message embeds the text again — so a megabyte of hostile input became a
+  megabyte of exception message, copied into every log sink and, in development, returned to the
+  client. Messages now carry a 64-character excerpt plus the input's length, and element failures
+  report the inner parser's reason as an excerpt instead of chaining it. **If you matched on the
+  full message text or read `InnerException` on these failures, that shape has changed.** Exception
+  types are unchanged: `FormatException`, `OverflowException`, `JsonException`; `TryParse` still
+  never throws.
+- **Tests:** a parser resilience suite (`ParserResilienceTests`) now backs the "denial of service
+  through parsing" line in SECURITY.md — megabyte-scale malformed literals and 200,000-element sets
+  are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
+  payload.
+
 ## [6.2.0] — 2026-08-16
 
 ### Changed
