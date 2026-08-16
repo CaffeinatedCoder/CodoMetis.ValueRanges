@@ -22,10 +22,43 @@ public sealed class SecurityPolicyConventionTests
     private static readonly Regex UnsupportedRow =
         new(@"^\|\s*<\s*(?<major>\d+)\.(?<minor>\d+)\s*\|\s*❌\s*\|", RegexOptions.Multiline);
 
+    /// <summary>"the current line targets **.NET 10**" — the number the horizon statement is anchored to.</summary>
+    private static readonly Regex TargetsDotNet =
+        new(@"targets \*\*\.NET (?<major>\d+)\*\*", RegexOptions.None);
+
     [TestMethod]
     public void SecurityPolicy_Exists()
     {
         Assert.IsTrue(SecurityPolicy.Exists, $"No SECURITY.md at the repository root ({SecurityPolicy.FullName}).");
+    }
+
+    /// <summary>
+    /// The support horizon is phrased against the .NET major the packages target, and that number
+    /// lives in the core project's TargetFramework. When the TFM moves to net11.0 the sentence has
+    /// to move with it, or the policy promises support against a release the package no longer
+    /// targets.
+    /// </summary>
+    [TestMethod]
+    public void TheSupportHorizon_NamesTheTargetedDotNetMajor()
+    {
+        var text  = File.ReadAllText(SecurityPolicy.FullName);
+        var match = TargetsDotNet.Match(text);
+
+        Assert.IsTrue(
+            match.Success,
+            "SECURITY.md has no 'targets **.NET N**' sentence in its support horizon — a consumer doing "
+          + "due diligence needs to know which platform line the support intention is tied to.");
+
+        var core = RepoLayout.PackableProjects.Single(project => project.PackageId == "CodoMetis.ValueRanges");
+        var tfm  = core.Property("TargetFramework") ?? "";
+        var tfmMajor = Regex.Match(tfm, @"^net(?<major>\d+)\.").Groups["major"].Value;
+
+        Assert.IsFalse(string.IsNullOrEmpty(tfmMajor), $"Could not read a net<major>.<minor> TargetFramework from {core.File.Name} (got '{tfm}').");
+
+        Assert.AreEqual(
+            tfmMajor, match.Groups["major"].Value,
+            $"SECURITY.md says the current line targets .NET {match.Groups["major"].Value}, but "
+          + $"{core.File.Name} targets {tfm}. Move the horizon statement with the TargetFramework.");
     }
 
     [TestMethod]
