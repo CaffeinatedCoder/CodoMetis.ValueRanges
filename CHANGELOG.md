@@ -9,24 +9,6 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
-## [Unreleased]
-
-### Changed
-
-- **Parse and JSON rejections no longer echo the whole input.** A malformed range, multirange or
-  array literal used to come back in the `FormatException` — and a bad bound or element chained the
-  BCL's exception, whose message embeds the text again — so a megabyte of hostile input became a
-  megabyte of exception message, copied into every log sink and, in development, returned to the
-  client. Messages now carry a 64-character excerpt plus the input's length, and element failures
-  report the inner parser's reason as an excerpt instead of chaining it. **If you matched on the
-  full message text or read `InnerException` on these failures, that shape has changed.** Exception
-  types are unchanged: `FormatException`, `OverflowException`, `JsonException`; `TryParse` still
-  never throws.
-- **Tests:** a parser resilience suite (`ParserResilienceTests`) now backs the "denial of service
-  through parsing" line in SECURITY.md — megabyte-scale malformed literals and 200,000-element sets
-  are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
-  payload.
-
 ## [6.3.0] — 2026-08-16
 
 Three additions that close gaps in the existing surface rather than extending the model. No
@@ -47,7 +29,7 @@ breaking changes.
   `NOT lower_inf AND NOT upper_inf AND NOT isempty` for both.
 
 - **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`,
-  matching what the fifteen value set types already supported. Elements are normalized exactly as
+  matching what the nineteen value set types and arities already supported. Elements are normalized exactly as
   `From` normalizes them: empties dropped, sorted by lower bound, overlapping and adjacent
   neighbours merged, any infinity collapsing the set. A `From(params ReadOnlySpan<TRange>)`
   overload comes with it, alongside the existing `From(IEnumerable<TRange>)`.
@@ -104,6 +86,22 @@ breaking changes.
   last value of a discrete one; a convention test now holds the two to agreement.
 
 ## [6.2.1] — 2026-08-16
+
+### Changed
+
+- **Parse and JSON rejections no longer echo the whole input.** A malformed range, multirange or
+  array literal used to come back in the `FormatException` — and a bad bound or element chained the
+  BCL's exception, whose message embeds the text again — so a megabyte of hostile input became a
+  megabyte of exception message, copied into every log sink and, in development, returned to the
+  client. Messages now carry a 64-character excerpt plus the input's length, and element failures
+  report the inner parser's reason as an excerpt instead of chaining it. **If you matched on the
+  full message text or read `InnerException` on these failures, that shape has changed.** Exception
+  types are unchanged: `FormatException`, `OverflowException`, `JsonException`; `TryParse` still
+  never throws.
+- **Tests:** a parser resilience suite (`ParserResilienceTests`) now backs the "denial of service
+  through parsing" line in SECURITY.md — megabyte-scale malformed literals and 200,000-element sets
+  are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
+  payload.
 
 ### Fixed
 

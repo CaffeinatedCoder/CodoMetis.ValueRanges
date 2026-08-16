@@ -72,8 +72,24 @@ users.Where(u => u.Roles.Remove("admin").IsEmpty);  // cardinality(array_remove(
 ```
 
 `Contains` always translates as `@>` rather than `= ANY`, so a plain GIN index serves it.
-`Intersect`, `Except` and `Add` are client-side only — PostgreSQL's array type has no intersection,
-difference or sorted insert — and fail query translation by design.
+
+## What does not translate
+
+These compute the right answer in memory, fail translation in a `Where` — loudly, rather than
+silently fetching the table — and fall back to client evaluation in a `Select`:
+
+| Operation | Why |
+|---|---|
+| `Intersect`, `Except`, `Add` on value sets | PostgreSQL's array type has no intersection, difference or sorted insert |
+| `Length` on any range | the empty range measures 0 where `upper(x) - lower(x)` yields `NULL`, and `int4range` overflows `int4` before a cast can widen it |
+| `Values()` on a discrete range | `generate_series` returns rows, not a scalar |
+| `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | arrays and multiranges convert only through `unnest` and a custom aggregate |
+| `Clamp(value)` on any range | the empty and unbounded shapes have no bound to clamp to |
+| the value set indexer, `set[0]` | canonical order is the CLR comparer's, not the server's |
+
+Everything else on the range, multirange and array surface translates. The
+[full README](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/README.md#what-runs-where)
+tabulates both halves together.
 
 ## Notes
 

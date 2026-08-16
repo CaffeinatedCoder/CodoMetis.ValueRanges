@@ -50,7 +50,7 @@ The two are not interchangeable, and the compiler will not let them be confused.
 **Three gaps in the existing surface, closed.** Nothing here extends the model; each item is something one half of the library had and the other half did not. No breaking changes.
 
 - **`RangeSet` gains `IsInfinity()` and `IsFinite()`**, the two shape predicates a single range already had. The distinction that makes them worth stating: `IsInfinity()` is *not* `IsUnboundedStart() && IsUnboundedEnd()`. That equivalence holds for a range, which is contiguous, and fails for a set — `{(,5],[10,)}` runs to infinity in both directions and does not contain 7. The EF translation keeps the distinction, mapping the set predicate to equality against the infinite multirange rather than to `lower_inf AND upper_inf` ([verified against live PostgreSQL](#verified-against-postgresql)).
-- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`, which the fifteen value set types have supported since v6.0. Normalization is the same as `From`'s.
+- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`, which the nineteen value set types and arities have supported since v6.0. Normalization is the same as `From`'s.
 - **`ISpanParsable<T>` on every parsable type** — all eleven ranges, `RangeSet`, and all nineteen set types and arities now take `ReadOnlySpan<char>` in `Parse`/`TryParse`. The literal grammars were always parsed over spans internally; this exposes that entry point, so parsing a slice of a larger buffer no longer allocates a substring first.
 - **`Length`** — the measure of a range. Discrete domains count inclusively (`[2024-01-01, 2024-01-31]` is 31 days), continuous ones measure the span. Empty measures zero, unbounded measures `null`.
 - **`Values()`** on the discrete ranges, enumerating what they contain — declared only where a step exists, so asking a `DecimalRange` is a compile error.
@@ -1167,6 +1167,40 @@ reservations.Where(r => YearMonthRange.CreateUnboundedEnd(r.Day.ToYearMonth())
 ```
 
 For column-driven construction, fall back to a `LocalDateRange` built from the date column — `daterange` construction in SQL is fully supported there.
+
+## What runs where
+
+Most of the surface translates to SQL and gives identical answers in memory and on the server — that is the point of the library, and the [live-PostgreSQL suite](#verified-against-postgresql) holds it to that. A minority evaluates client-side, always because PostgreSQL has no operator for it rather than because the translation was not written. This table is the whole picture.
+
+**Translated to SQL** — usable in `Where`, `OrderBy`, `Select`, on columns and on parameters:
+
+| Surface | Operations | PostgreSQL |
+|---|---|---|
+| Ranges | `Contains`, `IsContainedBy`, `Overlaps`, `IsAdjacentTo` | `@>`, `<@`, `&&`, `-\|-` |
+| | `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` | `<<`, `>>`, `&<`, `&>` |
+| | `Intersect`, `Union`, `Except`, `Merge` | `*`, `+`, `-`, `range_merge` |
+| | `IsEmpty`, `IsUnboundedStart`/`End`, `IsInfinity`, `IsFinite` | `isempty`, `lower_inf`, `upper_inf`, and combinations |
+| | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |
+| | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
+| | `RangeAgg`, `RangeIntersectAgg` | `range_agg`, `range_intersect_agg` |
+| `RangeSet` | the same operations over multirange columns, plus `Complement` | the multirange forms, and `'{(,)}' - x` |
+| Value sets | `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, and the proper variants | `@>`, `&&`, `<@` |
+| | `Count`, `IsEmpty` | `cardinality` |
+| | `Union`, `Remove` | `array_cat`, `array_remove` |
+| Both families | `==`/`!=` on a column | `=`, `<>` |
+
+**Client-side only** — these compute the right answer in memory, fail translation in a predicate, and fall back to client evaluation in a projection:
+
+| Operation | Why it does not translate |
+|---|---|
+| `Length` on any range | The finite case would be `upper(x) - lower(x)`, but the empty range measures 0 where PostgreSQL's subtraction yields `NULL`, and `int4range` overflows `int4` before a cast can widen it. |
+| `Values()` on a discrete range | Enumeration is `generate_series`, whose result is a set of rows rather than a value — it cannot appear where a scalar is expected. |
+| `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | PostgreSQL converts between arrays and multiranges only through `unnest` and a custom aggregate. |
+| `Clamp(value)` on any range | Expressible as `GREATEST`/`LEAST` over `lower`/`upper`, but the empty and unbounded cases have no bound to clamp to and would need a `CASE` per shape. |
+| `Intersect`, `Except`, `Add` on value sets | PostgreSQL's array type has no intersection, difference, or sorted insert. |
+| The value set indexer, `set[0]` | Array subscripting exists, but the canonical order is the CLR comparer's, not the server's. |
+
+Two consequences worth knowing. A client-side operation inside a `Where` **fails translation loudly** rather than silently fetching the table — EF throws, and that is the intended behaviour. Inside a `Select` it evaluates on the rows already being returned, which is safe. And `Count` over a *server-computed* `Union` is refused outright rather than answered, because `array_cat` concatenates without deduplicating — see the note under [value set columns](#value-set-columns).
 
 ## Verified against PostgreSQL
 

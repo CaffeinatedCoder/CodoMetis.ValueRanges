@@ -25,6 +25,40 @@ public sealed class ChangelogConventionTests
     private static IEnumerable<FileInfo> AllChangelogs() =>
         [RepoLayout.RootChangelog, .. RepoLayout.PackableProjects.Select(ChangelogOf)];
 
+    /// <summary>Matches a floating heading like <c>## [Unreleased]</c>.</summary>
+    private static readonly Regex UnversionedHeading =
+        new(@"^##\s*\[(?<label>[^\]]*[A-Za-z][^\]]*)\]", RegexOptions.Multiline);
+
+    /// <summary>
+    /// No changelog may park entries under a floating heading such as <c>## [Unreleased]</c>.
+    /// </summary>
+    /// <remarks>
+    /// Every commit on <c>main</c> is a tag away from being published, and the release workflow
+    /// publishes whatever <c>Directory.Build.props</c> names — so a heading that says "not
+    /// released yet" becomes false the moment someone tags, silently and with no other test
+    /// noticing. That is not hypothetical: 6.2.1 shipped the parse-rejection change to NuGet
+    /// while the changelog still filed it under Unreleased, and the version-is-documented tests
+    /// above passed throughout, because 6.2.1 did have an entry — just not the whole one.
+    /// Write entries under the version being prepared instead; it is already spelled out in
+    /// Directory.Build.props.
+    /// </remarks>
+    [TestMethod]
+    public void NoChangelog_ParksEntriesUnderAnUnversionedHeading()
+    {
+        var offenders = AllChangelogs()
+                       .Where(changelog => changelog.Exists)
+                       .SelectMany(changelog => UnversionedHeading
+                                               .Matches(File.ReadAllText(changelog.FullName))
+                                               .Select(match => $"{changelog.Name}: '{match.Groups["label"].Value}'"))
+                       .ToList();
+
+        Assert.AreEqual(
+            0, offenders.Count,
+            $"Changelog entries sit under a heading that names no version: {string.Join(", ", offenders)}. "
+          + "A tag can be cut at any time and the entry ships mislabelled — move it under the version "
+          + $"being prepared ({RepoLayout.ShippedVersion}).");
+    }
+
     [TestMethod]
     public void RootChangelog_Exists()
     {
