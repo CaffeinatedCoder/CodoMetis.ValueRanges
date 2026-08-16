@@ -55,8 +55,8 @@ them at once.
 | Two properties (`From`, `To`) | No algebra, no empty or unbounded case; "no end date" becomes a nullable that every reader reinterprets |
 | [`NpgsqlRange<T>`](https://www.npgsql.org/doc/api/NpgsqlTypes.NpgsqlRange-1.html) | Declared in `NpgsqlTypes`, in `Npgsql.dll` — a domain model that uses it references the database driver. The struct carries no algebra of its own ([and reconciles unboundedness at runtime](#unboundedness-is-a-shape-not-a-bound-value)) |
 | NodaTime `Interval` / `DateInterval` with the [Npgsql NodaTime plugin](https://www.npgsql.org/efcore/mapping/nodatime.html) | Two date/time shapes only, and `DateInterval` is always closed and always bounded — no half-open, no unbounded, no empty |
-| [FRange](https://www.nuget.org/packages/FRange/), [Open.Range](https://www.nuget.org/packages/Open.Range) | In-memory only — no PostgreSQL mapping, no SQL translation, no range literals |
-| `T[]` / `List<T>` with EF Core primitive collections | A list, not a set: order and multiplicity are part of the value, so equality is sequence equality |
+| [FRange](https://www.nuget.org/packages/FRange/), [Open.Range](https://www.nuget.org/packages/Open.Range) | In-memory only — no PostgreSQL mapping, no SQL translation, no range literals. Neither has a discrete domain, so `[1,10)` and `[1,9]` stay different values and integer or date adjacency cannot be decided |
+| `T[]` / `List<T>` with EF Core primitive collections | Mutable references, so the domain cannot defend an invariant it has already returned; and a list, not a set — order and multiplicity are part of the value |
 
 **On the range side, the SQL translation is not what is missing.** Npgsql already translates the
 full operator set, and this package does not improve on that. What is missing is a domain type to
@@ -65,9 +65,21 @@ intended for use via SQL translation as part of an EF Core LINQ query"* — call
 or a domain service and it throws. The algebra therefore exists only inside a query, on a type that
 only exists inside the driver. A domain model that wants both has neither.
 
+The in-memory libraries make the opposite trade, and both keep unboundedness a runtime fact.
+[FRange](https://www.nuget.org/packages/FRange/) comes closest — it has unbounded bounds and
+multiranges — but its C# surface answers `LowerBoundValue` on an unbounded range by throwing
+(`failwith "No bound"`), paired with a `HasLowerBound` you are expected to remember to call first.
+That is the same question [this library refuses to let you
+ask](#unboundedness-is-a-shape-not-a-bound-value): `UnboundedStart` has no `Start` property to
+throw from.
+
 **On the set side there is no equivalent at all.** Persisting a PostgreSQL array today means
-exposing `T[]` or `List<T>`, which makes order and duplicates part of the value and leaves canonical
-form to each writer to remember. A set of tags, permissions or IDs has no type that says so.
+exposing `T[]` or `List<T>` — *mutable* references, so a caller can rewrite an element after load
+and the domain cannot defend an invariant it has already handed out. Order and duplicates are part
+of the value, and canonical form is left to every writer to remember. A set of tags, permissions or
+IDs has no type that says so. These sets are immutable end to end: every construction path —
+`From`, parsing, JSON, materialization from the database — deduplicates and sorts, and there is no
+mutating member to undo it.
 
 This package is the two halves joined: immutable domain types carrying the complete algebra in
 process with no database dependency, which the EF Core companion also translates to the same

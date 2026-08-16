@@ -35,12 +35,18 @@ These types are the other way round. The algebra runs in process with no databas
 the [EF Core companion](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL)
 translates the same calls to the same PostgreSQL operators, verified against a live server.
 
-The rest of the ecosystem covers the pieces separately: NodaTime's `Interval`/`DateInterval` are
+The rest of the ecosystem covers the pieces separately. NodaTime's `Interval`/`DateInterval` are
 real domain types the Npgsql plugin maps, but only two date/time shapes, and `DateInterval` is
 always closed and bounded — never half-open, unbounded or empty. In-memory range libraries such as
-[FRange](https://www.nuget.org/packages/FRange/) carry an algebra but no persistence. And a
-PostgreSQL array maps to `T[]` or `List<T>`, a list rather than a set, with order and duplicates
-part of the value.
+[FRange](https://www.nuget.org/packages/FRange/) carry an algebra but no persistence, no discrete
+domain (`[1,10)` and `[1,9]` stay different values, so integer and date adjacency cannot be
+decided), and keep unboundedness a runtime fact — asking an unbounded range for its bound value
+throws, where here the property does not exist to be asked.
+
+And a PostgreSQL array maps to `T[]` or `List<T>`: *mutable* references, so a caller can rewrite an
+element after load and the domain cannot defend an invariant it has already handed out — and a list
+rather than a set, with order and duplicates part of the value. These sets are immutable end to end,
+canonical on every construction path, with no mutating member to undo it.
 
 ## Range types
 
