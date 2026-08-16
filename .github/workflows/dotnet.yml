@@ -128,6 +128,25 @@ jobs:
           path: TestResults/*.trx
           if-no-files-found: ignore
 
+  # The only job that exercises the delivery chain rather than the code: NuGet restore against the
+  # packed feed, the nuspec dependency chain, the public surface as packaged, and the EF plugins
+  # registering from the packaged assemblies. Deliberately independent of the other jobs so it
+  # reports in parallel. No database is involved — ToQueryString never connects.
+  consumer:
+    name: Consumer smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore the packages into a throwaway consumer project
+        run: ./test/consumer-smoke-test.sh
+
   pack:
     name: Pack
     runs-on: ubuntu-latest
@@ -165,6 +184,14 @@ jobs:
             fi
             printf '%-60s %s\n' "$id" "$heading"
           done
+
+      # The smoke test's *other* invocation mode. The `consumer` job runs it with no argument, where
+      # it packs its own feed; here it is handed a pre-built one, exactly as the release workflow
+      # does. The two are not interchangeable — packing pre-populates NUGET_PACKAGES with the
+      # solution's dependencies, and a restore that only works because of that side effect passes
+      # one way and fails the other. That difference broke a release in the sibling repository.
+      - name: Consumer smoke test against the packed feed
+        run: ./test/consumer-smoke-test.sh dist
 
       # Generating here too means a broken SBOM step surfaces on a PR rather than on release day.
       #

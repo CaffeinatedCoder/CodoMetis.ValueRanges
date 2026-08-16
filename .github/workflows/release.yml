@@ -112,6 +112,12 @@ jobs:
       - name: Pack
         run: dotnet pack -c Release --no-build -o dist
 
+      # Installs the packages just packed into throwaway projects outside this repository and runs
+      # real code against them. Passing dist means the artifacts published are the artifacts tested,
+      # rather than a fresh pack that happens to be built from the same commit.
+      - name: Consumer smoke test
+        run: ./test/consumer-smoke-test.sh dist
+
       # No --exclude-filter: nothing in this repository is referenced with PrivateAssets=all, so
       # every dependency in the graph is one a consumer actually takes on and the SBOM matches
       # the nuspec. ReleaseWiringConventionTests fails if that stops being true.
