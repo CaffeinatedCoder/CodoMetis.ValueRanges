@@ -54,6 +54,27 @@ remedy for those is to upgrade.
 | 6.2.x | ✅ |
 | < 6.2 | ❌ |
 
+### For how long
+
+There is no fixed end-of-support date. The current line targets **.NET 10** (`net10.0`, and EF Core
+10 for the EF Core packages), and the intention is to keep it maintained for as long as Microsoft
+supports that .NET release (.NET 10 is LTS, supported until November 2028), or until a new major of
+this package supersedes it, whichever comes first — majors here are cheap, and a new one has never
+meant the old one lost fixes before its successor shipped. If that intention changes, it is recorded
+here before anywhere else.
+
+### If this project stops being maintained
+
+This is a single-maintainer project, and that is the honest continuity risk. The signal would be
+unambiguous: the repository archived, the packages marked deprecated on nuget.org, and a note here.
+Published versions stay on nuget.org regardless (a package can be unlisted, not removed), the code
+is MIT-licensed, and the release path needs nothing but this repository — forking is the intended
+continuity mechanism, not a fallback.
+
+Advisories are published as GitHub Security Advisories, which reach the GitHub Advisory Database
+and from there `dotnet restore` (NuGetAudit): a consumer on an affected version sees a build
+warning without subscribing to anything.
+
 ## Where this package sits
 
 Useful context for judging impact, and for anyone doing supply-chain due diligence.
