@@ -3,6 +3,19 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.3.0] — 2026-08-16
+
+### Added
+
+- **`RangeSet.IsFinite()` translates** to `NOT lower_inf(x) AND NOT upper_inf(x) AND NOT isempty(x)`
+  on a multirange column, matching the single-range predicate of the same name.
+- **`RangeSet.IsInfinity()` translates** to equality against the infinite multirange literal —
+  `x = '{(,)}'::datemultirange` — and deliberately *not* to `lower_inf(x) AND upper_inf(x)`, which
+  is the correct translation for a single range and the wrong one for a multirange: a multirange
+  can satisfy both and still have a gap. PostgreSQL canonicalizes multiranges the way the model
+  does, so equality is exact. Verified against live PostgreSQL, where `{(,5],[10,)}` answers
+  `lower_inf` and `upper_inf` true and the equality false.
+
 ## [6.2.1] — 2026-08-16
 
 No source change in this package. The translation of `IsAdjacentTo` to `-|-` was always correct —

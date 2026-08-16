@@ -5,7 +5,7 @@ namespace CodoMetis.ValueRanges;
 
 /// <summary>
 /// An <see cref="IComparer{TRange}"/> that orders ranges by their lower bound, matching the
-/// internal sort used by <see cref="RangeSet{TRange,T}.From"/> to establish the sorted,
+/// internal sort used by <see cref="RangeSet{TRange,T}.From(IEnumerable{TRange})"/> to establish the sorted,
 /// disjoint, non-adjacent invariant.
 /// </summary>
 /// <remarks>
@@ -25,12 +25,12 @@ namespace CodoMetis.ValueRanges;
 ///   <see cref="IEmptyRange{T}"/> and <see cref="IInfinityRange{T}"/> are not expected as
 ///   inputs: a <see cref="RangeSet{TRange,T}"/> never contains them as ordinary elements,
 ///   and pre-sorting inputs that still contain them is the caller's responsibility (they
-///   are filtered out by <see cref="RangeSet{TRange,T}.From"/> before sorting).
+///   are filtered out by <see cref="RangeSet{TRange,T}.From(IEnumerable{TRange})"/> before sorting).
 ///   </description></item>
 /// </list>
 /// <para>
 /// Use this comparer to sort <see cref="List{TRange}"/>s the same way the set does, for
-/// example to pre-sort inputs before handing them to <see cref="RangeSet{TRange,T}.From"/>,
+/// example to pre-sort inputs before handing them to <see cref="RangeSet{TRange,T}.From(IEnumerable{TRange})"/>,
 /// or to compare two sequences of ranges structurally.
 /// </para>
 /// </remarks>

@@ -71,12 +71,23 @@ public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>
     public static Int64Set Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<Int64Set, long>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static Int64Set Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<Int64Set, long>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into an <see cref="Int64Set"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out Int64Set result)
         => SetFormat.TryParse<Int64Set, long>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int64Set result)
+        => SetFormat.TryParse<Int64Set, long>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(Int64Set? other)
@@ -178,12 +189,23 @@ public sealed class Int64Set<TElement> :
     public static Int64Set<TElement> Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<Int64Set<TElement>, TElement>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static Int64Set<TElement> Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<Int64Set<TElement>, TElement>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into an <see cref="Int64Set{TElement}"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out Int64Set<TElement> result)
         => SetFormat.TryParse<Int64Set<TElement>, TElement>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int64Set<TElement> result)
+        => SetFormat.TryParse<Int64Set<TElement>, TElement>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(Int64Set<TElement>? other)

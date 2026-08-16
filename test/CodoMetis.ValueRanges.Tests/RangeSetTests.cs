@@ -47,6 +47,75 @@ public class RangeSetTests
         Assert.AreSame(IntSet.Infinite, result);
     }
 
+    /// <summary>
+    /// The span overload and the sequence overload are separate entry points into
+    /// normalization; both must land on the same invariant. The sequence side is fed through
+    /// a lazy <c>Select</c> so it cannot take the materialized-collection fast path.
+    /// </summary>
+    [TestMethod]
+    public void From_SpanAndSequenceOverloads_NormalizeIdentically()
+    {
+        Int32Range[] input =
+        [
+            Int32Range.CreateFinite(10, 12),
+            Int32Range.Empty,
+            Int32Range.CreateFinite(1, 3),
+            Int32Range.CreateFinite(2, 5)
+        ];
+
+        var fromSpan     = IntSet.From(input.AsSpan());
+        var fromSequence = IntSet.From(input.Select(range => range));
+
+        Assert.AreEqual(fromSequence, fromSpan);
+        Assert.AreEqual(2, fromSpan.Count);
+        Assert.AreEqual(Int32Range.CreateFinite(1, 5), fromSpan[0]);
+        Assert.AreEqual(Int32Range.CreateFinite(10, 12), fromSpan[1]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection expressions
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// A collection expression runs through <c>RangeSet.Create</c>, so it must normalize
+    /// exactly like <c>From</c> rather than wrapping the elements as written: these overlap
+    /// and arrive out of order.
+    /// </summary>
+    [TestMethod]
+    public void CollectionExpression_Normalizes()
+    {
+        IntSet set = [Int32Range.CreateFinite(10, 12), Int32Range.CreateFinite(1, 3), Int32Range.CreateFinite(2, 5)];
+
+        Assert.AreEqual(2, set.Count);
+        Assert.AreEqual(Int32Range.CreateFinite(1, 5), set[0]);
+        Assert.AreEqual(Int32Range.CreateFinite(10, 12), set[1]);
+    }
+
+    [TestMethod]
+    public void CollectionExpression_Empty_ReturnsEmptySingleton()
+    {
+        IntSet set = [];
+
+        Assert.AreSame(IntSet.Empty, set);
+    }
+
+    [TestMethod]
+    public void CollectionExpression_ContainsInfinity_ReturnsInfiniteSingleton()
+    {
+        IntSet set = [Int32Range.CreateFinite(1, 5), Int32Range.Infinite];
+
+        Assert.AreSame(IntSet.Infinite, set);
+    }
+
+    [TestMethod]
+    public void CollectionExpression_OverDecimalRanges_UsesTheSameBuilder()
+    {
+        DecimalRangeSet set = [DecimalRange.CreateFinite(1.5m, 2.5m), DecimalRange.CreateFinite(2.0m, 3.0m)];
+
+        Assert.AreEqual(1, set.Count);
+        Assert.AreEqual(DecimalRange.CreateFinite(1.5m, 3.0m), set[0]);
+    }
+
     [TestMethod]
     public void From_OverlappingRanges_MergesIntoOne()
     {
@@ -167,6 +236,7 @@ public class RangeSetTests
         var covered = blocks.Union(blocks.Complement());
 
         Assert.AreSame(IntSet.Infinite, covered, $"got '{covered}'");
+        Assert.IsTrue(covered.IsInfinity());
     }
 
     /// <summary>

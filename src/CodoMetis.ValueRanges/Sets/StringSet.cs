@@ -82,12 +82,23 @@ public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, s
     public static StringSet Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<StringSet, string>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static StringSet Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<StringSet, string>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into a <see cref="StringSet"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out StringSet result)
         => SetFormat.TryParse<StringSet, string>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out StringSet result)
+        => SetFormat.TryParse<StringSet, string>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(StringSet? other)
@@ -208,12 +219,23 @@ public sealed class StringSet<TElement> :
     public static StringSet<TElement> Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<StringSet<TElement>, TElement>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static StringSet<TElement> Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<StringSet<TElement>, TElement>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into a <see cref="StringSet{TElement}"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out StringSet<TElement> result)
         => SetFormat.TryParse<StringSet<TElement>, TElement>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out StringSet<TElement> result)
+        => SetFormat.TryParse<StringSet<TElement>, TElement>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(StringSet<TElement>? other)

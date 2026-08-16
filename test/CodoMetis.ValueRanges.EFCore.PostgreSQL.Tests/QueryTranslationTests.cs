@@ -374,6 +374,31 @@ public sealed class QueryTranslationTests
     }
 
     [TestMethod]
+    public void RangeSet_IsFinite_ComposesNegatedUnboundedAndEmptyChecks()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.BlockedDays.IsFinite()));
+
+        StringAssert.Contains(sql, "NOT (lower_inf(b.\"BlockedDays\"))");
+        StringAssert.Contains(sql, "NOT (upper_inf(b.\"BlockedDays\"))");
+        StringAssert.Contains(sql, "NOT (isempty(b.\"BlockedDays\"))");
+    }
+
+    /// <summary>
+    /// Deliberately not <c>lower_inf AND upper_inf</c>, which is the translation the single-range
+    /// <c>IsInfinity</c> uses: a multirange can satisfy both and still have a gap. PostgreSQL
+    /// canonicalizes multiranges the same way the model does, so equality against the infinite
+    /// multirange literal is exact.
+    /// </summary>
+    [TestMethod]
+    public void RangeSet_IsInfinity_ComparesAgainstTheInfiniteMultirange()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.BlockedDays.IsInfinity()));
+
+        StringAssert.Contains(sql, "b.\"BlockedDays\" = '{(,)}'::datemultirange");
+        Assert.IsFalse(sql.Contains("lower_inf"), $"IsInfinity must not weaken to lower_inf:\n{sql}");
+    }
+
+    [TestMethod]
     public void RangeSet_EqualityOperator_TranslatesToSqlEquals()
     {
         var blocked = RangeSet<DateRange, DateOnly>.From([Range]);

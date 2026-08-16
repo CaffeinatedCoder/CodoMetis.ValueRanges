@@ -165,12 +165,23 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     public static Int32Range Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<Int32Range, int>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static Int32Range Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<Int32Range, int>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into an <see cref="Int32Range"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out Int32Range result)
         => RangeFormat.TryParse<Int32Range, int>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int32Range result)
+        => RangeFormat.TryParse<Int32Range, int>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

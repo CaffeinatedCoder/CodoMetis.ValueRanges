@@ -221,12 +221,23 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
     public static YearMonthRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<YearMonthRange, YearMonth>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static YearMonthRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<YearMonthRange, YearMonth>(s, provider);
+
     /// <summary>
     /// Tries to parse a range literal over ISO year-months into a <see cref="YearMonthRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out YearMonthRange result)
         => RangeFormat.TryParse<YearMonthRange, YearMonth>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out YearMonthRange result)
+        => RangeFormat.TryParse<YearMonthRange, YearMonth>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

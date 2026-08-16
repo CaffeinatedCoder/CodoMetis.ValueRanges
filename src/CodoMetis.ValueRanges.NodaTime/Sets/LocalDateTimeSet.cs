@@ -114,12 +114,23 @@ public sealed class LocalDateTimeSet : IValueSet<LocalDateTime>, IValueSetFactor
     public static LocalDateTimeSet Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<LocalDateTimeSet, LocalDateTime>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static LocalDateTimeSet Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<LocalDateTimeSet, LocalDateTime>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into a <see cref="LocalDateTimeSet"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out LocalDateTimeSet result)
         => SetFormat.TryParse<LocalDateTimeSet, LocalDateTime>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out LocalDateTimeSet result)
+        => SetFormat.TryParse<LocalDateTimeSet, LocalDateTime>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(LocalDateTimeSet? other)

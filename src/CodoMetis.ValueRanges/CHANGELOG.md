@@ -21,6 +21,23 @@ covers all four packages, which share one version number and release together.
   are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
   payload.
 
+## [6.3.0] — 2026-08-16
+
+### Added
+
+- **`RangeSet.IsInfinity()` and `RangeSet.IsFinite()`**, completing the shape predicates the single
+  ranges already had. `IsInfinity()` is true only for the set covering the whole domain — not the
+  same thing as unbounded at both ends, which `{(,5],[10,)}` satisfies while missing 7.
+  `IsFinite()` is true for a non-empty set bounded at both ends.
+- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`,
+  as the value set types already supported. Normalization is unchanged: empties dropped, sorted,
+  overlapping and adjacent neighbours merged. Adds `From(params ReadOnlySpan<TRange>)` and the
+  non-generic builder `RangeSet.Create<TRange, T>`.
+- **`ISpanParsable<T>`** on the seven range types, `RangeSet<TRange, T>`, and the fourteen set types
+  and arities, with `Parse`/`TryParse` overloads over `ReadOnlySpan<char>`. The literal parsers
+  were already span-based internally; this exposes them, so a slice of a larger buffer no longer
+  needs a substring allocation first. `IParsable<T>` is still satisfied.
+
 ## [6.2.1] — 2026-08-16
 
 ### Fixed

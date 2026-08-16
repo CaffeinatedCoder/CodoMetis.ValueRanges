@@ -99,12 +99,23 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
     public static InstantSet Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<InstantSet, Instant>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static InstantSet Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<InstantSet, Instant>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into a <see cref="InstantSet"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out InstantSet result)
         => SetFormat.TryParse<InstantSet, Instant>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out InstantSet result)
+        => SetFormat.TryParse<InstantSet, Instant>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(InstantSet? other)

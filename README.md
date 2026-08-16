@@ -45,6 +45,14 @@ DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a
 
 The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](#entity-framework-core-postgresql) for how that round-trips.
 
+## What's new in v6.3
+
+**Three gaps in the existing surface, closed.** Nothing here extends the model; each item is something one half of the library had and the other half did not. No breaking changes.
+
+- **`RangeSet` gains `IsInfinity()` and `IsFinite()`**, the two shape predicates a single range already had. The distinction that makes them worth stating: `IsInfinity()` is *not* `IsUnboundedStart() && IsUnboundedEnd()`. That equivalence holds for a range, which is contiguous, and fails for a set — `{(,5],[10,)}` runs to infinity in both directions and does not contain 7. The EF translation keeps the distinction, mapping the set predicate to equality against the infinite multirange rather than to `lower_inf AND upper_inf` ([verified against live PostgreSQL](#verified-against-postgresql)).
+- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`, which the fifteen value set types have supported since v6.0. Normalization is the same as `From`'s.
+- **`ISpanParsable<T>` on every parsable type** — all eleven ranges, `RangeSet`, and all nineteen set types and arities now take `ReadOnlySpan<char>` in `Parse`/`TryParse`. The literal grammars were always parsed over spans internally; this exposes that entry point, so parsing a slice of a larger buffer no longer allocates a substring first.
+
 ## What's new in v6.2
 
 **Two defects found by an audit, both of which had been documented as correct.** That is what made them survive review: reading the code confirmed the comment, and the comment was the bug. Neither changes an outcome that was previously right.
@@ -457,10 +465,12 @@ set - Int32Range.CreateFinite(4, 6);           // { [1, 3], [7, 10], [20, 30] }
 // Complement — every value not covered by the set
 set.Complement();  // { (-∞, 0], [11, 19], [31, +∞) }
 
-// State checks — isempty / lower_inf / upper_inf equivalents
+// State checks — isempty / lower_inf / upper_inf equivalents, plus the two derived shapes
 set.IsEmpty();           // false
 set.IsUnboundedStart();  // false
 set.IsUnboundedEnd();    // false
+set.IsFinite();          // true  — non-empty and bounded at both ends
+set.IsInfinity();        // false — only the set covering the whole domain answers true
 
 // Set-operand comparisons — the full multirange operator matrix
 set.Contains(IntSet.From([Int32Range.CreateFinite(2, 8)]));   // true   (@>)
@@ -482,6 +492,42 @@ three.IsAdjacentTo(Int32Range.CreateFinite(10, 12)); // false — touches only t
 ```
 
 The positional operators (`<<`, `>>`, `&<`, `&>`) likewise compare the first/last element's bounds.
+
+**`IsInfinity()` is not the conjunction of the two unbounded checks.** For a single range it would be — a range is contiguous, so unbounded on both sides means the whole domain. A set can be open at both ends and still have a hole:
+
+```csharp
+var gapped = IntSet.From([
+    Int32Range.CreateUnboundedStart(5, true),  // (-∞, 5]
+    Int32Range.CreateUnboundedEnd(10)          // [10, +∞)
+]);
+
+gapped.IsUnboundedStart();  // true
+gapped.IsUnboundedEnd();    // true
+gapped.Contains(7);         // false — the gap
+gapped.IsInfinity();        // false
+
+IntSet.Infinite.IsInfinity();  // true — the only set that covers everything
+```
+
+Because normalization collapses any `Infinity` input to the one-element `Infinite` set, that set is the unique representation of full coverage, which is what lets the check be exact both in memory and in SQL.
+
+### Collection expressions
+
+`RangeSet<TRange, T>` supports collection expressions, and they normalize exactly as `From` does:
+
+```csharp
+RangeSet<Int32Range, int> set = [
+    Int32Range.CreateFinite(10, 12),
+    Int32Range.CreateFinite(1, 3),
+    Int32Range.CreateFinite(2, 5)
+];
+// { [1, 5], [10, 12] } — sorted and merged, not wrapped as written
+
+RangeSet<Int32Range, int> none = [];                                  // the Empty singleton
+RangeSet<Int32Range, int> all  = [Int32Range.Infinite, someRange];    // the Infinite singleton
+```
+
+The builder behind it is the non-generic `RangeSet.Create<TRange, T>`, since a `[CollectionBuilder]` target cannot itself be generic. Prefer the collection expression over calling it: C# does not infer type arguments from constraints, so `T` cannot be deduced from `TRange` and a direct call has to name both. There is also a `From(params ReadOnlySpan<TRange>)` overload beside `From(IEnumerable<TRange>)`.
 
 The set implements `IReadOnlyList<TRange>` (enumeration in lower-bound order, `Count`, indexer) and structural equality, including `==`/`!=`: two sets built from different inputs that normalize identically are equal.
 
@@ -683,6 +729,20 @@ set[0];      // [1, 5]
 set[1];      // [7, 10]
 ```
 
+### Parsing from a span
+
+Every parsable type implements `ISpanParsable<T>`, so `Parse` and `TryParse` also take a `ReadOnlySpan<char>`. The literal grammars are parsed over spans internally either way — the overload just removes the substring allocation when what you have is a slice of a larger buffer:
+
+```csharp
+ReadOnlySpan<char> line = "period=[2024-01-01,2024-12-31];rate=4.5".AsSpan();
+
+var period = DateRange.Parse(line[7..29], null);   // no substring allocated
+var tags   = StringSet.Parse("{a,b}".AsSpan(), null);
+var blocks = RangeSet<Int32Range, int>.Parse("{[1,5],[7,10]}".AsSpan(), null);
+```
+
+`ISpanParsable<T>` extends `IParsable<T>`, so the `string` overloads and any generic code constrained on `IParsable<T>` keep working unchanged. One thing to know if you write generic code over these types: where a type parameter is constrained to `IRangeFactory` or `IValueSetFactory`, both overloads are now visible and a `string` argument binds to the span one through the implicit conversion. Each type's two overloads are the same call, so results are unaffected.
+
 ### Quoted bounds
 
 PostgreSQL allows quoting individual bounds to embed commas, brackets, or other characters that would otherwise confuse the parser:
@@ -792,6 +852,13 @@ The library exposes a structured set of interfaces for writing generic code:
 | `IRangeFactory<TRange, T>` | Abstract static factories; also `NextValueAfter`/`PreviousValueBefore` for step-aware (discrete) types |
 
 `T` is constrained to `struct, IComparable<T>, IEquatable<T>` throughout.
+
+`IRangeFactory<TRange, T>` and `IValueSetFactory<TSet, T>` both extend `ISpanParsable<TSelf>` (and so `IParsable<TSelf>`) and `IFormattable`, which is what lets generic code parse and format any range or set without knowing the concrete type:
+
+```csharp
+static T Load<T>(ReadOnlySpan<char> literal) where T : ISpanParsable<T>
+    => T.Parse(literal, CultureInfo.InvariantCulture);
+```
 
 For sorting ranges externally, `RangeLowerBoundComparer<TRange, T>` (an `IComparer<TRange>` singleton) exposes the same lower-bound ordering the set uses internally. See [Sorting ranges externally](#sorting-ranges-externally).
 
@@ -916,7 +983,8 @@ bookings.Where(b => b.BlockedDays == someSet);
 
 Notes:
 
-- Range state checks translate directly: `IsEmpty()` → `isempty`, `IsUnboundedStart()` → `lower_inf`, `IsUnboundedEnd()` → `upper_inf`, `IsInfinity()` → `lower_inf AND upper_inf`, `IsFinite()` → `NOT lower_inf AND NOT upper_inf AND NOT isempty`. The same state checks exist on `RangeSet` and translate to the multirange functions.
+- Range state checks translate directly: `IsEmpty()` → `isempty`, `IsUnboundedStart()` → `lower_inf`, `IsUnboundedEnd()` → `upper_inf`, `IsInfinity()` → `lower_inf AND upper_inf`, `IsFinite()` → `NOT lower_inf AND NOT upper_inf AND NOT isempty`.
+- The same state checks exist on `RangeSet` and translate to the multirange forms of those functions — **except `IsInfinity()`**, which translates to equality against the infinite multirange (`x = '{(,)}'::datemultirange`). `lower_inf AND upper_inf` is the right translation for a range and the wrong one for a multirange, which can satisfy both and still have a gap. PostgreSQL canonicalizes multiranges the way the model does, so the equality is exact ([verified against live PostgreSQL](#verified-against-postgresql)).
 - `LowerBound()`/`UpperBound()` return `T?` because PostgreSQL's `lower`/`upper` return `NULL` for an unbounded or empty operand — the in-memory implementation matches.
 - For the discrete types (`int4range`, `int8range`, `daterange`), PostgreSQL canonicalizes to half-open `[lower, upper)` while the model canonicalizes to closed `[lower, upper]`. `UpperBound()` therefore translates to `upper(x) - 1` and `UpperBoundInclusive()` to `NOT upper_inf(x) AND NOT isempty(x)`, so server results always equal the in-memory results ([verified against live PostgreSQL](#verified-against-postgresql)).
 - The aggregates return `NULL` in SQL for zero input rows (standard PostgreSQL aggregate behavior), while the in-memory `RangeAgg()` returns the empty set. `RangeIntersectAgg()` returns `null` in both worlds.
@@ -1041,7 +1109,7 @@ The library's core promise — identical results in memory and as SQL — is enf
 2. **Translation suite** — asserts the exact SQL generated for every LINQ construct via `ToQueryString()`, without a database.
 3. **Live-PostgreSQL parity suite** — a Testcontainers-based project executes the translated SQL against a real PostgreSQL instance and asserts agreement with the in-memory results: round-trips for every range and multirange column type, the timestamp normalization and precision rules at the Npgsql boundary, and operation-level parity for the full algebra.
 
-The live suite is the authority on semantics, and the model bends to it rather than the other way around: it is what established the discrete `upper()` canonicalization compensation and PostgreSQL's directional multirange adjacency rule documented above — before any user could trip over them. The NodaTime satellite types run through the same three layers, including the `Instant` sub-microsecond precision reduction and the `±infinity` boundary mapping.
+The live suite is the authority on semantics, and the model bends to it rather than the other way around: it is what established the discrete `upper()` canonicalization compensation, PostgreSQL's directional multirange adjacency rule documented above, and the confirmation that a multirange satisfying both `lower_inf` and `upper_inf` is still not the whole domain — all before any user could trip over them. The NodaTime satellite types run through the same three layers, including the `Instant` sub-microsecond precision reduction and the `±infinity` boundary mapping.
 
 All three layers run in CI on every push and pull request — the badge at the top of this page is the current state of the whole suite, live database included. A fourth, repo-level layer checks the things that compile and pack cleanly and only fail once a package is installed: that every shipped version is documented, that each package ships its own README, and that the value set contracts above hold for every set type that exists.
 

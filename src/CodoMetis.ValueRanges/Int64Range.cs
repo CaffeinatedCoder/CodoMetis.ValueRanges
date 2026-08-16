@@ -165,12 +165,23 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     public static Int64Range Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<Int64Range, long>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static Int64Range Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<Int64Range, long>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into an <see cref="Int64Range"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out Int64Range result)
         => RangeFormat.TryParse<Int64Range, long>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int64Range result)
+        => RangeFormat.TryParse<Int64Range, long>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

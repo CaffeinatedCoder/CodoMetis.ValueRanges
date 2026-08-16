@@ -154,12 +154,23 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     public static DecimalRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<DecimalRange, decimal>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static DecimalRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<DecimalRange, decimal>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into a <see cref="DecimalRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out DecimalRange result)
         => RangeFormat.TryParse<DecimalRange, decimal>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DecimalRange result)
+        => RangeFormat.TryParse<DecimalRange, decimal>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

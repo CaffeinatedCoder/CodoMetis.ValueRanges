@@ -27,6 +27,48 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
   are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
   payload.
 
+## [6.3.0] — 2026-08-16
+
+Three additions that close gaps in the existing surface rather than extending the model. No
+breaking changes.
+
+### Added
+
+- **`RangeSet.IsInfinity()` and `RangeSet.IsFinite()`** — the two shape predicates a range had and
+  its multirange counterpart did not. `IsFinite()` is true for a non-empty set bounded at both
+  ends; `IsInfinity()` is true only for the set covering the whole domain.
+
+  `IsInfinity()` is deliberately **not** `IsUnboundedStart() && IsUnboundedEnd()`. That equivalence
+  holds for a single range, because a range is contiguous, and fails for a set:
+  `{(,5],[10,)}` is unbounded at both ends and does not contain 7. The EF translation reflects
+  the same distinction — the range predicate maps to `lower_inf(x) AND upper_inf(x)`, the set
+  predicate to equality against the infinite multirange literal, which is exact because
+  PostgreSQL canonicalizes multiranges the way the model does. `IsFinite()` maps to
+  `NOT lower_inf AND NOT upper_inf AND NOT isempty` for both.
+
+- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`,
+  matching what the fifteen value set types already supported. Elements are normalized exactly as
+  `From` normalizes them: empties dropped, sorted by lower bound, overlapping and adjacent
+  neighbours merged, any infinity collapsing the set. A `From(params ReadOnlySpan<TRange>)`
+  overload comes with it, alongside the existing `From(IEnumerable<TRange>)`.
+
+  The builder is exposed as a non-generic `RangeSet.Create<TRange, T>`, because a
+  `[CollectionBuilder]` target cannot be generic. Prefer the collection expression: C# does not
+  infer type arguments from constraints, so a direct call has to name both `TRange` and `T`, which
+  is longer than `RangeSet<TRange, T>.From` already was.
+
+- **`ISpanParsable<T>` on every parsable type** — the eleven range types, `RangeSet<TRange, T>`, and
+  all nineteen value set types and arities, with public `Parse`/`TryParse` overloads over
+  `ReadOnlySpan<char>` beside the existing `string` ones. The literal grammars were already parsed
+  over spans internally, so this exposes the parser that was always there and lets a caller parse
+  a slice of a larger buffer without allocating a substring first. `IParsable<T>` remains
+  satisfied — `ISpanParsable<T>` extends it.
+
+  One consequence worth knowing if you write generic code over these types: where a type parameter
+  is constrained to `IRangeFactory`/`IValueSetFactory`, both `Parse` overloads are now visible, and
+  a `string` argument binds to the span overload through the implicit conversion. Every type's two
+  overloads are the same call, so results do not change.
+
 ## [6.2.1] — 2026-08-16
 
 ### Fixed

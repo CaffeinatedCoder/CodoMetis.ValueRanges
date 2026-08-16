@@ -67,12 +67,23 @@ public sealed class DecimalSet : IValueSet<decimal>, IValueSetFactory<DecimalSet
     public static DecimalSet Parse(string s, IFormatProvider? provider)
         => SetFormat.Parse<DecimalSet, decimal>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL array literal from a character span.</summary>
+    public static DecimalSet Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<DecimalSet, decimal>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL array literal into a <see cref="DecimalSet"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out DecimalSet result)
         => SetFormat.TryParse<DecimalSet, decimal>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL array literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DecimalSet result)
+        => SetFormat.TryParse<DecimalSet, decimal>(s, provider, out result);
 
     /// <summary>Structural equality — set equality over canonical form.</summary>
     public bool Equals(DecimalSet? other)

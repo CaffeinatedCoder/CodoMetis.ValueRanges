@@ -14,7 +14,7 @@ namespace CodoMetis.ValueRanges.Core;
 /// </summary>
 /// <typeparam name="TSet">The concrete set type being constructed.</typeparam>
 /// <typeparam name="T">The element type of the set.</typeparam>
-public interface IValueSetFactory<TSet, T> : IParsable<TSet>, IFormattable
+public interface IValueSetFactory<TSet, T> : ISpanParsable<TSet>, IFormattable
     where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
     where T : IEquatable<T>
 {
@@ -87,7 +87,10 @@ public interface IValueSetFactory<TSet, T> : IParsable<TSet>, IFormattable
     virtual static JsonConverter<T>? ElementJsonConverter => null;
 
     // -----------------------------------------------------------------------
-    // IParsable<TSet> — default implementations
+    // ISpanParsable<TSet> / IParsable<TSet> — default implementations
+    //
+    // The array literal grammar is parsed over a span throughout, so the string overloads are
+    // the ones that widen: every entry point converges on SetFormat's span parser.
     // -----------------------------------------------------------------------
 
     /// <inheritdoc cref="IParsable{TSelf}.Parse"/>
@@ -97,6 +100,14 @@ public interface IValueSetFactory<TSet, T> : IParsable<TSet>, IFormattable
     /// <inheritdoc cref="IParsable{TSelf}.TryParse"/>
     static bool IParsable<TSet>.TryParse(string? s, IFormatProvider? provider, out TSet result)
         => SetFormat.TryParse<TSet, T>(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc cref="ISpanParsable{TSelf}.Parse"/>
+    static TSet ISpanParsable<TSet>.Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => SetFormat.Parse<TSet, T>(s, provider);
+
+    /// <inheritdoc cref="ISpanParsable{TSelf}.TryParse"/>
+    static bool ISpanParsable<TSet>.TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out TSet result)
+        => SetFormat.TryParse<TSet, T>(s, provider, out result);
 
     // -----------------------------------------------------------------------
     // IFormattable — default implementation

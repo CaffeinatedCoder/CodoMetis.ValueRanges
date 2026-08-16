@@ -3,6 +3,18 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.3.0] — 2026-08-16
+
+### Added
+
+- **`ISpanParsable<T>`** on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`,
+  `YearMonthRange` and the five NodaTime set types, with `Parse`/`TryParse` overloads over
+  `ReadOnlySpan<char>` beside the existing `string` ones. The NodaTime patterns were already
+  applied to spans internally; this exposes that entry point.
+- The core additions apply to the NodaTime types too, since they come from the shared generic
+  surface: `RangeSet<LocalDateRange, LocalDate>` and its siblings gain `IsInfinity()`/`IsFinite()`
+  and collection-expression support. See `CodoMetis.ValueRanges` 6.3.0.
+
 ## [6.2.1] — 2026-08-16
 
 ### Fixed

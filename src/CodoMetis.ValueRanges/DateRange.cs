@@ -172,12 +172,23 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     public static DateRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<DateRange, DateOnly>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static DateRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<DateRange, DateOnly>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into a <see cref="DateRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out DateRange result)
         => RangeFormat.TryParse<DateRange, DateOnly>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DateRange result)
+        => RangeFormat.TryParse<DateRange, DateOnly>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

@@ -216,12 +216,23 @@ public abstract record LocalDateTimeRange : IRange<LocalDateTime>, IRangeFactory
     public static LocalDateTimeRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<LocalDateTimeRange, LocalDateTime>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static LocalDateTimeRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<LocalDateTimeRange, LocalDateTime>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into a <see cref="LocalDateTimeRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out LocalDateTimeRange result)
         => RangeFormat.TryParse<LocalDateTimeRange, LocalDateTime>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out LocalDateTimeRange result)
+        => RangeFormat.TryParse<LocalDateTimeRange, LocalDateTime>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()

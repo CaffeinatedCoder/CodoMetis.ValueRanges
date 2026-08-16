@@ -11,7 +11,7 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 /// <summary>
 /// Maps a <see cref="RangeSet{TRange,T}"/> to its PostgreSQL multirange column
 /// (e.g. <c>datemultirange</c>), converting through an <see cref="NpgsqlRange{T}"/> array
-/// at the provider boundary. Reads re-normalize through <see cref="RangeSet{TRange,T}.From"/>,
+/// at the provider boundary. Reads re-normalize through <see cref="RangeSet{TRange,T}.From(IEnumerable{TRange})"/>,
 /// so the set invariant holds regardless of what the database returns.
 /// </summary>
 /// <typeparam name="TRange">The range type the set is composed of.</typeparam>

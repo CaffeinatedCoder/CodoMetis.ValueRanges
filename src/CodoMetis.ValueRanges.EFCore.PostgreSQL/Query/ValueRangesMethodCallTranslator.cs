@@ -296,6 +296,21 @@ internal sealed class ValueRangesMethodCallTranslator(
             case nameof(RangeSet<,>.IsUnboundedEnd) when instance is not null && arguments.Count == 0:
                 return BoolFunction("upper_inf", Set(instance));
 
+            // Full coverage, not "unbounded at both ends": {(,5],[10,)} satisfies
+            // lower_inf AND upper_inf but leaves a hole. PostgreSQL canonicalizes multiranges
+            // exactly as the model does, so equality against '{(,)}' is the precise test.
+            case nameof(RangeSet<,>.IsInfinity) when instance is not null && arguments.Count == 0:
+                return sqlExpressionFactory.Equal(
+                    Set(instance),
+                    sqlExpressionFactory.Constant(definition.InfiniteRangeSet, definition.RangeSetTypeMapping));
+
+            case nameof(RangeSet<,>.IsFinite) when instance is not null && arguments.Count == 0:
+                return sqlExpressionFactory.AndAlso(
+                    sqlExpressionFactory.Not(BoolFunction("lower_inf", Set(instance))),
+                    sqlExpressionFactory.AndAlso(
+                        sqlExpressionFactory.Not(BoolFunction("upper_inf", Set(instance))),
+                        sqlExpressionFactory.Not(BoolFunction("isempty", Set(instance)))));
+
             case nameof(RangeSet<,>.Union) when instance is not null && arguments.Count == 1:
                 return SetBinary(PgExpressionType.RangeUnion, Set(instance), AsSet(arguments[0]));
 

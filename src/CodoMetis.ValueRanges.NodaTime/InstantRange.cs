@@ -171,12 +171,23 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
     public static InstantRange Parse(string s, IFormatProvider? provider)
         => RangeFormat.Parse<InstantRange, Instant>(s.AsSpan(), provider);
 
+    /// <summary>Parses a PostgreSQL range literal from a character span.</summary>
+    public static InstantRange Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => RangeFormat.Parse<InstantRange, Instant>(s, provider);
+
     /// <summary>
     /// Tries to parse a PostgreSQL range literal into an <see cref="InstantRange"/>.
     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
     /// </summary>
     public static bool TryParse(string? s, IFormatProvider? provider, out InstantRange result)
         => RangeFormat.TryParse<InstantRange, Instant>(s.AsSpan(), provider, out result);
+
+    /// <summary>
+    /// Tries to parse a PostgreSQL range literal from a character span.
+    /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out InstantRange result)
+        => RangeFormat.TryParse<InstantRange, Instant>(s, provider, out result);
 
     /// <inheritdoc />
     public override sealed string ToString()
