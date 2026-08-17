@@ -13,6 +13,25 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
 
 ### Fixed
 
+- **⚠️ `Int64Range.Contains(value)` produced SQL PostgreSQL refused to run**, whenever the value was
+  a constant rather than a captured variable. The range operators are polymorphic
+  (`anyrange @> anyelement`), and PostgreSQL resolves polymorphic operators without applying
+  implicit coercions — so a bare `25`, which it types as `integer`, does not match `int8range`:
+
+  ```
+  WHERE t."Tickets" @> 25          →  42883: operator does not exist: int8range @> integer
+  WHERE t."Tickets" @> 25::bigint  →  runs
+  ```
+
+  Constant element operands now carry an explicit cast when their store type is not the one
+  PostgreSQL infers from a bare numeric literal. `Int64Range` and
+  `RangeSet<Int64Range, long>` were the only types affected: every other element type renders
+  self-describing literal text (`DATE '2024-06-15'`, `TIMESTAMP '…'`), and `integer`/`numeric`
+  literals already arrive as the type their subtype wants — so no other emitted SQL changes.
+
+  The translation test for this asserted `@> ` and stopped there, and no test executed the query,
+  which is exactly the pair of gaps that let it ship.
+
 - **⚠️ `IsStrictlyLeftOf` answered `false` for every range unbounded at its *start***, and
   `IsStrictlyRightOf` for every such operand. `<<` compares the receiver's **upper** bound with the
   operand's **lower** bound, so `(-∞, 5]` — which has a perfectly finite upper bound — is strictly

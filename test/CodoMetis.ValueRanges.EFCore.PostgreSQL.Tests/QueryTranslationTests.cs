@@ -126,7 +126,13 @@ public sealed class QueryTranslationTests
             && b.InstantTime.Contains(new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero))));
 
         StringAssert.Contains(sql, "b.\"Seats\" @> 7");
-        StringAssert.Contains(sql, "b.\"Tickets\" @> ");
+
+        // Not just "@> something": a bare 7 here is an integer to PostgreSQL, and the range
+        // operators are polymorphic (anyrange @> anyelement), which resolves without implicit
+        // coercion — so `int8range @> integer` is an error rather than a widening. This assertion
+        // read `@> ` and passed while the query it described could not execute.
+        StringAssert.Contains(sql, "b.\"Tickets\" @> 7::bigint");
+
         StringAssert.Contains(sql, "b.\"Price\" @> 9.5");
         StringAssert.Contains(sql, "b.\"LocalTime\" @> TIMESTAMP");
         StringAssert.Contains(sql, "b.\"InstantTime\" @> TIMESTAMPTZ");

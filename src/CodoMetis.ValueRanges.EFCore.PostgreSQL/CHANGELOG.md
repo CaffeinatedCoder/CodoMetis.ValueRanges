@@ -5,12 +5,32 @@ covers all four packages, which share one version number and release together.
 
 ## [6.4.0] — 2026-08-17
 
-No source change in this package. The translation of `IsStrictlyLeftOf`/`IsStrictlyRightOf` to
-`<<`/`>>` was always correct; the in-memory predicate it mirrors was not, so client-side and
-server-side evaluation of the same comparison disagreed for any range unbounded at its start. See
-`CodoMetis.ValueRanges` 6.4.0. The live-PostgreSQL parity suite gained a `<<`/`>>` counterpart to
-its adjacency test, which is what the gap had been hiding behind: the translation tests assert that
-`<<` is emitted, never what it answers.
+### Fixed
+
+- **⚠️ A constant `long` element operand emitted SQL PostgreSQL refused to run.**
+  `Int64Range.Contains(25L)` and `RangeSet<Int64Range, long>.Contains(25L)` translated to
+  `x @> 25`, and PostgreSQL types a bare numeric literal as `integer`. The range operators are
+  polymorphic (`anyrange @> anyelement`) and polymorphic resolution does not apply implicit
+  coercions, so the query failed with `42883: operator does not exist: int8range @> integer`
+  rather than widening the literal. A captured variable was unaffected — it binds as a parameter
+  with its own type — so this hit exactly the inline-constant form.
+
+  Constant element operands now carry an explicit cast when their store type is not the one
+  PostgreSQL infers from a bare numeric literal, which is `integer` for whole numbers and
+  `numeric` for decimals. Only the `int8`-backed types were affected: every other element type
+  this package maps renders self-describing literal text (`DATE '2024-06-15'`, `TIMESTAMP '…'`,
+  `TIME '…'`), so **no other emitted SQL changes**.
+
+  The translation test asserted the prefix `@> ` and no test executed the query. Both halves are
+  fixed: the assertion now pins `@> 7::bigint`, and the live suite executes a constant-operand
+  `Contains` for every element type.
+
+- The translation of `IsStrictlyLeftOf`/`IsStrictlyRightOf` to `<<`/`>>` was always correct; the
+  in-memory predicate it mirrors was not, so client-side and server-side evaluation of the same
+  comparison disagreed for any range unbounded at its start. See `CodoMetis.ValueRanges` 6.4.0. The
+  live-PostgreSQL parity suite gained a `<<`/`>>` counterpart to its adjacency test, which is what
+  the gap had been hiding behind: the translation tests assert that `<<` is emitted, never what it
+  answers.
 
 ## [6.3.0] — 2026-08-16
 

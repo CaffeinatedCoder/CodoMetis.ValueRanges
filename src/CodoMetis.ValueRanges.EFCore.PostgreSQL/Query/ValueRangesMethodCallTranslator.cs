@@ -467,7 +467,48 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// Applies the range subtype mapping to a bound or element expression.
     /// </summary>
     private SqlExpression ApplyElementMapping(SqlExpression expression, IRangeTypeDefinition definition)
-        => sqlExpressionFactory.ApplyTypeMapping(Unwrap(expression), ElementMapping(definition));
+    {
+        var mapped = sqlExpressionFactory.ApplyTypeMapping(Unwrap(expression), ElementMapping(definition));
+
+        return NeedsExplicitCast(mapped, definition)
+                   ? sqlExpressionFactory.Convert(mapped, definition.ElementClrType, ElementMapping(definition))
+                   : mapped;
+    }
+
+    /// <summary>
+    /// Whether a constant element operand has to carry an explicit cast to its store type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The range operators are polymorphic — <c>anyrange @&gt; anyelement</c> — and PostgreSQL
+    /// resolves those without applying implicit coercions, so the operand's type has to be right
+    /// on its own. A bare numeric literal is typed by PostgreSQL as <c>integer</c> (or
+    /// <c>numeric</c> if it has a decimal point), which makes
+    /// <c>'[1,6)'::int8range @&gt; 25</c> an error — <c>operator does not exist: int8range @&gt;
+    /// integer</c> — even though <c>25</c> is a perfectly good <c>bigint</c>. That is what
+    /// <c>Int64Range.Contains(25L)</c> used to emit.
+    /// </para>
+    /// <para>
+    /// Only constants need this. A parameter is bound with its own type, and a column carries the
+    /// column's. And only a bare numeric literal is at risk: every other element type this package
+    /// maps renders self-describing text (<c>DATE '2024-06-15'</c>, <c>TIMESTAMP '…'</c>,
+    /// <c>TIME '…'</c>), while <c>integer</c> and <c>numeric</c> literals already arrive as the type
+    /// their range's subtype wants. Restricting the cast to the mismatched case keeps the emitted
+    /// SQL for every other type unchanged.
+    /// </para>
+    /// </remarks>
+    private bool NeedsExplicitCast(SqlExpression expression, IRangeTypeDefinition definition)
+    {
+        if (expression is not SqlConstantExpression { Value: not null }) return false;
+
+        var storeType = ElementMapping(definition)?.StoreType;
+        if (storeType is null) return false;
+
+        // The store types PostgreSQL assigns to a bare numeric literal, which therefore need no
+        // help; anything else numeric does.
+        return definition.ElementClrType.IsPrimitive
+            && storeType is not ("integer" or "numeric");
+    }
 
     private SqlExpression AsMultirange(SqlExpression range, IRangeTypeDefinition definition)
         => sqlExpressionFactory.Function(
