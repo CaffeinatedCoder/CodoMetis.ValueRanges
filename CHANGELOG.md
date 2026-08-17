@@ -22,6 +22,16 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
 
 ### Fixed
 
+- **The NodaTime step functions missed a domain maximum spelled in another calendar.**
+  `LocalDateRange.NextValueAfter` compared against `LocalDate.MaxIsoValue` with `==`, and NodaTime's
+  equality includes the calendar system. Of its nineteen calendars only ISO and Gregorian can
+  represent `9999-12-31` at all — Gregorian shares ISO's arithmetic but is a distinct
+  `CalendarSystem` instance, so the Gregorian spelling of the domain maximum compared unequal, the
+  guard was skipped and `PlusDays(1)` ran off the end of the domain. `(gregorianMax, +∞)` came back
+  as a throw where it is the empty range. Each type is now fixed the way its own documented policy
+  already says: `LocalDateRange` normalizes to ISO before comparing, `YearMonthRange` rejects
+  non-ISO outright rather than stepping in the caller's calendar and returning a value its own
+  constructors would refuse.
 - **`IRangeFactory.ToString` formatted an unrecognised range as `"empty"`.** All five shapes are
   named above the fallback, so it is reachable only through an `IRange<T>` implementation that is
   none of them — which the sealed-variant rule forbids and the type system permits, the interface
@@ -108,6 +118,28 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
   specification's shape, inclusivity cross-checked against `Contains`, and `Clamp` against the
   bounds those establish — predicting a bound's value directly does not work, because a discrete
   range canonicalizes and an exclusive continuous bound is a value the range does not contain.
+- **`DiscreteDomainBoundaryTests`**, covering what no oracle can reach. At the edge of a discrete
+  domain the successor does not exist, so `(max, +∞)`, `(-∞, min)`, `(max, max]` and `[min, min)` are
+  all the empty range; the guards that enforce that — in `DiscreteCanonical` and each type's two
+  unbounded factories — were load-bearing and untested. This is the exact hole Guava's `Range` has
+  had open since 2014 (#1767). The three small-model oracles cannot see it and not by oversight:
+  they run over eight to fifteen grid points with bounds drawn from the interior, which is what
+  makes them faithful, so exhaustive-over-a-small-model and boundary testing are complements. Types
+  are discovered and domain extremes tabulated, so a discrete type added without bounds fails rather
+  than being skipped. Proven by reverting each guard; the inclusive forms at the same bounds are
+  asserted non-empty so the checks cannot pass by everything being empty.
+- **`CalendarBoundaryTests`**, pinning the fix above along with its premise — that only ISO and
+  Gregorian reach the ISO extremes — so a NodaTime release that widened another calendar would
+  surface here.
+- **`DomainBoundaryDivergenceTests`**, recording where the model and PostgreSQL deliberately part.
+  The boundary is the one place a `ShapeMatrixParityTests` row would be wrong to write, and it is
+  wrong even for `int4range`/`int8range`, whose element domains match `int` and `long` exactly:
+  the disagreement is about the *sentinel*, not the domain. Here `±∞` mean the absence of a bound
+  over a domain that stops at `int.MinValue`/`int.MaxValue`; in PostgreSQL they sit outside the
+  element type. So `int4range(2147483647, NULL, '()')` raises `22003` on the server where the model
+  answers empty, and `int4range(NULL, -2147483648, '()')` is non-empty there where the model says
+  empty. Neither side is wrong, but a range at the boundary is not round-trip-safe — now asserted
+  against a live server rather than left to be discovered.
 - **`ValueSetNullContractTests`**, pinning by discovery that canonical form's exclusion of nulls is
   enforced by *refusing*, never by dropping. Silently discarding a null is the value-set shape of the
   fallback that produced five range bugs — an input nobody wrote a case for, answered plausibly:

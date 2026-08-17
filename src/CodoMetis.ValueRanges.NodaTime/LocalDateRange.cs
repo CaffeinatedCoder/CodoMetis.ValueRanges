@@ -190,11 +190,11 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
 
     /// <inheritdoc />
     public static LocalDate? NextValueAfter(LocalDate value)
-        => value == LocalDate.MaxIsoValue ? null : value.PlusDays(1);
+        => ToIso(value) == LocalDate.MaxIsoValue ? null : value.PlusDays(1);
 
     /// <inheritdoc />
     public static LocalDate? PreviousValueBefore(LocalDate value)
-        => value == LocalDate.MinIsoValue ? null : value.PlusDays(-1);
+        => ToIso(value) == LocalDate.MinIsoValue ? null : value.PlusDays(-1);
 
     /// <summary>
     /// Enumerates the dates the range contains, ascending and inclusive of both bounds.

@@ -20,6 +20,45 @@ Discrete types (int, long, DateOnly) implement `NextValueAfter`/`PreviousValueBe
 
 `TimeRange` (v5) is the first domain beyond the six built-ins: `timerange` does not exist in PostgreSQL until the database runs `CREATE TYPE timerange AS RANGE (subtype = time)` (via `HasPostgresRange`), and the Npgsql data source needs `EnableUnmappedTypes()`. A single range cannot cross midnight — overnight windows are two-element `RangeSet`s. PostgreSQL `time`'s special value `24:00:00` is not representable in `TimeOnly`.
 
+## Domain Width and the Boundary
+
+A CLR type and the PostgreSQL type it maps to do not always cover the same values, and where they
+differ the model is authoritative for what it can represent — not for what the server can store.
+
+**Width.** `int4range`/`int` and `int8range`/`long` match exactly. Nothing else does. The widest gap
+is `numrange`: PostgreSQL `numeric` carries up to 131,072 digits before the point, against
+`decimal`'s ~28 significant digits, so most of that type is unrepresentable here. `daterange` runs
+4713 BC – 5874897 AD against `DateOnly`'s 0001–9999, and `tsrange`/`DateTime` likewise. A stored
+range whose bounds fall outside the CLR type cannot be materialized; that failure is loud, at the
+Npgsql boundary, and is not something this library can paper over.
+
+**The boundary itself diverges even where the widths match.** The two sides mean different things by
+an unbounded side. Here `-∞`/`+∞` denote the *absence* of a bound over a domain that stops at
+`int.MinValue`/`int.MaxValue`, so `(int.MaxValue, +∞)` has no first value and is the empty range —
+`DiscreteCanonical` and each discrete type's unbounded factories enforce that, and
+`DiscreteDomainBoundaryTests` pins it for all five discrete types. In PostgreSQL the sentinels sit
+*outside* the element type, so the same range still has room. Two consequences:
+
+| Construction | This model | PostgreSQL |
+|---|---|---|
+| `(max, +∞)` | empty | raises `22003 integer out of range` — canonicalizing needs `max + 1` |
+| `(-∞, min)` | empty | **not** empty; its lower sentinel is below `int.MinValue` |
+| `(max, max]` | empty | empty |
+| `[min, min)` | empty | empty |
+
+Neither side is wrong — they answer over different domains — but a range at the boundary is **not
+round-trip-safe**. `DomainBoundaryDivergenceTests` asserts each row against a live server, so the
+difference stays a known property. This is also the one place a `ShapeMatrixParityTests` row would be
+wrong to write: matching element domains are not sufficient, because the disagreement is about the
+sentinel rather than the domain.
+
+**Calendars.** NodaTime equality includes the calendar system, and of its nineteen calendars only ISO
+and Gregorian can represent `9999-12-31` at all. Gregorian shares ISO's arithmetic but is a distinct
+`CalendarSystem` instance, so a Gregorian-spelled domain maximum compares unequal to
+`LocalDate.MaxIsoValue`. The step functions therefore apply each type's own stated policy before
+comparing: `LocalDateRange` normalizes to ISO, `YearMonthRange` rejects non-ISO outright.
+`CalendarBoundaryTests` covers both.
+
 ## NodaTime Satellites
 
 `CodoMetis.ValueRanges.NodaTime` adds three range types over NodaTime elements, following the identical discriminated-union pattern:
