@@ -780,6 +780,13 @@ public sealed class RangeSet<TRange, T>
     public RangeSet<TRange, T> Except(TRange other)
     {
         if (other is IEmptyRange<T>) return this;
+
+        // X \ (-∞, +∞) is the empty set for every X. Without this the infinite-set branch below
+        // asked the engine to shape ∞ \ ∞, which no arm covers: until 7.0.1 the fallback there
+        // answered ∞, so RangeSet.Infinite.Except(TRange.Infinite) returned the whole domain.
+        // The RangeSet overload has always guarded its own infinite operand this way.
+        if (other is IInfinityRange<T>) return Empty;
+
         if (IsInfiniteSet) return ComplementOfSingle(other);
 
         var results = new List<TRange>();
@@ -872,26 +879,21 @@ public sealed class RangeSet<TRange, T>
         return From(results);
     }
 
-    // Dispatches a single subtraction (current \ o) to ExceptEngine by current's shape.
+    // Dispatches a single subtraction (current \ o) to ExceptEngine.
     // Callers guarantee `current.Overlaps(o)` and `!o.Contains(current)`, so the engine
     // always returns a non-empty Left and an optional non-empty Right (one-piece trim or
     // two-piece split). `current` is never IInfinityRange here (the Infinite case is
     // handled by ComplementOfSet/ComplementOfSingle before this is reached).
     private static (TRange Left, TRange? Right) SubtractOne(TRange current, IRange<T> o)
-        => current switch
-           {
-               IFiniteRange<T> b         => ExceptEngine.Execute<TRange, T>(b, o),
-               IUnboundedStartRange<T> s => ExceptEngine.Execute<TRange, T>(s, o),
-               IUnboundedEndRange<T> e   => ExceptEngine.Execute<TRange, T>(e, o),
-               _                         => (current, default)
-           };
+        => ExceptEngine.Execute<TRange, T>(current, o);
 
     // Complement of a single range within the entire domain: (-∞, +∞) \ r.
-    // Delegates to the existing ExceptEngine.InfinityExcept, which already returns the
-    // correct one- or two-piece result for every shape of r.
+    // Callers guarantee r is neither empty nor Infinity — Except(TRange) short-circuits both
+    // before reaching here, since ∞ \ ∅ is ∞ and ∞ \ ∞ is the empty set, and neither is a
+    // subtraction the engine should be asked to shape.
     private RangeSet<TRange, T> ComplementOfSingle(TRange r)
     {
-        var (left, right) = ExceptEngine.InfinityExcept<TRange, T>(r);
+        var (left, right) = ExceptEngine.Execute<TRange, T>(TRange.Infinite, r);
         return right is null
                    ? RangeSet<TRange, T>.From([left])
                    : RangeSet<TRange, T>.From([left, right]);

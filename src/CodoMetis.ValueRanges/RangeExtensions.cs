@@ -643,15 +643,7 @@ public static class RangeExtensions
         {
             if (!range.Overlaps(other)) return RangeSet<TRange, T>.From([range]);
             if (other.Contains(range)) return RangeSet<TRange, T>.Empty;
-            var (left, right) = range is IInfinityRange<T>
-                                    ? ExceptEngine.InfinityExcept<TRange, T>(other)
-                                    : range switch
-                                      {
-                                          IFiniteRange<T> b         => ExceptEngine.Execute<TRange, T>(b, other),
-                                          IUnboundedStartRange<T> s => ExceptEngine.Execute<TRange, T>(s, other),
-                                          IUnboundedEndRange<T> e   => ExceptEngine.Execute<TRange, T>(e, other),
-                                          _                         => (range, default)
-                                      };
+            var (left, right) = ExceptEngine.Execute<TRange, T>(range, other);
             return right is null
                        ? RangeSet<TRange, T>.From([left])
                        : RangeSet<TRange, T>.From([left, right]);

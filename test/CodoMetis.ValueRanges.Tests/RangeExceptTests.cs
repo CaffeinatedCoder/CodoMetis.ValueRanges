@@ -353,4 +353,37 @@ public class RangeExceptTests
         Assert.AreEqual("{(,0]}", upTo5.Except(from1).ToString());
         Assert.AreEqual("{[6,)}", from1.Except(upTo5).ToString());
     }
+
+    /// <summary>
+    /// X \ (-∞, +∞) is the empty set for every X, the infinite set included. The single-range
+    /// overload has always answered this through its Contains guard and the set-minus-set overload
+    /// through its own infinite-operand guard; <see cref="RangeSet{TRange,T}.Except(TRange)"/> had
+    /// neither, so ∞ \ ∞ reached the engine as a pair no arm covered and the fallback answered ∞.
+    /// </summary>
+    [TestMethod]
+    public void Except_InfinityOperand_LeavesNothing()
+    {
+        Assert.IsTrue(RangeSet<Int32Range, int>.Infinite.Except(Int32Range.Infinite).IsEmpty());
+        Assert.IsTrue(RangeSet<DecimalRange, decimal>.Infinite.Except(DecimalRange.Infinite).IsEmpty());
+
+        // The same operand against a bounded set, which reached the engine by a different path.
+        var bounded = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5, true, true)]);
+        Assert.IsTrue(bounded.Except(Int32Range.Infinite).IsEmpty());
+
+        // And the single-range and set-minus-set overloads it now agrees with.
+        Assert.IsTrue(Int32Range.Infinite.Except(Int32Range.Infinite).IsEmpty());
+        Assert.IsTrue(RangeSet<Int32Range, int>.Infinite.Except(RangeSet<Int32Range, int>.Infinite).IsEmpty());
+    }
+
+    /// <summary>
+    /// Complement is defined as <c>Infinite.Except(this)</c>, so the infinite set's complement
+    /// runs through the same path and must be empty rather than the whole domain.
+    /// </summary>
+    [TestMethod]
+    public void Complement_OfTheInfiniteSet_IsEmpty()
+    {
+        Assert.IsTrue(RangeSet<Int32Range, int>.Infinite.Complement().IsEmpty());
+        Assert.AreEqual(RangeSet<Int32Range, int>.Infinite,
+                        RangeSet<Int32Range, int>.Infinite.Complement().Complement());
+    }
 }
