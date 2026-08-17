@@ -234,6 +234,20 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
+    public void Union_Equality_InAProjection_StillWorks()
+    {
+        // The refusal covers the contexts EF must translate in full. A projection is not one:
+        // EF falls back to client evaluation there and computes the comparison against the
+        // materialized set, which is correct. Refusing it too would be stricter than the defect —
+        // and would put equality out of step with Count, which degrades to client evaluation in a
+        // projection for exactly the same reason.
+        using var context = new TestDbContext();
+
+        _ = context.Bookings.Select(b => b.Tags.Union(Wanted) == Wanted).ToQueryString();
+        _ = context.Bookings.Select(b => b.Tags.Union(Wanted).Count).ToQueryString();
+    }
+
+    [TestMethod]
     public void Equality_WithoutAUnion_StillTranslates()
     {
         // The refusal is scoped to a server-computed union: comparing a column against a

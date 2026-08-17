@@ -173,7 +173,22 @@ is sensitive to both, and the ordering half is the one that surprises — on the
 `{a,c} ∪ {a,b} = {a,b,c}` is false for the repeated element, and `{a,c} ∪ {b} = {a,b,c}` is false
 for the ordering alone, where nothing repeats. Both are true in memory. Compare with
 `IsSubsetOf`/`IsSupersetOf` instead, which mean the same thing for canonical sets and ignore both,
-or materialize the union first.
+or materialize first with `AsEnumerable()` and let the in-memory algebra answer.
+
+The refusals cover only the contexts EF must translate in full — `Where`, `Any`, `All`, the
+ordering and grouping keys, and the predicate overloads. **In a projection both still work**, because
+EF falls back to client evaluation there and computes against the materialized set:
+
+```csharp
+bookings.Where(b => b.Tags.Union(more).Count > 2);      // throws — must translate
+bookings.Select(b => b.Tags.Union(more).Count);         // fine — client-evaluated, correct
+bookings.AsEnumerable().Where(b => b.Tags.Union(more).Count > 2);  // fine — in memory
+```
+
+There is no package-specific opt-in for the in-memory form, deliberately: `AsEnumerable()` is the
+framework's own boundary, everyone reads it the same way, and its cost — every matching row is
+fetched — is visible at the point it is paid. A marker buried inside the expression would look local
+and cheap while forcing the same full materialization.
 
 This is deliberately not "fixed" by canonicalizing in SQL: PostgreSQL has no array_distinct, and
 sorting inside the query orders `text` by the database collation rather than ordinally — which is

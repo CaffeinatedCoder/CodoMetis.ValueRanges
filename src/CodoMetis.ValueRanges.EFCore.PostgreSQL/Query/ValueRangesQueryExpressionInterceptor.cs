@@ -63,6 +63,47 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     {
         public static readonly UnionEqualityGuard Instance = new();
 
+        /// <summary>
+        /// The operators whose lambdas must translate in full. Everything else — a projection above
+        /// all — is left alone, because EF falls back to client evaluation there and computes the
+        /// comparison correctly against the materialized set.
+        /// </summary>
+        /// <remarks>
+        /// This is what keeps the refusal in step with how <c>Count</c> over a union behaves.
+        /// That one returns <see langword="null"/> from a translator, so EF decides: a predicate
+        /// fails, a projection degrades to client evaluation. Equality has no translator seam and
+        /// is refused a step earlier, so the contexts have to be named rather than inferred —
+        /// otherwise the refusal is stricter than the defect and takes a working projection with
+        /// it.
+        /// </remarks>
+        private static readonly HashSet<string> MustTranslate = new(StringComparer.Ordinal)
+        {
+            "Where", "Any", "All", "Count", "LongCount",
+            "First", "FirstOrDefault", "Single", "SingleOrDefault", "Last", "LastOrDefault",
+            "SkipWhile", "TakeWhile",
+            "OrderBy", "OrderByDescending", "ThenBy", "ThenByDescending", "GroupBy"
+        };
+
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+        {
+            // Only scan inside the lambdas of operators EF must translate server-side. `Queryable`
+            // rather than `Enumerable`: past an AsEnumerable the comparison runs in memory and is
+            // correct, which is the documented way to ask for it.
+            if (node.Method.DeclaringType == typeof(Queryable) && MustTranslate.Contains(node.Method.Name))
+            {
+                foreach (var argument in node.Arguments.Skip(1))
+                    ComparisonScan.Instance.Visit(argument);
+            }
+
+            return base.VisitMethodCall(node);
+        }
+    }
+
+    /// <summary>Finds an equality comparison against a server-computed union.</summary>
+    private sealed class ComparisonScan : ExpressionVisitor
+    {
+        public static readonly ComparisonScan Instance = new();
+
         protected override Expression VisitBinary(BinaryExpression node)
         {
             if (node.NodeType is ExpressionType.Equal or ExpressionType.NotEqual)
