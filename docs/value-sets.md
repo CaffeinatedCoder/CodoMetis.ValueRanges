@@ -12,16 +12,20 @@ A value set is an immutable, **canonical** set of scalar values: deduplicated, s
 |---|---|---|---|
 | `StringSet` | `string` | `text[]` | `StringSet<TElement>` |
 | `GuidSet` | `Guid` | `uuid[]` | `GuidSet<TElement>` |
-| `Int16Set` | `short` | `smallint[]` | — |
+| `Int16Set` | `short` | `smallint[]` | `Int16Set<TElement>` |
 | `Int32Set` | `int` | `integer[]` | `Int32Set<TElement>` |
 | `Int64Set` | `long` | `bigint[]` | `Int64Set<TElement>` |
-| `DecimalSet` | `decimal` | `numeric[]` | — |
-| `DateSet` | `DateOnly` | `date[]` | — |
-| `TimeSet` | `TimeOnly` | `time[]` | — |
-| `DateTimeSet` | `DateTime` | `timestamp[]` | — |
-| `DateTimeOffsetSet` | `DateTimeOffset` | `timestamptz[]` | — |
+| `DecimalSet` | `decimal` | `numeric[]` | `DecimalSet<TElement>` |
+| `DateSet` | `DateOnly` | `date[]` | `DateSet<TElement>` |
+| `TimeSet` | `TimeOnly` | `time[]` | `TimeSet<TElement>` |
+| `DateTimeSet` | `DateTime` | `timestamp[]` | `DateTimeSet<TElement>` |
+| `DateTimeOffsetSet` | `DateTimeOffset` | `timestamptz[]` | `DateTimeOffsetSet<TElement>` |
 
-The NodaTime satellite adds `LocalDateSet` (`date[]`), `LocalDateTimeSet` (`timestamp[]`), `InstantSet` (`timestamptz[]`), `LocalTimeSet` (`time[]` — a built-in array type, so unlike `timerange` no `CREATE TYPE` is needed) and `YearMonthSet` (month-aligned `date[]`). `LocalDate`/`LocalDateTime` elements normalize to the ISO calendar at construction; `YearMonth` elements must already be ISO, mirroring the range types.
+Since 7.0.0 every family has a wrapper arity; the six temporal and numeric ones added there carry
+one extra requirement over the original four — see [Validated wrapper
+elements](#validated-wrapper-elements).
+
+The NodaTime satellite adds `LocalDateSet` (`date[]`), `LocalDateTimeSet` (`timestamp[]`), `InstantSet` (`timestamptz[]`), `LocalTimeSet` (`time[]` — a built-in array type, so unlike `timerange` no `CREATE TYPE` is needed) and `YearMonthSet` (month-aligned `date[]`) — each with a wrapper arity of its own. `LocalDate`/`LocalDateTime` elements normalize to the ISO calendar at construction; `YearMonth` elements must already be ISO, mirroring the range types.
 
 ```csharp
 var tags = StringSet.From("beta", "alpha", "beta");   // {alpha,beta} — deduplicated, sorted
@@ -127,7 +131,7 @@ Each payload still deserializes into the other's type. The round-trip form is de
 
 ## Why these element types
 
-The same vetting as [for ranges](../README.md#why-these-element-types) applies, with one notable difference: `Guid` is absent from ranges ("every GUID between these two" has no domain meaning) but present in sets — *membership* is exactly the question ID collections ask. Excluded, deliberately: `bool` (a set over a two-value domain), `float`/`double` (NaN breaks total order and equality — the same quiet failure as for ranges), `byte[]` (nested variable-length elements have no cheap canonical order), and `TimeSpan` (PostgreSQL `interval` is a months/days/microseconds triple that `TimeSpan` cannot represent losslessly).
+The same vetting as [for ranges](why.md#why-these-element-types) applies, with one notable difference: `Guid` is absent from ranges ("every GUID between these two" has no domain meaning) but present in sets — *membership* is exactly the question ID collections ask. Excluded, deliberately: `bool` (a set over a two-value domain), `float`/`double` (NaN breaks total order and equality — the same quiet failure as for ranges), `byte[]` (nested variable-length elements have no cheap canonical order), and `TimeSpan` (PostgreSQL `interval` is a months/days/microseconds triple that `TimeSpan` cannot represent losslessly).
 
 ## Literals, parsing, JSON
 

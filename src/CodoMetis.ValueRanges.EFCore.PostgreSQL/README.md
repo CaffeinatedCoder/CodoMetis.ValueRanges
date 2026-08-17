@@ -88,7 +88,7 @@ silently fetching the table — and fall back to client evaluation in a `Select`
 | the value set indexer, `set[0]` | canonical order is the CLR comparer's, not the server's |
 
 Everything else on the range, multirange and array surface translates. The
-[full README](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/README.md#what-runs-where)
+[EF Core guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)
 tabulates both halves together.
 
 ## Notes
@@ -127,8 +127,10 @@ and call `npgsql.UseValueRangesNodaTime()` instead.
 
 ## Documentation
 
-The [full README](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/README.md#entity-framework-core-postgresql)
-documents every translation with its generated SQL. See also the
+The [EF Core guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md)
+documents every translation with its generated SQL, and
+[Getting started](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/getting-started.md)
+walks through a first entity, migration and query. See also the
 [changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/CHANGELOG.md).
 
 ## License
