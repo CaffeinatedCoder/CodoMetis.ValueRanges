@@ -70,11 +70,48 @@ public readonly record struct AccessRight : IFormattable, IParsable<AccessRight>
 StringSet<AccessRight> rights = [AccessRight.Parse("users.read", null)];
 ```
 
-`IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain. `GuidSet<T>`, `Int32Set<T>` and `Int64Set<T>` additionally require `IComparable<TElement>` (canonical order delegates to the backing primitive). One contract cannot be expressed in constraints and is convention instead: *the element's invariant text form must be exactly the backing primitive's text form* — a decorative format (`"CUST-{value}"`) fails loudly at the persistence boundary with an error naming the contract.
+Every value set family has an arity: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`, `Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>`, and in the NodaTime satellite `LocalDateSet<T>`, `LocalDateTimeSet<T>`, `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>`.
+
+`IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain. Every arity except `StringSet<T>` additionally requires `IComparable<TElement>` (canonical order delegates to the backing primitive).
+
+### The text-form contract
+
+One contract cannot be expressed in constraints and is convention instead: *the element's text form must be exactly the backing primitive's*. A decorative format (`"CUST-{value}"`) fails loudly at the persistence boundary with an error naming the contract.
+
+*Which* text form differs by family, and the difference matters:
+
+| Arity | The format the family asks for |
+|---|---|
+| `StringSet<T>`, `GuidSet<T>`, the integer arities, `DecimalSet<T>` | the element's default (`null`) |
+| `DateSet<T>` | `"yyyy-MM-dd"` |
+| `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>` | `"O"` |
+| the five NodaTime arities | the family's ISO pattern |
+
+The temporal families pin a format because the default one loses data: a `TimeOnly` renders as `09:30` and a `DateTime` as `06/15/2024 10:30:00`, so an arity that took the element's default would store every timestamp truncated to the second, and every `DateTimeKind` with it. NodaTime's null-format output is the culture's form — `Saturday, 15 June 2024` — for the same reason.
+
+In practice this asks nothing extra of a wrapper that forwards its `format` argument to the value it wraps, which is what the generators emit:
+
+```csharp
+public string ToString(string? format, IFormatProvider? provider)
+    => _value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+```
+
+A wrapper that swallows the argument and returns its own form is rejected rather than silently truncated.
+
+### Ordering and JSON
 
 String-backed wrappers sort ordinal over their text form — deliberately not the element's own `IComparable`, whose generated implementations typically delegate to culture-sensitive string comparison.
 
-That same text form carries into JSON, so a wrapper set is indistinguishable on the wire from the primitive set it replaces — `StringSet<AccessRight>` writes `["users.read"]`, `Int32Set<OrderId>` writes `[1,2]` — and reads run `Parse`, so the validation above applies to deserialized payloads too. Give the element type its own `[JsonConverter]` if you want a different shape; it takes precedence.
+That same text form carries into JSON: `StringSet<AccessRight>` writes `["users.read"]`, `Int32Set<OrderId>` writes `[1,2]`, `DecimalSet<Money>` writes `[12.50]` with the scale intact, `DateTimeSet<AuditStamp>` writes ISO 8601 strings. Reads run `Parse`, so the validation above applies to deserialized payloads too. Give the element type its own `[JsonConverter]` if you want a different shape; it takes precedence.
+
+For the string, Guid, integer and decimal arities the payload is **byte-identical** to the primitive set it replaces, so swapping `Int32Set` for `Int32Set<OrderId>` is invisible to API consumers. The four temporal arities and the five NodaTime ones write the same token type and the same value, but not the same bytes — the round-trip format always writes seven fraction digits where System.Text.Json trims them, and the default encoder escapes `+` in a string the converter writes itself:
+
+```
+DateTimeOffsetSet     ["2024-06-15T10:30:00+02:00"]
+DateTimeOffsetSet<T>  ["2024-06-15T10:30:00.0000000+02:00"]
+```
+
+Each payload still deserializes into the other's type. The round-trip form is deliberate: it is the one the array literal and the EF Core bridge already share, and it is what keeps the sub-second component from being dropped. If an existing API response shape matters, give the element its own `[JsonConverter]`.
 
 ## Why these element types
 

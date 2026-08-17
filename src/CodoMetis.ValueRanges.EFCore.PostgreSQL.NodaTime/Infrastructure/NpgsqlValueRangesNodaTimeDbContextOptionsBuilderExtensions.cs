@@ -2,6 +2,7 @@ using CodoMetis.ValueRanges;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Internal;
 using NodaTime;
+using NodaTime.Text;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
 // ReSharper disable once CheckNamespace — conventional namespace for options builder extensions,
@@ -69,6 +70,68 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             new YearMonthSetTypeDefinition()
         ];
 
+    // The validated-wrapper arities. A family cannot be registered as a closed definition —
+    // its element type is whatever the consumer supplies — so each is registered as an open
+    // generic whose instantiations the core registry builds on demand.
+    //
+    // Every one pins the ISO pattern as the format handed to the element's IFormattable, for
+    // the same reason the closed definitions above pass a literalText: NodaTime's null-format
+    // output is the culture's form. The element's own ToString(format, provider) is what
+    // produces it, so a wrapper that forwards its format argument — which is what the
+    // generators emit — needs no configuration.
+    private static readonly (Type Family, Func<Type, ISetTypeDefinition> Factory)[] SetFamilies =
+        [
+            // literalText is passed explicitly on every one of these, for the same reason the
+            // closed definitions above pass one: the default renders a primitive through
+            // IFormattable with a null format, and for NodaTime that is the culture's form —
+            // a LocalDate becomes 'Saturday, 15 June 2024', which is not a date literal at all.
+            // Instant and LocalTime would survive the default because theirs happen to be ISO;
+            // relying on that per type is exactly the trap this argument exists to close.
+            (typeof(LocalDateSet<>), SetTypeRegistry.Bridged(
+                 "date", LocalDatePattern.Iso.PatternText,
+                 ParseWith(LocalDatePattern.Iso), LocalDatePattern.Iso.Format,
+                 LocalDatePattern.Iso.Format)),
+
+            (typeof(LocalDateTimeSet<>), SetTypeRegistry.Bridged(
+                 "timestamp without time zone", LocalDateTimePattern.ExtendedIso.PatternText,
+                 ParseWith(LocalDateTimePattern.ExtendedIso), LocalDateTimePattern.ExtendedIso.Format,
+                 LocalDateTimePattern.ExtendedIso.Format)),
+
+            (typeof(InstantSet<>), SetTypeRegistry.Bridged(
+                 "timestamp with time zone", InstantPattern.ExtendedIso.PatternText,
+                 ParseWith(InstantPattern.ExtendedIso), InstantPattern.ExtendedIso.Format,
+                 InstantPattern.ExtendedIso.Format)),
+
+            (typeof(LocalTimeSet<>), SetTypeRegistry.Bridged(
+                 "time without time zone", LocalTimePattern.ExtendedIso.PatternText,
+                 ParseWith(LocalTimePattern.ExtendedIso), LocalTimePattern.ExtendedIso.Format,
+                 LocalTimePattern.ExtendedIso.Format)),
+
+            // The one family whose element text form and store text form differ: the element
+            // speaks 2024-06 and the column holds 2024-06-01. formatPrimitive therefore feeds
+            // the element its own granularity back, while literalText renders the date.
+            (typeof(YearMonthSet<>), SetTypeRegistry.Bridged<LocalDate>(
+                 "date", YearMonthPattern.Iso.PatternText,
+                 static text => YearMonthPattern.Iso.Parse(text).GetValueOrThrow().OnDayOfMonth(1),
+                 static date => YearMonthPattern.Iso.Format(YearMonthOf(date)),
+                 LocalDatePattern.Iso.Format))
+        ];
+
+    /// <summary>
+    /// A pattern as the bridge's parse leg. <c>GetValueOrThrow</c> raises
+    /// <c>UnparsableValueException</c>, which derives from <see cref="FormatException"/> — the
+    /// exception the bridge translates into the message naming the wrapper text-form contract.
+    /// </summary>
+    private static Func<string, T> ParseWith<T>(IPattern<T> pattern)
+        => text => pattern.Parse(text).GetValueOrThrow();
+
+    private static YearMonth YearMonthOf(LocalDate date)
+        => date.Day == 1
+               ? date.ToYearMonth()
+               : throw new InvalidOperationException(
+                     $"A YearMonthSet<T> column must hold first-of-month dates; got {date}. "
+                   + "The stored array is corrupt for this mapping.");
+
     /// <summary>
     /// Enables mapping of the CodoMetis.ValueRanges NodaTime range types to the PostgreSQL
     /// range and multirange types — <c>LocalDateRange</c> to <c>daterange</c>,
@@ -101,6 +164,9 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
 
         foreach (var definition in SetDefinitions)
             SetTypeRegistry.Register(definition);
+
+        foreach (var (family, factory) in SetFamilies)
+            SetTypeRegistry.RegisterFamily(family, factory);
 
         RangeTypeRegistry.RegisterAggregateExtensions(typeof(NodaTimeRangeAggregateExtensions));
 

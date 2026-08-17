@@ -85,7 +85,35 @@ public sealed class ValueSetContractTests
         ],
         [typeof(TenantId)]       = [TenantId.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff", null)],
         [typeof(SmallCode)]      = [SmallCode.Parse("42", null), SmallCode.Parse("-7", null)],
-        [typeof(LargeCode)]      = [LargeCode.Parse("9000000000", null), LargeCode.Parse("0", null)]
+        [typeof(LargeCode)]      = [LargeCode.Parse("9000000000", null), LargeCode.Parse("0", null)],
+        [typeof(TinyCode)]       = [TinyCode.Parse("32767", null), TinyCode.Parse("-7", null)],
+
+        // Two scales and a value that is not representable in binary floating point: a decimal
+        // element that round-tripped through double would come back as 0.1000000000000000055.
+        [typeof(Money)]          = [Money.Parse("12.50", null), Money.Parse("0.1", null),
+                                    Money.Parse("-1.5", null)],
+
+        // The sub-second probes are the ones that fail if a temporal arity formats its elements
+        // with their default form instead of the round-trip one — that is the whole reason
+        // those families pin a format.
+        [typeof(BusinessDate)]   = [BusinessDate.Parse("2024-06-15", null),
+                                    BusinessDate.Parse("1970-01-01", null)],
+        [typeof(ShiftTime)]      = [ShiftTime.Parse("09:30:15.25", null),
+                                    ShiftTime.Parse("23:59:59.9999999", null)],
+        [typeof(AuditStamp)]     = [AuditStamp.Parse("2024-06-15T10:30:00.1234567", null),
+                                    AuditStamp.Parse("1970-01-01T00:00:00", null)],
+        [typeof(EventStamp)]     = [EventStamp.Parse("2024-06-15T10:30:00.1234567+02:00", null),
+                                    EventStamp.Parse("2024-06-15T10:30:00.1234567Z", null)],
+
+        [typeof(CalendarDay)]    = [CalendarDay.Parse("2024-06-15", null),
+                                    CalendarDay.Parse("1970-01-01", null)],
+        [typeof(WallClockStamp)] = [WallClockStamp.Parse("2024-06-15T10:30:00.123456789", null),
+                                    WallClockStamp.Parse("1970-01-01T00:00:00", null)],
+        [typeof(EventInstant)]   = [EventInstant.Parse("2024-06-15T10:30:00.123456789Z", null),
+                                    EventInstant.Parse("1970-01-01T00:00:00Z", null)],
+        [typeof(OpeningTime)]    = [OpeningTime.Parse("09:30:15.123456789", null),
+                                    OpeningTime.Parse("23:59:59", null)],
+        [typeof(BillingMonth)]   = [BillingMonth.Parse("2024-06", null), BillingMonth.Parse("1970-01", null)]
     };
 
     /// <summary>
@@ -110,7 +138,7 @@ public sealed class ValueSetContractTests
             }
 
             // A wrapper family: close it over the element type its arity is meant for.
-            var closed = setType.MakeGenericType(WrapperElementFor(setType));
+            var closed = setType.MakeGenericType(WrapperElements.For(setType));
             yield return (closed, ElementTypeOf(closed));
         }
     }
@@ -126,17 +154,6 @@ public sealed class ValueSetContractTests
                                  && @interface.GetGenericTypeDefinition() == typeof(IValueSet<>))
                .GetGenericArguments()[0];
 
-    private static Type WrapperElementFor(Type family) => family.Name switch
-    {
-        "StringSet`1" => typeof(TextKey),
-        "GuidSet`1"   => typeof(TenantId),
-        "Int32Set`1"  => typeof(SmallCode),
-        "Int64Set`1"  => typeof(LargeCode),
-        _             => throw new InvalidOperationException(
-            $"No representative wrapper element type registered for the set family '{family.Name}'. "
-          + "Add one to WrapperElementFor (and probes for it) so the new family is covered.")
-    };
-
     /// <summary>
     /// Guards the tests below against the worst failure a discovery-driven suite has: finding
     /// nothing and passing. Every assertion here loops over <see cref="AllSetTypes"/>, so a
@@ -145,10 +162,11 @@ public sealed class ValueSetContractTests
     [TestMethod]
     public void Discovery_FindsEverySetFamily()
     {
-        // 10 closed core types + 4 wrapper arities + 5 NodaTime types, as of 6.1.0. A floor
-        // rather than an equality, so adding a set type does not fail an unrelated test — the
-        // contract tests below cover it automatically, and the probe test insists on probes.
-        const int knownSetTypes = 19;
+        // 10 closed core types + 10 core wrapper arities + 5 NodaTime types + 5 NodaTime
+        // wrapper arities, as of 6.4.0. A floor rather than an equality, so adding a set type
+        // does not fail an unrelated test — the contract tests below cover it automatically,
+        // and the probe test insists on probes.
+        const int knownSetTypes = 30;
 
         var discovered = AllSetTypes().Select(pair => pair.Set.Name).ToList();
 

@@ -3,6 +3,52 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.4.0] — 2026-08-17
+
+### Added
+
+- **Six new validated-wrapper arities** — `Int16Set<T>`, `DecimalSet<T>`, `DateSet<T>`,
+  `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>` — so every core value set family has one,
+  not just the string, Guid and integer families. `TElement` is constrained only on BCL interfaces
+  (`struct`, `IEquatable<T>`, `IComparable<T>`, `IFormattable`, `IParsable<T>`), and the collection
+  expression, parsing, formatting, JSON and set algebra work as on the existing arities.
+- **A decimal element JSON converter**, so `DecimalSet<T>` writes its elements as JSON numbers with
+  their scale intact. The integer converter the other numeric arities use reads and writes through
+  `long` on both legs and would have truncated every decimal element.
+
+### Changed
+
+- **The four temporal arities pin a round-trip element format.** `DateSet<T>` asks its elements for
+  `yyyy-MM-dd`; `TimeSet<T>`, `DateTimeSet<T>` and `DateTimeOffsetSet<T>` ask for `O`. Their
+  closed siblings already default `FormatValue` to those formats, and the arities now match, so
+  the array literal, the JSON payload and the EF Core bridge share one text form. Taking the
+  element's default instead would drop sub-seconds — `TimeOnly` formats as `09:30` and `DateTime`
+  as `06/15/2024 10:30:00` — and, for `DateTime`, the `DateTimeKind` with them.
+
+  The contract this puts on a wrapper is that it forwards the `format` argument to the value it
+  wraps, which is what the generators emit. One that ignores it fails loudly rather than storing a
+  truncated value.
+
+### Fixed
+
+- **⚠️ The numeric wrapper arities ignored `JsonSerializerOptions.NumberHandling`.** `Int16Set<T>`,
+  `Int32Set<T>`, `Int64Set<T>` and `DecimalSet<T>` write their elements' JSON tokens themselves, so
+  System.Text.Json is not in the loop to apply the setting for them — and they did not consult it.
+  Under `JsonNumberHandling.WriteAsString` an arity emitted a bare number where its primitive
+  sibling emitted a string: `Int64Set` produced `["9007199254740993"]` and `Int64Set<OrderId>`
+  produced `[9007199254740993]`.
+
+  That setting is switched on almost exclusively because the consumer is JavaScript, where a bare
+  number above 2^53 is rounded on arrival — 9007199254740993 arrives as 9007199254740992. So
+  swapping a closed set for its arity silently reintroduced, at the client only, exactly the
+  corruption the setting was turned on to prevent, contradicting the byte-for-byte parity these
+  converters exist to provide. **Payloads change for anyone serializing a numeric wrapper arity
+  under `WriteAsString`**, from a number to the string their primitive sibling was already writing.
+
+  Reads are unchanged: the numeric converters accept a JSON string unconditionally, so payloads
+  written either way have always round-tripped. The integer half of this dates to the converters'
+  introduction in 6.1.0; `DecimalSet<T>` shipped with it in this release.
+
 ## [6.3.0] — 2026-08-16
 
 ### Added
