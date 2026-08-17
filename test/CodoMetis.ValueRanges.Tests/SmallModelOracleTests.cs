@@ -49,7 +49,7 @@ public class SmallModelOracleTests
 
     private sealed record Spec(Shape Shape, int Start, int End, bool StartInclusive, bool EndInclusive);
 
-    private sealed record Case<TRange>(string Label, TRange Range, HashSet<int> Model);
+    private sealed record Case<TRange>(string Label, TRange Range, HashSet<int> Model, Shape Shape);
 
     // Grid indices. Int32 uses one index per integer; decimal uses one per half-step, so an
     // exclusive bound and an inclusive one at the same value differ by exactly one grid point.
@@ -64,6 +64,14 @@ public class SmallModelOracleTests
     [TestMethod]
     public void Int32Range_ModelMatchesElementContainment()
         => AssertModelIsGrounded(IntCases(), IntGridMax, index => index, "Int32Range");
+
+    [TestMethod]
+    public void Int32Range_Accessors_AgreeWithShape()
+        => SweepAccessors<Int32Range, int>("Int32Range", IntCases(), IntGridMax, index => index);
+
+    [TestMethod]
+    public void DecimalRange_Accessors_AgreeWithShape()
+        => SweepAccessors<DecimalRange, decimal>("DecimalRange", DecimalCases(), DecimalGridMax, index => index * 0.5m);
 
     [TestMethod]
     public void Int32Range_EveryOrderedPair_MatchesSetTheory()
@@ -86,7 +94,8 @@ public class SmallModelOracleTests
         .. EnumerateSpecs(IntBounds)
           .Select(spec => new Case<Int32Range>(Describe(spec, index => index.ToString()),
                                                BuildInt(spec),
-                                               ModelOf(spec, IntGridMax)))
+                                               ModelOf(spec, IntGridMax),
+                                               spec.Shape))
     ];
 
     private static List<Case<DecimalRange>> DecimalCases() =>
@@ -94,7 +103,8 @@ public class SmallModelOracleTests
         .. EnumerateSpecs(DecimalBounds)
           .Select(spec => new Case<DecimalRange>(Describe(spec, index => (index * 0.5m).ToString("0.#")),
                                                  BuildDecimal(spec),
-                                                 ModelOf(spec, DecimalGridMax)))
+                                                 ModelOf(spec, DecimalGridMax),
+                                                 spec.Shape))
     ];
 
     private static IEnumerable<Spec> EnumerateSpecs(int[] bounds)
@@ -177,6 +187,86 @@ public class SmallModelOracleTests
             Shape.UnboundedEnd   => $"{(spec.StartInclusive ? '[' : '(')}{text(spec.Start)},)",
             _                    => throw new UnreachableException()
         };
+
+    // ---------------------------------------------------------------- accessors
+
+    /// <summary>
+    /// The bound accessors and <c>Clamp</c>, which the pair sweep never touches — they take an
+    /// element or nothing at all, so no shape-pair matrix reaches them. Their discard arms answer
+    /// <see langword="null"/> or <see langword="false"/> for three shapes at once, which is correct
+    /// but was argued rather than checked.
+    /// </summary>
+    /// <remarks>
+    /// Grounded in three independent links rather than one: nullness comes from the specification's
+    /// shape, inclusivity is cross-checked against <c>Contains</c> (the model's axiom, pinned
+    /// separately), and <c>Clamp</c> is checked against the bounds those two have just established.
+    /// Predicting a bound's *value* directly would not work — a discrete range canonicalizes, so
+    /// <c>(1,5)</c> reports its lower bound as 2, and an exclusive continuous bound is a value the
+    /// range does not contain.
+    /// </remarks>
+    private static void SweepAccessors<TRange, T>(
+        string             domain,
+        List<Case<TRange>> cases,
+        int                gridMax,
+        Func<int, T>       valueOf
+    )
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var failures = new List<string>();
+
+        foreach (var probe in cases)
+        {
+            // A finite specification with no values between its bounds — [1,1), (1,1), and on a
+            // discrete domain (1,2) — is the empty range, because CreateFinite collapses it. The
+            // shape to predict from is therefore the collapsed one, not the one asked for.
+            bool isEmpty      = probe.Model.Count == 0;
+            bool boundedBelow = !isEmpty && probe.Shape is Shape.Finite or Shape.UnboundedEnd;
+            bool boundedAbove = !isEmpty && probe.Shape is Shape.Finite or Shape.UnboundedStart;
+
+            var lower = probe.Range.LowerBound();
+            var upper = probe.Range.UpperBound();
+
+            Check($"LowerBound() is null", lower is null, !boundedBelow);
+            Check($"UpperBound() is null", upper is null, !boundedAbove);
+
+            // An absent bound is never inclusive — PostgreSQL's lower_inc/upper_inc agree.
+            if (lower is null) Check("LowerBoundInclusive()", probe.Range.LowerBoundInclusive(), false);
+            if (upper is null) Check("UpperBoundInclusive()", probe.Range.UpperBoundInclusive(), false);
+
+            // A present bound belongs to the range exactly when it says it is inclusive.
+            if (lower is { } lowerValue)
+                Check("Contains(LowerBound())", probe.Range.Contains(lowerValue), probe.Range.LowerBoundInclusive());
+
+            if (upper is { } upperValue)
+                Check("Contains(UpperBound())", probe.Range.Contains(upperValue), probe.Range.UpperBoundInclusive());
+
+            for (int k = 0; k <= gridMax; k++)
+            {
+                var value    = valueOf(k);
+                var clamped  = probe.Range.Clamp(value);
+                var expected = probe.Model.Count == 0 ? null
+                             : probe.Model.Contains(k) ? value
+                             : k < probe.Model.Min()   ? lower
+                                                       : upper;
+
+                if (!Nullable.Equals(clamped, expected))
+                    failures.Add($"  {probe.Label}.Clamp({value}) = {Describe(clamped)}, expected {Describe(expected)}");
+            }
+
+            void Check(string accessor, bool actual, bool expected)
+            {
+                if (actual != expected)
+                    failures.Add($"  {probe.Label}.{accessor} = {actual}, its shape says {expected}");
+            }
+        }
+
+        Assert.AreEqual(0, failures.Count,
+                        $"{domain}: the bound accessors disagree with the shapes they describe:"
+                      + Environment.NewLine + string.Join(Environment.NewLine, failures.Take(20)));
+
+        static string Describe(T? value) => value?.ToString() ?? "null";
+    }
 
     // ---------------------------------------------------------------- the axiom
 

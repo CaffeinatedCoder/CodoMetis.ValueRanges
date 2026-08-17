@@ -97,6 +97,13 @@ internal static class SetProviderText
                TimeOnly value       => value.ToString("O", CultureInfo.InvariantCulture),
                IFormattable value   => value.ToString(null, CultureInfo.InvariantCulture),
                null                 => throw new InvalidOperationException("Value sets cannot contain null elements."),
-               _                    => primitive.ToString()!
+
+               // string, which is not IFormattable and needs no conversion. It was reaching the
+               // discard and being ToString()'d back to itself, which is right but only by
+               // accident — naming it keeps the fallback for genuinely unknown types.
+               string value         => value,
+
+               _                    => throw new InvalidOperationException(
+                                           $"No invariant text form for element type {primitive.GetType()}.")
            };
 }

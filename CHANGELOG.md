@@ -22,6 +22,19 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
 
 ### Fixed
 
+- **`IRangeFactory.ToString` formatted an unrecognised range as `"empty"`.** All five shapes are
+  named above the fallback, so it is reachable only through an `IRange<T>` implementation that is
+  none of them — which the sealed-variant rule forbids and the type system permits, the interface
+  being public. `"empty"` was the worst available answer: that text is what `Parse` round-trips,
+  what the EF literal sends to PostgreSQL and what the shape matrix compares against the server, so
+  such a range would have been stored, queried and asserted as the empty range with nothing raised.
+  It now throws. Found by triaging every discard arm outside `Internals/` — 60 of them, recorded in
+  `docs/discard-triage.md`, of which this was the only defect.
+- **`BridgedElementTypeMapping` produced a `string` element's literal by accident.** `string` is not
+  `IFormattable`, so it missed every named arm and reached the fallback, where `ToString()` returned
+  it unchanged — the right answer for the wrong reason, and the arm that would have silently handed
+  PostgreSQL whatever `ToString` produced for a genuinely unknown element type. The string case is
+  named and the fallback refuses.
 - **`RangeSet.Contains(T)` threw on the infinite set.**
   `RangeSet<Int32Range, int>.Infinite.Contains(value)` raised
   `InvalidOperationException: Range shape 'Infinity' has no lower bound` for every value, where the

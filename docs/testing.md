@@ -150,6 +150,13 @@ with the single-range oracle's two-element `Set.Union`/`Set.Except` and the work
 merge-join algorithms are generic over the range type, so the discrete sweep does exercise all of
 them. What it does not reach is continuous adjacency deciding a merge.
 
+### Discard Arms
+
+`docs/discard-triage.md` records the one-time triage of every `_ =>` arm outside `Internals/`, where
+the convention test cannot reach because plenty of them are correct. Read it before adding one: the
+short version is that a discard may be the last case of a closed set, a documented specification, or
+an EF "not mine" — never the answer to a shape nobody thought about.
+
 ### The Value Set Oracle
 
 `SmallModelSetOracleTests` (in the conventions project, which references all four shipping
