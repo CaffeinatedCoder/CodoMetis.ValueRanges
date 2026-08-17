@@ -10,7 +10,7 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 /// properties. Ids are assigned by the tests (no identity column) so that parallel
 /// tests can insert disjoint rows without coordination.
 /// </summary>
-public class Reservation
+public partial class Reservation
 {
     public int Id { get; set; }
 
