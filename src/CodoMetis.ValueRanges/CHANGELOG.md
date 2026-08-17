@@ -3,6 +3,32 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [7.0.1] — 2026-08-17
+
+### Fixed
+
+- **`RangeSet.Except(TRange)` returned the whole domain when subtracting an infinity range.**
+  `RangeSet<Int32Range, int>.Infinite.Except(Int32Range.Infinite)` answered `{(,)}` where `X \ (-∞,
+  +∞)` is the empty set for every `X`, and `Complement()` on the infinite set was wrong through the
+  same path. The set-minus-set overload has always guarded its infinite operand, and the
+  single-range overload answers it through its `Contains` guard, so the three overloads were
+  answering one question two ways. This is the fourth bug from the pattern 7.0.0 documented: the
+  engine's discard arm supplied `∞` for the one shape pair it was never given.
+
+### Changed
+
+- **The `Intersect`, `Merge` and `Except` engines dispatch on the shape pair.** Each had three
+  entry points typed by the receiver's shape, each switching over the operand's shape with a
+  discard that rebuilt the receiver or returned `Empty`. They are now one entry point per engine
+  taking `IRange<T>` on both sides and switching over `(left, right)`, so an unhandled pair is a
+  missing line rather than something a fallback absorbs. Internal: no public signature changed, and
+  no behaviour beyond the fix above.
+- **A shape dispatch with no arm for its operands throws `UnreachableException` naming the pair**
+  instead of returning a plausible value. Every one of the four bugs was a fallback returning
+  something well-formed — a wrong boolean, or a correctly shaped range holding the wrong values.
+  These paths sit behind the callers' guards and are unreachable; if a change breaks a guard, the
+  first test to reach it now names the missing pair.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added

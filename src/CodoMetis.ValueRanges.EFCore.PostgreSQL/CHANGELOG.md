@@ -3,6 +3,13 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [7.0.1] — 2026-08-17
+
+No source change in this package. The translation of `Except` was already correct — as with the
+three bugs in 7.0.0, the disagreement was between the database and memory rather than inside either
+— so `RangeSet.Infinite.Except(range)` evaluated server-side has always answered the empty set. See
+`CodoMetis.ValueRanges` 7.0.1 for the in-memory fix that brings the two back into step.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added

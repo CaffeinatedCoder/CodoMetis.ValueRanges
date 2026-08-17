@@ -3,6 +3,12 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [7.0.1] — 2026-08-17
+
+No source change in this package. The NodaTime range types run on the core engines, so they inherit
+both the infinity-operand subtraction fix and the shape-pair dispatch — see
+`CodoMetis.ValueRanges` 7.0.1.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added

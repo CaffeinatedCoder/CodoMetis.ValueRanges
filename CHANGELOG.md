@@ -9,6 +9,51 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [7.0.1] — 2026-08-17
+
+A fourth instance of the trap 7.0.0 documented, and the structural change that makes a fifth fail
+loudly instead of silently.
+
+7.0.0 recorded that three bugs had come from one shape: dispatch on the *receiver's* shape, an inner
+switch over the operand's, and a discard arm that answers the pairs nobody wrote. Auditing the
+engines for that shape turned up one more — `RangeSet.Except(TRange)` with an infinity operand — and
+made the case that documenting the rule was not going to be enough on its own. The engines now
+decide on the shape *pair*, and a pair with no arm throws instead of returning something plausible.
+
+### Fixed
+
+- **`RangeSet.Except(TRange)` returned the whole domain when subtracting an infinity range.**
+  `RangeSet<Int32Range, int>.Infinite.Except(Int32Range.Infinite)` answered `{(,)}` where `X \ (-∞,
+  +∞)` is the empty set for every `X`, and `Complement()` on the infinite set was wrong through the
+  same path. The set-minus-set overload has always guarded its infinite operand and the single-range
+  overload answers it through its `Contains` guard, so — as with the empty-range containment bug in
+  7.0.0 — the three overloads were answering the same question two different ways. The engine's
+  discard arm supplied `∞` for the one pair it was never given: `(Infinity, Infinity)`.
+
+### Changed
+
+- **The `Intersect`, `Merge` and `Except` engines dispatch on the shape pair.** Each had three
+  entry points typed by the receiver's shape, and each of those switched over the operand's shape
+  with a discard that rebuilt the receiver or returned `Empty` — the structure all four bugs shared.
+  They are now one entry point per engine taking `IRange<T>` on both sides, switching over
+  `(left, right)` with one arm per accepted pair, so a pair nobody handled is a missing *line*
+  rather than something a fallback absorbs. No public signature changed and no behaviour changed
+  beyond the fix above; the 3,300-comparison shape matrix agrees with PostgreSQL as before.
+- **A shape dispatch with no arm for its operands throws `UnreachableException` naming the pair.**
+  C# cannot prove a switch over interface patterns exhaustive, so the discard arm cannot be removed
+  — but it can stop producing values. Every one of the four bugs was a fallback returning something
+  well-formed: a wrong boolean, or a range of the right shape carrying the wrong values, which looks
+  correct in a debugger and disagrees only with the database. These paths are unreachable behind the
+  callers' existing guards; if a future change breaks one, the first test to reach it now says which
+  pair is missing.
+
+### Added
+
+- **`EngineDispatchConventionTests`**, which parses the shipping sources and enforces both halves of
+  the rule: a switch that dispatches on range shape must throw from its discard arm, and an engine's
+  entry points must take `IRange<T>` on both sides rather than one operand's shape. Both are
+  discovered by globbing `src/`, and both were verified by seeding the defect they claim to catch.
+
 ## [7.0.0] — 2026-08-17
 
 Two workstreams land together: the validated-wrapper arities now exist for every value set family
