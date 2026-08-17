@@ -18,6 +18,21 @@ namespace CodoMetis.ValueRanges.Serialization;
 /// </summary>
 internal static class ValueSetElementJson
 {
+    /// <summary>
+    /// Whether the numeric converters must emit a JSON string rather than a number.
+    /// </summary>
+    /// <remarks>
+    /// The options-level setting is the only one that can reach here:
+    /// <see cref="JsonNumberHandlingAttribute"/> on a property is rejected by
+    /// <see cref="System.Text.Json"/> itself for a type that is not a number or a collection of
+    /// numbers, which a value set is not. Honouring it is what keeps a wrapper arity's payload
+    /// identical to its primitive sibling's — the whole point of the numeric converters — and
+    /// <c>WriteAsString</c> is normally switched on precisely because the consumer is JavaScript
+    /// and a bare number above 2^53 would be rounded on arrival.
+    /// </remarks>
+    internal static bool WritesNumbersAsStrings(JsonSerializerOptions options)
+        => (options.NumberHandling & JsonNumberHandling.WriteAsString) != 0;
+
     internal static T Parse<TSet, T>(string s)
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
@@ -71,8 +86,10 @@ internal sealed class ValueSetTextElementJsonConverter<TSet, T> : JsonConverter<
 /// Both legs go through the family's text form, which is the wrapper contract: the element's
 /// invariant text must be exactly the backing primitive's text. A wrapper that violates it —
 /// by padding, prefixing, or formatting non-numerically — surfaces as a <see cref="JsonException"/>
-/// naming the offending text rather than emitting malformed JSON. Reads also accept a JSON string,
-/// so payloads produced under <see cref="JsonNumberHandling.WriteAsString"/> round-trip.
+/// naming the offending text rather than emitting malformed JSON. Reads accept a JSON string
+/// unconditionally, and writes honour <see cref="JsonNumberHandling.WriteAsString"/> on the
+/// options — without which a wrapper would emit a bare number where its primitive sibling emits a
+/// string, which is how an <see cref="long"/> above 2^53 loses digits at a JavaScript consumer.
 /// </remarks>
 /// <typeparam name="TSet">The value set family that owns the element's text form.</typeparam>
 /// <typeparam name="T">The element type.</typeparam>
@@ -105,7 +122,12 @@ internal sealed class ValueSetIntegerElementJsonConverter<TSet, T> : JsonConvert
                 $"{typeof(T).Name} formats as '{text}', which is not an integer. An element of "
               + $"{typeof(TSet).Name} must format as exactly the text form of the primitive it wraps.");
 
-        writer.WriteNumberValue(number);
+        // The parsed number's text, not the element's: that is what the primitive sibling writes,
+        // and parity with it is the contract.
+        if (ValueSetElementJson.WritesNumbersAsStrings(options))
+            writer.WriteStringValue(number.ToString(CultureInfo.InvariantCulture));
+        else
+            writer.WriteNumberValue(number);
     }
 }
 
@@ -117,8 +139,8 @@ internal sealed class ValueSetIntegerElementJsonConverter<TSet, T> : JsonConvert
 /// truncate every element of a decimal-backed wrapper.
 /// </summary>
 /// <remarks>
-/// Both legs go through the family's text form, as in the integer converter, and reads accept a
-/// JSON string so payloads written under <see cref="JsonNumberHandling.WriteAsString"/> round-trip.
+/// Both legs go through the family's text form, as in the integer converter, and
+/// <see cref="JsonNumberHandling.WriteAsString"/> is honoured the same way.
 /// Scale is preserved: <see cref="decimal"/> keeps trailing zeros through parse and format, so an
 /// element formatting as <c>12.50</c> is written as <c>12.50</c> — the same text
 /// <see cref="System.Text.Json"/> writes for the <see cref="decimal"/> it wraps.
@@ -159,6 +181,11 @@ internal sealed class ValueSetDecimalElementJsonConverter<TSet, T> : JsonConvert
                 $"{typeof(T).Name} formats as '{text}', which is not a decimal number. An element of "
               + $"{typeof(TSet).Name} must format as exactly the text form of the primitive it wraps.");
 
-        writer.WriteNumberValue(number);
+        // As in the integer converter — and the round trip through decimal keeps the scale, so
+        // the string form carries the same digits the number form would have.
+        if (ValueSetElementJson.WritesNumbersAsStrings(options))
+            writer.WriteStringValue(number.ToString(CultureInfo.InvariantCulture));
+        else
+            writer.WriteNumberValue(number);
     }
 }

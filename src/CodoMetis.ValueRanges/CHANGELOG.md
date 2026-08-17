@@ -29,6 +29,26 @@ covers all four packages, which share one version number and release together.
   wraps, which is what the generators emit. One that ignores it fails loudly rather than storing a
   truncated value.
 
+### Fixed
+
+- **⚠️ The numeric wrapper arities ignored `JsonSerializerOptions.NumberHandling`.** `Int16Set<T>`,
+  `Int32Set<T>`, `Int64Set<T>` and `DecimalSet<T>` write their elements' JSON tokens themselves, so
+  System.Text.Json is not in the loop to apply the setting for them — and they did not consult it.
+  Under `JsonNumberHandling.WriteAsString` an arity emitted a bare number where its primitive
+  sibling emitted a string: `Int64Set` produced `["9007199254740993"]` and `Int64Set<OrderId>`
+  produced `[9007199254740993]`.
+
+  That setting is switched on almost exclusively because the consumer is JavaScript, where a bare
+  number above 2^53 is rounded on arrival — 9007199254740993 arrives as 9007199254740992. So
+  swapping a closed set for its arity silently reintroduced, at the client only, exactly the
+  corruption the setting was turned on to prevent, contradicting the byte-for-byte parity these
+  converters exist to provide. **Payloads change for anyone serializing a numeric wrapper arity
+  under `WriteAsString`**, from a number to the string their primitive sibling was already writing.
+
+  Reads are unchanged: the numeric converters accept a JSON string unconditionally, so payloads
+  written either way have always round-tripped. The integer half of this dates to the converters'
+  introduction in 6.1.0; `DecimalSet<T>` shipped with it in this release.
+
 ## [6.3.0] — 2026-08-16
 
 ### Added
