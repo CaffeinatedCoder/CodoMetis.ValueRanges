@@ -7,6 +7,13 @@ covers all four packages, which share one version number and release together.
 
 ### Fixed
 
+- **`RangeSet.Contains(T)` threw on the infinite set.**
+  `RangeSet<Int32Range, int>.Infinite.Contains(value)` raised
+  `InvalidOperationException: Range shape 'Infinity' has no lower bound` for every value, where the
+  answer is `true`. The set binary-searches the sorted lower bounds to find the candidate element,
+  and the infinite set's single element has no lower bound to search on; every other query
+  short-circuits that case first and this one did not. Loud rather than silent, and found by the
+  new `SmallModelOracleTests` on its first run.
 - **`RangeSet.Except(TRange)` returned the whole domain when subtracting an infinity range.**
   `RangeSet<Int32Range, int>.Infinite.Except(Int32Range.Infinite)` answered `{(,)}` where `X \ (-∞,
   +∞)` is the empty set for every `X`, and `Complement()` on the infinite set was wrong through the

@@ -22,6 +22,14 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
 
 ### Fixed
 
+- **`RangeSet.Contains(T)` threw on the infinite set.**
+  `RangeSet<Int32Range, int>.Infinite.Contains(value)` raised
+  `InvalidOperationException: Range shape 'Infinity' has no lower bound` for every value, where the
+  answer is `true` — the infinite set contains everything, and `Int32Range.Infinite.Contains(value)`
+  has always said so. The set locates the candidate element by binary-searching the sorted lower
+  bounds, and its single element has no lower bound to search on; every other query on the set
+  short-circuits the infinite case first, and this one did not. Loud rather than silent, unlike the
+  rest of this release, and found by the new oracle below on its first run.
 - **`RangeSet.Except(TRange)` returned the whole domain when subtracting an infinity range.**
   `RangeSet<Int32Range, int>.Infinite.Except(Int32Range.Infinite)` answered `{(,)}` where `X \ (-∞,
   +∞)` is the empty set for every `X`, and `Complement()` on the infinite set was wrong through the
@@ -53,6 +61,21 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
   the rule: a switch that dispatches on range shape must throw from its discard arm, and an engine's
   entry points must take `IRange<T>` on both sides rather than one operand's shape. Both are
   discovered by globbing `src/`, and both were verified by seeding the defect they claim to catch.
+- **`SmallModelOracleTests`** — a second oracle beside the PostgreSQL shape matrix, asking set
+  theory instead of the database, and needing no Docker. Every representable range over a tiny
+  universe is enumerated from its specification — around 110 per domain, all five shapes and all
+  four inclusiveness combinations at every bound — the expected value set is derived arithmetically
+  from that specification, and every one of the ~12,100 ordered pairs is checked for all eight
+  binary predicates, the four value-producing operations, and the same questions asked again at the
+  `RangeSet` arities. About 460,000 assertions per run over the discrete and continuous domains, in
+  under 200 ms.
+
+  It exists because hand-picked representatives are how the first version of the 7.0.0 `Except`
+  sweep reported zero disagreements on the exact defect it was written to catch. All five bugs of
+  this family were seeded back in to prove it catches them: the adjacency asymmetry (6.2.1),
+  `IsStrictlyLeftOf` on an unbounded start and `Except` between opposing unbounded operands
+  (7.0.0), and both fixes above. The model has one axiom — that `Contains(T)` is correct, since
+  results are read back through it — and that is pinned by its own test rather than assumed.
 
 ## [7.0.0] — 2026-08-17
 

@@ -349,6 +349,12 @@ public sealed class RangeSet<TRange, T>
     /// </remarks>
     public bool Contains(T value)
     {
+        // The infinite set contains every value, and its single element has no lower bound to
+        // binary-search on — RangeLowerBound throws for IInfinityRange rather than inventing one.
+        // Every other query here guards this first; until 7.0.1 this one did not, so
+        // RangeSet.Infinite.Contains(value) threw where the single-range overload answered true.
+        if (IsInfiniteSet) return true;
+
         int idx = RangeSetHelpers.LastIndexWithLowerBoundAtOrBelow<TRange, T>(_elements, value);
         return idx >= 0 && _elements[idx].Contains(value);
     }

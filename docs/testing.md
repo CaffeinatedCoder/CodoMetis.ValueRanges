@@ -74,6 +74,41 @@ Every test in this project has been verified by seeding the defect it claims to 
 
 ## Patterns
 
+### The Two Oracles
+
+Two tests check range algebra against something other than itself, and they answer different
+questions. Neither replaces the other.
+
+- **`ShapeMatrixParityTests`** (integration, needs Docker) asks *PostgreSQL* for every binary
+  predicate and value operation over every ordered shape pair and diffs. This is the only check
+  that the library agrees with the database rather than with its own idea of what a range means.
+  It uses about ten hand-picked representatives per domain.
+- **`SmallModelOracleTests`** (unit, no Docker) asks *set theory*. It enumerates every
+  representable range over a tiny universe from its specification — around 110 per domain, all
+  five shapes and all four inclusiveness combinations at every bound — derives the expected value
+  set arithmetically from that specification, and checks all ~12,100 ordered pairs. About 460,000
+  assertions across the discrete and continuous domains, in under 200 ms.
+
+The small-model oracle is the stronger *bug detector* of the two, because hand-picked
+representatives are how the first version of the 7.0.0 `Except` sweep came back with zero
+disagreements on the exact defect it was written to catch — its operands happened to be disjoint,
+so the failing pair never arose. It also covers the `RangeSet` arities, which is where two of the
+five known bugs of this family lived: an operation lifted through `RangeSet.From([r])` must give
+the lifted answer.
+
+Two details make the small domain faithful, and a change to either breaks the model silently:
+
+- **Bounds are only ever drawn from the interior of the universe**, so the outermost grid points
+  are values no bound names. An unbounded side then reaches a point a finite side cannot, which is
+  what lets the model tell `[1,6]` from `[1,+∞)` — a distinction `&<` and `&>` turn on.
+- **The continuous domain uses a half-step grid**, so an exclusive bound is one grid point away
+  from an inclusive one at the same value. `[1,2)` and `[2,3]` abut; `[1,2)` and `(2,3]` leave the
+  point 2 between them.
+
+The model has one axiom — that `Contains(T)` is correct — since results are read back through it.
+That is pinned by its own test per domain rather than assumed, and `Contains(T)` is itself verified
+against PostgreSQL's element `@>` in the integration suite.
+
 ### Shape-Combination Matrix
 
 Every binary operation test must cover all five range shapes: `Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`. Tests instantiate the "other" operand in each shape and verify the result type and value.
