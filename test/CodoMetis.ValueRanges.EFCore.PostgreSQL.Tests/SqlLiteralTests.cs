@@ -81,4 +81,22 @@ public sealed class SqlLiteralTests
             LiteralOf(DecimalSet<TestRate>.From(
                 TestRate.Parse("12.50", CultureInfo.InvariantCulture),
                 TestRate.Parse("13", CultureInfo.InvariantCulture))));
+
+    /// <summary>
+    /// The other half of the temporal contract: an element that swallows the format argument
+    /// answers with a form the bridge refuses, rather than one it would quietly truncate. The
+    /// message has to name the type and the contract, because the consumer's next question is
+    /// which of their wrappers is wrong.
+    /// </summary>
+    [TestMethod]
+    public void WrapperTimestampSet_ElementIgnoringTheFormat_IsRejected()
+    {
+        var lossy = DateTimeSet<TestLossyStamp>.From(
+            new TestLossyStamp(new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified)));
+
+        var error = Assert.ThrowsExactly<InvalidOperationException>(() => LiteralOf(lossy));
+
+        StringAssert.Contains(error.Message, nameof(TestLossyStamp));
+        StringAssert.Contains(error.Message, "must format to exactly the backing primitive's text form");
+    }
 }

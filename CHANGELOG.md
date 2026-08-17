@@ -50,6 +50,21 @@ breaking changes.
   their closed siblings do: wall-clock `DateTimeKind.Unspecified` for `timestamp`, UTC for
   `timestamptz`.
 
+### Known difference
+
+- **A temporal arity's JSON is not byte-identical to its closed sibling's**, though the token type
+  and the value are the same and each payload deserializes into the other's type. The round-trip
+  format always writes seven fraction digits where System.Text.Json trims them, and the default
+  encoder escapes `+`:
+
+  ```
+  DateTimeOffsetSet     ["2024-06-15T10:30:00+02:00"]
+  DateTimeOffsetSet<T>  ["2024-06-15T10:30:00.0000000+02:00"]
+  ```
+
+  The string, Guid, integer and decimal arities remain byte-identical to their siblings. Give the
+  element type its own `[JsonConverter]` if an existing response shape matters.
+
 ## [6.3.0] — 2026-08-16
 
 Three additions that close gaps in the existing surface rather than extending the model. No

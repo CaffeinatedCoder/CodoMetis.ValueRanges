@@ -68,6 +68,23 @@ public class Booking
 
     public DecimalSet<TestRate> WrappedRates { get; set; } = DecimalSet<TestRate>.Empty;
 
+    // The remaining arities. One property per family, so the model-mapping tests can pin the
+    // column type of every one rather than only the three the literal tests exercise.
+
+    public GuidSet<TestUuid> WrappedUuids { get; set; } = GuidSet<TestUuid>.Empty;
+
+    public Int16Set<TestSmallCode> WrappedSmallCodes { get; set; } = Int16Set<TestSmallCode>.Empty;
+
+    public Int32Set<TestCode> WrappedCodes { get; set; } = Int32Set<TestCode>.Empty;
+
+    public Int64Set<TestBigCode> WrappedBigCodes { get; set; } = Int64Set<TestBigCode>.Empty;
+
+    public DateSet<TestDay> WrappedDays { get; set; } = DateSet<TestDay>.Empty;
+
+    public TimeSet<TestSlot> WrappedSlots { get; set; } = TimeSet<TestSlot>.Empty;
+
+    public DateTimeOffsetSet<TestInstant> WrappedInstants { get; set; } = DateTimeOffsetSet<TestInstant>.Empty;
+
     /// <summary>A plain CLR array beside the set types — must keep its native provider mapping.</summary>
     public string[] PlainTags { get; set; } = [];
 
@@ -175,4 +192,208 @@ public sealed class TestDbContext : DbContext
         => optionsBuilder.UseNpgsql(
             "Host=localhost;Database=valueranges_tests;Username=postgres",
             npgsql => npgsql.UseValueRanges());
+}
+
+// The remaining wrapper element types, one per arity. All are the generator shape: a readonly
+// record struct over a private backing field, forwarding the format argument so whatever format
+// its family asks for reaches the wrapped value.
+
+public readonly record struct TestUuid : IFormattable, IParsable<TestUuid>, IComparable<TestUuid>
+{
+    private readonly Guid _value;
+
+    public TestUuid(Guid value) => _value = value;
+
+    public static TestUuid Parse(string s, IFormatProvider? provider) => new(Guid.Parse(s));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestUuid result)
+    {
+        var ok = Guid.TryParse(s, out var value);
+        result = ok ? new TestUuid(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestUuid other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString("D", CultureInfo.InvariantCulture);
+}
+
+public readonly record struct TestSmallCode : IFormattable, IParsable<TestSmallCode>, IComparable<TestSmallCode>
+{
+    private readonly short _value;
+
+    public TestSmallCode(short value) => _value = value;
+
+    public static TestSmallCode Parse(string s, IFormatProvider? provider)
+        => new(short.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestSmallCode result)
+    {
+        var ok = short.TryParse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = ok ? new TestSmallCode(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestSmallCode other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+public readonly record struct TestCode : IFormattable, IParsable<TestCode>, IComparable<TestCode>
+{
+    private readonly int _value;
+
+    public TestCode(int value) => _value = value;
+
+    public static TestCode Parse(string s, IFormatProvider? provider)
+        => new(int.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestCode result)
+    {
+        var ok = int.TryParse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = ok ? new TestCode(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestCode other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+public readonly record struct TestBigCode : IFormattable, IParsable<TestBigCode>, IComparable<TestBigCode>
+{
+    private readonly long _value;
+
+    public TestBigCode(long value) => _value = value;
+
+    public static TestBigCode Parse(string s, IFormatProvider? provider)
+        => new(long.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestBigCode result)
+    {
+        var ok = long.TryParse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = ok ? new TestBigCode(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestBigCode other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+public readonly record struct TestDay : IFormattable, IParsable<TestDay>, IComparable<TestDay>
+{
+    private readonly DateOnly _value;
+
+    public TestDay(DateOnly value) => _value = value;
+
+    public static TestDay Parse(string s, IFormatProvider? provider)
+        => new(DateOnly.Parse(s, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestDay result)
+    {
+        var ok = DateOnly.TryParse(s, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = ok ? new TestDay(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestDay other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+}
+
+public readonly record struct TestSlot : IFormattable, IParsable<TestSlot>, IComparable<TestSlot>
+{
+    private readonly TimeOnly _value;
+
+    public TestSlot(TimeOnly value) => _value = value;
+
+    public static TestSlot Parse(string s, IFormatProvider? provider)
+        => new(TimeOnly.Parse(s, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestSlot result)
+    {
+        var ok = TimeOnly.TryParse(s, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = ok ? new TestSlot(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestSlot other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString("O", CultureInfo.InvariantCulture);
+}
+
+public readonly record struct TestInstant : IFormattable, IParsable<TestInstant>, IComparable<TestInstant>
+{
+    private readonly DateTimeOffset _value;
+
+    public TestInstant(DateTimeOffset value) => _value = value;
+
+    public static TestInstant Parse(string s, IFormatProvider? provider)
+        => new(DateTimeOffset.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestInstant result)
+    {
+        var ok = DateTimeOffset.TryParse(
+            s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value);
+        result = ok ? new TestInstant(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestInstant other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString("O", CultureInfo.InvariantCulture);
+}
+
+/// <summary>
+/// A deliberately non-conforming element: it swallows the format argument and answers with the
+/// invariant default, which for a <see cref="DateTime"/> drops the fractional seconds. The
+/// bridge must refuse it rather than bind a truncated value.
+/// </summary>
+public readonly record struct TestLossyStamp
+    : IFormattable, IParsable<TestLossyStamp>, IComparable<TestLossyStamp>
+{
+    private readonly DateTime _value;
+
+    public TestLossyStamp(DateTime value) => _value = value;
+
+    public static TestLossyStamp Parse(string s, IFormatProvider? provider)
+        => new(DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestLossyStamp result)
+    {
+        var ok = DateTime.TryParse(
+            s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value);
+        result = ok ? new TestLossyStamp(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestLossyStamp other) => _value.CompareTo(other._value);
+
+    // The defect: `format` is ignored.
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(CultureInfo.InvariantCulture);
+
+    public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
 }

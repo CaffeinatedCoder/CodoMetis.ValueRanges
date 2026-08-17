@@ -102,7 +102,16 @@ A wrapper that swallows the argument and returns its own form is rejected rather
 
 String-backed wrappers sort ordinal over their text form — deliberately not the element's own `IComparable`, whose generated implementations typically delegate to culture-sensitive string comparison.
 
-That same text form carries into JSON, so a wrapper set is indistinguishable on the wire from the primitive set it replaces — `StringSet<AccessRight>` writes `["users.read"]`, `Int32Set<OrderId>` writes `[1,2]`, `DecimalSet<Money>` writes `[12.50]` with the scale intact, `DateTimeSet<AuditStamp>` writes ISO 8601 strings — and reads run `Parse`, so the validation above applies to deserialized payloads too. Give the element type its own `[JsonConverter]` if you want a different shape; it takes precedence.
+That same text form carries into JSON: `StringSet<AccessRight>` writes `["users.read"]`, `Int32Set<OrderId>` writes `[1,2]`, `DecimalSet<Money>` writes `[12.50]` with the scale intact, `DateTimeSet<AuditStamp>` writes ISO 8601 strings. Reads run `Parse`, so the validation above applies to deserialized payloads too. Give the element type its own `[JsonConverter]` if you want a different shape; it takes precedence.
+
+For the string, Guid, integer and decimal arities the payload is **byte-identical** to the primitive set it replaces, so swapping `Int32Set` for `Int32Set<OrderId>` is invisible to API consumers. The four temporal arities and the five NodaTime ones write the same token type and the same value, but not the same bytes — the round-trip format always writes seven fraction digits where System.Text.Json trims them, and the default encoder escapes `+` in a string the converter writes itself:
+
+```
+DateTimeOffsetSet     ["2024-06-15T10:30:00+02:00"]
+DateTimeOffsetSet<T>  ["2024-06-15T10:30:00.0000000+02:00"]
+```
+
+Each payload still deserializes into the other's type. The round-trip form is deliberate: it is the one the array literal and the EF Core bridge already share, and it is what keeps the sub-second component from being dropped. If an existing API response shape matters, give the element its own `[JsonConverter]`.
 
 ## Why these element types
 

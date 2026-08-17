@@ -196,13 +196,18 @@ the hook is last, never an override. Resolution failures (no contract for `T`) f
 delegation, preserving the previous behaviour.
 
 The primitive-backed families serialize natively and leave the default `null`. Every wrapper arity
-defines one, since its element type is arbitrary, and the shape follows the primitive so a
-wrapper's payload is what its primitive sibling produces: `ValueSetIntegerElementJsonConverter`
-(a JSON number) for the three integer families, `ValueSetDecimalElementJsonConverter` for
-`DecimalSet<T>` — separate rather than a widening, since the integer one reads and writes through
-`long` and would truncate every decimal element — and `ValueSetTextElementJsonConverter` (a JSON
-string) for the string, Guid, temporal and NodaTime arities, matching how System.Text.Json writes
-those primitives. The NodaTime satellite defines
+defines one, since its element type is arbitrary, and the token type always follows the primitive:
+`ValueSetIntegerElementJsonConverter` (a JSON number) for the three integer families,
+`ValueSetDecimalElementJsonConverter` for `DecimalSet<T>` — separate rather than a widening, since
+the integer one reads and writes through `long` and would truncate every decimal element — and
+`ValueSetTextElementJsonConverter` (a JSON string) for the string, Guid, temporal and NodaTime
+arities. For the non-temporal families the payload is byte-identical to the primitive sibling's.
+For the temporal ones it is the same value in different text: the round-trip format writes seven
+fraction digits where System.Text.Json trims them, and the default encoder escapes `+`. That is
+asserted rather than fixed (`SetJsonConverterTests`) — matching the native writer byte for byte
+would mean reproducing System.Text.Json's temporal formatting for an element known only through
+`IFormattable`, and the round-trip form is the one the array literal and the EF bridge share.
+The NodaTime satellite defines
 one per set (`Serialization/NodaTimeElementJsonConverter.cs`, namespace
 `CodoMetis.ValueRanges.Serialization`), each reusing the family's own `ParseValue`/`FormatValue` so
 JSON, array literals and the wire form share one text form. The satellite additionally exposes

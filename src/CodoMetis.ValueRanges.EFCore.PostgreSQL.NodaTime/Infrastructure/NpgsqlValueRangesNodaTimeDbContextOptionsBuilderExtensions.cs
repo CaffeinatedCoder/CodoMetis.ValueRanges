@@ -81,21 +81,31 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
     // generators emit — needs no configuration.
     private static readonly (Type Family, Func<Type, ISetTypeDefinition> Factory)[] SetFamilies =
         [
+            // literalText is passed explicitly on every one of these, for the same reason the
+            // closed definitions above pass one: the default renders a primitive through
+            // IFormattable with a null format, and for NodaTime that is the culture's form —
+            // a LocalDate becomes 'Saturday, 15 June 2024', which is not a date literal at all.
+            // Instant and LocalTime would survive the default because theirs happen to be ISO;
+            // relying on that per type is exactly the trap this argument exists to close.
             (typeof(LocalDateSet<>), SetTypeRegistry.Bridged(
                  "date", LocalDatePattern.Iso.PatternText,
-                 ParseWith(LocalDatePattern.Iso), LocalDatePattern.Iso.Format)),
+                 ParseWith(LocalDatePattern.Iso), LocalDatePattern.Iso.Format,
+                 LocalDatePattern.Iso.Format)),
 
             (typeof(LocalDateTimeSet<>), SetTypeRegistry.Bridged(
                  "timestamp without time zone", LocalDateTimePattern.ExtendedIso.PatternText,
-                 ParseWith(LocalDateTimePattern.ExtendedIso), LocalDateTimePattern.ExtendedIso.Format)),
+                 ParseWith(LocalDateTimePattern.ExtendedIso), LocalDateTimePattern.ExtendedIso.Format,
+                 LocalDateTimePattern.ExtendedIso.Format)),
 
             (typeof(InstantSet<>), SetTypeRegistry.Bridged(
                  "timestamp with time zone", InstantPattern.ExtendedIso.PatternText,
-                 ParseWith(InstantPattern.ExtendedIso), InstantPattern.ExtendedIso.Format)),
+                 ParseWith(InstantPattern.ExtendedIso), InstantPattern.ExtendedIso.Format,
+                 InstantPattern.ExtendedIso.Format)),
 
             (typeof(LocalTimeSet<>), SetTypeRegistry.Bridged(
                  "time without time zone", LocalTimePattern.ExtendedIso.PatternText,
-                 ParseWith(LocalTimePattern.ExtendedIso), LocalTimePattern.ExtendedIso.Format)),
+                 ParseWith(LocalTimePattern.ExtendedIso), LocalTimePattern.ExtendedIso.Format,
+                 LocalTimePattern.ExtendedIso.Format)),
 
             // The one family whose element text form and store text form differ: the element
             // speaks 2024-06 and the column holds 2024-06-01. formatPrimitive therefore feeds
