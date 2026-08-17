@@ -49,7 +49,8 @@ public class SmallModelOracleTests
 
     private sealed record Spec(Shape Shape, int Start, int End, bool StartInclusive, bool EndInclusive);
 
-    private sealed record Case<TRange>(string Label, TRange Range, HashSet<int> Model, Shape Shape);
+    private sealed record Case<TRange>(string Label, TRange Range, HashSet<int> Model, Shape Shape)
+        where TRange : notnull;
 
     // Grid indices. Int32 uses one index per integer; decimal uses one per half-step, so an
     // exclusive bound and an inclusive one at the same value differ by exactly one grid point.
@@ -64,6 +65,18 @@ public class SmallModelOracleTests
     [TestMethod]
     public void Int32Range_ModelMatchesElementContainment()
         => AssertModelIsGrounded(IntCases(), IntGridMax, index => index, "Int32Range");
+
+    [TestMethod]
+    public void Int32Range_Equality_IsValueEquality()
+        => SweepEquality<Int32Range, int>("Int32Range", IntCases(),
+                                          (a, b) => a == b, (a, b) => a != b,
+                                          a => a == null, a => null == a);
+
+    [TestMethod]
+    public void DecimalRange_Equality_IsValueEquality()
+        => SweepEquality<DecimalRange, decimal>("DecimalRange", DecimalCases(),
+                                                (a, b) => a == b, (a, b) => a != b,
+                                                a => a == null, a => null == a);
 
     [TestMethod]
     public void Int32Range_Accessors_AgreeWithShape()
@@ -188,6 +201,99 @@ public class SmallModelOracleTests
             _                    => throw new UnreachableException()
         };
 
+    // ---------------------------------------------------------------- equality
+
+    /// <summary>
+    /// Two ranges are equal exactly when they hold the same values, and equal ranges hash alike.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the law <c>DiscreteCanonical</c> exists to uphold — its summary says the bounds are
+    /// closed "so that structural record equality coincides with set equality" — and nothing
+    /// checked it. Records compare field by field, so the claim only holds while canonicalization
+    /// makes one representation per value set: over the integers <c>(1,5)</c>, <c>[2,5)</c>,
+    /// <c>(1,4]</c> and <c>[2,4]</c> are four spellings of one range, and equality has to see
+    /// through all of them. The enumeration contains every such spelling at every bound, so the
+    /// sweep is what proves it.
+    /// </para>
+    /// <para>
+    /// The grid model is injective over this enumeration, which is what makes "same model" a sound
+    /// stand-in for "same values": bounds are drawn only from even grid indices, so an inclusive
+    /// bound lands on an even point and an exclusive one on an odd point, and no two distinct
+    /// specifications can produce the same set of points. A finite range can never reach grid 0 or
+    /// the last point either, so it cannot collide with an unbounded shape.
+    /// </para>
+    /// <para>
+    /// Three forms are checked because they can diverge: <c>Equals(object)</c>, the
+    /// <c>IEquatable&lt;T&gt;</c> path through <see cref="EqualityComparer{T}"/>, and the
+    /// <c>==</c> operator, which a generic method cannot invoke and so is passed in.
+    /// </para>
+    /// </remarks>
+    private static void SweepEquality<TRange, T>(
+        string                     domain,
+        List<Case<TRange>>         cases,
+        Func<TRange, TRange, bool> equalOperator,
+        Func<TRange, TRange, bool> notEqualOperator,
+        Func<TRange, bool>         equalsNull,
+        Func<TRange, bool>         nullEquals
+    )
+        where TRange : class, IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var failures = new List<string>();
+        var comparer = EqualityComparer<TRange>.Default;
+
+        // Identity checks first, in their own pass: a range equals itself, and nothing else that
+        // is not a range of the same value.
+        foreach (var probe in cases)
+        {
+            // The nullable analysis reads the loop variable as maybe-null through the generic
+            // Case<TRange>; it cannot be, since cases is built from the enumeration.
+            var range = probe!.Range;
+
+            if (!range.Equals(range))
+                failures.Add($"  {probe.Label} is not equal to itself");
+
+            if (range.Equals((object?)"not a range"))
+                failures.Add($"  {probe.Label} compares equal to a string");
+
+            // Last, because comparing against null marks the operand maybe-null for the rest of
+            // the block as far as the nullable analysis is concerned.
+            if (Equals(range, null) || equalsNull(range) || nullEquals(range))
+                failures.Add($"  {probe.Label} compares equal to null");
+        }
+
+        foreach (var a in cases)
+        {
+            foreach (var b in cases)
+            {
+                bool same = a.Model.SetEquals(b.Model);
+
+                Check("Equals(object)", a.Range.Equals((object?)b.Range),   same);
+                Check("IEquatable",     comparer.Equals(a.Range, b.Range),  same);
+                Check("==",             equalOperator(a.Range, b.Range),    same);
+                Check("!=",             notEqualOperator(a.Range, b.Range), !same);
+
+                // Equal values must hash alike, or a range used as a dictionary key goes missing.
+                // The converse is not required: distinct ranges may legitimately collide.
+                if (same && a.Range.GetHashCode() != b.Range.GetHashCode())
+                    failures.Add($"  {a.Label} and {b.Label} hold the same values but hash differently");
+
+                void Check(string form, bool actual, bool expected)
+                {
+                    if (actual != expected)
+                        failures.Add($"  {a.Label} {form} {b.Label} → {actual}, "
+                                   + $"but they hold {(expected ? "the same values" : "different values")}");
+                }
+            }
+        }
+
+        Assert.AreEqual(0, failures.Count,
+                        $"{domain}: equality does not coincide with set equality:"
+                      + Environment.NewLine + string.Join(Environment.NewLine, failures.Take(20))
+                      + (failures.Count > 20 ? $"{Environment.NewLine}  … and {failures.Count - 20} more" : ""));
+    }
+
     // ---------------------------------------------------------------- accessors
 
     /// <summary>
@@ -210,7 +316,7 @@ public class SmallModelOracleTests
         int                gridMax,
         Func<int, T>       valueOf
     )
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where TRange : class, IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var failures = new List<string>();
@@ -281,6 +387,7 @@ public class SmallModelOracleTests
         Func<int, object>           valueOf,
         string                      domain
     )
+        where TRange : notnull
     {
         var failures = new List<string>();
 
@@ -317,7 +424,7 @@ public class SmallModelOracleTests
         int                gridMax,
         Func<int, T>       valueOf
     )
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where TRange : class, IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var failures = new List<string>();

@@ -89,6 +89,25 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
   `IsStrictlyLeftOf` on an unbounded start and `Except` between opposing unbounded operands
   (7.0.0), and both fixes above. The model has one axiom — that `Contains(T)` is correct, since
   results are read back through it — and that is pinned by its own test rather than assumed.
+- **An equality sweep in `SmallModelOracleTests`**, closing the last surface the oracles reached at
+  the multirange and value-set arities but not at the range's own. Two ranges are equal exactly when
+  they hold the same values, and equal ranges hash alike — the law `DiscreteCanonical` exists to
+  uphold, whose summary says the bounds are closed "so that structural record equality coincides
+  with set equality", and which nothing checked. Over the integers `(1,5)`, `[2,5)`, `(1,4]` and
+  `[2,4]` are four spellings of one range and equality has to see through all of them; the
+  enumeration holds every spelling at every bound. `Equals(object)`, the `IEquatable<T>` path and
+  the `==`/`!=` operators are checked separately because they can diverge, along with reflexivity
+  and comparison against `null` and against another type.
+
+  Seeded both halves: a `Finite.Equals` that forgets its upper bound, and a `GetHashCode` on
+  reference identity, which reports `[1,1]` and `[1,2)` — the same discrete range spelled twice —
+  as hashing apart. The first attempt at the equality seed would not compile, since defining
+  `Equals` on a record without `GetHashCode` is CS8851, so the compiler already guards that half.
+- **The bound accessors and `Clamp` joined the sweep**, having been argued total during the discard
+  triage rather than checked. Grounded in three independent links: nullness from the
+  specification's shape, inclusivity cross-checked against `Contains`, and `Clamp` against the
+  bounds those establish — predicting a bound's value directly does not work, because a discrete
+  range canonicalizes and an exclusive continuous bound is a value the range does not contain.
 - **`ShapeMatrixCoverageTests`**, which fails when a binary range operation has no row in
   `ShapeMatrixParityTests`. The matrix found three of the five bugs in the receiver-shaped-dispatch
   family, and its weakness is that it is a list: an operation added to `RangeExtensions` without a

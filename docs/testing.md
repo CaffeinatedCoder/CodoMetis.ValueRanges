@@ -112,6 +112,14 @@ Two details make the small domain faithful, and a change to either breaks the mo
   from an inclusive one at the same value. `[1,2)` and `[2,3]` abut; `[1,2)` and `(2,3]` leave the
   point 2 between them.
 
+It also sweeps the surfaces no shape-pair matrix reaches: the **bound accessors** and `Clamp`, and
+**equality**. The equality law is that two ranges are equal exactly when they hold the same values,
+and equal ranges hash alike — which only holds because canonicalization gives one representation
+per value set, so over the integers `(1,5)`, `[2,5)`, `(1,4]` and `[2,4]` must all compare equal.
+`Equals(object)`, the `IEquatable<T>` path and the `==`/`!=` operators are checked separately,
+since they can diverge; the operators are passed in as delegates because a generic method cannot
+invoke them.
+
 The model has one axiom — that `Contains(T)` is correct — since results are read back through it.
 That is pinned by its own test per domain rather than assumed, and `Contains(T)` is itself verified
 against PostgreSQL's element `@>` in the integration suite.
