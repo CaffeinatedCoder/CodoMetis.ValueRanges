@@ -170,15 +170,25 @@ public static class RangeExtensions
         /// <param name="other">The range to test.</param>
         /// <returns>
         /// <see langword="true"/> if every value in <paramref name="other"/> also belongs to this range.
-        /// Always <see langword="true"/> for <see cref="IInfinityRange{T}"/> (unless <paramref name="other"/>
-        /// is <see cref="IEmptyRange{T}"/>).
+        /// Always <see langword="true"/> when <paramref name="other"/> is <see cref="IEmptyRange{T}"/> —
+        /// the empty range is contained by every range, including itself — and always
+        /// <see langword="true"/> for an <see cref="IInfinityRange{T}"/> receiver.
         /// Always <see langword="false"/> when <paramref name="other"/> extends in a direction that
-        /// this range does not bound, or when this range is <see cref="IEmptyRange{T}"/>.
+        /// this range does not bound, or when this range is <see cref="IEmptyRange{T}"/> and
+        /// <paramref name="other"/> is not.
         /// </returns>
-        public bool Contains(IRange<T> other) =>
-            range switch
+        public bool Contains(IRange<T> other)
+        {
+            // ∅ ⊆ S for every S. "Every value in other also belongs to this range" is vacuously
+            // satisfied when other has no values, so there is nothing to check and no receiver
+            // shape that can refuse — the empty receiver included, since ∅ ⊆ ∅. This is also what
+            // PostgreSQL's @> answers, and what Contains(RangeSet) has always answered by
+            // iterating zero elements; before 7.0.0 the single-range overload disagreed with both.
+            if (other.IsEmpty()) return true;
+
+            return range switch
             {
-                IInfinityRange<T> => !other.IsEmpty(),
+                IInfinityRange<T> => true,
 
                 IFiniteRange<T> b =>
                     other switch
@@ -208,8 +218,10 @@ public static class RangeExtensions
                         _                       => false
                     },
 
+                // An empty receiver, with a non-empty other: ∅ contains nothing.
                 _ => false
             };
+        }
 
         /// <summary>
         /// Determines whether this range and <paramref name="other"/> share at least one common value.
@@ -268,23 +280,40 @@ public static class RangeExtensions
         /// <returns>
         /// <see langword="true"/> if the upper bound of this range is less than the lower bound of
         /// <paramref name="other"/>, or if they meet at a single point but at least one side is exclusive there.
-        /// Always <see langword="false"/> when this range is <see cref="IUnboundedEndRange{T}"/>,
-        /// <see cref="IUnboundedStartRange{T}"/>, <see cref="IInfinityRange{T}"/>, or <see cref="IEmptyRange{T}"/>.
+        /// Always <see langword="false"/> when this range has no upper bound
+        /// (<see cref="IUnboundedEndRange{T}"/>, <see cref="IInfinityRange{T}"/>) or when
+        /// <paramref name="other"/> has no lower bound (<see cref="IUnboundedStartRange{T}"/>,
+        /// <see cref="IInfinityRange{T}"/>), and whenever either range is <see cref="IEmptyRange{T}"/>.
+        /// An <see cref="IUnboundedStartRange{T}"/> receiver is *not* excluded: <c>(-∞, e]</c> has a
+        /// finite upper bound, so it is strictly left of anything starting after <c>e</c>.
         /// </returns>
-        public bool IsStrictlyLeftOf(IRange<T> other) =>
-            range switch
+        public bool IsStrictlyLeftOf(IRange<T> other)
+        {
+            // <<  compares this range's UPPER bound against other's LOWER bound, so what decides is
+            // which side each operand is unbounded on — not whether it is unbounded at all. Reading
+            // the two bounds separately, rather than switching on the receiver's shape and handling
+            // unbounded operands only in the inner switch, is what keeps the two directions in step:
+            // deciding per receiver is how (-∞, e] came to answer false where PostgreSQL's << answers
+            // true, the same trap IsAdjacentTo fell into before 6.3.0.
+            (T Value, bool Inclusive)? upper = range switch
             {
-                IFiniteRange<T> b =>
-                    other switch
-                    {
-                        IFiniteRange<T> o =>
-                            b.End.CompareTo(o.Start) < 0 || (b.End.CompareTo(o.Start) == 0 && !(b.EndInclusive && o.StartInclusive)),
-                        IUnboundedEndRange<T> e =>
-                            b.End.CompareTo(e.Start) < 0 || (b.End.CompareTo(e.Start) == 0 && !(b.EndInclusive && e.StartInclusive)),
-                        _ => false
-                    },
-                _ => false
+                IFiniteRange<T> f         => (f.End, f.EndInclusive),
+                IUnboundedStartRange<T> s => (s.End, s.EndInclusive),
+                _                         => null // +∞ (or empty): never left of anything
             };
+
+            (T Value, bool Inclusive)? lower = other switch
+            {
+                IFiniteRange<T> f       => (f.Start, f.StartInclusive),
+                IUnboundedEndRange<T> e => (e.Start, e.StartInclusive),
+                _                       => null // -∞ (or empty): nothing is left of it
+            };
+
+            if (upper is not { } end || lower is not { } start) return false;
+
+            int comparison = end.Value.CompareTo(start.Value);
+            return comparison < 0 || (comparison == 0 && !(end.Inclusive && start.Inclusive));
+        }
 
         /// <summary>
         /// Determines whether this range begins strictly after <paramref name="other"/> ends,

@@ -1,5 +1,7 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using NodaTime.Text;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -8,7 +10,7 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 /// properties. Ids are assigned by the tests (no identity column) so that parallel
 /// tests can insert disjoint rows without coordination.
 /// </summary>
-public class Reservation
+public partial class Reservation
 {
     public int Id { get; set; }
 
@@ -53,6 +55,38 @@ public class Reservation
 
     public int GroupKey { get; set; }
 
+    // -- The multiranges that had no mapped column until 7.0.0 --
+    //
+    // Six of the eleven multirange types were exercised end to end; these five had never been
+    // mapped to a column, so nothing proved their store type, their literal form or their
+    // round trip. Every one is covered by MultirangeCoverageTests.
+
+    public RangeSet<Int64Range, long> TicketBlocks { get; set; } = RangeSet<Int64Range, long>.Empty;
+
+    public RangeSet<DecimalRange, decimal> PriceBands { get; set; } = RangeSet<DecimalRange, decimal>.Empty;
+
+    public RangeSet<DateTimeRange, DateTime> WallClockWindows { get; set; } = RangeSet<DateTimeRange, DateTime>.Empty;
+
+    public RangeSet<DateTimeOffsetRange, DateTimeOffset> InstantWindows { get; set; } =
+        RangeSet<DateTimeOffsetRange, DateTimeOffset>.Empty;
+
+    public RangeSet<LocalDateTimeRange, LocalDateTime> NodaWallClocks { get; set; } =
+        RangeSet<LocalDateTimeRange, LocalDateTime>.Empty;
+
+    // -- Element-typed scalars, so a range constructor can be built from columns server-side --
+
+    public DateOnly Day { get; set; }
+
+    public DateOnly OtherDay { get; set; }
+
+    public decimal Amount { get; set; }
+
+    public decimal OtherAmount { get; set; }
+
+    public TimeOnly At { get; set; }
+
+    public TimeOnly Until { get; set; }
+
     // -- Value set properties: BCL closed types --
 
     public StringSet Tags { get; set; } = StringSet.Empty;
@@ -92,6 +126,16 @@ public class Reservation
 
     // Month granularity, stored as a month-aligned date[].
     public YearMonthSet BillingMonths { get; set; } = YearMonthSet.Empty;
+
+    // -- Value set properties: wrapper arities over lossy-by-default text forms --
+    //
+    // The temporal and NodaTime arities bridge to the store through a text form, so these are
+    // the properties that prove the pinned format actually survives a real round trip rather
+    // than only a generated literal.
+
+    public DateTimeSet<AuditStamp> Audits { get; set; } = DateTimeSet<AuditStamp>.Empty;
+
+    public YearMonthSet<BillingMonth> WrappedMonths { get; set; } = YearMonthSet<BillingMonth>.Empty;
 }
 
 /// <summary>
@@ -148,4 +192,63 @@ public sealed class IntegrationDbContext : DbContext
         // Generates CREATE TYPE timerange AS RANGE (SUBTYPE = time) ahead of the tables.
         modelBuilder.HasPostgresRange("timerange", "time");
     }
+}
+
+/// <summary>
+/// A generator-shaped validated wrapper (DateTime-backed) — the consumer shape for
+/// <see cref="DateTimeSet{TElement}"/>. It forwards the format specifier to the value it
+/// wraps, which is what the temporal arities' contract requires and what the generators emit.
+/// </summary>
+public readonly record struct AuditStamp : IFormattable, IParsable<AuditStamp>, IComparable<AuditStamp>
+{
+    private readonly DateTime _value;
+
+    public AuditStamp(DateTime value) => _value = value;
+
+    public static AuditStamp Parse(string s, IFormatProvider? provider)
+        => new(DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out AuditStamp result)
+    {
+        var parsed = DateTime.TryParse(
+            s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value);
+        result = parsed ? new AuditStamp(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(AuditStamp other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString("O", CultureInfo.InvariantCulture);
+}
+
+/// <summary>
+/// A generator-shaped validated wrapper (YearMonth-backed) — the consumer shape for
+/// <see cref="YearMonthSet{TElement}"/>, whose bridge additionally changes granularity: the
+/// element speaks <c>2024-06</c> and the column holds <c>2024-06-01</c>.
+/// </summary>
+public readonly record struct BillingMonth : IFormattable, IParsable<BillingMonth>, IComparable<BillingMonth>
+{
+    private readonly YearMonth _value;
+
+    public BillingMonth(YearMonth value) => _value = value;
+
+    public static BillingMonth Parse(string s, IFormatProvider? provider)
+        => new(YearMonthPattern.Iso.Parse(s).GetValueOrThrow());
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out BillingMonth result)
+    {
+        var parsed = s is not null && YearMonthPattern.Iso.Parse(s).Success;
+        result = parsed ? new BillingMonth(YearMonthPattern.Iso.Parse(s!).Value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(BillingMonth other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => YearMonthPattern.Iso.Format(_value);
 }

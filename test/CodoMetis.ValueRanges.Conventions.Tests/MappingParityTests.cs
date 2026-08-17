@@ -63,6 +63,21 @@ public sealed class MappingParityTests
                 @interface.IsGenericType && @interface.GetGenericTypeDefinition() == typeof(IValueSet<>)))
            .OrderBy(type => type.Name, StringComparer.Ordinal);
 
+    /// <summary>
+    /// The validated-wrapper arities, closed over their representative element type. They are
+    /// registered by open generic definition rather than as closed definitions, which is a
+    /// second way to be absent from the registry: <see cref="SetTypesIn"/> filters generic type
+    /// definitions out, so before this a family with no entry in the registry's family table
+    /// mapped to nothing and no test noticed.
+    /// </summary>
+    private static IEnumerable<Type> SetFamiliesIn(Type marker) =>
+        ExportedTypesOf(marker)
+           .Where(type => type is { IsClass: true, IsAbstract: false, IsGenericTypeDefinition: true })
+           .Where(type => type.GetInterfaces().Any(@interface =>
+                @interface.IsGenericType && @interface.GetGenericTypeDefinition() == typeof(IValueSet<>)))
+           .OrderBy(type => type.Name, StringComparer.Ordinal)
+           .Select(family => family.MakeGenericType(WrapperElements.For(family)));
+
     private static Type ElementTypeOf(Type rangeOrSet, Type openInterface) =>
         rangeOrSet.GetInterfaces()
                   .First(@interface => @interface.IsGenericType
@@ -91,11 +106,14 @@ public sealed class MappingParityTests
     [TestMethod]
     public void Discovery_FindsEveryRangeAndSetType()
     {
-        // 7 BCL ranges + 4 NodaTime ranges; 10 closed BCL sets + 5 NodaTime sets, as of 6.1.0.
-        AssertAtLeast(RangeTypesIn(typeof(Int32Range)),    7,  "BCL range types");
-        AssertAtLeast(RangeTypesIn(typeof(LocalDateRange)), 4, "NodaTime range types");
-        AssertAtLeast(SetTypesIn(typeof(StringSet)),      10,  "BCL set types");
-        AssertAtLeast(SetTypesIn(typeof(LocalDateSet)),    5,  "NodaTime set types");
+        // 7 BCL ranges + 4 NodaTime ranges; 10 closed BCL sets + 10 BCL wrapper arities +
+        // 5 NodaTime sets + 5 NodaTime wrapper arities, as of 7.0.0.
+        AssertAtLeast(RangeTypesIn(typeof(Int32Range)),     7,  "BCL range types");
+        AssertAtLeast(RangeTypesIn(typeof(LocalDateRange)),  4, "NodaTime range types");
+        AssertAtLeast(SetTypesIn(typeof(StringSet)),       10,  "BCL set types");
+        AssertAtLeast(SetTypesIn(typeof(LocalDateSet)),     5,  "NodaTime set types");
+        AssertAtLeast(SetFamiliesIn(typeof(StringSet)),    10,  "BCL wrapper arities");
+        AssertAtLeast(SetFamiliesIn(typeof(LocalDateSet)),  5,  "NodaTime wrapper arities");
 
         static void AssertAtLeast(IEnumerable<Type> discovered, int floor, string what)
         {
@@ -130,6 +148,26 @@ public sealed class MappingParityTests
         var       source  = MappingSourceOf(context);
 
         foreach (var setType in SetTypesIn(typeof(StringSet))) AssertMapped(source, setType, "value set type");
+    }
+
+    [TestMethod]
+    public void EveryCoreWrapperArity_IsMappedByThePlugin()
+    {
+        using var context = new BclContext();
+        var       source  = MappingSourceOf(context);
+
+        foreach (var closed in SetFamiliesIn(typeof(StringSet)))
+            AssertMapped(source, closed, "value set wrapper arity");
+    }
+
+    [TestMethod]
+    public void EveryNodaTimeWrapperArity_IsMappedByTheSatellite()
+    {
+        using var context = new NodaContext();
+        var       source  = MappingSourceOf(context);
+
+        foreach (var closed in SetFamiliesIn(typeof(LocalDateSet)))
+            AssertMapped(source, closed, "value set wrapper arity");
     }
 
     [TestMethod]

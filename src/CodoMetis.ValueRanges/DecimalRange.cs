@@ -144,21 +144,40 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
         };
 
     /// <summary>
-    /// The span between the bounds, or <see langword="null"/> when the range is unbounded.
-    /// The empty range measures 0.
+    /// The span between the bounds, or <see langword="null"/> when the range is unbounded or the
+    /// span is too large to represent. The empty range measures 0.
     /// </summary>
     /// <remarks>
     /// A span rather than a count: the domain is continuous, so there is nothing to count.
     /// Bound inclusiveness does not affect the span — <c>[1, 5]</c> and <c>[1, 5)</c> both
     /// measure 4.
+    /// <para>
+    /// A range straddling zero can be wider than <see cref="decimal"/> itself — the span of
+    /// <c>[decimal.MinValue, decimal.MaxValue]</c> is twice <see cref="decimal.MaxValue"/> — and
+    /// there is no wider type to compute it in. That case returns <see langword="null"/>, the same
+    /// answer <c>Int64Range.Length</c> gives when a count exceeds <see cref="long.MaxValue"/>,
+    /// rather than throwing <see cref="OverflowException"/> out of a property.
+    /// </para>
     /// </remarks>
     public decimal? Length =>
         this switch
         {
             IEmptyRange<decimal>    => 0m,
-            IFiniteRange<decimal> f => f.End - f.Start,
+            IFiniteRange<decimal> f => FiniteLength(f.Start, f.End),
             _                       => null
         };
+
+    /// <summary>
+    /// <c>end - start</c>, or <see langword="null"/> when that subtraction would overflow.
+    /// </summary>
+    /// <remarks>
+    /// Only a negative lower bound can overflow: with <c>start >= 0</c> the difference is at most
+    /// <c>end</c>. Otherwise the largest representable <c>end</c> is
+    /// <c>decimal.MaxValue + start</c>, and the comparison is written that way so the check itself
+    /// cannot overflow.
+    /// </remarks>
+    private static decimal? FiniteLength(decimal start, decimal end)
+        => start < 0m && end > decimal.MaxValue + start ? null : end - start;
 
     /// <inheritdoc />
     public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)

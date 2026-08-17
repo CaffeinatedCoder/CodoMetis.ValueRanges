@@ -167,7 +167,9 @@ public class RangeSetComparisonTests
         Assert.IsTrue(IntSet.Infinite.Contains(Int32Range.CreateUnboundedEnd(10)));
         Assert.IsTrue(IntSet.Infinite.Overlaps(R(1, 3)));
         Assert.IsTrue(IntSet.Infinite.Overlaps(Int32Range.CreateUnboundedStart(5, true)));
-        Assert.IsFalse(IntSet.Infinite.Contains(Int32Range.Empty));
+        // Containment and overlap part ways on the empty range, and both match PostgreSQL:
+        // ∅ ⊆ S vacuously, while overlap needs a shared value and ∅ has none.
+        Assert.IsTrue(IntSet.Infinite.Contains(Int32Range.Empty));
         Assert.IsFalse(IntSet.Infinite.Overlaps(Int32Range.Empty));
     }
 

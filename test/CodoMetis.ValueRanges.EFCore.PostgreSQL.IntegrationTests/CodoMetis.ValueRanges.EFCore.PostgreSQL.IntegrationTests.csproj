@@ -18,6 +18,18 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!--
+            The representative wrapper element type per family, shared with the conventions suite
+            rather than copied: the arities are only reachable once closed over something, and a
+            third definition would let the live round trips drift from what the contract tests
+            check. Linked instead of moved so the conventions project keeps no reference to this
+            one, which needs Docker.
+        -->
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\WrapperElements.cs"
+                 Link="WrapperElements.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.EFCore.PostgreSQL\CodoMetis.ValueRanges.EFCore.PostgreSQL.csproj" />
         <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.csproj" />
     </ItemGroup>

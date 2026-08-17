@@ -93,44 +93,97 @@ internal sealed class StringBridgedSetTypeDefinition<TSet, TElement> : ISetTypeD
 /// <summary>
 /// The <see cref="ISetTypeDefinition"/> for validated-wrapper set instantiations backed by a
 /// struct primitive (<c>GuidSet&lt;TElement&gt;</c>, <c>Int32Set&lt;TElement&gt;</c>,
-/// <c>Int64Set&lt;TElement&gt;</c>): the bridge goes through the invariant text form in both
-/// directions, which is lossless exactly when the element's text form is the backing
-/// primitive's text form — the documented contract. A decorative element format fails loudly
-/// here with an error naming the type and the contract.
+/// <c>DateTimeSet&lt;TElement&gt;</c>, the NodaTime arities, …): the bridge goes through a text
+/// form in both directions, which is lossless exactly when the element's text form is the
+/// backing primitive's text form — the documented contract. A decorative element format fails
+/// loudly here with an error naming the type and the contract.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The text form is the family's, not the element's default. The <c>elementFormat</c> argument
+/// is what the element's <see cref="IFormattable"/> is asked for, and it is the same specifier
+/// the primitive-backed sibling's <c>FormatValue</c> defaults to, so a set's array literal, its
+/// JSON and this bridge all agree. A <see langword="null"/> format is right only where the
+/// element's default already round-trips: <see cref="Guid"/> and the integers. It is wrong for
+/// every temporal — <c>TimeOnly</c> renders as <c>09:30</c> and <c>DateTime</c> as
+/// <c>06/15/2024 10:30:00</c> with a null format, dropping sub-seconds and
+/// <see cref="DateTimeKind"/> silently.
+/// </para>
+/// <para>
+/// The primitive legs are delegates rather than <see cref="IParsable{TSelf}"/>: NodaTime's
+/// value types do not implement it at all, and <c>DateTime.Parse</c> reaches through it without
+/// <see cref="DateTimeStyles.RoundtripKind"/>, which rewrites a UTC element to
+/// <see cref="DateTimeKind.Local"/> on the way to the parameter.
+/// </para>
+/// </remarks>
+/// <typeparam name="TSet">The closed wrapper set type, e.g. <c>Int32Set&lt;OrderId&gt;</c>.</typeparam>
+/// <typeparam name="TElement">The validated wrapper element type.</typeparam>
+/// <typeparam name="TPrimitive">The primitive store representation of one element.</typeparam>
 internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISetTypeDefinition
     where TSet : class, IValueSetFactory<TSet, TElement>, IValueSet<TElement>
-    where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
-    where TPrimitive : struct, IFormattable, IParsable<TPrimitive>
+    where TElement : struct, IEquatable<TElement>, IFormattable, IParsable<TElement>
+    where TPrimitive : struct
 {
-    public BridgedSetTypeDefinition(string elementStoreType)
+    private readonly string?                  _elementFormat;
+    private readonly Func<string, TPrimitive> _parsePrimitive;
+    private readonly Func<TPrimitive, string> _formatPrimitive;
+
+    /// <param name="elementStoreType">The PostgreSQL type of one element, e.g. <c>integer</c>.</param>
+    /// <param name="elementFormat">
+    /// The format specifier handed to the element's <see cref="IFormattable"/>, or
+    /// <see langword="null"/> to take its default.
+    /// </param>
+    /// <param name="parsePrimitive">The element's text form to the store primitive.</param>
+    /// <param name="formatPrimitive">
+    /// The store primitive back to text the element's <see cref="IParsable{TSelf}"/> accepts.
+    /// Not necessarily the literal form — <c>YearMonthSet&lt;T&gt;</c> stores a first-of-month
+    /// <c>date</c> and hands its element <c>2024-06</c>.
+    /// </param>
+    /// <param name="literalText">
+    /// The primitive's SQL literal form; defaults to <see cref="SetProviderText.Of"/>.
+    /// </param>
+    public BridgedSetTypeDefinition(
+        string                    elementStoreType,
+        string?                   elementFormat,
+        Func<string, TPrimitive>  parsePrimitive,
+        Func<TPrimitive, string>  formatPrimitive,
+        Func<TPrimitive, string>? literalText = null
+    )
     {
+        _elementFormat   = elementFormat;
+        _parsePrimitive  = parsePrimitive;
+        _formatPrimitive = formatPrimitive;
+
         ElementStoreType = elementStoreType;
         ArrayStoreType   = elementStoreType + "[]";
         SetTypeMapping   = new ValueSetTypeMapping<TSet, TElement, TPrimitive>(
-            ArrayStoreType, ToPrimitive, FromPrimitive);
+            ArrayStoreType, ToPrimitive, FromPrimitive, literalText);
         ElementTypeMapping = new BridgedElementTypeMapping<TElement, TPrimitive>(
-            ElementStoreType, ToPrimitive, FromPrimitive);
+            ElementStoreType, ToPrimitive, FromPrimitive, literalText);
     }
 
-    private static TPrimitive ToPrimitive(TElement element)
+    private TPrimitive ToPrimitive(TElement element)
     {
-        var text = element.ToString(null, CultureInfo.InvariantCulture);
+        var text = element.ToString(_elementFormat, CultureInfo.InvariantCulture);
         try
         {
-            return TPrimitive.Parse(text, CultureInfo.InvariantCulture);
+            return _parsePrimitive(text);
         }
         catch (FormatException ex)
         {
+            // NodaTime's UnparsableValueException derives from FormatException, so the
+            // satellite's patterns surface the same message rather than an opaque one.
+            var asked = _elementFormat is null ? "invariant" : $"'{_elementFormat}'";
+
             throw new InvalidOperationException(
-                $"The invariant text form '{text}' of '{typeof(TElement)}' is not a valid "
+                $"The {asked} text form '{text}' of '{typeof(TElement)}' is not a valid "
               + $"'{typeof(TPrimitive)}' value. Value set elements must format to exactly the "
               + "backing primitive's text form.", ex);
         }
     }
 
-    private static TElement FromPrimitive(TPrimitive primitive)
-        => TElement.Parse(primitive.ToString(null, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    private TElement FromPrimitive(TPrimitive primitive)
+        => TElement.Parse(_formatPrimitive(primitive), CultureInfo.InvariantCulture);
 
     public Type SetClrType => typeof(TSet);
 

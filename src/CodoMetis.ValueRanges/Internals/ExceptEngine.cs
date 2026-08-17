@@ -37,6 +37,17 @@ internal static class ExceptEngine
            {
                IFiniteRange<T> o         => OpenStartExceptFinite<TRange, T>(left, o),
                IUnboundedStartRange<T> o => (TRange.CreateFinite(o.End, left.End, !o.EndInclusive, left.EndInclusive), default),
+
+               // (-∞, left.End] minus [e.Start, +∞): the operand runs to +∞, so it removes
+               // everything from its own start upwards and what survives is (-∞, e.Start).
+               // Callers guarantee the two overlap, so e.Start is at or below left.End and this
+               // bound is the binding one.
+               IUnboundedEndRange<T> e   => (TRange.CreateUnboundedStart(e.Start, !e.StartInclusive), default),
+
+               // Unreachable: RangeExtensions.Except and the RangeSet merge-join both short-circuit
+               // an empty operand (no overlap) and an infinity operand (the operand contains the
+               // receiver) before dispatching here. Returning the receiver unchanged is the safe
+               // identity for those two, and was silently the answer for the arm above until 7.0.0.
                _                         => (TRange.CreateUnboundedStart(left.End, left.EndInclusive), default)
            };
 
@@ -47,6 +58,12 @@ internal static class ExceptEngine
            {
                IFiniteRange<T> o       => OpenEndExceptFinite<TRange, T>(left, o),
                IUnboundedEndRange<T> o => (TRange.CreateFinite(left.Start, o.Start, left.StartInclusive, !o.StartInclusive), default),
+
+               // The mirror of the case above: [left.Start, +∞) minus (-∞, s.End] leaves
+               // (s.End, +∞).
+               IUnboundedStartRange<T> s => (TRange.CreateUnboundedEnd(s.End, !s.EndInclusive), default),
+
+               // Unreachable, as above.
                _                       => (TRange.CreateUnboundedEnd(left.Start, left.StartInclusive), default)
            };
 

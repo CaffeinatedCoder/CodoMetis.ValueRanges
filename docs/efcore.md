@@ -87,6 +87,41 @@ Timestamp semantics:
 - Npgsql by default maps `DateTime.MinValue`/`MaxValue` to PostgreSQL `-infinity`/`infinity`. A *finite* bound of `DateTime.MaxValue` therefore becomes an explicit `infinity` bound in the database — which is distinct from an *unbounded* side (`upper_inf` stays `false`), so shape checks behave consistently.
 - Reverse engineering (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`, not to these types — the plugin provides no design-time services. Apply the range types manually after scaffolding.
 
+## Indexing a range column, and preventing overlaps
+
+A GiST index over a range column is ordinary EF configuration — no package involvement:
+
+```csharp
+modelBuilder.Entity<Booking>()
+    .HasIndex(b => b.Period)
+    .HasMethod("gist");
+```
+
+That serves `&&`, `@>`, `<@` and the positional operators. What it does *not* do is stop two overlapping rows from being written, and that is a gap application code cannot close on its own: checking for an overlap and then inserting is a read-then-write race, so under concurrency two requests can both find the slot free. Only a database constraint is atomic.
+
+PostgreSQL's answer is an exclusion constraint, and [`EFCore.ComplexIndexes.PostgreSQL`](https://www.nuget.org/packages/EFCore.ComplexIndexes.PostgreSQL) declares one from the model. It accepts a range column mapped by this package exactly as it accepts an `NpgsqlRange<T>` — the constraint is expressed over the *column*, and these types map as ordinary scalars:
+
+```csharp
+modelBuilder.Entity<Booking>().HasExclusionConstraint(ex => ex
+    .WithEquality(b => b.RoomId)     // same room …
+    .WithOverlaps(b => b.Period)     // … must not overlap in time
+    .HasName("ex_booking_room_period"));
+```
+
+which migrates to:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS btree_gist;   -- injected automatically for the scalar `=` element
+ALTER TABLE "Bookings" ADD CONSTRAINT "ex_booking_room_period"
+  EXCLUDE USING gist ("RoomId" WITH =, "Period" WITH &&);
+```
+
+A second booking for the same room whose `Period` overlaps an existing one now fails with `23P01` (`exclusion_violation`), surfacing as a `DbUpdateException` wrapping a `PostgresException` that names the constraint. Different rooms are unaffected, and — because `daterange` is discrete and canonicalized — `[2024-01-01, 2024-01-10]` and `[2024-01-11, 2024-01-20]` are *adjacent, not overlapping*, so both are accepted. That is the same distinction `IsAdjacentTo` and `Overlaps` draw in memory.
+
+> **Exclusion constraints come from migrations, not `EnsureCreated()`.** They are emitted by a design-time service that `dotnet ef migrations add` loads automatically. `EnsureCreated()` builds its schema through the runtime differ, which does not know about them — the table is created, the constraint silently is not, and overlapping rows are accepted. Verified: an `EnsureCreated()` table carries zero exclusion constraints. Use migrations, or add the constraint with explicit SQL.
+
+Everything above was executed against PostgreSQL 17 with a `DateRange` property, including the rejected overlap and the accepted adjacent pair.
+
 ## Value set columns
 
 The same package maps every [value set type](value-sets.md) to its native PostgreSQL array column — by convention, with nothing to configure. Wrapper instantiations (`StringSet<AccessRight>`) are recognized automatically from the open generic; there is no per-element registration to forget:
@@ -146,7 +181,16 @@ modelBuilder.Entity<Booking>()
 
 `Contains` deliberately translates as containment (`@>`) rather than `= ANY(...)`, because only containment is GIN-servable — one code path, always indexable.
 
-**Set equality** (`==`) translates to SQL `=`, which is order-sensitive on arrays: it means set equality exactly because every writer stores canonical form. Rows written by other tools in non-canonical order are still matched correctly by all the operators above (they ignore order and duplicates) and normalize when materialized — only `==` carries the canonical-writers precondition. The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is the property's own concern.
+**Set equality** (`==`) translates to SQL `=`, which is order-sensitive on arrays: it means set equality exactly because every writer stores canonical form. Rows written by other tools in non-canonical order are still matched correctly by every *operator* above — `@>`, `<@`, `&&` and the proper-containment pairs ignore both order and duplicates — and normalize when materialized.
+
+Two members carry the canonical-writers precondition, not one:
+
+- **`==`**, because SQL `=` compares arrays as sequences.
+- **`Count`**, because it translates to `cardinality`, which ignores order but *not* duplicates. A row stored as `{b,a,b}` materializes as the two-element set `{a,b}`, so `set.Count` is 2 in memory while `WHERE "Tags".cardinality = 2` does not match it and `= 3` does. `IsEmpty` is unaffected: an array is empty exactly when it has no elements, whatever its multiplicities.
+
+That divergence is inherent to reading normalized while leaving the row as written — the alternatives are rewriting foreign rows on read, or refusing to translate `Count` at all, and neither is worth the common case. If you query `Count` against a table other tools also write, canonicalize on ingest.
+
+The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is the property's own concern.
 
 Two boundary notes: plain `T[]`/`List<T>` properties keep their native Npgsql mapping — both can coexist in one model — and database scaffolding produces plain arrays, since opting into a set type is a model decision. The NodaTime satellite registers its five set types via the same `UseValueRangesNodaTime()` call; `YearMonthSet` persists first-of-month dates and reads validate alignment, exactly like `YearMonthRange`.
 

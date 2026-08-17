@@ -3,6 +3,35 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [7.0.0] — 2026-08-17
+
+### Added
+
+- **Five validated-wrapper arities** — `LocalDateSet<T>`, `LocalDateTimeSet<T>`, `InstantSet<T>`,
+  `LocalTimeSet<T>` and `YearMonthSet<T>` — matching the core package's arities, so a domain type
+  backed by a NodaTime value can be stored as a native PostgreSQL array without referencing this
+  package.
+
+  Each pins the ISO pattern as the format it asks its elements for, for the same reason the closed
+  NodaTime sets pass an explicit literal text: NodaTime's `IFormattable` with a null format
+  produces the culture's form, so a `LocalDate` would otherwise render as
+  `Saturday, 15 June 2024`. A wrapper that forwards its `format` argument to the value it wraps
+  needs no configuration.
+
+  Unlike their closed siblings these arities cannot normalize the element's calendar — the element
+  type is opaque to them — so the ISO text form is part of the contract rather than something the
+  set enforces. `YearMonthSet<T>` is stored as a month-aligned `date[]`, exactly as `YearMonthSet`
+  is.
+### Changed
+
+- **⚠️ Three range results change**, inherited from the core algebra that the NodaTime range types
+  share — see `CodoMetis.ValueRanges` 7.0.0 for each. `Contains`/`IsContainedBy` now answer `true`
+  for an empty operand (∅ ⊆ S); `IsStrictlyLeftOf`/`IsStrictlyRightOf` now answer correctly for a
+  range unbounded at its start, so `LocalDateRange.CreateUnboundedStart(…)` agrees with
+  PostgreSQL's `<<`; and `Except` now actually subtracts when the two operands are unbounded in
+  opposite directions, where it used to return the receiver untouched.
+
+
 ## [6.3.0] — 2026-08-16
 
 ### Added

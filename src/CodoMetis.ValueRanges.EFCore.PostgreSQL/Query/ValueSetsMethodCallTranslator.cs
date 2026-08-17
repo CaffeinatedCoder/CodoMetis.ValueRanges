@@ -76,7 +76,7 @@ internal sealed class ValueSetsMethodCallTranslator(
         if (method.DeclaringType != typeof(ValueSetExtensions))
             return null;
 
-        if (!TryResolveDefinition(method, arguments, out var definition))
+        if (!TryResolveDefinition(arguments, out var definition))
             return null;
 
         SqlExpression Set(int index)
@@ -138,8 +138,21 @@ internal sealed class ValueSetsMethodCallTranslator(
         }
     }
 
+    /// <summary>
+    /// Resolves the set type definition from the operands, by concrete set CLR type only.
+    /// </summary>
+    /// <remarks>
+    /// There is deliberately no fallback to the method's element type argument. Every method this
+    /// translator handles is declared on <see cref="ValueSetExtensions"/> and constrained
+    /// <c>where TSet : class, IValueSetFactory&lt;TSet, T&gt;, IValueSet&lt;T&gt;</c>, which
+    /// <c>IValueSet&lt;T&gt;</c> cannot satisfy with itself as <c>TSet</c> — so <c>TSet</c> always
+    /// binds to a concrete set type and the loop below always resolves. An earlier element-type
+    /// fallback existed for "operands statically typed as <c>IValueSet&lt;T&gt;</c>", a shape the
+    /// constraint makes unreachable; it never ran, and the cast form it described
+    /// (<c>((IValueSet&lt;string&gt;)x).Contains(…)</c>) fails in EF before reaching any
+    /// translator.
+    /// </remarks>
     private static bool TryResolveDefinition(
-        MethodInfo                                  method,
         IReadOnlyList<SqlExpression>                arguments,
         [NotNullWhen(true)] out ISetTypeDefinition? definition
     )
@@ -149,11 +162,6 @@ internal sealed class ValueSetsMethodCallTranslator(
             if (SetTypeRegistry.TryGetByClrType(Unwrap(argument).Type, out definition))
                 return true;
         }
-
-        // Operands statically typed as IValueSet<T> carry no concrete set type —
-        // fall back to the method's element type argument (always the last one).
-        if (method.IsGenericMethod)
-            return SetTypeRegistry.TryGetByElementType(method.GetGenericArguments()[^1], out definition);
 
         definition = null;
         return false;

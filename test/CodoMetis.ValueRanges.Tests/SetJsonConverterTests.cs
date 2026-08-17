@@ -40,8 +40,14 @@ public class SetJsonConverterTests
     {
         Assert.IsNotNull(HookFor<StringSet<TestPermission>, TestPermission>());
         Assert.IsNotNull(HookFor<GuidSet<TestId>, TestId>());
+        Assert.IsNotNull(HookFor<Int16Set<TestSmallId>, TestSmallId>());
         Assert.IsNotNull(HookFor<Int32Set<TestIntId>, TestIntId>());
         Assert.IsNotNull(HookFor<Int64Set<TestLongId>, TestLongId>());
+        Assert.IsNotNull(HookFor<DecimalSet<TestMoney>, TestMoney>());
+        Assert.IsNotNull(HookFor<DateSet<TestDay>, TestDay>());
+        Assert.IsNotNull(HookFor<TimeSet<TestSlot>, TestSlot>());
+        Assert.IsNotNull(HookFor<DateTimeSet<TestStamp>, TestStamp>());
+        Assert.IsNotNull(HookFor<DateTimeOffsetSet<TestOffsetStamp>, TestOffsetStamp>());
     }
 
     // -----------------------------------------------------------------------
@@ -93,6 +99,197 @@ public class SetJsonConverterTests
         Assert.AreEqual(
             JsonSerializer.Serialize(GuidSet.From(guid), Options),
             JsonSerializer.Serialize(GuidSet<TestId>.From(TestId.FromGuid(guid)), Options));
+
+        Assert.AreEqual(
+            JsonSerializer.Serialize(Int16Set.From((short)3, (short)1), Options),
+            JsonSerializer.Serialize(Int16Set<TestSmallId>.From(new TestSmallId(3), new TestSmallId(1)), Options));
+
+        var day = new DateOnly(2024, 6, 15);
+        Assert.AreEqual(
+            JsonSerializer.Serialize(DateSet.From(day), Options),
+            JsonSerializer.Serialize(DateSet<TestDay>.From(new TestDay(day)), Options));
+    }
+
+    /// <summary>
+    /// A JSON number with a fractional part, which the integer converter cannot express: routed
+    /// through <see cref="long"/> on either leg, <c>12.50</c> becomes <c>12</c> or throws. The
+    /// scale is preserved, so the payload matches what System.Text.Json writes for the
+    /// <see cref="decimal"/> the element wraps.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_DecimalBacked_SerializesAsNumbersKeepingScale()
+    {
+        var money = DecimalSet<TestMoney>.From(new TestMoney(12.50m), new TestMoney(1.5m));
+
+        Assert.AreEqual("[1.5,12.50]", JsonSerializer.Serialize(money, Options));
+        Assert.AreEqual(money, JsonSerializer.Deserialize<DecimalSet<TestMoney>>("[1.5,12.50]", Options));
+    }
+
+    /// <summary>
+    /// The temporal arities write the family's round-trip text form as a JSON string — the same
+    /// token type System.Text.Json uses for the primitives they wrap, and the same text the
+    /// array literal carries. The sub-second digits are the assertion: the element's default
+    /// form would have dropped them.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_TemporalBacked_SerializesAsRoundTripStrings()
+    {
+        var precise = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified).AddTicks(1_234_567);
+        var stamps  = DateTimeSet<TestStamp>.From(new TestStamp(precise));
+
+        Assert.AreEqual("[\"2024-06-15T10:30:00.1234567\"]", JsonSerializer.Serialize(stamps, Options));
+        Assert.AreEqual(stamps, JsonSerializer.Deserialize<DateTimeSet<TestStamp>>(
+            "[\"2024-06-15T10:30:00.1234567\"]", Options));
+
+        var slots = TimeSet<TestSlot>.From(new TestSlot(new TimeOnly(9, 30, 15, 250)));
+
+        Assert.AreEqual("[\"09:30:15.2500000\"]", JsonSerializer.Serialize(slots, Options));
+        Assert.AreEqual(slots, JsonSerializer.Deserialize<TimeSet<TestSlot>>("[\"09:30:15.2500000\"]", Options));
+
+        var days = DateSet<TestDay>.From(new TestDay(new DateOnly(2024, 6, 15)));
+
+        Assert.AreEqual("[\"2024-06-15\"]", JsonSerializer.Serialize(days, Options));
+    }
+
+    /// <summary>
+    /// Where the wrapper's payload is <em>not</em> byte-identical to its primitive sibling's.
+    /// The token type and the value agree, and each parses to the other's value, but the text
+    /// differs in two ways: the round-trip format always writes seven fraction digits where
+    /// System.Text.Json trims them, and the default encoder escapes <c>+</c> in a string it
+    /// writes itself, which the native <see cref="DateTimeOffset"/> writer does not.
+    /// </summary>
+    /// <remarks>
+    /// Asserted rather than fixed. Matching the native writer byte for byte would mean the
+    /// element converter reproducing System.Text.Json's temporal formatting for an element type
+    /// it only knows through <see cref="IFormattable"/>, and the round-trip form is the one the
+    /// array literal and the EF bridge already share. Swapping a closed temporal set for its
+    /// arity therefore changes the bytes of an API response, though not its meaning — the
+    /// non-temporal arities are byte-identical, which
+    /// <see cref="WrapperSet_ProducesTheSameJsonAsItsPrimitiveSibling"/> pins.
+    /// </remarks>
+    [TestMethod]
+    public void WrapperSet_TemporalBacked_DiffersFromItsPrimitiveSiblingInTextOnly()
+    {
+        var stamp = new DateTimeOffset(2024, 6, 15, 10, 30, 0, TimeSpan.FromHours(2));
+
+        var primitive = JsonSerializer.Serialize(DateTimeOffsetSet.From(stamp), Options);
+        var wrapper   = JsonSerializer.Serialize(
+            DateTimeOffsetSet<TestOffsetStamp>.From(new TestOffsetStamp(stamp)), Options);
+
+        Assert.AreEqual("[\"2024-06-15T10:30:00+02:00\"]", primitive);
+        Assert.AreEqual("[\"2024-06-15T10:30:00.0000000\\u002B02:00\"]", wrapper);
+
+        // Different bytes, same value: each payload deserializes into the other's type.
+        Assert.AreEqual(
+            DateTimeOffsetSet.From(stamp),
+            JsonSerializer.Deserialize<DateTimeOffsetSet>(wrapper, Options));
+        Assert.AreEqual(
+            DateTimeOffsetSet<TestOffsetStamp>.From(new TestOffsetStamp(stamp)),
+            JsonSerializer.Deserialize<DateTimeOffsetSet<TestOffsetStamp>>(primitive, Options));
+    }
+
+    /// <summary>
+    /// The parity above holds under the default options; this is the same contract under the one
+    /// option that changes how a number is written. The numeric element converters emit the token
+    /// themselves, so they have to consult <see cref="JsonSerializerOptions.NumberHandling"/> —
+    /// System.Text.Json is not in the loop to apply it for them.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="Int64Set{TElement}"/> case is why this matters rather than being cosmetic.
+    /// <c>WriteAsString</c> is switched on almost exclusively because the consumer is JavaScript,
+    /// where a bare number above 2^53 is rounded on arrival: 9007199254740993 is read back as
+    /// 9007199254740992. A wrapper that ignored the setting would reintroduce, silently and only
+    /// at the client, exactly the corruption the setting was turned on to prevent.
+    /// </remarks>
+    [TestMethod]
+    public void WrapperSet_NumericBacked_HonoursWriteAsString()
+    {
+        var options = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString }
+                     .AddRangeConverters();
+
+        const long beyondDoublePrecision = 9_007_199_254_740_993L;
+
+        Assert.AreEqual(
+            "[\"9007199254740993\"]",
+            JsonSerializer.Serialize(Int64Set<TestLongId>.From(new TestLongId(beyondDoublePrecision)), options));
+
+        Assert.AreEqual("[\"1\",\"3\"]", JsonSerializer.Serialize(
+            Int32Set<TestIntId>.From(new TestIntId(1), new TestIntId(3)), options));
+
+        Assert.AreEqual("[\"3\"]", JsonSerializer.Serialize(
+            Int16Set<TestSmallId>.From(new TestSmallId(3)), options));
+
+        // Scale survives the string form, as it does the number form.
+        Assert.AreEqual("[\"12.50\"]", JsonSerializer.Serialize(
+            DecimalSet<TestMoney>.From(new TestMoney(12.50m)), options));
+    }
+
+    /// <summary>
+    /// The parity assertion itself, restated against the same non-default options — the arities
+    /// must agree with their primitive siblings token for token, not merely both be plausible.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_MatchesItsPrimitiveSibling_UnderWriteAsString()
+    {
+        var options = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString }
+                     .AddRangeConverters();
+
+        Assert.AreEqual(
+            JsonSerializer.Serialize(Int64Set.From(9_007_199_254_740_993L), options),
+            JsonSerializer.Serialize(
+                Int64Set<TestLongId>.From(new TestLongId(9_007_199_254_740_993L)), options));
+
+        Assert.AreEqual(
+            JsonSerializer.Serialize(Int32Set.From(1, 3), options),
+            JsonSerializer.Serialize(Int32Set<TestIntId>.From(new TestIntId(1), new TestIntId(3)), options));
+
+        Assert.AreEqual(
+            JsonSerializer.Serialize(Int16Set.From((short)3), options),
+            JsonSerializer.Serialize(Int16Set<TestSmallId>.From(new TestSmallId(3)), options));
+
+        Assert.AreEqual(
+            JsonSerializer.Serialize(DecimalSet.From(12.50m), options),
+            JsonSerializer.Serialize(DecimalSet<TestMoney>.From(new TestMoney(12.50m)), options));
+    }
+
+    /// <summary>
+    /// The string payload the writer now produces must read back, which it does through the
+    /// converters' unconditional string branch rather than through the option.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_NumericBacked_RoundTripsUnderWriteAsString()
+    {
+        var options = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString }
+                     .AddRangeConverters();
+
+        var longs = Int64Set<TestLongId>.From(new TestLongId(9_007_199_254_740_993L));
+        var money = DecimalSet<TestMoney>.From(new TestMoney(12.50m));
+
+        Assert.AreEqual(longs, JsonSerializer.Deserialize<Int64Set<TestLongId>>(
+            JsonSerializer.Serialize(longs, options), options));
+        Assert.AreEqual(money, JsonSerializer.Deserialize<DecimalSet<TestMoney>>(
+            JsonSerializer.Serialize(money, options), options));
+    }
+
+    /// <summary>
+    /// The setting must not leak into the families that write strings anyway — a temporal or
+    /// string-backed arity has no number to reconsider.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_TextBacked_IsUnaffectedByWriteAsString()
+    {
+        var options = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString }
+                     .AddRangeConverters();
+
+        var guid = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        Assert.AreEqual(
+            "[\"11111111-1111-1111-1111-111111111111\"]",
+            JsonSerializer.Serialize(GuidSet<TestId>.From(TestId.FromGuid(guid)), options));
+
+        Assert.AreEqual(
+            "[\"2024-06-15\"]",
+            JsonSerializer.Serialize(DateSet<TestDay>.From(new TestDay(new DateOnly(2024, 6, 15))), options));
     }
 
     [TestMethod]

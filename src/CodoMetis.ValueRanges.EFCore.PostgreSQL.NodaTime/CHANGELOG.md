@@ -3,6 +3,29 @@
 Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [7.0.0] — 2026-08-17
+
+### Added
+
+- **Mappings for the five NodaTime wrapper arities** — `LocalDateSet<T>` to `date[]`,
+  `LocalDateTimeSet<T>` to `timestamp[]`, `InstantSet<T>` to `timestamptz[]`, `LocalTimeSet<T>`
+  to `time[]`, and `YearMonthSet<T>` to a month-aligned `date[]`. `UseValueRangesNodaTime()`
+  registers them through the base plugin's new `SetTypeRegistry.RegisterFamily` seam; nothing
+  changes at the call site.
+
+  Each family pins its ISO pattern as the format handed to the element's `IFormattable` and
+  parses with the matching pattern, so a corrupt or decoratively formatted element fails loudly
+  at the boundary. `YearMonthSet<T>` bridges through the first day of the month and validates the
+  alignment on read, exactly as the closed `YearMonthSet` definition does.
+### Changed
+
+- **The range corrections in `CodoMetis.ValueRanges` 7.0.0 reach the NodaTime range types too** —
+  they are translated by the base plugin and carry the core algebra, so empty-range containment,
+  `IsStrictlyLeftOf`/`IsStrictlyRightOf` and `Except` between opposing unbounded operands all
+  change what they answer in memory. No translation in this package changed; see the core
+  changelog for why in-memory and server-side evaluation disagreed in each case.
+
+
 ## [6.3.0] — 2026-08-16
 
 No source change in this package. The NodaTime range sets are translated by the base plugin, so

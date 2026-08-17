@@ -76,6 +76,81 @@ public class SetIntegrationTests
         Assert.AreEqual("{2,10}", await ColumnText("Codes", 8001));
     }
 
+    /// <summary>
+    /// The validated-wrapper arities whose bridge goes through a text form that is lossy by
+    /// default. The sub-second component is the assertion that matters: an arity that asked its
+    /// elements for their default form instead of the round-trip one would store
+    /// <c>10:30:00</c> here, and this reads back equal only because it does not.
+    /// </summary>
+    /// <remarks>
+    /// The probe is microsecond-aligned because that is PostgreSQL's resolution for
+    /// <c>timestamp</c>, not because of anything the bridge does — a <see cref="DateTime"/> tick
+    /// is 100ns, so the last digit is truncated by the server for the closed
+    /// <see cref="DateTimeSet"/> just the same. <see cref="WrapperTimestamps_TruncateBelowTheServersResolution"/>
+    /// pins that separately, so this test cannot be read as the bridge losing the digit.
+    /// </remarks>
+    [TestMethod]
+    public async Task WrapperArities_RoundTripWithoutLosingPrecision()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var precise = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified).AddTicks(1_234_560);
+
+        var original = new Reservation
+        {
+            Id     = 8060,
+            Audits = DateTimeSet<AuditStamp>.From(
+                new AuditStamp(precise),
+                new AuditStamp(new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Unspecified))),
+            WrappedMonths = YearMonthSet<BillingMonth>.From(
+                new BillingMonth(new YearMonth(2024, 6)),
+                new BillingMonth(new YearMonth(2024, 1)))
+        };
+
+        await Seed(original);
+        var loaded = await Load(8060);
+
+        Assert.AreEqual(original.Audits, loaded.Audits);
+        Assert.AreEqual(original.WrappedMonths, loaded.WrappedMonths);
+
+        // The stored text, not just CLR equality: the sub-second digits are in the column, and
+        // the month-backed wrapper is stored month-aligned exactly as YearMonthSet is.
+        Assert.AreEqual("{\"1970-01-01 00:00:00\",\"2024-06-15 10:30:00.123456\"}",
+                        await ColumnText("Audits", 8060));
+        Assert.AreEqual("{2024-01-01,2024-06-01}", await ColumnText("WrappedMonths", 8060));
+    }
+
+    /// <summary>
+    /// PostgreSQL <c>timestamp</c> resolves to microseconds and a <see cref="DateTime"/> tick is
+    /// 100ns, so the last tick digit does not survive a round trip. A property of the column, not
+    /// of the wrapper bridge — asserted here so the alignment in the test above is documented
+    /// rather than looking like a value chosen to make a lossy bridge pass.
+    /// </summary>
+    [TestMethod]
+    public async Task WrapperTimestamps_TruncateBelowTheServersResolution()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var subMicrosecond = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified).AddTicks(1_234_567);
+
+        await Seed(new Reservation
+        {
+            Id     = 8061,
+            Audits = DateTimeSet<AuditStamp>.From(new AuditStamp(subMicrosecond)),
+            Marks  = DateTimeSet.From(subMicrosecond)
+        });
+
+        var loaded = await Load(8061);
+
+        var expected = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified).AddTicks(1_234_560);
+
+        Assert.AreEqual(new AuditStamp(expected), loaded.Audits[0]);
+
+        // The closed sibling truncates identically — which is what makes this the column's
+        // behaviour rather than the arity's.
+        Assert.AreEqual(expected, loaded.Marks[0]);
+    }
+
     [TestMethod]
     public async Task NodaTimeSetTypes_RoundTripCanonical()
     {
@@ -194,6 +269,30 @@ public class SetIntegrationTests
             .Where(r => r.Id == 8010 && r.Tags == canonical)
             .CountAsync();
         Assert.AreEqual(0, byEquality);
+
+        // `Count` carries the same precondition as `==`, and is the second member that does.
+        // It translates to `cardinality`, which ignores order but not duplicates, so it counts
+        // the three elements stored where the materialized set has two. Pinned in both
+        // directions: the model's answer finds nothing, the stored one finds the row.
+        Assert.AreEqual(2, loaded.Tags.Count, "the materialized set is normalized");
+
+        var byModelCount = await query.Reservations
+            .Where(r => r.Id == 8010 && r.Tags.Count == 2)
+            .CountAsync();
+        Assert.AreEqual(0, byModelCount, "cardinality does not see the normalized count");
+
+        var byStoredCount = await query.Reservations
+            .Where(r => r.Id == 8010 && r.Tags.Count == 3)
+            .CountAsync();
+        Assert.AreEqual(1, byStoredCount, "cardinality counts the duplicate the row still holds");
+
+        // IsEmpty is not affected — an array is empty exactly when it has no elements, whatever
+        // its multiplicities — so the divergence is Count's alone, not cardinality's in general.
+        var byIsEmpty = await query.Reservations
+            .Where(r => r.Id == 8010 && !r.Tags.IsEmpty)
+            .CountAsync();
+        Assert.AreEqual(1, byIsEmpty);
+        Assert.IsFalse(loaded.Tags.IsEmpty);
 
         // The row stays as written until actually modified — reads alone never rewrite it.
         Assert.AreEqual("{b,a,b}", await ColumnText("Tags", 8010));

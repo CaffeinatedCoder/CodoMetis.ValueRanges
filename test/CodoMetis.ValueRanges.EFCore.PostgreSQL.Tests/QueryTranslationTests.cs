@@ -1,3 +1,4 @@
+using CodoMetis.ValueRanges.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests;
@@ -125,7 +126,13 @@ public sealed class QueryTranslationTests
             && b.InstantTime.Contains(new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero))));
 
         StringAssert.Contains(sql, "b.\"Seats\" @> 7");
-        StringAssert.Contains(sql, "b.\"Tickets\" @> ");
+
+        // Not just "@> something": a bare 7 here is an integer to PostgreSQL, and the range
+        // operators are polymorphic (anyrange @> anyelement), which resolves without implicit
+        // coercion — so `int8range @> integer` is an error rather than a widening. This assertion
+        // read `@> ` and passed while the query it described could not execute.
+        StringAssert.Contains(sql, "b.\"Tickets\" @> 7::bigint");
+
         StringAssert.Contains(sql, "b.\"Price\" @> 9.5");
         StringAssert.Contains(sql, "b.\"LocalTime\" @> TIMESTAMP");
         StringAssert.Contains(sql, "b.\"InstantTime\" @> TIMESTAMPTZ");
@@ -501,6 +508,56 @@ public sealed class QueryTranslationTests
     {
         var sql = Sql(db => db.Bookings.Where(b => DateRange.CreateUnboundedStart(b.Day, true).Overlaps(b.Period)));
         StringAssert.Contains(sql, "daterange(NULL, b.\"Day\", '(]') && b.\"Period\"");
+    }
+
+    // -------------------------------------------------------------------------
+    // Operands statically typed as IRange<T>
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// The query operations are declared as <c>extension&lt;T&gt;(IRange&lt;T&gt; range)</c> — one
+    /// type parameter, receiver typed as the interface — so a receiver whose static type really is
+    /// <c>IRange&lt;T&gt;</c> carries no concrete range type for the translator to resolve from.
+    /// <c>ValueRangesMethodCallTranslator.TryResolveDefinition</c> falls back to the method's
+    /// element type argument for exactly this case, and nothing else exercised it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fallback is not dead code, though its counterpart on the value set side was: those
+    /// methods are constrained <c>where TSet : IValueSetFactory&lt;TSet, T&gt;</c>, which forces a
+    /// concrete type, and the range set operations (<c>Intersect</c>, <c>Merge</c>, <c>Union</c>,
+    /// <c>Except</c>, <c>IsAdjacentTo</c>) are constrained the same way. The query operations are
+    /// not, so this shape reaches the translator and resolves through the element type.
+    /// </para>
+    /// <para>
+    /// It is reachable only when no operand carries a concrete range type: a captured local
+    /// declared as the interface, with an element-typed argument. Where any operand is a range
+    /// column, the CLR-type loop resolves first — which is why every other test here passes
+    /// without the fallback. Deleting it makes this query untranslatable.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void InterfaceTypedReceiver_ResolvesThroughTheElementType()
+    {
+        IRange<DateOnly> declaredAsInterface = Range;
+
+        var sql = Sql(db => db.Bookings.Where(b => declaredAsInterface.Contains(b.Day)));
+
+        StringAssert.Contains(sql, " @> b.\"Day\"");
+    }
+
+    /// <summary>
+    /// The same receiver against an <see cref="Int32Range"/> element, confirming the fallback
+    /// resolves the definition from <c>T</c> rather than defaulting to one registered type.
+    /// </summary>
+    [TestMethod]
+    public void InterfaceTypedReceiver_ResolvesPerElementType()
+    {
+        IRange<int> seats = Int32Range.CreateFinite(1, 5);
+
+        var sql = Sql(db => db.Bookings.Where(b => seats.Contains(b.Id)));
+
+        StringAssert.Contains(sql, " @> b.\"Id\"");
     }
 
     // -------------------------------------------------------------------------

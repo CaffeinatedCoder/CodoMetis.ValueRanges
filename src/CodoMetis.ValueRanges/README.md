@@ -130,7 +130,14 @@ tags.Count;                  // 2
 
 The **wrapper arities** take generator-produced domain values — Vogen, Metalama, StronglyTypedId or
 hand-written — and are constrained only on BCL interfaces, so your domain types never reference this
-package.
+package. Every family has one: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`, `Int32Set<T>`,
+`Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>` and
+`DateTimeOffsetSet<T>`, plus five more in the NodaTime satellite.
+
+One contract is convention rather than constraint: the element's text form must be exactly the
+backing primitive's. A wrapper whose `ToString(format, provider)` forwards both arguments to the
+value it wraps satisfies it — which matters most for the temporal arities, since those ask for a
+round-trip format precisely because the default one drops sub-seconds.
 
 ### Canonical form is the contract
 
