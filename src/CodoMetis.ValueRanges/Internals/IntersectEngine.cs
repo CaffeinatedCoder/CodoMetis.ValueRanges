@@ -6,37 +6,28 @@ using static RangeBoundHelpers;
 
 internal static class IntersectEngine
 {
-    internal static TRange Execute<TRange, T>(IFiniteRange<T> left, IRange<T> right)
+    // One switch over the shape pair. Callers guarantee the operands overlap (so neither is
+    // Empty) and that an Infinity operand was answered before dispatch — RangeExtensions.Intersect
+    // returns the other side for it, and IInfinityRange.IntersectWith re-expresses. Those pairs
+    // therefore have no arm and throw rather than falling back to Empty; see ShapePair.
+    internal static TRange Execute<TRange, T>(IRange<T> left, IRange<T> right)
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
-        => right switch
+        => (left, right) switch
            {
-               IFiniteRange<T> o         => FiniteWithFinite<TRange, T>(left, o),
-               IUnboundedStartRange<T> s => FiniteWithOpenStart<TRange, T>(left, s),
-               IUnboundedEndRange<T> e   => FiniteWithOpenEnd<TRange, T>(left, e),
-               _                         => TRange.Empty
-           };
+               (IFiniteRange<T> l, IFiniteRange<T> o)         => FiniteWithFinite<TRange, T>(l, o),
+               (IFiniteRange<T> l, IUnboundedStartRange<T> o) => FiniteWithOpenStart<TRange, T>(l, o),
+               (IFiniteRange<T> l, IUnboundedEndRange<T> o)   => FiniteWithOpenEnd<TRange, T>(l, o),
 
-    internal static TRange Execute<TRange, T>(IUnboundedStartRange<T> left, IRange<T> right)
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
-        where T : struct, IComparable<T>, IEquatable<T>
-        => right switch
-           {
-               IUnboundedStartRange<T> o => OpenStartWithOpenStart<TRange, T>(left, o),
-               IFiniteRange<T> f         => FiniteWithOpenStart<TRange, T>(f, left),
-               IUnboundedEndRange<T> e   => OpenStartWithOpenEnd<TRange, T>(left, e),
-               _                         => TRange.Empty
-           };
+               (IUnboundedStartRange<T> l, IFiniteRange<T> o)         => FiniteWithOpenStart<TRange, T>(o, l),
+               (IUnboundedStartRange<T> l, IUnboundedStartRange<T> o) => OpenStartWithOpenStart<TRange, T>(l, o),
+               (IUnboundedStartRange<T> l, IUnboundedEndRange<T> o)   => OpenStartWithOpenEnd<TRange, T>(l, o),
 
-    internal static TRange Execute<TRange, T>(IUnboundedEndRange<T> left, IRange<T> right)
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
-        where T : struct, IComparable<T>, IEquatable<T>
-        => right switch
-           {
-               IUnboundedEndRange<T> o   => OpenEndWithOpenEnd<TRange, T>(left, o),
-               IFiniteRange<T> f         => FiniteWithOpenEnd<TRange, T>(f, left),
-               IUnboundedStartRange<T> s => OpenStartWithOpenEnd<TRange, T>(s, left),
-               _                         => TRange.Empty
+               (IUnboundedEndRange<T> l, IFiniteRange<T> o)         => FiniteWithOpenEnd<TRange, T>(o, l),
+               (IUnboundedEndRange<T> l, IUnboundedStartRange<T> o) => OpenStartWithOpenEnd<TRange, T>(o, l),
+               (IUnboundedEndRange<T> l, IUnboundedEndRange<T> o)   => OpenEndWithOpenEnd<TRange, T>(l, o),
+
+               _ => throw ShapePair.Unreachable(nameof(IntersectEngine), left, right)
            };
 
     private static TRange FiniteWithFinite<TRange, T>(IFiniteRange<T> b, IFiniteRange<T> o)

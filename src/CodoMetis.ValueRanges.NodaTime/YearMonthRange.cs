@@ -199,11 +199,11 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
 
     /// <inheritdoc />
     public static YearMonth? NextValueAfter(YearMonth value)
-        => value == MaxIso ? null : value.PlusMonths(1);
+        => RequireIso(value) == MaxIso ? null : value.PlusMonths(1);
 
     /// <inheritdoc />
     public static YearMonth? PreviousValueBefore(YearMonth value)
-        => value == MinIso ? null : value.PlusMonths(-1);
+        => RequireIso(value) == MinIso ? null : value.PlusMonths(-1);
 
     /// <summary>
     /// Enumerates the months the range contains, ascending and inclusive of both bounds.

@@ -139,6 +139,16 @@ public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, s
 /// must be exactly the backing primitive's text form</em>.
 /// </para>
 /// <para>
+/// <typeparamref name="TElement"/> must be a <c>struct</c>, which is stricter than the machinery
+/// needs — the core is constrained only on <see cref="IEquatable{T}"/>, and the closed
+/// <see cref="StringSet"/> over <see cref="string"/> runs through it. The reason is the canonical
+/// array: it is sorted and binary-searched, and a reference element would leave the caller holding
+/// a handle to something inside it. Mutating that silently unsorts the array, and
+/// <c>Contains</c> then misses an element it holds. A struct makes it unrepresentable rather than
+/// forbidden by a comment. A class-shaped domain type wraps in a <c>readonly record struct</c> for
+/// storage.
+/// </para>
+/// <para>
 /// Canonical order is ordinal over the invariant text form — deliberately not the element's
 /// own <see cref="IComparable{T}"/>, whose generated implementations typically delegate to
 /// culture-sensitive string comparison.

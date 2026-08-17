@@ -6,37 +6,29 @@ using static RangeBoundHelpers;
 
 internal static class MergeEngine
 {
-    internal static TRange Execute<TRange, T>(IFiniteRange<T> left, IRange<T> right)
+    // One switch over the shape pair. The only callers are RangeSet's greedy merges, which reach
+    // this behind `current.Overlaps(next) || current.IsAdjacentTo(next)` — both false for an empty
+    // operand — and behind Normalize, which collapses any Infinity input to the Infinite singleton
+    // before an element ever reaches here. Those pairs therefore have no arm and throw rather than
+    // falling back to Empty, which would have been the wrong answer for both; see ShapePair.
+    internal static TRange Execute<TRange, T>(IRange<T> left, IRange<T> right)
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
-        => right switch
+        => (left, right) switch
            {
-               IFiniteRange<T> o         => FiniteWithFinite<TRange, T>(left, o),
-               IUnboundedStartRange<T> s => OpenStartWithFinite<TRange, T>(s, left),
-               IUnboundedEndRange<T> e   => OpenEndWithFinite<TRange, T>(e, left),
-               _                         => TRange.Empty
-           };
+               (IFiniteRange<T> l, IFiniteRange<T> o)         => FiniteWithFinite<TRange, T>(l, o),
+               (IFiniteRange<T> l, IUnboundedStartRange<T> o) => OpenStartWithFinite<TRange, T>(o, l),
+               (IFiniteRange<T> l, IUnboundedEndRange<T> o)   => OpenEndWithFinite<TRange, T>(o, l),
 
-    internal static TRange Execute<TRange, T>(IUnboundedStartRange<T> left, IRange<T> right)
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
-        where T : struct, IComparable<T>, IEquatable<T>
-        => right switch
-           {
-               IFiniteRange<T> f         => OpenStartWithFinite<TRange, T>(left, f),
-               IUnboundedStartRange<T> o => OpenStartWithOpenStart<TRange, T>(left, o),
-               IUnboundedEndRange<T>     => TRange.Infinite,
-               _                         => TRange.Empty
-           };
+               (IUnboundedStartRange<T> l, IFiniteRange<T> o)         => OpenStartWithFinite<TRange, T>(l, o),
+               (IUnboundedStartRange<T> l, IUnboundedStartRange<T> o) => OpenStartWithOpenStart<TRange, T>(l, o),
+               (IUnboundedStartRange<T>, IUnboundedEndRange<T>)       => TRange.Infinite,
 
-    internal static TRange Execute<TRange, T>(IUnboundedEndRange<T> left, IRange<T> right)
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
-        where T : struct, IComparable<T>, IEquatable<T>
-        => right switch
-           {
-               IFiniteRange<T> f       => OpenEndWithFinite<TRange, T>(left, f),
-               IUnboundedStartRange<T> => TRange.Infinite,
-               IUnboundedEndRange<T> o => OpenEndWithOpenEnd<TRange, T>(left, o),
-               _                       => TRange.Empty
+               (IUnboundedEndRange<T> l, IFiniteRange<T> o)         => OpenEndWithFinite<TRange, T>(l, o),
+               (IUnboundedEndRange<T>, IUnboundedStartRange<T>)     => TRange.Infinite,
+               (IUnboundedEndRange<T> l, IUnboundedEndRange<T> o)   => OpenEndWithOpenEnd<TRange, T>(l, o),
+
+               _ => throw ShapePair.Unreachable(nameof(MergeEngine), left, right)
            };
 
     private static TRange FiniteWithFinite<TRange, T>(IFiniteRange<T> b, IFiniteRange<T> o)

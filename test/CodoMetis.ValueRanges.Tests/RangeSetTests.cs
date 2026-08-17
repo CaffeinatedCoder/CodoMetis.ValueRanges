@@ -330,6 +330,25 @@ public class RangeSetTests
         Assert.IsFalse(set.Contains(5));
     }
 
+    /// <summary>
+    /// The infinite set contains every value. Its single element has no lower bound to
+    /// binary-search on, and every other query on the set guards that case first — this one did
+    /// not, so it threw where <c>Int32Range.Infinite.Contains(value)</c> answers true.
+    /// </summary>
+    [TestMethod]
+    public void Contains_Value_OnTheInfiniteSet_IsAlwaysTrue()
+    {
+        Assert.IsTrue(IntSet.Infinite.Contains(0));
+        Assert.IsTrue(IntSet.Infinite.Contains(int.MinValue));
+        Assert.IsTrue(IntSet.Infinite.Contains(int.MaxValue));
+
+        // Which is what the single-range overload has always answered.
+        Assert.IsTrue(Int32Range.Infinite.Contains(0));
+
+        // And the set built from an infinity element, which normalizes to the same singleton.
+        Assert.IsTrue(IntSet.From([Int32Range.CreateFinite(1, 3), Int32Range.Infinite]).Contains(99));
+    }
+
     [TestMethod]
     public void Contains_Range_EntirelyWithinOneElement_ReturnsTrue()
     {

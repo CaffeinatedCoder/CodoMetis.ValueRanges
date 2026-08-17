@@ -167,9 +167,34 @@ bookings.Where(b => b.Tags.Union(more).Contains(tag));
 
 `Union` is the one translated operation whose result is **not** canonical — `array_cat`
 concatenates. That is invisible to the operators above (all duplicate-insensitive) and to
-materialization (reads re-canonicalize), but `Count` over a union is refused rather than
-counting duplicates, and comparing a union with `==` is unreliable. `Remove` has no such
-caveat: `array_remove` leaves the array sorted and deduplicated. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
+materialization (reads re-canonicalize), but anything sensitive to order or multiplicity is
+**refused** rather than translated: `Count`, and since 8.0.0 `==`/`!=`/`Equals`. Array equality
+is sensitive to both, and the ordering half is the one that surprises — on the server
+`{a,c} ∪ {a,b} = {a,b,c}` is false for the repeated element, and `{a,c} ∪ {b} = {a,b,c}` is false
+for the ordering alone, where nothing repeats. Both are true in memory. Compare with
+`IsSubsetOf`/`IsSupersetOf` instead, which mean the same thing for canonical sets and ignore both,
+or materialize first with `AsEnumerable()` and let the in-memory algebra answer.
+
+The refusals cover only the contexts EF must translate in full — `Where`, `Any`, `All`, the
+ordering and grouping keys, and the predicate overloads. **In a projection both still work**, because
+EF falls back to client evaluation there and computes against the materialized set:
+
+```csharp
+bookings.Where(b => b.Tags.Union(more).Count > 2);      // throws — must translate
+bookings.Select(b => b.Tags.Union(more).Count);         // fine — client-evaluated, correct
+bookings.AsEnumerable().Where(b => b.Tags.Union(more).Count > 2);  // fine — in memory
+```
+
+There is no package-specific opt-in for the in-memory form, deliberately: `AsEnumerable()` is the
+framework's own boundary, everyone reads it the same way, and its cost — every matching row is
+fetched — is visible at the point it is paid. A marker buried inside the expression would look local
+and cheap while forcing the same full materialization.
+
+This is deliberately not "fixed" by canonicalizing in SQL: PostgreSQL has no array_distinct, and
+sorting inside the query orders `text` by the database collation rather than ordinally — which is
+the same disagreement with the client's canonical order, one layer down.
+
+`Remove` has no such caveat: `array_remove` leaves the array sorted and deduplicated. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
 
 **Indexing** is ordinary EF configuration — no package involvement:
 

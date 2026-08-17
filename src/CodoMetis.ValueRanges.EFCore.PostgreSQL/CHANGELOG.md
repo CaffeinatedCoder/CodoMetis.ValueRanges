@@ -3,6 +3,22 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [8.0.0] — 2026-08-17
+
+### Fixed
+
+- **⚠️ Equality over a server-computed value set `Union` is refused instead of answering wrongly.**
+  `array_cat` concatenates, so the result carries duplicates and each operand's ordering, while
+  array equality is sensitive to both — `{a,c} ∪ {a,b} = {a,b,c}` is `false` on the server for the
+  repeated element, and `{a,c} ∪ {b} = {a,b,c}` is `false` for ordering alone. Both are `true` in
+  memory, and nothing threw. `==`, `!=` and `Equals` over a union now fail translation, matching
+  the `Count` refusal. The insensitive operators still compose on a union.
+
+Otherwise no source change in this package. The translation of `Except` was already correct — as with the
+three bugs in 7.0.0, the disagreement was between the database and memory rather than inside either
+— so `RangeSet.Infinite.Except(range)` evaluated server-side has always answered the empty set. See
+`CodoMetis.ValueRanges` 8.0.0 for the in-memory fix that brings the two back into step.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added

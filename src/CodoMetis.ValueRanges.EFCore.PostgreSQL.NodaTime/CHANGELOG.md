@@ -3,6 +3,11 @@
 Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [8.0.0] — 2026-08-17
+
+No source change in this package. See `CodoMetis.ValueRanges` 8.0.0 for the infinity-operand
+subtraction fix and the shape-pair dispatch the NodaTime range types inherit.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added

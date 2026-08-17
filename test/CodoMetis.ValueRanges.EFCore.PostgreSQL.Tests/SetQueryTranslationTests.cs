@@ -211,6 +211,65 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
+    public void Union_Equality_FailsTranslation()
+    {
+        // array_cat concatenates, and array equality is sensitive to both multiplicity and order,
+        // so this would answer false for sets that are equal in memory. Both halves bite:
+        // {a,c} ∪ {a,b} differs from {a,b,c} by the repeated a, and {a,c} ∪ {b} differs by
+        // ordering alone with nothing repeated. Refusing beats a row quietly not matching.
+        using var context = new TestDbContext();
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted) != Wanted).ToQueryString());
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted).Equals(Wanted)).ToQueryString());
+
+        // And through a canonicality-preserving wrapper, as the Count refusal does.
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x") == Wanted).ToQueryString());
+    }
+
+    [TestMethod]
+    public void Union_Equality_InAProjection_StillWorks()
+    {
+        // The refusal covers the contexts EF must translate in full. A projection is not one:
+        // EF falls back to client evaluation there and computes the comparison against the
+        // materialized set, which is correct. Refusing it too would be stricter than the defect —
+        // and would put equality out of step with Count, which degrades to client evaluation in a
+        // projection for exactly the same reason.
+        using var context = new TestDbContext();
+
+        _ = context.Bookings.Select(b => b.Tags.Union(Wanted) == Wanted).ToQueryString();
+        _ = context.Bookings.Select(b => b.Tags.Union(Wanted).Count).ToQueryString();
+    }
+
+    [TestMethod]
+    public void Equality_WithoutAUnion_StillTranslates()
+    {
+        // The refusal is scoped to a server-computed union: comparing a column against a
+        // canonical value is ordinary array equality and stays translatable.
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags == Wanted));
+        StringAssert.Contains(sql, "ARRAY['a','b']::text[]");
+    }
+
+    [TestMethod]
+    public void Union_InsensitivePredicates_StillTranslate()
+    {
+        // The operators that ignore order and multiplicity keep composing on a union — that is
+        // the whole reason array_cat is an acceptable translation for it.
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).IsSupersetOf(Wanted))),
+                              "array_cat");
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).Overlaps(Wanted))),
+                              "array_cat");
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).IsProperSubsetOf(Wanted))),
+                              "array_cat");
+    }
+
+    [TestMethod]
     public void Union_Count_FailsTranslation()
     {
         // array_cat concatenates, so cardinality would count shared elements twice.

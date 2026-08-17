@@ -3,6 +3,22 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [8.0.0] — 2026-08-17
+
+### Fixed
+
+- **The step functions missed a domain maximum spelled in another calendar.**
+  `LocalDateRange.NextValueAfter` compared against `LocalDate.MaxIsoValue` with `==`, and NodaTime's
+  equality includes the calendar system. Only ISO and Gregorian can represent `9999-12-31` at all,
+  and Gregorian is a distinct `CalendarSystem` instance, so the Gregorian spelling of the domain
+  maximum compared unequal, the guard was skipped and `PlusDays(1)` ran off the end of the domain.
+  `LocalDateRange` now normalizes to ISO before comparing and `YearMonthRange` rejects non-ISO
+  outright — each the policy that type already documents for its bounds.
+
+Otherwise no source change in this package. The NodaTime range types run on the core engines, so they inherit
+both the infinity-operand subtraction fix and the shape-pair dispatch — see
+`CodoMetis.ValueRanges` 8.0.0.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added

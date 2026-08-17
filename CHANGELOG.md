@@ -9,6 +9,305 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [8.0.0] — 2026-08-17
+
+Six corrections and the machinery that found them. **Nothing was removed or resignatured** —
+package validation passes against the 7.0.0 baseline — and no signature changed anywhere.
+
+This is a major for the same reason 7.0.0 was: several corrections change what existing calls
+*answer*, and a caller cannot discover that from a compile error. One goes further and changes a
+query that compiled and ran into one that throws. Upgrading is a code change for anyone on the
+affected paths, and a floating `7.0.*` reference must not pick that up silently.
+
+**What can break you, in order of likelihood:**
+
+1. **`==`/`!=`/`Equals` over a server-computed value set `Union` now fails translation.** Those
+   queries were returning wrong rows; they now throw with a message naming the alternatives.
+2. **`RangeSet.Except(TRange)` with an infinity operand** returned the whole domain and now returns
+   the empty set, `Complement()` on the infinite set with it.
+3. **`YearMonthRange.NextValueAfter`/`PreviousValueBefore`** now reject a non-ISO calendar instead
+   of stepping in it and returning a value the type's own constructors refuse.
+4. **`RangeSet.Contains(T)` on the infinite set** threw and now answers `true`; **the NodaTime step
+   functions** threw at a Gregorian-spelled domain maximum and now answer `null`. Both were loud
+   failures, so only code catching them is affected.
+
+Everything else here is internal or additive. The engines now decide on the shape *pair* rather than
+the receiver's shape, and a pair with no arm throws instead of returning something plausible — the
+fourth instance of the trap 7.0.0 documented, and the structural change that makes a fifth loud. The
+release also adds four exhaustive oracles, three convention tests and a hand triage of every discard
+arm in the codebase; those found four of the six corrections and are listed under **Added**.
+
+### Fixed
+
+- **⚠️ Comparing a server-computed value set `Union` for equality is now refused instead of
+  answering wrongly.** `Union` translates to `array_cat`, which concatenates: the result carries
+  duplicates and keeps each operand's ordering, while array equality is sensitive to both. Against
+  a live server `{a,c} ∪ {a,b} = {a,b,c}` is `false` for the repeated `a`, and — the half that
+  surprises — `{a,c} ∪ {b} = {a,b,c}` is `false` too, where nothing repeats and only the order
+  differs. In memory both are `true`. Nothing threw; the row simply did not match.
+
+  `==`, `!=` and `Equals` over a union, or over anything built on one that did not restore
+  canonical form, now fail translation with an exception naming the alternatives. This matches how
+  `Count` over a union has been refused since 6.2.0, and it was the last known-wrong translation in
+  the package. The order- and multiplicity-insensitive operators are unaffected and still compose
+  on a union — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `IsEmpty`, and the proper
+  subset/superset pair, which is written as `<@ AND NOT @>` precisely so it stays insensitive.
+
+  The refusal covers only the contexts EF must translate in full — `Where`, `Any`, `All`, the
+  predicate overloads, the ordering and grouping keys. In a **projection** it still works, because
+  EF falls back to client evaluation there and computes against the materialized set. That scoping
+  is what keeps equality in step with the `Count` refusal, which reaches the same outcome by a
+  different route: returning `null` from a translator hands the decision to EF. Materializing with
+  `AsEnumerable()` remains the way to ask for the in-memory answer in any context.
+
+  Not "fixed" by canonicalizing in SQL, deliberately: PostgreSQL has no array_distinct, and sorting
+  inside the query orders `text` by the database collation rather than ordinally — silently
+  disagreeing with the client's canonical order, which is the same defect one layer down.
+  **If a query relied on this comparison it was already returning wrong rows; it now throws.**
+- **The NodaTime step functions missed a domain maximum spelled in another calendar.**
+  `LocalDateRange.NextValueAfter` compared against `LocalDate.MaxIsoValue` with `==`, and NodaTime's
+  equality includes the calendar system. Of its nineteen calendars only ISO and Gregorian can
+  represent `9999-12-31` at all — Gregorian shares ISO's arithmetic but is a distinct
+  `CalendarSystem` instance, so the Gregorian spelling of the domain maximum compared unequal, the
+  guard was skipped and `PlusDays(1)` ran off the end of the domain. `(gregorianMax, +∞)` came back
+  as a throw where it is the empty range. Each type is now fixed the way its own documented policy
+  already says: `LocalDateRange` normalizes to ISO before comparing, `YearMonthRange` rejects
+  non-ISO outright rather than stepping in the caller's calendar and returning a value its own
+  constructors would refuse.
+- **`IRangeFactory.ToString` formatted an unrecognised range as `"empty"`.** All five shapes are
+  named above the fallback, so it is reachable only through an `IRange<T>` implementation that is
+  none of them — which the sealed-variant rule forbids and the type system permits, the interface
+  being public. `"empty"` was the worst available answer: that text is what `Parse` round-trips,
+  what the EF literal sends to PostgreSQL and what the shape matrix compares against the server, so
+  such a range would have been stored, queried and asserted as the empty range with nothing raised.
+  It now throws. Found by triaging every discard arm outside `Internals/` — 60 of them, recorded in
+  `docs/discard-triage.md`, of which this was the only defect.
+- **`BridgedElementTypeMapping` produced a `string` element's literal by accident.** `string` is not
+  `IFormattable`, so it missed every named arm and reached the fallback, where `ToString()` returned
+  it unchanged — the right answer for the wrong reason, and the arm that would have silently handed
+  PostgreSQL whatever `ToString` produced for a genuinely unknown element type. The string case is
+  named and the fallback refuses.
+- **`RangeSet.Contains(T)` threw on the infinite set.**
+  `RangeSet<Int32Range, int>.Infinite.Contains(value)` raised
+  `InvalidOperationException: Range shape 'Infinity' has no lower bound` for every value, where the
+  answer is `true` — the infinite set contains everything, and `Int32Range.Infinite.Contains(value)`
+  has always said so. The set locates the candidate element by binary-searching the sorted lower
+  bounds, and its single element has no lower bound to search on; every other query on the set
+  short-circuits the infinite case first, and this one did not. Loud rather than silent, unlike the
+  rest of this release, and found by the new oracle below on its first run.
+- **`RangeSet.Except(TRange)` returned the whole domain when subtracting an infinity range.**
+  `RangeSet<Int32Range, int>.Infinite.Except(Int32Range.Infinite)` answered `{(,)}` where `X \ (-∞,
+  +∞)` is the empty set for every `X`, and `Complement()` on the infinite set was wrong through the
+  same path. The set-minus-set overload has always guarded its infinite operand and the single-range
+  overload answers it through its `Contains` guard, so — as with the empty-range containment bug in
+  7.0.0 — the three overloads were answering the same question two different ways. The engine's
+  discard arm supplied `∞` for the one pair it was never given: `(Infinity, Infinity)`.
+
+### Changed
+
+- **The `Intersect`, `Merge` and `Except` engines dispatch on the shape pair.** Each had three
+  entry points typed by the receiver's shape, and each of those switched over the operand's shape
+  with a discard that rebuilt the receiver or returned `Empty` — the structure all four bugs shared.
+  They are now one entry point per engine taking `IRange<T>` on both sides, switching over
+  `(left, right)` with one arm per accepted pair, so a pair nobody handled is a missing *line*
+  rather than something a fallback absorbs. No public signature changed and no behaviour changed
+  beyond the fix above; the 3,300-comparison shape matrix agrees with PostgreSQL as before.
+- **A shape dispatch with no arm for its operands throws `UnreachableException` naming the pair.**
+  C# cannot prove a switch over interface patterns exhaustive, so the discard arm cannot be removed
+  — but it can stop producing values. Every one of the four bugs was a fallback returning something
+  well-formed: a wrong boolean, or a range of the right shape carrying the wrong values, which looks
+  correct in a debugger and disagrees only with the database. These paths are unreachable behind the
+  callers' existing guards; if a future change breaks one, the first test to reach it now says which
+  pair is missing.
+
+### Added
+
+- **`EngineDispatchConventionTests`**, which parses the shipping sources and enforces both halves of
+  the rule: a switch that dispatches on range shape must throw from its discard arm, and an engine's
+  entry points must take `IRange<T>` on both sides rather than one operand's shape. Both are
+  discovered by globbing `src/`, and both were verified by seeding the defect they claim to catch.
+- **`SmallModelOracleTests`** — a second oracle beside the PostgreSQL shape matrix, asking set
+  theory instead of the database, and needing no Docker. Every representable range over a tiny
+  universe is enumerated from its specification — around 110 per domain, all five shapes and all
+  four inclusiveness combinations at every bound — the expected value set is derived arithmetically
+  from that specification, and every one of the ~12,100 ordered pairs is checked for all eight
+  binary predicates, the four value-producing operations, and the same questions asked again at the
+  `RangeSet` arities. About 460,000 assertions per run over the discrete and continuous domains, in
+  under 200 ms.
+
+  It exists because hand-picked representatives are how the first version of the 7.0.0 `Except`
+  sweep reported zero disagreements on the exact defect it was written to catch. All five bugs of
+  this family were seeded back in to prove it catches them: the adjacency asymmetry (6.2.1),
+  `IsStrictlyLeftOf` on an unbounded start and `Except` between opposing unbounded operands
+  (7.0.0), and both fixes above. The model has one axiom — that `Contains(T)` is correct, since
+  results are read back through it — and that is pinned by its own test rather than assumed.
+- **An equality sweep in `SmallModelOracleTests`**, closing the last surface the oracles reached at
+  the multirange and value-set arities but not at the range's own. Two ranges are equal exactly when
+  they hold the same values, and equal ranges hash alike — the law `DiscreteCanonical` exists to
+  uphold, whose summary says the bounds are closed "so that structural record equality coincides
+  with set equality", and which nothing checked. Over the integers `(1,5)`, `[2,5)`, `(1,4]` and
+  `[2,4]` are four spellings of one range and equality has to see through all of them; the
+  enumeration holds every spelling at every bound. `Equals(object)`, the `IEquatable<T>` path and
+  the `==`/`!=` operators are checked separately because they can diverge, along with reflexivity
+  and comparison against `null` and against another type.
+
+  Seeded both halves: a `Finite.Equals` that forgets its upper bound, and a `GetHashCode` on
+  reference identity, which reports `[1,1]` and `[1,2)` — the same discrete range spelled twice —
+  as hashing apart. The first attempt at the equality seed would not compile, since defining
+  `Equals` on a record without `GetHashCode` is CS8851, so the compiler already guards that half.
+- **The bound accessors and `Clamp` joined the sweep**, having been argued total during the discard
+  triage rather than checked. Grounded in three independent links: nullness from the
+  specification's shape, inclusivity cross-checked against `Contains`, and `Clamp` against the
+  bounds those establish — predicting a bound's value directly does not work, because a discrete
+  range canonicalizes and an exclusive continuous bound is a value the range does not contain.
+- **`DiscreteDomainBoundaryTests`**, covering what no oracle can reach. At the edge of a discrete
+  domain the successor does not exist, so `(max, +∞)`, `(-∞, min)`, `(max, max]` and `[min, min)` are
+  all the empty range; the guards that enforce that — in `DiscreteCanonical` and each type's two
+  unbounded factories — were load-bearing and untested. This is the exact hole Guava's `Range` has
+  had open since 2014 (#1767). The three small-model oracles cannot see it and not by oversight:
+  they run over eight to fifteen grid points with bounds drawn from the interior, which is what
+  makes them faithful, so exhaustive-over-a-small-model and boundary testing are complements. Types
+  are discovered and domain extremes tabulated, so a discrete type added without bounds fails rather
+  than being skipped. Proven by reverting each guard; the inclusive forms at the same bounds are
+  asserted non-empty so the checks cannot pass by everything being empty.
+- **`CalendarBoundaryTests`**, pinning the fix above along with its premise — that only ISO and
+  Gregorian reach the ISO extremes — so a NodaTime release that widened another calendar would
+  surface here.
+- **`DomainBoundaryDivergenceTests`**, recording where the model and PostgreSQL deliberately part.
+  The boundary is the one place a `ShapeMatrixParityTests` row would be wrong to write, and it is
+  wrong even for `int4range`/`int8range`, whose element domains match `int` and `long` exactly:
+  the disagreement is about the *sentinel*, not the domain. Here `±∞` mean the absence of a bound
+  over a domain that stops at `int.MinValue`/`int.MaxValue`; in PostgreSQL they sit outside the
+  element type. So `int4range(2147483647, NULL, '()')` raises `22003` on the server where the model
+  answers empty, and `int4range(NULL, -2147483648, '()')` is non-empty there where the model says
+  empty. Neither side is wrong, but a range at the boundary is not round-trip-safe — now asserted
+  against a live server rather than left to be discovered.
+- **`ValueSetNullContractTests`**, pinning by discovery that canonical form's exclusion of nulls is
+  enforced by *refusing*, never by dropping. Silently discarding a null is the value-set shape of the
+  fallback that produced five range bugs — an input nobody wrote a case for, answered plausibly:
+  three supplied elements would yield a set of two, indistinguishable from a duplicate. Every entry
+  point is checked — both `From` overloads, `Add`, `Remove`, `Contains`, an unquoted `NULL` in the
+  PostgreSQL array literal, and a JSON `null` element — and all of them already refused, so nothing
+  changed in the library.
+
+  What is new is that the rule is enforced over *discovered* families rather than by hand. Exactly
+  one qualifies today: every wrapper element is a `readonly record struct` and every NodaTime
+  element is a struct, so `string` in `StringSet` is the only nullable element type among the 30.
+  A family added later over a reference type is covered without anyone remembering to come back.
+  Nulls stay out of `SetProbes`, which feeds sweeps that build valid sets — they need their own test,
+  not a probe entry.
+- **`Reflect.InvokeGeneric`**, so the three discovery-driven suites report a failed assertion
+  directly instead of behind a `TargetInvocationException` frame that says nothing.
+- **`ShapeMatrixCoverageTests`**, which fails when a binary range operation has no row in
+  `ShapeMatrixParityTests`. The matrix found three of the five bugs in the receiver-shaped-dispatch
+  family, and its weakness is that it is a list: an operation added to `RangeExtensions` without a
+  row there is simply not swept, and until now nothing said so — the suite stayed green while the
+  one check that would catch the next instance quietly stopped covering it.
+
+  Operations are discovered by reflection (C# 14 extension members lower to static methods, so the
+  twelve show up as `(receiver, IRange<T>)` pairs) and coverage is parsed out of the matrix's own
+  source. The two forms are checked separately by return type: a predicate must appear in the table
+  of `(name, operator)` pairs, a value-producing operation must be invoked against its SQL
+  counterpart. That split is load-bearing — the matrix's dispatch switch calls all eight predicates,
+  so an invocation alone would mark one covered after its row was deleted. All three ways coverage
+  can be lost were seeded: a new operation with no row, a deleted predicate row, and a dropped
+  value-operation sweep.
+- **`SmallModelMultirangeOracleTests`**, reaching the multi-element algorithms that no oracle
+  touched: the greedy merge, the sorted merge behind `Union`, the two-pointer merge-join behind
+  `Except` and the single-pass gap walk behind `Complement` — the most intricate code here, each
+  carrying a hand-written correctness argument in its doc comment, and covered by worked examples
+  only. Over eight grid points every subset is a representable multirange, so all 256 subsets and
+  all 65,536 ordered pairs is exhaustive over the whole multirange value space.
+
+  It differs from the single-range sweep in two ways that matter. It compares results **element by
+  element** against the canonical run decomposition rather than only probing membership, so an
+  unmerged neighbour or a stray empty fails — the `RangeSet` invariant was load-bearing and
+  unasserted, because `Contains(value)` cannot see it while `Count`, `Equals`, `GetHashCode`,
+  `ToString` and the EF multirange literal all can. And it feeds `From` a deliberately
+  non-canonical decomposition, since building from maximal runs asks normalization to do nothing;
+  a seeded defect disabling adjacency merging passed every other check in the file until that path
+  existed. Found no defects; three seeded ones — that adjacency arm, an inclusiveness flip in the
+  complement walk, and a merge-join pointer advancing too far — are each caught.
+
+  Discrete domains only, and not incidentally: a run of consecutive grid points is the canonical
+  decomposition exactly when consecutive points are contiguous, which is false of the reals.
+- **`SmallModelSetOracleTests`** — the same treatment for the value set families, where it matters
+  more: `Intersect`, `Except` and `Add` are deliberately client-side only, because a PostgreSQL
+  array has no intersection, no difference and no sorted insert, so unlike the ranges there is no
+  second implementation anywhere to cross-check against. For all 30 set types — core and NodaTime,
+  plain and wrapper arity — it builds *every* subset of the probe universe (2^n, so exhaustive over
+  the whole value space rather than a sample) and checks `Values`, `Count`, `IsEmpty`, `Contains`,
+  `Add`, `Remove`, all five relational predicates, `Union`, `Intersect`, `Except`, equality and
+  hashing over every ordered pair, plus five construction paths per subset — reversed input,
+  duplicated input, `IEnumerable`, repeated `Add`, and both round trips.
+
+  It found no defects, which is the honest result; seven were seeded in to show it would have.
+  Its model reads the canonical *order* from `CanonicalComparer`, so it verifies that every path
+  agrees with the declared order but not that the order is the specified one — a limit recorded on
+  the class and closed by the test below.
+- **`ValueSetContractTests.StringBackedFamilies_SortOrdinal`**, pinning the one ordering claim no
+  self-consistency check can make: `StringSet` and its wrapper arity must order `Zebra` before
+  `apple`. Ordinal puts `Z` (90) first and every culture puts `apple` first, so swapping
+  `StringComparer.Ordinal` for `StringComparer.InvariantCulture` used to leave the whole suite
+  green while changing what the client considers sorted — and PostgreSQL's ordering of a `text[]`
+  is not the current culture's.
+- **A shared `SetProbes`** holding the value set probe table and type discovery, so the contract
+  tests and the new oracle cannot drift apart on which families exist or what to feed them. Two
+  tables would let a family lose its probes in one suite and go unexercised there while the other
+  stayed green — the failure mode a discovery-driven suite has to defend against hardest.
+- **`SetOperatorParityTests`**, the value set counterpart of the range shape matrix. The sets had
+  an exhaustive in-memory oracle and example-based integration tests, and nothing in between:
+  nothing asked PostgreSQL to confirm `@>`, `<@`, `&&` and `cardinality` over the whole value
+  space. It now sweeps every ordered pair of subsets of a four-element universe — through EF, so
+  the translation is inside the loop — for three families chosen for what each can break that the
+  others cannot: `StringSet` (`text[]`, where the client's ordinal order and the database's
+  collation disagree), `Int64Set` (the element literals PostgreSQL will not coerce), and
+  `StringSet<TestKey>` (the wrapper arities, which reach the store through a text bridge). The
+  three compositions on `Union` that this release kept legal are swept alongside, so that claim is
+  now checked against a server rather than restated.
+
+  Two seeds. Dropping the `NOT <@` half of `IsProperSupersetOf` in the translator fails all three
+  families on exactly the equal-set rows; and refusing to translate `Union` — which sends the whole
+  projection to client evaluation, where every comparison in the sweep would still pass, since the
+  model would be agreeing with itself — fails on the assertion that the operators are in the SQL.
+- **`RangeAggregateParityTests`**. `RangeAgg`/`RangeIntersectAgg` were example-tested on both sides
+  and swept on neither, and nothing had ever fed either aggregate an empty or an unbounded range —
+  the two inputs whose handling is a choice rather than a consequence. Every subset of an
+  eight-range universe holding both is now one group, over a discrete and a continuous domain, and
+  the server's fold has to equal the client's. The empty and infinity results are additionally
+  written down as literals rather than compared, because "whatever the other one does" is not a
+  specification: `range_agg` drops empties and absorbs into `(,)`, `range_intersect_agg` empties
+  the fold at the first empty input and treats `(,)` as the identity, and the two implementations
+  agree on all of it. The one divergence — a PostgreSQL aggregate over zero rows is `NULL` where
+  `RangeAgg` answers the empty set — is now executed rather than only documented.
+
+  Seeding `RangeIntersectAgg` to skip empty inputs is what exposed the first draft comparing the
+  server against a fold re-derived in the test rather than against the shipped aggregate; the sweep
+  now calls the real ones, and the seed fails 26 of its 510 comparisons.
+- **`ContinuousMultirangeParityTests`**, closing the hole the multirange oracle documents. That
+  oracle is exhaustive and discrete *by construction* — its model is a set of grid points, and
+  decomposition into maximal runs is canonical only where consecutive points are contiguous — so
+  continuous adjacency deciding a merge went unswept. PostgreSQL has no such difficulty: its
+  multirange constructor merges adjacent ranges by comparing bounds, which is the same rule stated
+  the same way, so it is a usable oracle exactly where a point set is not. Every subset of six
+  fragments and every ordered pair of those subsets now goes through `+`, `-`, `*` and the
+  complement against `nummultirange`, about 12,500 comparisons.
+
+  Seeded twice. A blunt break of continuous adjacency fails this sweep and nine worked examples, so
+  it proves only that the sweep works. Making the lower-bound comparer blind to inclusivity is the
+  seed that shows what it adds: the entire core suite — both oracles, every algebra test, every
+  worked example — notices only through the comparer's own unit test, while its *consequence*,
+  unions that quietly stop merging, is caught by nothing at the value level. This sweep reports it
+  in hundreds of pairs.
+- **`RegistryConcurrencyTests`**. The two registries are the only mutable process-wide state in the
+  packages, and their design is sound — immutable snapshots, atomic replacement under a lock — but
+  the write is a read-modify-write over the whole snapshot, so the lock is load-bearing and was the
+  one part a later edit could drop with nothing noticing. Each registry is now hammered through
+  both of its mutating entry points at once, with readers alongside checking the built-in
+  registrations stay visible, over four rounds. Removing both locks fails both tests on 5 runs of
+  5; a single round let the set registry through about one time in three, which is why there are
+  four.
+
 ## [7.0.0] — 2026-08-17
 
 Two workstreams land together: the validated-wrapper arities now exist for every value set family

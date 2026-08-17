@@ -103,10 +103,15 @@ internal static class RangeBoundHelpers
         where T : struct, IComparable<T>, IEquatable<T> =>
         source switch
         {
+            IEmptyRange<T>            => TRange.Empty,
             IInfinityRange<T>         => TRange.Infinite,
             IFiniteRange<T> f         => TRange.CreateFinite(f.Start, f.End, f.StartInclusive, f.EndInclusive),
             IUnboundedStartRange<T> s => TRange.CreateUnboundedStart(s.End, s.EndInclusive),
             IUnboundedEndRange<T> e   => TRange.CreateUnboundedEnd(e.Start, e.StartInclusive),
-            _                         => TRange.Empty
+
+            // Every shape is named above, so this is only reachable through an external
+            // implementation of IRange<T> — which the sealed-variant rule forbids. Empty was the
+            // fallback until 8.0.0 and silently swallowed such a range.
+            _ => throw ShapePair.Unreachable(nameof(RecreateAs), source, source)
         };
 }

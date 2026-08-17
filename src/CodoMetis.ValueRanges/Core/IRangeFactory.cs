@@ -142,7 +142,14 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
             IFiniteRange<T> f       => $"{(f.StartInclusive ? '[' : '(')}{Fmt(f.Start)},{Fmt(f.End)}{(f.EndInclusive ? ']' : ')')}",
             IUnboundedStartRange<T> us => $"(,{Fmt(us.End)}{(us.EndInclusive ? ']' : ')')}",
             IUnboundedEndRange<T>   ue => $"{(ue.StartInclusive ? '[' : '(')}{Fmt(ue.Start)},)",
-            _                       => "empty"
+
+            // All five shapes are named above, so this is only reachable through an implementation
+            // of IRange<T> that is none of them — which the sealed-variant rule forbids. It
+            // answered "empty" until 8.0.0, and that is the worst possible fallback here: this text
+            // is what Parse round-trips, what the EF literal sends to PostgreSQL and what the shape
+            // matrix compares, so an unrecognised range would have been silently stored, queried
+            // and asserted as the empty range rather than rejected.
+            _ => throw new InvalidOperationException($"Unknown range variant: {GetType()}.")
         };
     }
 }
