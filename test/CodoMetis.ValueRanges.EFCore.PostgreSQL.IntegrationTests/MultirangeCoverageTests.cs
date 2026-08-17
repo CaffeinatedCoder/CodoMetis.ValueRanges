@@ -190,7 +190,7 @@ public class MultirangeCoverageTests
     /// without applying implicit coercions, so a constant has to arrive already typed.
     /// </summary>
     /// <remarks>
-    /// <c>Int64Range.Contains(25L)</c> emitted <c>"Tickets" @&gt; 25</c> before 6.4.0 and failed at
+    /// <c>Int64Range.Contains(25L)</c> emitted <c>"Tickets" @&gt; 25</c> before 7.0.0 and failed at
     /// execution with <c>operator does not exist: int8range @&gt; integer</c> — a bare numeric
     /// literal is an <c>integer</c> to PostgreSQL. Nothing caught it because the translation test
     /// asserted the prefix <c>@&gt; </c> and no test executed the query. Every other element type

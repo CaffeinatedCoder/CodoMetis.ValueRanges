@@ -11,7 +11,7 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 /// <remarks>
 /// <para>
 /// The per-predicate tests elsewhere pick the shapes a human thought to try, which is how
-/// <c>IsAdjacentTo</c> (6.2.1) and <c>IsStrictlyLeftOf</c> (6.4.0) both shipped answering
+/// <c>IsAdjacentTo</c> (6.2.1) and <c>IsStrictlyLeftOf</c> (7.0.0) both shipped answering
 /// <see langword="false"/> for a whole family of receivers: each was written as a switch on the
 /// receiver's shape whose inner switch handled the operand's, so the two directions could drift
 /// apart without any single test noticing. A full matrix has no such blind spot — it asks every
@@ -193,7 +193,7 @@ public sealed class ShapeMatrixParityTests
     /// The empty range is contained by every range and every set, itself included — ∅ ⊆ S holds
     /// vacuously, and it is what PostgreSQL's <c>@&gt;</c> answers. Asserted here across both
     /// containment overloads and both container kinds, because the model answered
-    /// <see langword="false"/> for the single-range case until 6.4.0.
+    /// <see langword="false"/> for the single-range case until 7.0.0.
     /// </summary>
     /// <remarks>
     /// <c>RangeSet.Contains(RangeSet)</c> already answered <see langword="true"/>, by iterating

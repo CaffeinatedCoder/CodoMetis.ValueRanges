@@ -183,7 +183,7 @@ public static class RangeExtensions
             // satisfied when other has no values, so there is nothing to check and no receiver
             // shape that can refuse — the empty receiver included, since ∅ ⊆ ∅. This is also what
             // PostgreSQL's @> answers, and what Contains(RangeSet) has always answered by
-            // iterating zero elements; before 6.4.0 the single-range overload disagreed with both.
+            // iterating zero elements; before 7.0.0 the single-range overload disagreed with both.
             if (other.IsEmpty()) return true;
 
             return range switch

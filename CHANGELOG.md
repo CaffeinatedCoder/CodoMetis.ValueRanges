@@ -9,7 +9,21 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
-## [6.4.0] — 2026-08-17
+## [7.0.0] — 2026-08-17
+
+Three corrections from an audit of the range and multirange types. **The public API is unchanged** —
+nothing was added, removed or resignatured, and package validation passes against 6.3.0 — but two
+of the three change what existing calls *answer*, which is why this is a major rather than a minor.
+
+All three shared one shape: the EF translation was correct and the in-memory implementation was
+not, so the same expression gave one answer when it ran in PostgreSQL and another when it ran in
+memory. Nothing threw. If you evaluate range predicates only server-side, or only in memory, you
+saw consistent (in one case consistently wrong) results either way; the disagreement was visible
+only to code that did both.
+
+The audit's durable output is `ShapeMatrixParityTests`, which asks PostgreSQL for all eight binary
+predicates over every ordered pair of range shapes and requires the model to match — 2,464
+comparisons, no exclusions.
 
 ### Fixed
 

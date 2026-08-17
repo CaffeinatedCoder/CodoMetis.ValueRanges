@@ -270,7 +270,7 @@ public class RangeContainsTests
     /// since "every value of the inner range is in the outer" has no value to falsify it.
     /// </summary>
     /// <remarks>
-    /// This answered <see langword="false"/> before 6.4.0, which disagreed with PostgreSQL's
+    /// This answered <see langword="false"/> before 7.0.0, which disagreed with PostgreSQL's
     /// <c>@&gt;</c> — so the same comparison gave opposite answers in memory and in SQL — and with
     /// the library's own <c>RangeSet.Contains(RangeSet)</c>, which reaches the same conclusion by
     /// iterating zero elements.

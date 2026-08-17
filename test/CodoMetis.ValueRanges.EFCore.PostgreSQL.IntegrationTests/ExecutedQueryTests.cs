@@ -183,7 +183,7 @@ public class ExecutedQueryTests
     /// </summary>
     /// <remarks>
     /// <c>&lt;&lt;</c> compares the receiver's upper bound with the operand's lower bound, so an
-    /// <c>UnboundedStart</c> receiver is decided by its finite upper bound. Until 6.4.0 the
+    /// <c>UnboundedStart</c> receiver is decided by its finite upper bound. Until 7.0.0 the
     /// in-memory implementation answered <see langword="false"/> for every such receiver while the
     /// server answered <see langword="true"/> — a disagreement invisible to the translation tests,
     /// which only assert that <c>&lt;&lt;</c> is emitted.

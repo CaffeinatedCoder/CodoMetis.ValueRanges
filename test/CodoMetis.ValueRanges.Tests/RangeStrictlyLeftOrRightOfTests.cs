@@ -75,7 +75,7 @@ public class RangeStrictlyLeftOrRightOfTests
     /// <c>[10, 20]</c>. Being unbounded at the <em>other</em> end is irrelevant.
     /// </summary>
     /// <remarks>
-    /// This asserted the opposite until 6.4.0, on the reasoning that "UnboundedStart ranges
+    /// This asserted the opposite until 7.0.0, on the reasoning that "UnboundedStart ranges
     /// extend to -∞, so they can never be strictly left of anything" — which names the wrong
     /// bound. PostgreSQL's <c>&lt;&lt;</c> answers <see langword="true"/> here, so the query
     /// that ran server-side and the same expression evaluated in memory disagreed.

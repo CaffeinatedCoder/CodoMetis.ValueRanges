@@ -53,7 +53,7 @@ public class Reservation
 
     public int GroupKey { get; set; }
 
-    // -- The multiranges that had no mapped column until 6.4.0 --
+    // -- The multiranges that had no mapped column until 7.0.0 --
     //
     // Six of the eleven multirange types were exercised end to end; these five had never been
     // mapped to a column, so nothing proved their store type, their literal form or their
