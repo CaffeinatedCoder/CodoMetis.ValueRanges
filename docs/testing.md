@@ -109,6 +109,40 @@ The model has one axiom — that `Contains(T)` is correct — since results are 
 That is pinned by its own test per domain rather than assumed, and `Contains(T)` is itself verified
 against PostgreSQL's element `@>` in the integration suite.
 
+### The Multirange Oracle
+
+`SmallModelMultirangeOracleTests` covers what the other two do not reach. The single-range oracle
+only ever lifts *one* range into a set, so the multi-element algorithms — the greedy merge, the
+sorted merge behind `Union`, the two-pointer merge-join behind `Except`, the single-pass gap walk
+behind `Complement` — had no oracle at all and were covered by worked examples only.
+
+Over a universe of eight grid points **every subset is a representable multirange**, so enumerating
+all 256 and sweeping all 65,536 ordered pairs is exhaustive over the whole multirange value space.
+The outermost grid points double as the unbounded sentinels, so unbounded elements and the infinite
+set appear without being special-cased.
+
+Two things make it bite where the single-range oracle cannot:
+
+- **It checks representation, not just membership.** Results are compared element by element against
+  the canonical run decomposition, so an unmerged neighbour, a stray empty or elements out of order
+  fails — even though `Contains(value)` would answer identically. `Count`, `Equals`, `GetHashCode`,
+  `ToString`, the indexer and the EF multirange literal all read the representation, and nothing
+  asserted the invariant before this.
+- **It feeds `From` deliberately non-canonical input.** Building from maximal runs hands
+  normalization something already normalized and asks it to do nothing. The `From(shattered,
+  reversed)` path splits every run into one range per value and reverses them, which is the only
+  thing here that exercises the sort and the greedy merge's adjacency arm. A seeded defect that
+  disabled adjacency merging walked straight through every other check in this file.
+
+**Discrete domains only, and not incidentally.** A run of consecutive grid points is the canonical
+decomposition exactly when consecutive points are contiguous — true of integers and days, false of
+reals. Over a half-step decimal grid, `{0, 0.5}` is both `[0, 0.5]` (which holds 0.25) and
+`{0} ∪ {0.5}` (which does not), and no grid resolution separates them. A continuous sweep built this
+way reported ~37,000 disagreements that were all the model being wrong. Continuous multiranges stay
+with the single-range oracle's two-element `Set.Union`/`Set.Except` and the worked examples; the
+merge-join algorithms are generic over the range type, so the discrete sweep does exercise all of
+them. What it does not reach is continuous adjacency deciding a merge.
+
 ### The Value Set Oracle
 
 `SmallModelSetOracleTests` (in the conventions project, which references all four shipping

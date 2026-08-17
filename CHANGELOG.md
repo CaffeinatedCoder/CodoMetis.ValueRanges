@@ -76,6 +76,25 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
   `IsStrictlyLeftOf` on an unbounded start and `Except` between opposing unbounded operands
   (7.0.0), and both fixes above. The model has one axiom — that `Contains(T)` is correct, since
   results are read back through it — and that is pinned by its own test rather than assumed.
+- **`SmallModelMultirangeOracleTests`**, reaching the multi-element algorithms that no oracle
+  touched: the greedy merge, the sorted merge behind `Union`, the two-pointer merge-join behind
+  `Except` and the single-pass gap walk behind `Complement` — the most intricate code here, each
+  carrying a hand-written correctness argument in its doc comment, and covered by worked examples
+  only. Over eight grid points every subset is a representable multirange, so all 256 subsets and
+  all 65,536 ordered pairs is exhaustive over the whole multirange value space.
+
+  It differs from the single-range sweep in two ways that matter. It compares results **element by
+  element** against the canonical run decomposition rather than only probing membership, so an
+  unmerged neighbour or a stray empty fails — the `RangeSet` invariant was load-bearing and
+  unasserted, because `Contains(value)` cannot see it while `Count`, `Equals`, `GetHashCode`,
+  `ToString` and the EF multirange literal all can. And it feeds `From` a deliberately
+  non-canonical decomposition, since building from maximal runs asks normalization to do nothing;
+  a seeded defect disabling adjacency merging passed every other check in the file until that path
+  existed. Found no defects; three seeded ones — that adjacency arm, an inclusiveness flip in the
+  complement walk, and a merge-join pointer advancing too far — are each caught.
+
+  Discrete domains only, and not incidentally: a run of consecutive grid points is the canonical
+  decomposition exactly when consecutive points are contiguous, which is false of the reals.
 - **`SmallModelSetOracleTests`** — the same treatment for the value set families, where it matters
   more: `Intersect`, `Except` and `Add` are deliberately client-side only, because a PostgreSQL
   array has no intersection, no difference and no sorted insert, so unlike the ranges there is no
