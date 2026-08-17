@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
@@ -101,6 +103,60 @@ internal sealed class ValueSetIntegerElementJsonConverter<TSet, T> : JsonConvert
         if (!long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
             throw new JsonException(
                 $"{typeof(T).Name} formats as '{text}', which is not an integer. An element of "
+              + $"{typeof(TSet).Name} must format as exactly the text form of the primitive it wraps.");
+
+        writer.WriteNumberValue(number);
+    }
+}
+
+/// <summary>
+/// Writes a set element as a JSON number with a fractional part — the shape used by
+/// <c>DecimalSet&lt;TElement&gt;</c>. Separate from
+/// <see cref="ValueSetIntegerElementJsonConverter{TSet,T}"/> rather than a widening of it:
+/// that one reads and writes through <see cref="long"/> on both legs, which would silently
+/// truncate every element of a decimal-backed wrapper.
+/// </summary>
+/// <remarks>
+/// Both legs go through the family's text form, as in the integer converter, and reads accept a
+/// JSON string so payloads written under <see cref="JsonNumberHandling.WriteAsString"/> round-trip.
+/// Scale is preserved: <see cref="decimal"/> keeps trailing zeros through parse and format, so an
+/// element formatting as <c>12.50</c> is written as <c>12.50</c> — the same text
+/// <see cref="System.Text.Json"/> writes for the <see cref="decimal"/> it wraps.
+/// </remarks>
+/// <typeparam name="TSet">The value set family that owns the element's text form.</typeparam>
+/// <typeparam name="T">The element type.</typeparam>
+internal sealed class ValueSetDecimalElementJsonConverter<TSet, T> : JsonConverter<T>
+    where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
+    where T : IEquatable<T>
+{
+    /// <summary>The shared instance — the converter is stateless.</summary>
+    internal static readonly ValueSetDecimalElementJsonConverter<TSet, T> Instance = new();
+
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var text = reader.TokenType switch
+        {
+            // The raw token text, not GetDecimal().ToString(): a round trip through decimal
+            // would renormalize the scale the payload was written with.
+            JsonTokenType.Number => Encoding.UTF8.GetString(
+                                        reader.HasValueSequence
+                                            ? reader.ValueSequence.ToArray()
+                                            : reader.ValueSpan),
+            JsonTokenType.String => reader.GetString()!,
+            var other            => throw new JsonException(
+                                        $"Expected a JSON number for a {typeof(T).Name} value, got {other}.")
+        };
+
+        return ValueSetElementJson.Parse<TSet, T>(text);
+    }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+    {
+        var text = TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
+
+        if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number))
+            throw new JsonException(
+                $"{typeof(T).Name} formats as '{text}', which is not a decimal number. An element of "
               + $"{typeof(TSet).Name} must format as exactly the text form of the primitive it wraps.");
 
         writer.WriteNumberValue(number);

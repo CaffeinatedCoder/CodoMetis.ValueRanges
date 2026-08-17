@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests;
@@ -63,6 +64,10 @@ public class Booking
 
     public DateTimeOffsetSet Instants { get; set; } = DateTimeOffsetSet.Empty;
 
+    public DateTimeSet<TestStamp> Audits { get; set; } = DateTimeSet<TestStamp>.Empty;
+
+    public DecimalSet<TestRate> WrappedRates { get; set; } = DecimalSet<TestRate>.Empty;
+
     /// <summary>A plain CLR array beside the set types — must keep its native provider mapping.</summary>
     public string[] PlainTags { get; set; } = [];
 
@@ -101,6 +106,65 @@ public readonly record struct TestKey : IFormattable, IParsable<TestKey>
     public string ToString(string? format, IFormatProvider? formatProvider) => _value;
 
     public override string ToString() => _value;
+}
+
+/// <summary>
+/// A generator-shaped validated wrapper (DateTime-backed), the consumer shape for
+/// <see cref="DateTimeSet{TElement}"/>. It forwards the format specifier, which is what the
+/// temporal arities require: their bridge asks for <c>O</c>, and a wrapper that answered with
+/// its own default would hand the store a value truncated to whole seconds.
+/// </summary>
+public readonly record struct TestStamp : IFormattable, IParsable<TestStamp>, IComparable<TestStamp>
+{
+    private readonly DateTime _value;
+
+    private TestStamp(DateTime value) => _value = value;
+
+    public static TestStamp Parse(string s, IFormatProvider? provider)
+        => new(DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestStamp result)
+    {
+        var parsed = DateTime.TryParse(
+            s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value);
+        result = parsed ? new TestStamp(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(TestStamp other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString("O", CultureInfo.InvariantCulture);
+}
+
+/// <summary>
+/// A generator-shaped validated wrapper (decimal-backed), the consumer shape for
+/// <see cref="DecimalSet{TElement}"/>.
+/// </summary>
+public readonly record struct TestRate : IFormattable, IParsable<TestRate>, IComparable<TestRate>
+{
+    private readonly decimal _value;
+
+    private TestRate(decimal value) => _value = value;
+
+    public static TestRate Parse(string s, IFormatProvider? provider)
+        => new(decimal.Parse(s, NumberStyles.Number, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestRate result)
+    {
+        var parsed = decimal.TryParse(s, NumberStyles.Number, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = parsed ? new TestRate(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(TestRate other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
 }
 
 public sealed class TestDbContext : DbContext

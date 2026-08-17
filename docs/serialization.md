@@ -177,7 +177,7 @@ static JsonConverter<LocalDate>? IValueSetFactory<LocalDateSet, LocalDate>.Eleme
     => /* ISO 8601, the same text form the array literals use */;
 ```
 
-It is consulted last — only when System.Text.Json has no scalar converter for the element type at all — so registering one by any of the three normal routes still wins. The primitive-backed families serialize natively and leave it at the default `null`. The four wrapper arities define one, because their element type is whatever you supply: string- and Guid-backed sets write the element's text form as a JSON string, integer-backed sets write a JSON number, so `Int32Set<OrderId>` and `Int32Set` produce identical payloads. The five NodaTime sets define one too, which is why they need no configuration:
+It is consulted last — only when System.Text.Json has no scalar converter for the element type at all — so registering one by any of the three normal routes still wins. The primitive-backed families serialize natively and leave it at the default `null`. Every wrapper arity defines one, because its element type is whatever you supply, and each picks the shape its primitive sibling writes, so `Int32Set<OrderId>` and `Int32Set` produce identical payloads: the integer arities write a JSON number, `DecimalSet<T>` writes a JSON number keeping the element's scale, and the string, Guid, temporal and NodaTime arities write a JSON string holding the family's text form. The five NodaTime sets define one too, which is why they need no configuration:
 
 ```csharp
 var options = new JsonSerializerOptions().AddRangeConverters();

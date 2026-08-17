@@ -98,12 +98,21 @@ See `src/CodoMetis.ValueRanges/RangeSet.cs` and `src/CodoMetis.ValueRanges/Range
 The second type family: immutable, canonical sets of scalar values whose PostgreSQL storage
 shape is a native array — `StringSet`/`text[]` is to arrays what `RangeSet`/multirange is to
 ranges. Ten closed types (`StringSet`, `GuidSet`, `Int16Set`, `Int32Set`, `Int64Set`,
-`DecimalSet`, `DateSet`, `TimeSet`, `DateTimeSet`, `DateTimeOffsetSet`) plus validated-wrapper
-arities (`StringSet<T>`, `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>`) whose `TElement` is
-constrained **only on BCL interfaces** (`struct, IEquatable, IFormattable, IParsable`, numeric
-families add `IComparable`) so generator-produced domain values never reference this package.
-The text-form contract (convention, not constraint): the element's invariant text form must be
-exactly the backing primitive's text form.
+`DecimalSet`, `DateSet`, `TimeSet`, `DateTimeSet`, `DateTimeOffsetSet`) plus a validated-wrapper
+arity for each of them, whose `TElement` is constrained **only on BCL interfaces**
+(`struct, IEquatable, IFormattable, IParsable`; every family except `StringSet<T>` adds
+`IComparable`) so generator-produced domain values never reference this package.
+
+The text-form contract (convention, not constraint): the element's text form must be exactly the
+backing primitive's. *Which* text form differs by family, and that is deliberate. `StringSet<T>`,
+`GuidSet<T>`, `Int16Set<T>`, `Int32Set<T>`, `Int64Set<T>` and `DecimalSet<T>` use the element's
+invariant default, because for those primitives it round-trips. The four temporal arities ask for
+a round-trip format instead — `"yyyy-MM-dd"` for `DateSet<T>`, `"O"` for the other three — because
+the default does not: `TimeOnly` renders as `09:30` and `DateTime` as `06/15/2024 10:30:00`,
+losing sub-seconds and, for `DateTime`, the `Kind`. Same rule in the NodaTime satellite, whose
+five arities pin their ISO patterns for the same reason the closed NodaTime sets pass an explicit
+literal text. A wrapper that forwards its `format` argument — the generated shape — satisfies all
+of them; one that swallows it is rejected at the persistence boundary.
 
 - **Interfaces** (`Core/`): `IValueSet<T>` (public `Values`) + `IValueSetFactory<TSet, T>`
   (abstract static `Empty`/`From`, internal abstract static `FromTrusted` — which is what keeps
@@ -186,11 +195,14 @@ means the reflection fallback, so the family's converter takes over. That orderi
 the hook is last, never an override. Resolution failures (no contract for `T`) fall back to
 delegation, preserving the previous behaviour.
 
-The primitive-backed families serialize natively and leave the default `null`. The wrapper arities
-(`StringSet<T>`, `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>`) always define one, since their element type
-is arbitrary — `ValueSetTextElementJsonConverter` for the string- and Guid-backed pair, and
-`ValueSetIntegerElementJsonConverter` for the integer-backed pair, so a wrapper's payload is byte-for-byte
-what its primitive sibling produces. The NodaTime satellite defines
+The primitive-backed families serialize natively and leave the default `null`. Every wrapper arity
+defines one, since its element type is arbitrary, and the shape follows the primitive so a
+wrapper's payload is what its primitive sibling produces: `ValueSetIntegerElementJsonConverter`
+(a JSON number) for the three integer families, `ValueSetDecimalElementJsonConverter` for
+`DecimalSet<T>` — separate rather than a widening, since the integer one reads and writes through
+`long` and would truncate every decimal element — and `ValueSetTextElementJsonConverter` (a JSON
+string) for the string, Guid, temporal and NodaTime arities, matching how System.Text.Json writes
+those primitives. The NodaTime satellite defines
 one per set (`Serialization/NodaTimeElementJsonConverter.cs`, namespace
 `CodoMetis.ValueRanges.Serialization`), each reusing the family's own `ParseValue`/`FormatValue` so
 JSON, array literals and the wire form share one text form. The satellite additionally exposes
@@ -208,9 +220,10 @@ format themselves.
 - **`RangeTypeRegistry`** (`Internal/`) — the single wiring point. Process-wide and additive: the seven core types (six built-ins + `timerange`) are registered up front; satellites contribute `RangeTypeDefinition`s at options-configuration time via `Register` (idempotent per range CLR type, thread-safe immutable-snapshot swap). Lookups: by range/set CLR type, by element type (the `IRange<T>`-typed-operand fallback — one range type per element type, enforced), and by store type name (first registration owns the name; BCL and NodaTime types share `daterange` etc., so store-name-only resolution stays with the BCL types)
 - **`IRangeTypeDefinition` extension points** — `ElementTypeMapping` (default `null`: resolve the subtype mapping from the type mapping source) lets a definition supply a converting element mapping when the element CLR type is unknown to the provider (NodaTime `YearMonth` ⇄ `date`); `SupportsSqlConstruction` (default `true`) lets a definition whose model granularity is coarser than its store subtype opt out of server-side factory-constructor translation
 - **Value sets** (v6) — mirror wiring beside the range machinery:
-  - **`SetTypeRegistry`** (`Internal/`, sibling of `RangeTypeRegistry`): ten closed core definitions up front; the four wrapper families are matched by **open generic definition** with closed instantiations built lazily and cached — no per-element registration exists, so there is nothing to misconfigure. Satellites register closed definitions (the NodaTime satellite adds its five from `UseValueRangesNodaTime()`). **Deliberately no store-name lookup**: `text[]` etc. stay with the provider's native array mappings, so plain `string[]` properties and scaffolding are untouched
+  - **`SetTypeRegistry`** (`Internal/`, sibling of `RangeTypeRegistry`): ten closed core definitions up front; the ten core wrapper families are matched by **open generic definition** with closed instantiations built lazily and cached — no per-element registration exists, so there is nothing to misconfigure. Satellites register closed definitions via `Register` and additional families via `RegisterFamily` (the NodaTime satellite adds five of each from `UseValueRangesNodaTime()`; a family cannot be registered as closed definitions, because its element type is whatever the consumer supplies). **Deliberately no store-name lookup**: `text[]` etc. stay with the provider's native array mappings, so plain `string[]` properties and scaffolding are untouched
   - **`ValueSetTypeMapping<TSet, TElement, TPrimitive>`** converts sets to primitive arrays at the provider boundary (Npgsql binds those natively); reads route through `From` — non-canonical rows normalize, null elements throw. Literals render uniformly as `ARRAY['…',…]::type[]`, with a per-definition literal-text hook (NodaTime's null-format `IFormattable` is the culture long form, not ISO)
   - **Element mappings** (`BridgedElementTypeMapping`): a bare element parameter in `col @> ARRAY[@p]` binds as its backing primitive — the same definition-supplied converting-element-mapping seam `YearMonth` uses. Two producers: the wrapper families (text-form contract fails loudly here with an error naming it), and any `SetTypeDefinition` carrying a `normalizeValue`, which gets an element mapping applying that same normalization (the server-side half of `NormalizeElement`)
+  - **`BridgedSetTypeDefinition`** carries the wrapper bridge itself: an element format plus parse/format delegates over the primitive, rather than the element's default text form and `IParsable<TPrimitive>`. Both halves are load-bearing. The format is what keeps a temporal element from being truncated on the way to the column. The delegates exist because `IParsable` is too narrow twice over — `DateTime.Parse` reached through it cannot ask for `DateTimeStyles.RoundtripKind`, so a UTC element arrives as `DateTimeKind.Local`, and NodaTime's value types do not implement `IParsable` at all. The temporal families parse strictly (`ParseExact`), which turns "the wrapper ignored the format specifier" from silent truncation into the contract error
   - **Translators**: `ValueSetsMethodCallTranslator` (Contains → `@>` `ARRAY[value]` unconditionally — always GIN-servable; Overlaps/IsSubsetOf/IsSupersetOf → `&&`/`<@`/`@>`; IsProperSubsetOf/IsProperSupersetOf → the operator paired with its **negated converse** rather than `<>`, keeping both halves multiplicity-insensitive; Remove → `array_remove`; Union → `array_cat`) and `ValueSetsMemberTranslator` (`Count`/`IsEmpty` → `cardinality`). `Intersect`/`Except`/`Add` have no translation: PostgreSQL's array type has only 9 operators (`@> <@ && = <> < <= > >=`) against the range type's 17 — there is no array intersection or difference, and no sorted insert (`array_sort` orders by collation, not ordinal). They stay in the core library because it has no EF dependency and is an in-memory type family first. Set `==` is translated by EF itself as `col = @p` and assumes canonical writers; all package-translated operators are order-insensitive and stay correct against non-canonical rows
   - **Composing on a translated `Union`**: `array_cat` concatenates rather than canonicalizing. That is invisible to the operators above and to materialization (reads route through `From`), but `cardinality` would double-count shared elements — so `Count` over an `array_cat` operand is **refused** by the member translator (EF reports the query as untranslatable, which beats a quietly inflated number), while `IsEmpty` stays translated (a concatenation is empty exactly when both sides are). **Equality over a union is wrong and cannot be intercepted** — EF emits the `=` itself. Canonicalizing server-side is not available: PostgreSQL has no array-distinct function (verified against 18.4 — `array_sort`/`array_reverse`/`array_shuffle` exist, nothing that deduplicates; `intarray.uniq` is `int[]`-only and not installed by default), so it would need a `SELECT DISTINCT … ORDER BY` subquery whose ordering could not match CLR canonical order anyway (`text` orders by database collation, not ordinal; `uuid` orders byte-wise where `Guid.CompareTo` orders field-wise)
   - `YearMonthSet` gets a hand-written `YearMonthSetTypeDefinition` (month-aligned `date[]`, reads throw on non-aligned dates), reusing the range family's `YearMonthTypeMapping` as its element mapping

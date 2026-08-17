@@ -3,6 +3,34 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.4.0] — 2026-08-17
+
+### Added
+
+- **Mappings for the six new core wrapper arities** — `Int16Set<T>` to `smallint[]`,
+  `DecimalSet<T>` to `numeric[]`, `DateSet<T>` to `date[]`, `TimeSet<T>` to `time[]`,
+  `DateTimeSet<T>` to `timestamp[]` and `DateTimeOffsetSet<T>` to `timestamptz[]`. As with the
+  existing arities they are matched by open generic definition and built on demand, so there is
+  no per-element registration to get wrong.
+- **`SetTypeRegistry.RegisterFamily`**, so a satellite can contribute wrapper families. Only
+  closed definitions could be registered before, which is no use to a family whose element type
+  comes from the consumer.
+
+### Changed
+
+- **The wrapper element bridge takes an explicit format and conversion delegates** instead of
+  going through the element's default text form and `IParsable<TPrimitive>`. Two reasons, both
+  load-bearing for the new arities: the default text form of `TimeOnly`, `DateTime` and
+  `DateTimeOffset` drops sub-seconds, and `DateTime.Parse` reached through `IParsable` has no way
+  to ask for `DateTimeStyles.RoundtripKind`, so a UTC element became `DateTimeKind.Local` on the
+  way to the parameter. NodaTime's value types do not implement `IParsable` at all, which the
+  satellite's arities need.
+
+  The temporal families parse strictly (`ParseExact`), so an element that ignores the format
+  specifier raises the existing contract error naming the type rather than binding a value
+  truncated to the second. Behaviour for `StringSet<T>`, `GuidSet<T>`, `Int32Set<T>` and
+  `Int64Set<T>` is unchanged.
+
 ## [6.3.0] — 2026-08-16
 
 ### Added

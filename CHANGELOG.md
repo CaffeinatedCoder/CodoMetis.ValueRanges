@@ -9,6 +9,47 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [6.4.0] — 2026-08-17
+
+The validated-wrapper arities now exist for every value set family instead of four of them. No
+breaking changes.
+
+### Added
+
+- **Eleven new wrapper arities**, completing the set: `Int16Set<T>`, `DecimalSet<T>`, `DateSet<T>`,
+  `TimeSet<T>`, `DateTimeSet<T>` and `DateTimeOffsetSet<T>` in the core package, and
+  `LocalDateSet<T>`, `LocalDateTimeSet<T>`, `InstantSet<T>`, `LocalTimeSet<T>` and
+  `YearMonthSet<T>` in the NodaTime satellite. Every value set family now has one, so a
+  domain type backed by any supported primitive can be stored as a native PostgreSQL array
+  without the domain type referencing this package.
+
+  As before, `TElement` is constrained only on BCL interfaces — `struct`, `IEquatable<T>`,
+  `IComparable<T>`, `IFormattable`, `IParsable<T>` — which is what Vogen, Metalama,
+  StronglyTypedId and hand-written wrappers already emit.
+
+- **`SetTypeRegistry.RegisterFamily`**, the seam the NodaTime satellite registers its arities
+  through. A wrapper family cannot be registered as a closed definition, because its element type
+  is whatever the consumer supplies.
+
+### Changed
+
+- **The temporal arities ask their elements for a round-trip format** rather than accepting the
+  element's default text form. This is the one place the wrapper contract is stricter than for the
+  existing four arities, and it is not cosmetic: `TimeOnly` renders as `09:30` with a null format,
+  `DateTime` as `06/15/2024 10:30:00`, so an arity built the way `Int32Set<T>` is built would have
+  stored every timestamp truncated to the second, and every `DateTimeKind` lost — silently, on the
+  way to the column.
+
+  Concretely, the contract for these six families is that the element's `ToString("O", …)` (or
+  `"yyyy-MM-dd"` for `DateSet<T>`, and the ISO pattern for the NodaTime arities) is exactly the
+  backing primitive's. A wrapper that forwards its `format` argument — the generated shape —
+  satisfies it with no extra work. One that swallows the argument is rejected at the persistence
+  boundary with an error naming the type and the contract, rather than storing a truncated value.
+
+- **`DateTimeSet<T>` and `DateTimeOffsetSet<T>` normalize at the provider boundary** exactly as
+  their closed siblings do: wall-clock `DateTimeKind.Unspecified` for `timestamp`, UTC for
+  `timestamptz`.
+
 ## [6.3.0] — 2026-08-16
 
 Three additions that close gaps in the existing surface rather than extending the model. No

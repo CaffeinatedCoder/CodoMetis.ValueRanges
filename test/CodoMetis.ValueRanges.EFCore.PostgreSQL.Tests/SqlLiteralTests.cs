@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -46,4 +47,38 @@ public sealed class SqlLiteralTests
     [TestMethod]
     public void EmptyRangeSet() =>
         Assert.AreEqual("'{}'::datemultirange", LiteralOf(RangeSet<DateRange, DateOnly>.Empty));
+
+    // -- Validated wrapper arities: what the element-to-primitive bridge actually produces --
+    //
+    // The literal is the only place the bridge's output is observable without a database, and
+    // the sub-second digits are the whole point: a bridge that asked its elements for their
+    // default text form instead of the round-trip one would render 10:30:00.0000000 here and
+    // store a value silently truncated to the second.
+
+    [TestMethod]
+    public void WrapperTimestampSet_KeepsSubSecondPrecision() =>
+        Assert.AreEqual(
+            "ARRAY['2024-06-15T10:30:00.1234567']::timestamp without time zone[]",
+            LiteralOf(DateTimeSet<TestStamp>.From(
+                TestStamp.Parse("2024-06-15T10:30:00.1234567", CultureInfo.InvariantCulture))));
+
+    /// <summary>
+    /// A UTC-kinded element normalizes to wall-clock time, exactly as the closed
+    /// <see cref="DateTimeSet"/> does: PostgreSQL <c>timestamp</c> carries no time zone, and
+    /// Npgsql rejects a UTC-kinded value for it.
+    /// </summary>
+    [TestMethod]
+    public void WrapperTimestampSet_NormalizesKindToUnspecified() =>
+        Assert.AreEqual(
+            "ARRAY['2024-06-15T10:30:00.1234567']::timestamp without time zone[]",
+            LiteralOf(DateTimeSet<TestStamp>.From(
+                TestStamp.Parse("2024-06-15T10:30:00.1234567Z", CultureInfo.InvariantCulture))));
+
+    [TestMethod]
+    public void WrapperDecimalSet_KeepsScale() =>
+        Assert.AreEqual(
+            "ARRAY['12.50','13']::numeric[]",
+            LiteralOf(DecimalSet<TestRate>.From(
+                TestRate.Parse("12.50", CultureInfo.InvariantCulture),
+                TestRate.Parse("13", CultureInfo.InvariantCulture))));
 }
