@@ -76,6 +76,30 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
   `IsStrictlyLeftOf` on an unbounded start and `Except` between opposing unbounded operands
   (7.0.0), and both fixes above. The model has one axiom — that `Contains(T)` is correct, since
   results are read back through it — and that is pinned by its own test rather than assumed.
+- **`SmallModelSetOracleTests`** — the same treatment for the value set families, where it matters
+  more: `Intersect`, `Except` and `Add` are deliberately client-side only, because a PostgreSQL
+  array has no intersection, no difference and no sorted insert, so unlike the ranges there is no
+  second implementation anywhere to cross-check against. For all 30 set types — core and NodaTime,
+  plain and wrapper arity — it builds *every* subset of the probe universe (2^n, so exhaustive over
+  the whole value space rather than a sample) and checks `Values`, `Count`, `IsEmpty`, `Contains`,
+  `Add`, `Remove`, all five relational predicates, `Union`, `Intersect`, `Except`, equality and
+  hashing over every ordered pair, plus five construction paths per subset — reversed input,
+  duplicated input, `IEnumerable`, repeated `Add`, and both round trips.
+
+  It found no defects, which is the honest result; seven were seeded in to show it would have.
+  Its model reads the canonical *order* from `CanonicalComparer`, so it verifies that every path
+  agrees with the declared order but not that the order is the specified one — a limit recorded on
+  the class and closed by the test below.
+- **`ValueSetContractTests.StringBackedFamilies_SortOrdinal`**, pinning the one ordering claim no
+  self-consistency check can make: `StringSet` and its wrapper arity must order `Zebra` before
+  `apple`. Ordinal puts `Z` (90) first and every culture puts `apple` first, so swapping
+  `StringComparer.Ordinal` for `StringComparer.InvariantCulture` used to leave the whole suite
+  green while changing what the client considers sorted — and PostgreSQL's ordering of a `text[]`
+  is not the current culture's.
+- **A shared `SetProbes`** holding the value set probe table and type discovery, so the contract
+  tests and the new oracle cannot drift apart on which families exist or what to feed them. Two
+  tables would let a family lose its probes in one suite and go unexercised there while the other
+  stayed green — the failure mode a discovery-driven suite has to defend against hardest.
 
 ## [7.0.0] — 2026-08-17
 

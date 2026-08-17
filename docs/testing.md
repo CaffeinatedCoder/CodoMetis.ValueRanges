@@ -109,6 +109,39 @@ The model has one axiom — that `Contains(T)` is correct — since results are 
 That is pinned by its own test per domain rather than assumed, and `Contains(T)` is itself verified
 against PostgreSQL's element `@>` in the integration suite.
 
+### The Value Set Oracle
+
+`SmallModelSetOracleTests` (in the conventions project, which references all four shipping
+assemblies) does the same for the value set families — and there it is the *only* oracle. `Intersect`,
+`Except` and `Add` are deliberately client-side only, because a PostgreSQL array has no
+intersection, no difference and no sorted insert, so no amount of integration testing can
+cross-check them.
+
+For each of the 30 set types it builds **every subset** of that family's probe universe — 2^n, so
+exhaustive over the whole value space rather than a sample — and checks:
+
+- per subset: `Values`, `Count`, `IsEmpty`, `Contains`, `Add` and `Remove` for every probe
+- per ordered pair: `Union`, `Intersect`, `Except`, `Overlaps`, the four subset/superset
+  predicates, equality, and that equal sets hash equally
+- per construction path: reversed input, duplicated input, `IEnumerable`, repeated `Add` from
+  empty, `Parse(ToString())`, and a JSON round trip — all of which must land on the identical
+  canonical array, because canonical form is a property of the value and not of the order it
+  arrived in
+
+Its one axiom is that `From(x)` on a single element normalizes correctly, since element
+normalization is family-specific and internal (`TextKey` trims, the NodaTime calendar types convert
+to ISO) and cannot be derived externally the way a range's values can be derived from its bounds.
+That is pinned by `ValueSetContractTests.EverySetType_FindsAnElementItWasBuiltFrom`.
+
+**What it cannot check:** the model reads the canonical *order* from `CanonicalComparer`, so it
+verifies that every path agrees with the declared order, not that the declared order is the
+specified one. Swapping `StringComparer.Ordinal` for `StringComparer.InvariantCulture` moves the
+model with the implementation. `ValueSetContractTests.StringBackedFamilies_SortOrdinal` is the
+independent check that closes it.
+
+Probes and type discovery are shared with the contract tests through `SetProbes` — one table, so
+the two suites cannot disagree about which families exist or what to feed them.
+
 ### Shape-Combination Matrix
 
 Every binary operation test must cover all five range shapes: `Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`. Tests instantiate the "other" operand in each shape and verify the result type and value.
