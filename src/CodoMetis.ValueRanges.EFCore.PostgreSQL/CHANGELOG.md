@@ -25,6 +25,12 @@ covers all four packages, which share one version number and release together.
   fixed: the assertion now pins `@> 7::bigint`, and the live suite executes a constant-operand
   `Contains` for every element type.
 
+### Changed
+
+- No translation changed for either of the two core fixes this release, but the queries they affect
+  behave differently in memory. `Contains` → `@>` was always correct, while the in-memory predicate
+  answered `false` for an empty operand where `@>` answers `true` — so the same comparison matched
+  every row server-side and none client-side. See `CodoMetis.ValueRanges` 6.4.0.
 - The translation of `IsStrictlyLeftOf`/`IsStrictlyRightOf` to `<<`/`>>` was always correct; the
   in-memory predicate it mirrors was not, so client-side and server-side evaluation of the same
   comparison disagreed for any range unbounded at its start. See `CodoMetis.ValueRanges` 6.4.0. The

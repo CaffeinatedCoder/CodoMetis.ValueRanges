@@ -111,11 +111,20 @@ public class RangeSetOptimizationTests
         Assert.IsTrue(IntSet.Infinite.Contains(Int32Range.Infinite));
     }
 
+    /// <summary>
+    /// The empty range short-circuits ahead of the binary search — there is nothing to locate,
+    /// and ∅ ⊆ S holds for every set including the empty one.
+    /// </summary>
     [TestMethod]
-    public void Contains_Range_EmptyQuery_ReturnsFalse()
+    public void Contains_Range_EmptyQuery_ReturnsTrue()
     {
         var set = IntSet.From([Int32Range.CreateFinite(1, 10)]);
-        Assert.IsFalse(set.Contains(Int32Range.Empty));
+
+        Assert.IsTrue(set.Contains(Int32Range.Empty));
+        Assert.IsTrue(IntSet.Empty.Contains(Int32Range.Empty));
+
+        // The empty set still contains nothing non-empty.
+        Assert.IsFalse(IntSet.Empty.Contains(Int32Range.CreateFinite(1, 10)));
     }
 
     [TestMethod]

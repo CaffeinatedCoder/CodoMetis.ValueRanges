@@ -170,15 +170,25 @@ public static class RangeExtensions
         /// <param name="other">The range to test.</param>
         /// <returns>
         /// <see langword="true"/> if every value in <paramref name="other"/> also belongs to this range.
-        /// Always <see langword="true"/> for <see cref="IInfinityRange{T}"/> (unless <paramref name="other"/>
-        /// is <see cref="IEmptyRange{T}"/>).
+        /// Always <see langword="true"/> when <paramref name="other"/> is <see cref="IEmptyRange{T}"/> —
+        /// the empty range is contained by every range, including itself — and always
+        /// <see langword="true"/> for an <see cref="IInfinityRange{T}"/> receiver.
         /// Always <see langword="false"/> when <paramref name="other"/> extends in a direction that
-        /// this range does not bound, or when this range is <see cref="IEmptyRange{T}"/>.
+        /// this range does not bound, or when this range is <see cref="IEmptyRange{T}"/> and
+        /// <paramref name="other"/> is not.
         /// </returns>
-        public bool Contains(IRange<T> other) =>
-            range switch
+        public bool Contains(IRange<T> other)
+        {
+            // ∅ ⊆ S for every S. "Every value in other also belongs to this range" is vacuously
+            // satisfied when other has no values, so there is nothing to check and no receiver
+            // shape that can refuse — the empty receiver included, since ∅ ⊆ ∅. This is also what
+            // PostgreSQL's @> answers, and what Contains(RangeSet) has always answered by
+            // iterating zero elements; before 6.4.0 the single-range overload disagreed with both.
+            if (other.IsEmpty()) return true;
+
+            return range switch
             {
-                IInfinityRange<T> => !other.IsEmpty(),
+                IInfinityRange<T> => true,
 
                 IFiniteRange<T> b =>
                     other switch
@@ -208,8 +218,10 @@ public static class RangeExtensions
                         _                       => false
                     },
 
+                // An empty receiver, with a non-empty other: ∅ contains nothing.
                 _ => false
             };
+        }
 
         /// <summary>
         /// Determines whether this range and <paramref name="other"/> share at least one common value.

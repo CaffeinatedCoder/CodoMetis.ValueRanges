@@ -264,4 +264,52 @@ public class RangeContainsTests
 
         Assert.IsFalse(outer.Contains(inner));
     }
+
+    /// <summary>
+    /// The empty range is contained by every shape, including itself: ∅ ⊆ S is vacuously true,
+    /// since "every value of the inner range is in the outer" has no value to falsify it.
+    /// </summary>
+    /// <remarks>
+    /// This answered <see langword="false"/> before 6.4.0, which disagreed with PostgreSQL's
+    /// <c>@&gt;</c> — so the same comparison gave opposite answers in memory and in SQL — and with
+    /// the library's own <c>RangeSet.Contains(RangeSet)</c>, which reaches the same conclusion by
+    /// iterating zero elements.
+    /// </remarks>
+    [TestMethod]
+    public void Contains_Range_EmptyInner_ReturnsTrueForEveryShape()
+    {
+        Int32Range[] outers =
+        [
+            Int32Range.CreateFinite(1, 10),
+            Int32Range.CreateUnboundedStart(10),
+            Int32Range.CreateUnboundedEnd(1),
+            Int32Range.Infinite,
+            Int32Range.Empty
+        ];
+
+        foreach (var outer in outers)
+        {
+            Assert.IsTrue(outer.Contains(Int32Range.Empty), $"'{outer}' should contain the empty range");
+            Assert.IsTrue(Int32Range.Empty.IsContainedBy(outer), $"empty should be contained by '{outer}'");
+        }
+    }
+
+    /// <summary>
+    /// The converse does not follow: the empty range contains nothing but itself, so the flip
+    /// above is not simply "empty is involved, answer true".
+    /// </summary>
+    [TestMethod]
+    public void Contains_Range_EmptyOuter_ReturnsFalseForEveryNonEmptyShape()
+    {
+        Int32Range[] inners =
+        [
+            Int32Range.CreateFinite(1, 10),
+            Int32Range.CreateUnboundedStart(10),
+            Int32Range.CreateUnboundedEnd(1),
+            Int32Range.Infinite
+        ];
+
+        foreach (var inner in inners)
+            Assert.IsFalse(Int32Range.Empty.Contains(inner), $"empty should not contain '{inner}'");
+    }
 }

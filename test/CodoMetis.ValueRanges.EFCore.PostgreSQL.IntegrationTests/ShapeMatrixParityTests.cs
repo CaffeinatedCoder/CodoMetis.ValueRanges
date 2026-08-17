@@ -61,18 +61,6 @@ public sealed class ShapeMatrixParityTests
             _                      => throw new ArgumentOutOfRangeException(nameof(predicate))
         };
 
-    /// <summary>
-    /// The one rule on which the model and PostgreSQL deliberately disagree: PostgreSQL applies
-    /// "the empty set is a subset of every set", so <c>x @&gt; 'empty'</c> is true for every
-    /// <c>x</c>, while the model answers <see langword="false"/> — as its
-    /// <c>Contains</c>/<c>IsContainedBy</c> documentation states. Excluded here and asserted
-    /// separately below, so the divergence stays a decision on record rather than a gap.
-    /// </summary>
-    private static bool IsEmptySubsetRule<T>(string predicate, IRange<T> a, IRange<T> b)
-        where T : struct, IComparable<T>, IEquatable<T>
-        => (predicate is "Contains" && b.IsEmpty())
-        || (predicate is "IsContainedBy" && a.IsEmpty());
-
     private static async Task AssertMatrixAgrees<TRange, T>(
         string storeType,
         (string Name, TRange Range)[] shapes
@@ -87,8 +75,6 @@ public sealed class ShapeMatrixParityTests
         foreach (var (rightName, right) in shapes)
         foreach (var (predicate, @operator) in Predicates)
         {
-            if (IsEmptySubsetRule<T>(predicate, left, right)) continue;
-
             cases.Add(($"{predicate}: '{leftName}' vs '{rightName}'", InMemory<TRange, T>(predicate, left, right)));
             sql.Add($"('{Literal(left!)}'::{storeType} {@operator} '{Literal(right!)}'::{storeType})");
         }
@@ -204,38 +190,51 @@ public sealed class ShapeMatrixParityTests
     }
 
     /// <summary>
-    /// The empty-operand containment rule the matrix above excludes, asserted directly in both
-    /// worlds so the divergence is a recorded decision. PostgreSQL treats the empty range as a
-    /// subset of everything; the model does not, and says so in the
-    /// <c>Contains</c>/<c>IsContainedBy</c> documentation.
+    /// The empty range is contained by every range and every set, itself included — ∅ ⊆ S holds
+    /// vacuously, and it is what PostgreSQL's <c>@&gt;</c> answers. Asserted here across both
+    /// containment overloads and both container kinds, because the model answered
+    /// <see langword="false"/> for the single-range case until 6.4.0.
     /// </summary>
     /// <remarks>
-    /// This is the one place where <c>Contains</c> evaluated in memory and the <c>@&gt;</c> it
-    /// translates to answer differently. It matters only for an explicitly empty operand, which
-    /// is why it has survived: <c>x.Contains(SomeRange.Empty)</c> is a question nobody asks on
-    /// purpose. Anyone who does ask it should know the two sides differ.
+    /// <c>RangeSet.Contains(RangeSet)</c> already answered <see langword="true"/>, by iterating
+    /// zero elements — and since <c>From</c> drops empty elements, <c>RangeSet.Empty</c> and
+    /// <c>Int32Range.Empty</c> are each other's normalized form. So the model was answering the
+    /// same question two ways before this was corrected, which is why the multirange half of this
+    /// test passes with or without the fix.
     /// </remarks>
     [TestMethod]
-    public async Task EmptyOperandContainment_DivergesFromPostgres_Deliberately()
+    public async Task EmptyRange_IsContainedByEverything_AsInPostgres()
     {
         ContainerLifecycle.RequireDatabase();
 
         var finite = Int32Range.CreateFinite(1, 5);
+        var set    = RangeSet<Int32Range, int>.From([finite]);
 
-        Assert.IsFalse(finite.Contains(Int32Range.Empty), "the model does not treat empty as a subset");
-        Assert.IsFalse(Int32Range.Empty.IsContainedBy(finite), "…in either direction");
-        Assert.IsFalse(Int32Range.Infinite.Contains(Int32Range.Empty), "…not even the infinite range");
+        Assert.IsTrue(finite.Contains(Int32Range.Empty));
+        Assert.IsTrue(Int32Range.Empty.IsContainedBy(finite));
+        Assert.IsTrue(Int32Range.Infinite.Contains(Int32Range.Empty));
+        Assert.IsTrue(Int32Range.Empty.Contains(Int32Range.Empty), "∅ ⊆ ∅");
+        Assert.IsTrue(set.Contains(Int32Range.Empty));
+        Assert.IsTrue(set.Contains(RangeSet<Int32Range, int>.Empty));
+        Assert.IsTrue(RangeSet<Int32Range, int>.Empty.Contains(Int32Range.Empty),
+            "the empty set contains the empty range, as From makes them the same value");
+
+        // …while the converse still fails: ∅ contains nothing non-empty.
+        Assert.IsFalse(Int32Range.Empty.Contains(finite));
+        Assert.IsFalse(RangeSet<Int32Range, int>.Empty.Contains(finite));
 
         var server = await Evaluate(
         [
             "('[1,5]'::int4range @> 'empty'::int4range)",
             "('empty'::int4range <@ '[1,5]'::int4range)",
-            "('(,)'::int4range @> 'empty'::int4range)"
+            "('(,)'::int4range @> 'empty'::int4range)",
+            "('empty'::int4range @> 'empty'::int4range)",
+            "('{[1,6)}'::int4multirange @> 'empty'::int4range)",
+            "('{}'::int4multirange @> 'empty'::int4range)",
+            "('empty'::int4range @> '[1,5]'::int4range)",
+            "('{}'::int4multirange @> '[1,5]'::int4range)"
         ]);
 
-        CollectionAssert.AreEqual(
-            new[] { true, true, true }, server,
-            "PostgreSQL is expected to apply the empty-subset rule; if this changed, the "
-          + "exclusion in the shape matrix above is no longer describing a real divergence.");
+        CollectionAssert.AreEqual(new[] { true, true, true, true, true, true, false, false }, server);
     }
 }

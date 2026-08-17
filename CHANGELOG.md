@@ -13,6 +13,25 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
 
 ### Fixed
 
+- **⚠️ `Contains` and `IsContainedBy` now agree that the empty range is contained by everything.**
+  `[1,5].Contains(Int32Range.Empty)` returned `false` and now returns `true`, as does
+  `Int32Range.Empty.IsContainedBy(anything)` and `Int32Range.Empty.Contains(Int32Range.Empty)`.
+
+  ∅ ⊆ S for every S: "every value of the inner range is also in the outer" is vacuously satisfied
+  when the inner range has no values. PostgreSQL's `@>` answers the same, so the previous behaviour
+  put the two sides of the wire in disagreement — `r.Period.Contains(DateRange.Empty)` matched no
+  row in memory and every row in SQL.
+
+  It also disagreed with this library. `RangeSet.Contains(RangeSet)` has always answered `true` for
+  an empty operand by iterating zero elements, and `RangeSet.From` drops empty elements — so
+  `RangeSet.Empty` and `Int32Range.Empty` are each other's normalized form, and the two overloads
+  were answering the same question two ways.
+
+  **Migration.** Only comparisons with an explicitly empty operand change. Code that relied on
+  `Contains` to mean "contains and is non-empty" should say so: `outer.Contains(inner) &&
+  !inner.IsEmpty()`. `Overlaps` is unchanged and still `false` for an empty operand — overlap needs
+  a shared value — so a guard that wanted "shares something" was always better written with it.
+
 - **⚠️ `Int64Range.Contains(value)` produced SQL PostgreSQL refused to run**, whenever the value was
   a constant rather than a captured variable. The range operators are polymorphic
   (`anyrange @> anyelement`), and PostgreSQL resolves polymorphic operators without applying

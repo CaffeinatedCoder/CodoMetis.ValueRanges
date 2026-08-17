@@ -5,9 +5,11 @@ covers all four packages, which share one version number and release together.
 
 ## [6.4.0] — 2026-08-17
 
-No source change in this package. The NodaTime range types inherit the `IsStrictlyLeftOf` /
-`IsStrictlyRightOf` fix from the shared generic surface — see `CodoMetis.ValueRanges` 6.4.0 — so
-`LocalDateRange.CreateUnboundedStart(…)` and its siblings now agree with PostgreSQL's `<<`.
+No source change in this package. The NodaTime range types share the core algebra, so both
+behavioural fixes are inherited — see `CodoMetis.ValueRanges` 6.4.0. **⚠️ Two results change**:
+`Contains`/`IsContainedBy` now answer `true` for an empty operand (∅ ⊆ S), and `IsStrictlyLeftOf` /
+`IsStrictlyRightOf` now answer correctly for a range unbounded at its start, so
+`LocalDateRange.CreateUnboundedStart(…)` agrees with PostgreSQL's `<<`.
 
 ## [6.3.0] — 2026-08-16
 

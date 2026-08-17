@@ -5,10 +5,10 @@ covers all four packages, which share one version number and release together.
 
 ## [6.4.0] — 2026-08-17
 
-No source change in this package. The NodaTime range types are translated by the base plugin, so
-the `IsStrictlyLeftOf`/`IsStrictlyRightOf` correction applies here too — see
-`CodoMetis.ValueRanges` 6.4.0 for why in-memory and server-side evaluation disagreed for a range
-unbounded at its start.
+No source change in this package. The NodaTime range types are translated by the base plugin and
+carry the core algebra, so both corrections apply here too — empty-range containment and
+`IsStrictlyLeftOf`/`IsStrictlyRightOf`. See `CodoMetis.ValueRanges` 6.4.0 for why in-memory and
+server-side evaluation disagreed in each case.
 
 ## [6.3.0] — 2026-08-16
 

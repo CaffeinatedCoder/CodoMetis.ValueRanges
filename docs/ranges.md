@@ -73,7 +73,16 @@ sprint.Contains(new DateOnly(2025, 1, 20));  // false
 var inner = DateRange.CreateFinite(new DateOnly(2025, 1, 8), new DateOnly(2025, 1, 14));
 sprint.Contains(inner);       // true  — range containment
 inner.IsContainedBy(sprint);  // true  — symmetric alias
+
+sprint.Contains(DateRange.Empty);        // true  — ∅ ⊆ S, for every S
+DateRange.Empty.Contains(DateRange.Empty);  // true  — including itself
+DateRange.Empty.Contains(sprint);        // false — ∅ contains nothing
 ```
+
+The empty range is contained by every range, which is the vacuous reading of "every value of the
+inner range is also in the outer" and matches PostgreSQL's `@>`. Containment and *overlap* part
+ways here: `sprint.Overlaps(DateRange.Empty)` is `false`, because overlap needs a shared value and
+the empty range has none.
 
 ### Overlap
 

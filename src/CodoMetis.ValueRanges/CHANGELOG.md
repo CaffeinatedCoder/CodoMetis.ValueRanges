@@ -7,6 +7,27 @@ covers all four packages, which share one version number and release together.
 
 ### Fixed
 
+- **⚠️ The empty range is now contained by every range**, in `RangeExtensions.Contains`,
+  `IsContainedBy` and `RangeSet.Contains(IRange<T>)`. `[1,5].Contains(Int32Range.Empty)` returned
+  `false` and now returns `true`; so do `Int32Range.Empty.IsContainedBy(x)`,
+  `Int32Range.Empty.Contains(Int32Range.Empty)` and `RangeSet.Empty.Contains(Int32Range.Empty)`.
+
+  ∅ ⊆ S for every S — "every value of the inner range is also in the outer" has nothing to falsify
+  it when the inner range has no values. Three things agreed on that already and the single-range
+  overload did not: PostgreSQL's `@>`, so the same comparison answered differently in memory and in
+  SQL; `RangeSet.Contains(RangeSet)`, which reaches it by iterating zero elements; and
+  `RangeSet.From`, which drops empty elements and therefore makes `RangeSet.Empty` and
+  `Int32Range.Empty` the same value asked about two ways.
+
+  The converse is unchanged: `Int32Range.Empty.Contains(nonEmpty)` is still `false`, and `Overlaps`
+  still answers `false` for an empty operand — overlap requires a shared value, containment does
+  not. Nothing internal depended on the old answer: both engine call sites (`Except`, and the
+  multirange subtraction scan) are guarded by `Overlaps` first, so neither can see an empty operand.
+
+  **Migration.** Only comparisons with an explicitly empty operand change. For the old meaning,
+  write `outer.Contains(inner) && !inner.IsEmpty()` — or use `Overlaps`, which is what "shares
+  something" wanted all along.
+
 - **⚠️ `IsStrictlyLeftOf` answered `false` for every range unbounded at its *start***, and
   `IsStrictlyRightOf` for every such operand. The `<<` relation compares the receiver's **upper**
   bound with the operand's **lower** bound, so being unbounded at the *other* end is irrelevant:
