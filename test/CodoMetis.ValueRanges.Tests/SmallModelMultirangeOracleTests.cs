@@ -37,11 +37,19 @@ namespace CodoMetis.ValueRanges.Tests;
 /// the two singletons <c>{0} ∪ {0.5}</c>, which do not, and the model cannot tell them apart at any
 /// grid resolution. A continuous sweep built this way reported ~37,000 disagreements on its first
 /// run, every one of them the model being wrong rather than the library — <c>(-∞,0] ∪ [0.5,0.5]</c>
-/// really does have two elements. Continuous multiranges are left to
-/// <see cref="SmallModelOracleTests"/>, which reaches them at the two-element level through
-/// <c>Set.Union</c> and <c>Set.Except</c>, and to the worked examples in <c>RangeSetTests</c>. The
-/// merge-join algorithms themselves are generic over the range type, so the discrete sweep does
-/// exercise all of them; what it does not reach is continuous adjacency deciding a merge.
+/// really does have two elements. The merge-join algorithms themselves are generic over the range
+/// type, so the discrete sweep does exercise all of them; what it cannot reach is continuous
+/// adjacency deciding a merge.
+/// </para>
+/// <para>
+/// That half is swept against PostgreSQL instead, by <c>ContinuousMultirangeParityTests</c> in the
+/// integration suite. A point-set model is the wrong oracle for the reals; the database is a
+/// working one, because its multirange constructor merges adjacent ranges by comparing bounds
+/// rather than by enumerating values, which is the same rule stated the same way. Between the two,
+/// the multirange surface is swept end to end — this file over the discrete domains with no
+/// database, that one over the continuous domain with one. <see cref="SmallModelOracleTests"/>
+/// still reaches the continuous two-element cases through <c>Set.Union</c> and <c>Set.Except</c>,
+/// and <c>RangeSetTests</c> keeps its worked examples.
 /// </para>
 /// <para>
 /// <b>Why the element-level check matters.</b> The single-range oracle reads results back through

@@ -255,6 +255,58 @@ arm in the codebase; those found four of the six corrections and are listed unde
   tests and the new oracle cannot drift apart on which families exist or what to feed them. Two
   tables would let a family lose its probes in one suite and go unexercised there while the other
   stayed green — the failure mode a discovery-driven suite has to defend against hardest.
+- **`SetOperatorParityTests`**, the value set counterpart of the range shape matrix. The sets had
+  an exhaustive in-memory oracle and example-based integration tests, and nothing in between:
+  nothing asked PostgreSQL to confirm `@>`, `<@`, `&&` and `cardinality` over the whole value
+  space. It now sweeps every ordered pair of subsets of a four-element universe — through EF, so
+  the translation is inside the loop — for three families chosen for what each can break that the
+  others cannot: `StringSet` (`text[]`, where the client's ordinal order and the database's
+  collation disagree), `Int64Set` (the element literals PostgreSQL will not coerce), and
+  `StringSet<TestKey>` (the wrapper arities, which reach the store through a text bridge). The
+  three compositions on `Union` that this release kept legal are swept alongside, so that claim is
+  now checked against a server rather than restated.
+
+  Two seeds. Dropping the `NOT <@` half of `IsProperSupersetOf` in the translator fails all three
+  families on exactly the equal-set rows; and refusing to translate `Union` — which sends the whole
+  projection to client evaluation, where every comparison in the sweep would still pass, since the
+  model would be agreeing with itself — fails on the assertion that the operators are in the SQL.
+- **`RangeAggregateParityTests`**. `RangeAgg`/`RangeIntersectAgg` were example-tested on both sides
+  and swept on neither, and nothing had ever fed either aggregate an empty or an unbounded range —
+  the two inputs whose handling is a choice rather than a consequence. Every subset of an
+  eight-range universe holding both is now one group, over a discrete and a continuous domain, and
+  the server's fold has to equal the client's. The empty and infinity results are additionally
+  written down as literals rather than compared, because "whatever the other one does" is not a
+  specification: `range_agg` drops empties and absorbs into `(,)`, `range_intersect_agg` empties
+  the fold at the first empty input and treats `(,)` as the identity, and the two implementations
+  agree on all of it. The one divergence — a PostgreSQL aggregate over zero rows is `NULL` where
+  `RangeAgg` answers the empty set — is now executed rather than only documented.
+
+  Seeding `RangeIntersectAgg` to skip empty inputs is what exposed the first draft comparing the
+  server against a fold re-derived in the test rather than against the shipped aggregate; the sweep
+  now calls the real ones, and the seed fails 26 of its 510 comparisons.
+- **`ContinuousMultirangeParityTests`**, closing the hole the multirange oracle documents. That
+  oracle is exhaustive and discrete *by construction* — its model is a set of grid points, and
+  decomposition into maximal runs is canonical only where consecutive points are contiguous — so
+  continuous adjacency deciding a merge went unswept. PostgreSQL has no such difficulty: its
+  multirange constructor merges adjacent ranges by comparing bounds, which is the same rule stated
+  the same way, so it is a usable oracle exactly where a point set is not. Every subset of six
+  fragments and every ordered pair of those subsets now goes through `+`, `-`, `*` and the
+  complement against `nummultirange`, about 12,500 comparisons.
+
+  Seeded twice. A blunt break of continuous adjacency fails this sweep and nine worked examples, so
+  it proves only that the sweep works. Making the lower-bound comparer blind to inclusivity is the
+  seed that shows what it adds: the entire core suite — both oracles, every algebra test, every
+  worked example — notices only through the comparer's own unit test, while its *consequence*,
+  unions that quietly stop merging, is caught by nothing at the value level. This sweep reports it
+  in hundreds of pairs.
+- **`RegistryConcurrencyTests`**. The two registries are the only mutable process-wide state in the
+  packages, and their design is sound — immutable snapshots, atomic replacement under a lock — but
+  the write is a read-modify-write over the whole snapshot, so the lock is load-bearing and was the
+  one part a later edit could drop with nothing noticing. Each registry is now hammered through
+  both of its mutating entry points at once, with readers alongside checking the built-in
+  registrations stay visible, over four rounds. Removing both locks fails both tests on 5 runs of
+  5; a single round let the set registry through about one time in three, which is why there are
+  four.
 
 ## [7.0.0] — 2026-08-17
 

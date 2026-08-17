@@ -72,7 +72,19 @@ StringSet<AccessRight> rights = [AccessRight.Parse("users.read", null)];
 
 Every value set family has an arity: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`, `Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>`, and in the NodaTime satellite `LocalDateSet<T>`, `LocalDateTimeSet<T>`, `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>`.
 
-`IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain. Every arity except `StringSet<T>` additionally requires `IComparable<TElement>` (canonical order delegates to the backing primitive).
+`IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain. Every arity except `StringSet<T>` additionally requires `IComparable<TElement>` (canonical order delegates to the backing primitive; `StringSet<T>` orders ordinally over the text form and deliberately ignores the element's own comparison).
+
+There is no private constructor to find, no source generator to integrate with and no value converter to write. Reading calls `TElement.Parse(text, invariant)` and writing calls `element.ToString(format, invariant)` — which is why Vogen, Metalama, StronglyTypedId and hand-written wrappers all work identically, and why a wrapper that omits `IParsable` does not work at all regardless of what generated it.
+
+### Why the element must be a struct
+
+Every arity constrains `TElement` to `struct`. This is stricter than the machinery needs — `IValueSet<T>` and the core are constrained only on `IEquatable<T>`, and the closed `StringSet` over `string` proves reference elements run through them — so it is a deliberate choice, for one reason:
+
+**A canonical array is sorted and binary-searched.** With a reference element the caller keeps a handle to what is inside that array. Mutate it and the array silently stops being sorted, and `Contains` then misses an element that is present — no exception, indistinguishable from a genuine miss. `struct` makes that unrepresentable: the array holds copies, so there is no handle to mutate.
+
+That is the same failure this library refuses everywhere else, and the same one `CanonicalOrder` already guards against for a different cause. The alternative — relaxing to `notnull` and documenting "elements must be immutable" — would replace a type-system guarantee with a second unenforceable element contract beside the text-form one, which is exactly the kind that needs deliberately non-conforming test types to pin.
+
+**If your domain type is a class**, declare a `readonly record struct` for storage and convert at the boundary. The wrapper only has to carry the backing primitive's text form; it does not have to be your domain model's identity type.
 
 ### The text-form contract
 
