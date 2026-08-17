@@ -76,6 +76,20 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
   `IsStrictlyLeftOf` on an unbounded start and `Except` between opposing unbounded operands
   (7.0.0), and both fixes above. The model has one axiom — that `Contains(T)` is correct, since
   results are read back through it — and that is pinned by its own test rather than assumed.
+- **`ShapeMatrixCoverageTests`**, which fails when a binary range operation has no row in
+  `ShapeMatrixParityTests`. The matrix found three of the five bugs in the receiver-shaped-dispatch
+  family, and its weakness is that it is a list: an operation added to `RangeExtensions` without a
+  row there is simply not swept, and until now nothing said so — the suite stayed green while the
+  one check that would catch the next instance quietly stopped covering it.
+
+  Operations are discovered by reflection (C# 14 extension members lower to static methods, so the
+  twelve show up as `(receiver, IRange<T>)` pairs) and coverage is parsed out of the matrix's own
+  source. The two forms are checked separately by return type: a predicate must appear in the table
+  of `(name, operator)` pairs, a value-producing operation must be invoked against its SQL
+  counterpart. That split is load-bearing — the matrix's dispatch switch calls all eight predicates,
+  so an invocation alone would mark one covered after its row was deleted. All three ways coverage
+  can be lost were seeded: a new operation with no row, a deleted predicate row, and a dropped
+  value-operation sweep.
 - **`SmallModelMultirangeOracleTests`**, reaching the multi-element algorithms that no oracle
   touched: the greedy merge, the sorted merge behind `Union`, the two-pointer merge-join behind
   `Except` and the single-pass gap walk behind `Complement` — the most intricate code here, each

@@ -83,7 +83,14 @@ questions. Neither replaces the other.
   predicate and value operation over every ordered shape pair and diffs. This is the only check
   that the library agrees with the database rather than with its own idea of what a range means.
   It uses about ten hand-picked representatives per domain.
-- **`SmallModelOracleTests`** (unit, no Docker) asks *set theory*. It enumerates every
+- **`SmallModelOracleTests`** (unit, no Docker) asks *set theory*.
+- **`ShapeMatrixCoverageTests`** (conventions, no Docker) keeps the matrix honest: adding a binary
+  operation to `RangeExtensions` without a row in the matrix fails there. Operations are discovered
+  by reflection, coverage is parsed out of the matrix source, and the two forms are checked
+  separately by return type — a predicate must appear in the `(name, operator)` table, a
+  value-producing operation must be invoked against its SQL counterpart. Checking a predicate
+  against invocations alone would not work: the matrix's own dispatch switch calls all eight, so a
+  deleted table row would still look covered. It enumerates every
   representable range over a tiny universe from its specification — around 110 per domain, all
   five shapes and all four inclusiveness combinations at every bound — derives the expected value
   set arithmetically from that specification, and checks all ~12,100 ordered pairs. About 460,000
