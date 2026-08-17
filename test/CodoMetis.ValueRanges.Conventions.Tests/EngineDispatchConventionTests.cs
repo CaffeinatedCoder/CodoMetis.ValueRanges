@@ -12,7 +12,7 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// <remarks>
 /// <para>
 /// IsAdjacentTo (6.2.1), IsStrictlyLeftOf and Except (7.0.0) and the Infinity-operand subtraction
-/// (7.0.1) were all the same defect: dispatch switched on the receiver's shape, the inner switch
+/// (8.0.0) were all the same defect: dispatch switched on the receiver's shape, the inner switch
 /// covered some operand shapes, and the discard arm returned something well-formed for the rest.
 /// Each was silently wrong in memory while the EF translation stayed correct, so the disagreement
 /// was between the two sides of the wire rather than inside either.

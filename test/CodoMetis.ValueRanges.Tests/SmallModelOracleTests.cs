@@ -39,7 +39,7 @@ namespace CodoMetis.ValueRanges.Tests;
 /// <c>IsAdjacentTo</c>'s asymmetry (6.2.1) fails the adjacency law in one direction,
 /// <c>IsStrictlyLeftOf</c> on an unbounded start (7.0.0) fails <c>max A &lt; min B</c>,
 /// <c>Except</c> between opposing unbounded operands (7.0.0) fails set difference, and
-/// <c>RangeSet.Except(TRange)</c> with an infinity operand (7.0.1) fails it at the set arity.
+/// <c>RangeSet.Except(TRange)</c> with an infinity operand (8.0.0) fails it at the set arity.
 /// </para>
 /// </remarks>
 [TestClass]

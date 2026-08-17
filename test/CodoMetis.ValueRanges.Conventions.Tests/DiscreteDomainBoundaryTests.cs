@@ -65,7 +65,7 @@ public sealed class DiscreteDomainBoundaryTests
             covered.Add(rangeType.Name);
         }
 
-        // Int32Range, Int64Range, DateRange, LocalDateRange, YearMonthRange as of 7.0.1.
+        // Int32Range, Int64Range, DateRange, LocalDateRange, YearMonthRange as of 8.0.0.
         Assert.IsTrue(
             covered.Count >= 5,
             $"Found {covered.Count} discrete range types, fewer than the five known to exist: "

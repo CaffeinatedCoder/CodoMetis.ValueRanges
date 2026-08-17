@@ -34,7 +34,7 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 public sealed class ShapeMatrixCoverageTests
 {
     // Contains, IsContainedBy, Overlaps, IsStrictlyLeftOf, IsStrictlyRightOf, DoesNotExtendRightOf,
-    // DoesNotExtendLeftOf, IsAdjacentTo, Intersect, Merge, Union, Except — as of 7.0.1. A floor,
+    // DoesNotExtendLeftOf, IsAdjacentTo, Intersect, Merge, Union, Except — as of 8.0.0. A floor,
     // so adding an operation does not fail this assertion; the coverage check below covers it.
     private const int KnownBinaryOperations = 12;
 

@@ -111,7 +111,7 @@ internal static class RangeBoundHelpers
 
             // Every shape is named above, so this is only reachable through an external
             // implementation of IRange<T> — which the sealed-variant rule forbids. Empty was the
-            // fallback until 7.0.1 and silently swallowed such a range.
+            // fallback until 8.0.0 and silently swallowed such a range.
             _ => throw ShapePair.Unreachable(nameof(RecreateAs), source, source)
         };
 }

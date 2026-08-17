@@ -15,7 +15,7 @@ namespace CodoMetis.ValueRanges.Tests;
 /// answers is therefore observable, and it has to be a refusal.
 /// </para>
 /// <para>
-/// <c>ToString</c> returned <c>"empty"</c> there until 7.0.1 — the worst available answer, since
+/// <c>ToString</c> returned <c>"empty"</c> there until 8.0.0 — the worst available answer, since
 /// that text is what <c>Parse</c> round-trips, what the EF literal sends to PostgreSQL and what
 /// <c>ShapeMatrixParityTests</c> compares against the server. An unrecognised range would have been
 /// stored, queried and asserted as the empty range with nothing raised anywhere.

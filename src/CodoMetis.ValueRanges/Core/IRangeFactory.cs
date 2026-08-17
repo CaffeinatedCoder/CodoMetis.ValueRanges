@@ -145,7 +145,7 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
 
             // All five shapes are named above, so this is only reachable through an implementation
             // of IRange<T> that is none of them — which the sealed-variant rule forbids. It
-            // answered "empty" until 7.0.1, and that is the worst possible fallback here: this text
+            // answered "empty" until 8.0.0, and that is the worst possible fallback here: this text
             // is what Parse round-trips, what the EF literal sends to PostgreSQL and what the shape
             // matrix compares, so an unrecognised range would have been silently stored, queried
             // and asserted as the empty range rather than rejected.

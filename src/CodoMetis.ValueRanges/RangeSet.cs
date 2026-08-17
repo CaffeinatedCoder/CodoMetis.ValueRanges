@@ -351,7 +351,7 @@ public sealed class RangeSet<TRange, T>
     {
         // The infinite set contains every value, and its single element has no lower bound to
         // binary-search on — RangeLowerBound throws for IInfinityRange rather than inventing one.
-        // Every other query here guards this first; until 7.0.1 this one did not, so
+        // Every other query here guards this first; until 8.0.0 this one did not, so
         // RangeSet.Infinite.Contains(value) threw where the single-range overload answered true.
         if (IsInfiniteSet) return true;
 
@@ -788,7 +788,7 @@ public sealed class RangeSet<TRange, T>
         if (other is IEmptyRange<T>) return this;
 
         // X \ (-∞, +∞) is the empty set for every X. Without this the infinite-set branch below
-        // asked the engine to shape ∞ \ ∞, which no arm covers: until 7.0.1 the fallback there
+        // asked the engine to shape ∞ \ ∞, which no arm covers: until 8.0.0 the fallback there
         // answered ∞, so RangeSet.Infinite.Except(TRange.Infinite) returned the whole domain.
         // The RangeSet overload has always guarded its own infinite operand this way.
         if (other is IInfinityRange<T>) return Empty;

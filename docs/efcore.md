@@ -168,7 +168,7 @@ bookings.Where(b => b.Tags.Union(more).Contains(tag));
 `Union` is the one translated operation whose result is **not** canonical — `array_cat`
 concatenates. That is invisible to the operators above (all duplicate-insensitive) and to
 materialization (reads re-canonicalize), but anything sensitive to order or multiplicity is
-**refused** rather than translated: `Count`, and since 7.0.1 `==`/`!=`/`Equals`. Array equality
+**refused** rather than translated: `Count`, and since 8.0.0 `==`/`!=`/`Equals`. Array equality
 is sensitive to both, and the ordering half is the one that surprises — on the server
 `{a,c} ∪ {a,b} = {a,b,c}` is false for the repeated element, and `{a,c} ∪ {b} = {a,b,c}` is false
 for the ordering alone, where nothing repeats. Both are true in memory. Compare with

@@ -9,16 +9,33 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
-## [7.0.1] — 2026-08-17
+## [8.0.0] — 2026-08-17
 
-A fourth instance of the trap 7.0.0 documented, and the structural change that makes a fifth fail
-loudly instead of silently.
+Six corrections and the machinery that found them. **Nothing was removed or resignatured** —
+package validation passes against the 7.0.0 baseline — and no signature changed anywhere.
 
-7.0.0 recorded that three bugs had come from one shape: dispatch on the *receiver's* shape, an inner
-switch over the operand's, and a discard arm that answers the pairs nobody wrote. Auditing the
-engines for that shape turned up one more — `RangeSet.Except(TRange)` with an infinity operand — and
-made the case that documenting the rule was not going to be enough on its own. The engines now
-decide on the shape *pair*, and a pair with no arm throws instead of returning something plausible.
+This is a major for the same reason 7.0.0 was: several corrections change what existing calls
+*answer*, and a caller cannot discover that from a compile error. One goes further and changes a
+query that compiled and ran into one that throws. Upgrading is a code change for anyone on the
+affected paths, and a floating `7.0.*` reference must not pick that up silently.
+
+**What can break you, in order of likelihood:**
+
+1. **`==`/`!=`/`Equals` over a server-computed value set `Union` now fails translation.** Those
+   queries were returning wrong rows; they now throw with a message naming the alternatives.
+2. **`RangeSet.Except(TRange)` with an infinity operand** returned the whole domain and now returns
+   the empty set, `Complement()` on the infinite set with it.
+3. **`YearMonthRange.NextValueAfter`/`PreviousValueBefore`** now reject a non-ISO calendar instead
+   of stepping in it and returning a value the type's own constructors refuse.
+4. **`RangeSet.Contains(T)` on the infinite set** threw and now answers `true`; **the NodaTime step
+   functions** threw at a Gregorian-spelled domain maximum and now answer `null`. Both were loud
+   failures, so only code catching them is affected.
+
+Everything else here is internal or additive. The engines now decide on the shape *pair* rather than
+the receiver's shape, and a pair with no arm throws instead of returning something plausible — the
+fourth instance of the trap 7.0.0 documented, and the structural change that makes a fifth loud. The
+release also adds four exhaustive oracles, three convention tests and a hand triage of every discard
+arm in the codebase; those found four of the six corrections and are listed under **Added**.
 
 ### Fixed
 

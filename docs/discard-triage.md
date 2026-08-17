@@ -6,7 +6,7 @@ bans them mechanically inside `src/**/Internals/`, where all five lived. It cann
 repo-wide, because plenty of discards elsewhere are correct and load-bearing — `Contains`'s
 `_ => false` for an empty *receiver* is the specification, not a gap.
 
-So the rest were triaged by hand, once, in 7.0.1. This is the record: what was found, and — more
+So the rest were triaged by hand, once, in 8.0.0. This is the record: what was found, and — more
 usefully — which arms are covered by something mechanical and which rest on an argument.
 
 **60 arms outside `Internals/`. One defect. One cosmetic fix. Six promoted from argued to swept.**
