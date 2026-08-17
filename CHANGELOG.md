@@ -308,6 +308,38 @@ arm in the codebase; those found four of the six corrections and are listed unde
   5; a single round let the set registry through about one time in three, which is why there are
   four.
 
+### Documentation
+
+No behaviour changed here, but one of these corrects a claim that shipped on a NuGet page, so it
+ships in this release rather than after it.
+
+- **⚠️ The pattern-matching guidance was wrong, and the documented snippet did not compile.** Every
+  page showing a switch over the five range shapes said the compiler enforces the coverage. It does
+  not: the example warns `CS8509`, which is a build *error* under `TreatWarningsAsErrors` — as in
+  this repository — so a reader's first copy-paste failed to build while the prose beside it
+  promised a guarantee.
+
+  Adding a `null` arm does not help, and that is the diagnostic worth recording: the complaint moves
+  from `'_'` to `'not null'`, which is C# declining to accept the five subtype patterns as covering
+  a non-null range at all. Exhaustiveness analysis does not reason about a closed class hierarchy,
+  so the private base constructor buys the runtime guarantee and none of the compile-time one.
+
+  The narrower true statement — no external subtype can be declared, so the five arms are complete
+  in fact and the discard is unreachable — now appears alongside a discard arm that **throws**. That
+  is the same rule the library already imposes on its own shape dispatches, for the same reason: a
+  fallback returning a plausible value is how four of this release's family of bugs stayed hidden.
+  Corrected in the README, `docs/ranges.md`, `docs/architecture.md`, `CLAUDE.md` and the core
+  package's own README, which is where it reached NuGet.
+
+- **The value set table listed six families as having no wrapper arity.** 7.0.0 added all eleven and
+  completed the set; the table had not moved. The EF package's README also linked twice into
+  root-README anchors that have never existed there.
+
+- **A getting-started guide** (`docs/getting-started.md`) — in-memory first, then entity, migration
+  and a translated query — and the migration guide now covers v7 and v8, having stopped at v3.x
+  while the package shipped 8.0.0. The README leads with installation and code instead of
+  positioning, which moves to `docs/why.md`.
+
 ## [7.0.0] — 2026-08-17
 
 Two workstreams land together: the validated-wrapper arities now exist for every value set family
