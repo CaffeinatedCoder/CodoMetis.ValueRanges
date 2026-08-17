@@ -89,7 +89,7 @@ RangeType (abstract, private ctor)
 └── Infinity       : IInfinityRange<T>    — (-∞, +∞)
 ```
 
-The private base constructor prevents external subtyping, so the compiler guarantees exhaustive switch expressions. Invalid ranges (inverted bounds, degenerate half-open) normalize to `EmptyRange` at construction time.
+The private base constructor prevents external subtyping, so these five are the only ranges that can exist and a switch over them is complete in fact. C# does not prove it — exhaustiveness analysis ignores the closed hierarchy, so a switch expression still warns `CS8509` without a discard arm, which is why the discard must throw rather than answer (see [pattern matching](ranges.md#pattern-matching)). Invalid ranges (inverted bounds, degenerate half-open) normalize to `EmptyRange` at construction time.
 
 ## Interface Hierarchy (`Core/`)
 

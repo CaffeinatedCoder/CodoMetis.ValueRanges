@@ -69,7 +69,9 @@ month-granularity `YearMonthRange` — live in
 Each range is a discriminated union of `Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange` and
 `Infinity`. The shape lives in the static type: `UnboundedEnd` has no `End` property to put a
 sentinel in, `Finite` has no flag to disown its `End`, and neither carries a nullable bound. Invalid
-states are unrepresentable, and pattern matching is exhaustive with compiler-enforced coverage.
+states are unrepresentable, and because no external subtype can be declared, these five are the only
+ranges that can exist — so a switch over them is complete in fact, though C# cannot prove it and a
+switch expression still needs a (unreachable) discard arm.
 
 ```csharp
 DateTimeRange.CreateUnboundedEnd(start)               // genuinely open-ended

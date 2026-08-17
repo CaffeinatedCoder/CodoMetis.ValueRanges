@@ -53,10 +53,21 @@ string Describe(Int32Range range) => range switch
     Int32Range.UnboundedStart s => $"(-∞, {s.End}]",
     Int32Range.UnboundedEnd e   => $"[{e.Start}, +∞)",
     Int32Range.Infinity         => "(-∞, +∞)",
+    _                           => throw new UnreachableException(),   // System.Diagnostics
 };
 ```
 
-The private constructor on the abstract base record prevents any subtypes being declared outside the assembly, so the compiler guarantees this switch is complete.
+The five variants are the only ranges that can exist: the private constructor on the abstract base
+record prevents any subtype being declared outside the assembly. So the five arms are complete in
+fact, and the discard is genuinely unreachable.
+
+C# does not prove that, though — its exhaustiveness analysis does not reason about a closed class
+hierarchy, so a switch *expression* over the variants warns `CS8509` without a discard arm, and
+adding a `null` arm does not help (the complaint just moves to `not null`). Keep the discard and make
+it **throw** rather than return a value: that is the same rule the library applies to its own shape
+dispatches, and for the same reason — a fallback that produces a plausible answer is how four
+range-algebra bugs stayed hidden ([architecture](architecture.md)). A switch *statement* needs no
+discard, and `if`/`is` chains are unaffected.
 
 ## Query Operations
 
