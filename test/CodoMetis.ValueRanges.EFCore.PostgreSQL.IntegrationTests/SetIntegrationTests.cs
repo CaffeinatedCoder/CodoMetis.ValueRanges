@@ -195,6 +195,30 @@ public class SetIntegrationTests
             .CountAsync();
         Assert.AreEqual(0, byEquality);
 
+        // `Count` carries the same precondition as `==`, and is the second member that does.
+        // It translates to `cardinality`, which ignores order but not duplicates, so it counts
+        // the three elements stored where the materialized set has two. Pinned in both
+        // directions: the model's answer finds nothing, the stored one finds the row.
+        Assert.AreEqual(2, loaded.Tags.Count, "the materialized set is normalized");
+
+        var byModelCount = await query.Reservations
+            .Where(r => r.Id == 8010 && r.Tags.Count == 2)
+            .CountAsync();
+        Assert.AreEqual(0, byModelCount, "cardinality does not see the normalized count");
+
+        var byStoredCount = await query.Reservations
+            .Where(r => r.Id == 8010 && r.Tags.Count == 3)
+            .CountAsync();
+        Assert.AreEqual(1, byStoredCount, "cardinality counts the duplicate the row still holds");
+
+        // IsEmpty is not affected — an array is empty exactly when it has no elements, whatever
+        // its multiplicities — so the divergence is Count's alone, not cardinality's in general.
+        var byIsEmpty = await query.Reservations
+            .Where(r => r.Id == 8010 && !r.Tags.IsEmpty)
+            .CountAsync();
+        Assert.AreEqual(1, byIsEmpty);
+        Assert.IsFalse(loaded.Tags.IsEmpty);
+
         // The row stays as written until actually modified — reads alone never rewrite it.
         Assert.AreEqual("{b,a,b}", await ColumnText("Tags", 8010));
     }

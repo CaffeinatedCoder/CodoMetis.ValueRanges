@@ -146,7 +146,16 @@ modelBuilder.Entity<Booking>()
 
 `Contains` deliberately translates as containment (`@>`) rather than `= ANY(...)`, because only containment is GIN-servable — one code path, always indexable.
 
-**Set equality** (`==`) translates to SQL `=`, which is order-sensitive on arrays: it means set equality exactly because every writer stores canonical form. Rows written by other tools in non-canonical order are still matched correctly by all the operators above (they ignore order and duplicates) and normalize when materialized — only `==` carries the canonical-writers precondition. The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is the property's own concern.
+**Set equality** (`==`) translates to SQL `=`, which is order-sensitive on arrays: it means set equality exactly because every writer stores canonical form. Rows written by other tools in non-canonical order are still matched correctly by every *operator* above — `@>`, `<@`, `&&` and the proper-containment pairs ignore both order and duplicates — and normalize when materialized.
+
+Two members carry the canonical-writers precondition, not one:
+
+- **`==`**, because SQL `=` compares arrays as sequences.
+- **`Count`**, because it translates to `cardinality`, which ignores order but *not* duplicates. A row stored as `{b,a,b}` materializes as the two-element set `{a,b}`, so `set.Count` is 2 in memory while `WHERE "Tags".cardinality = 2` does not match it and `= 3` does. `IsEmpty` is unaffected: an array is empty exactly when it has no elements, whatever its multiplicities.
+
+That divergence is inherent to reading normalized while leaving the row as written — the alternatives are rewriting foreign rows on read, or refusing to translate `Count` at all, and neither is worth the common case. If you query `Count` against a table other tools also write, canonicalize on ingest.
+
+The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is the property's own concern.
 
 Two boundary notes: plain `T[]`/`List<T>` properties keep their native Npgsql mapping — both can coexist in one model — and database scaffolding produces plain arrays, since opting into a set type is a model decision. The NodaTime satellite registers its five set types via the same `UseValueRangesNodaTime()` call; `YearMonthSet` persists first-of-month dates and reads validate alignment, exactly like `YearMonthRange`.
 

@@ -38,6 +38,20 @@ covers all four packages, which share one version number and release together.
   the gap had been hiding behind: the translation tests assert that `<<` is emitted, never what it
   answers.
 
+### Known difference
+
+- **`Count` carries the canonical-writers precondition, as `==` does** — the documentation said
+  only `==` did. `Count` translates to `cardinality`, which ignores element order but not
+  multiplicity, so a row another tool stored as `{b,a,b}` materializes as the two-element set
+  `{a,b}` while `WHERE "Tags".cardinality = 2` does not match it and `= 3` does. No behaviour
+  changed here; the claim in `docs/efcore.md` was wrong and is corrected, and the live suite now
+  pins both directions beside the `==` case it already covered.
+
+  `IsEmpty` is unaffected — an array is empty exactly when it has no elements, whatever its
+  multiplicities — so this is `Count`'s alone rather than a property of `cardinality` in general.
+  The divergence is inherent to normalizing on read while leaving the row as written; the
+  alternatives are rewriting foreign rows on read or refusing to translate `Count` at all.
+
 ## [6.3.0] — 2026-08-16
 
 ### Added

@@ -120,6 +120,14 @@ requires the model to match — some 3,300 comparisons, no exclusions.
   again. **Behaviour changes for anyone comparing an unbounded-start range with `IsStrictlyLeftOf`
   or `IsStrictlyRightOf` in memory** — from a wrong `false` to the answer PostgreSQL already gave.
 
+### Known difference
+
+- **`Count` on a value set carries the canonical-writers precondition, as `==` does.** The
+  documentation claimed only `==` did. `Count` translates to `cardinality`, which ignores order but
+  not duplicates, so a row another tool stored as `{b,a,b}` reads back as the two-element set
+  `{a,b}` while the server counts three. No behaviour changed — `docs/efcore.md` is corrected and
+  the live suite now pins it. `IsEmpty` is unaffected.
+
 ## [6.3.0] — 2026-08-16
 
 Three additions that close gaps in the existing surface rather than extending the model. No
