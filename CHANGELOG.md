@@ -22,6 +22,24 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
 
 ### Fixed
 
+- **⚠️ Comparing a server-computed value set `Union` for equality is now refused instead of
+  answering wrongly.** `Union` translates to `array_cat`, which concatenates: the result carries
+  duplicates and keeps each operand's ordering, while array equality is sensitive to both. Against
+  a live server `{a,c} ∪ {a,b} = {a,b,c}` is `false` for the repeated `a`, and — the half that
+  surprises — `{a,c} ∪ {b} = {a,b,c}` is `false` too, where nothing repeats and only the order
+  differs. In memory both are `true`. Nothing threw; the row simply did not match.
+
+  `==`, `!=` and `Equals` over a union, or over anything built on one that did not restore
+  canonical form, now fail translation with an exception naming the alternatives. This matches how
+  `Count` over a union has been refused since 6.2.0, and it was the last known-wrong translation in
+  the package. The order- and multiplicity-insensitive operators are unaffected and still compose
+  on a union — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `IsEmpty`, and the proper
+  subset/superset pair, which is written as `<@ AND NOT @>` precisely so it stays insensitive.
+
+  Not "fixed" by canonicalizing in SQL, deliberately: PostgreSQL has no array_distinct, and sorting
+  inside the query orders `text` by the database collation rather than ordinally — silently
+  disagreeing with the client's canonical order, which is the same defect one layer down.
+  **If a query relied on this comparison it was already returning wrong rows; it now throws.**
 - **The NodaTime step functions missed a domain maximum spelled in another calendar.**
   `LocalDateRange.NextValueAfter` compared against `LocalDate.MaxIsoValue` with `==`, and NodaTime's
   equality includes the calendar system. Of its nineteen calendars only ISO and Gregorian can

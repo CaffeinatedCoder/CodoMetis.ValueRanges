@@ -167,9 +167,19 @@ bookings.Where(b => b.Tags.Union(more).Contains(tag));
 
 `Union` is the one translated operation whose result is **not** canonical — `array_cat`
 concatenates. That is invisible to the operators above (all duplicate-insensitive) and to
-materialization (reads re-canonicalize), but `Count` over a union is refused rather than
-counting duplicates, and comparing a union with `==` is unreliable. `Remove` has no such
-caveat: `array_remove` leaves the array sorted and deduplicated. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
+materialization (reads re-canonicalize), but anything sensitive to order or multiplicity is
+**refused** rather than translated: `Count`, and since 7.0.1 `==`/`!=`/`Equals`. Array equality
+is sensitive to both, and the ordering half is the one that surprises — on the server
+`{a,c} ∪ {a,b} = {a,b,c}` is false for the repeated element, and `{a,c} ∪ {b} = {a,b,c}` is false
+for the ordering alone, where nothing repeats. Both are true in memory. Compare with
+`IsSubsetOf`/`IsSupersetOf` instead, which mean the same thing for canonical sets and ignore both,
+or materialize the union first.
+
+This is deliberately not "fixed" by canonicalizing in SQL: PostgreSQL has no array_distinct, and
+sorting inside the query orders `text` by the database collation rather than ordinally — which is
+the same disagreement with the client's canonical order, one layer down.
+
+`Remove` has no such caveat: `array_remove` leaves the array sorted and deduplicated. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
 
 **Indexing** is ordinary EF configuration — no package involvement:
 

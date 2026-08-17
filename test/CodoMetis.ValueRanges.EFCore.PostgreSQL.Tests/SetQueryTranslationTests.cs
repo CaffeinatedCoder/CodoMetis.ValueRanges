@@ -211,6 +211,51 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
+    public void Union_Equality_FailsTranslation()
+    {
+        // array_cat concatenates, and array equality is sensitive to both multiplicity and order,
+        // so this would answer false for sets that are equal in memory. Both halves bite:
+        // {a,c} ∪ {a,b} differs from {a,b,c} by the repeated a, and {a,c} ∪ {b} differs by
+        // ordering alone with nothing repeated. Refusing beats a row quietly not matching.
+        using var context = new TestDbContext();
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted) != Wanted).ToQueryString());
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted).Equals(Wanted)).ToQueryString());
+
+        // And through a canonicality-preserving wrapper, as the Count refusal does.
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x") == Wanted).ToQueryString());
+    }
+
+    [TestMethod]
+    public void Equality_WithoutAUnion_StillTranslates()
+    {
+        // The refusal is scoped to a server-computed union: comparing a column against a
+        // canonical value is ordinary array equality and stays translatable.
+        var sql = Sql(db => db.Bookings.Where(b => b.Tags == Wanted));
+        StringAssert.Contains(sql, "ARRAY['a','b']::text[]");
+    }
+
+    [TestMethod]
+    public void Union_InsensitivePredicates_StillTranslate()
+    {
+        // The operators that ignore order and multiplicity keep composing on a union — that is
+        // the whole reason array_cat is an acceptable translation for it.
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).IsSupersetOf(Wanted))),
+                              "array_cat");
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).Overlaps(Wanted))),
+                              "array_cat");
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).IsProperSubsetOf(Wanted))),
+                              "array_cat");
+    }
+
+    [TestMethod]
     public void Union_Count_FailsTranslation()
     {
         // array_cat concatenates, so cardinality would count shared elements twice.
