@@ -163,9 +163,11 @@ internal static class SetTypeRegistry
     /// can register from their options-builder extension on every context configuration.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// A different set type is already registered for the same element CLR type — the element
-    /// type is the fallback lookup for interface-typed operands, so it must resolve
-    /// unambiguously.
+    /// A different set type is already registered for the same element CLR type. Nothing resolves
+    /// a definition by element type any more, so this is a registration sanity check rather than a
+    /// correctness requirement: two set types over one element type is almost always a satellite
+    /// registering the same family twice under different names, and the specific message beats the
+    /// silence. <see cref="RangeTypeRegistry"/> carries the identical check.
     /// </exception>
     public static void Register(ISetTypeDefinition definition)
     {
@@ -252,28 +254,6 @@ internal static class SetTypeRegistry
         {
             definition = FamilyCache.GetOrAdd(clrType, factory);
             return true;
-        }
-
-        definition = null;
-        return false;
-    }
-
-    /// <summary>
-    /// Looks up a definition by element type — the fallback when an expression is statically
-    /// typed as <c>IValueSet&lt;T&gt;</c> and only <c>T</c> is known. Searches closed
-    /// registrations and already-instantiated family definitions.
-    /// </summary>
-    public static bool TryGetByElementType(Type elementType, [NotNullWhen(true)] out ISetTypeDefinition? definition)
-    {
-        if (Current.ByElementType.TryGetValue(elementType, out definition)) return true;
-
-        foreach (var cached in FamilyCache.Values)
-        {
-            if (cached.ElementClrType == elementType)
-            {
-                definition = cached;
-                return true;
-            }
         }
 
         definition = null;
