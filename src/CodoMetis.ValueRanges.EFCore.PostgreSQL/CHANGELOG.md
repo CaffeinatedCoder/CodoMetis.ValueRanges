@@ -19,6 +19,12 @@ three bugs in 7.0.0, the disagreement was between the database and memory rather
 — so `RangeSet.Infinite.Except(range)` evaluated server-side has always answered the empty set. See
 `CodoMetis.ValueRanges` 8.0.0 for the in-memory fix that brings the two back into step.
 
+### Documentation
+
+- **This README linked twice into root-README anchors that have never existed**, so both links landed
+  on the wrong page from the NuGet listing. They now point at `docs/efcore.md`, where the content
+  lives, and the package documentation gains a link to the new getting-started guide.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added

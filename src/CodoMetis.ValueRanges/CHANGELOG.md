@@ -36,6 +36,16 @@ covers all four packages, which share one version number and release together.
   These paths sit behind the callers' guards and are unreachable; if a change breaks a guard, the
   first test to reach it now names the missing pair.
 
+### Documentation
+
+- **⚠️ This package's README claimed pattern matching over the five shapes has compiler-enforced
+  coverage. It does not.** A switch expression over the variants warns `CS8509` — a build error
+  under `TreatWarningsAsErrors` — and adding a `null` arm only moves the complaint to `'not null'`,
+  because C# exhaustiveness analysis does not reason about a closed class hierarchy. The private
+  base constructor still guarantees no external subtype exists, so the five arms are complete in
+  fact and a discard is unreachable; it now says that, and says to make the discard throw. See the
+  root changelog for the full note.
+
 ## [7.0.0] — 2026-08-17
 
 ### Added
