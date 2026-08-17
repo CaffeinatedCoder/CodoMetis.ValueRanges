@@ -53,6 +53,13 @@ arm in the codebase; those found four of the six corrections and are listed unde
   on a union — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `IsEmpty`, and the proper
   subset/superset pair, which is written as `<@ AND NOT @>` precisely so it stays insensitive.
 
+  The refusal covers only the contexts EF must translate in full — `Where`, `Any`, `All`, the
+  predicate overloads, the ordering and grouping keys. In a **projection** it still works, because
+  EF falls back to client evaluation there and computes against the materialized set. That scoping
+  is what keeps equality in step with the `Count` refusal, which reaches the same outcome by a
+  different route: returning `null` from a translator hands the decision to EF. Materializing with
+  `AsEnumerable()` remains the way to ask for the in-memory answer in any context.
+
   Not "fixed" by canonicalizing in SQL, deliberately: PostgreSQL has no array_distinct, and sorting
   inside the query orders `text` by the database collation rather than ordinally — silently
   disagreeing with the client's canonical order, which is the same defect one layer down.
