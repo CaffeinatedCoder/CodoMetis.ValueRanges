@@ -154,4 +154,50 @@ public class RangeLengthTests
         Assert.IsNull(Int32Range.Infinite.Length);
         Assert.AreNotEqual(Int32Range.Empty.Length, Int32Range.Infinite.Length);
     }
+
+    /// <summary>
+    /// A <see cref="DecimalRange"/> straddling zero can be wider than <see cref="decimal"/> itself,
+    /// and there is no wider type to measure it in — so <c>Length</c> answers
+    /// <see langword="null"/>, as <c>Int64Range</c> does for a count above
+    /// <see cref="long.MaxValue"/>.
+    /// </summary>
+    /// <remarks>
+    /// It threw <see cref="OverflowException"/> out of the property until 7.0.0 — the only measure
+    /// in the family that could fail, where its sibling had already established the answer.
+    /// </remarks>
+    [TestMethod]
+    public void Length_Decimal_SpanWiderThanTheDomain_IsNullRatherThanThrowing()
+    {
+        Assert.IsNull(DecimalRange.CreateFinite(decimal.MinValue, decimal.MaxValue).Length);
+        Assert.IsNull(DecimalRange.CreateFinite(-1m, decimal.MaxValue).Length);
+    }
+
+    /// <summary>
+    /// The refusal is exact, not approximate: a span of exactly <see cref="decimal.MaxValue"/>
+    /// still measures. A guard that rounded would take these with it.
+    /// </summary>
+    [TestMethod]
+    public void Length_Decimal_WidestRepresentableSpan_StillMeasures()
+    {
+        Assert.AreEqual(decimal.MaxValue, DecimalRange.CreateFinite(0m, decimal.MaxValue).Length);
+        Assert.AreEqual(decimal.MaxValue, DecimalRange.CreateFinite(decimal.MinValue, 0m).Length);
+        Assert.AreEqual(decimal.MaxValue, DecimalRange.CreateFinite(-1m, decimal.MaxValue - 1m).Length);
+
+        // One unit wider on the same lower bound is where it tips over.
+        Assert.IsNull(DecimalRange.CreateFinite(-1m, decimal.MaxValue).Length);
+    }
+
+    /// <summary>
+    /// The same boundary on the sibling that already had the guard, asserted from both directions
+    /// so an off-by-one in either would show.
+    /// </summary>
+    [TestMethod]
+    public void Length_Int64_RefusalBoundary_IsExact()
+    {
+        Assert.AreEqual(long.MaxValue, Int64Range.CreateFinite(1L, long.MaxValue).Length);
+        Assert.AreEqual(long.MaxValue, Int64Range.CreateFinite(long.MinValue + 1, -1L).Length);
+
+        Assert.IsNull(Int64Range.CreateFinite(0L, long.MaxValue).Length);
+        Assert.IsNull(Int64Range.CreateFinite(long.MinValue, -1L).Length);
+    }
 }

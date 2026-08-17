@@ -55,6 +55,38 @@ public partial class Reservation
 
     public int GroupKey { get; set; }
 
+    // -- The multiranges that had no mapped column until 7.0.0 --
+    //
+    // Six of the eleven multirange types were exercised end to end; these five had never been
+    // mapped to a column, so nothing proved their store type, their literal form or their
+    // round trip. Every one is covered by MultirangeCoverageTests.
+
+    public RangeSet<Int64Range, long> TicketBlocks { get; set; } = RangeSet<Int64Range, long>.Empty;
+
+    public RangeSet<DecimalRange, decimal> PriceBands { get; set; } = RangeSet<DecimalRange, decimal>.Empty;
+
+    public RangeSet<DateTimeRange, DateTime> WallClockWindows { get; set; } = RangeSet<DateTimeRange, DateTime>.Empty;
+
+    public RangeSet<DateTimeOffsetRange, DateTimeOffset> InstantWindows { get; set; } =
+        RangeSet<DateTimeOffsetRange, DateTimeOffset>.Empty;
+
+    public RangeSet<LocalDateTimeRange, LocalDateTime> NodaWallClocks { get; set; } =
+        RangeSet<LocalDateTimeRange, LocalDateTime>.Empty;
+
+    // -- Element-typed scalars, so a range constructor can be built from columns server-side --
+
+    public DateOnly Day { get; set; }
+
+    public DateOnly OtherDay { get; set; }
+
+    public decimal Amount { get; set; }
+
+    public decimal OtherAmount { get; set; }
+
+    public TimeOnly At { get; set; }
+
+    public TimeOnly Until { get; set; }
+
     // -- Value set properties: BCL closed types --
 
     public StringSet Tags { get; set; } = StringSet.Empty;

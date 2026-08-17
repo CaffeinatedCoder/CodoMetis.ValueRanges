@@ -51,8 +51,8 @@ remedy for those is to upgrade.
 
 | Version | Supported |
 |---|---|
-| 6.4.x | ✅ |
-| < 6.4 | ❌ |
+| 7.0.x | ✅ |
+| < 7.0 | ❌ |
 
 ### For how long
 

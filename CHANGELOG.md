@@ -9,10 +9,31 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
-## [6.4.0] — 2026-08-17
+## [7.0.0] — 2026-08-17
 
-The validated-wrapper arities now exist for every value set family instead of four of them. No
-breaking changes.
+Two workstreams land together: the validated-wrapper arities now exist for every value set family
+instead of four of them, and an audit of the range and multirange types corrected five defects.
+
+**Nothing was removed or resignatured** — package validation passes against the 6.3.0 baseline — and
+the value set surface only grew. What makes this a major is the range half: three of its five
+corrections change what existing calls *answer*, silently, and a silent change of answer is the kind
+a caller cannot discover from a compile error.
+
+Those three shared one shape: the EF translation was correct and the in-memory implementation was
+not, so the same expression gave one answer when it ran in PostgreSQL and another when it ran in
+memory. Nothing threw. If you evaluate range operations only server-side, or only in memory, you saw
+consistent (in these cases consistently wrong) results either way; the disagreement was visible only
+to code that did both. The remaining two were loud rather than silent — a query PostgreSQL refused
+to run, and a property that threw.
+
+Two of the three are the same mistake, and it is the third time this repository has made it: an
+operation that dispatches on the *receiver's* shape and handles the *operand's* shapes in an inner
+switch, where the missing arm falls through to a default that answers `false` or returns the
+receiver unchanged. `IsAdjacentTo` had it in 6.2.1; `IsStrictlyLeftOf` and `Except` have it here.
+
+The audit's durable output is `ShapeMatrixParityTests`, which asks PostgreSQL for all eight binary
+predicates *and* the four value-producing operations over every ordered pair of range shapes, and
+requires the model to match — some 3,300 comparisons, no exclusions.
 
 ### Added
 
@@ -70,6 +91,93 @@ breaking changes.
   under `WriteAsString`**, from a number to the string their primitive sibling was already writing.
   Reads are unaffected — the numeric converters have always accepted a JSON string unconditionally.
 
+
+- **`DecimalRange.Length` threw `OverflowException` for a range wider than `decimal` itself.**
+  `DecimalRange.CreateFinite(decimal.MinValue, decimal.MaxValue).Length` raised instead of
+  answering; the span is twice `decimal.MaxValue` and there is no wider type to compute it in. It
+  now returns `null`, which is the answer `Int64Range.Length` already gave for a count above
+  `long.MaxValue` and documented as "too large to represent". Only a range straddling zero can
+  reach it, and the refusal is exact — a span of exactly `decimal.MaxValue` still measures.
+
+  This was the only measure in the family that could fail, and a property that throws breaks
+  debugger evaluation and LINQ projections as much as it breaks the caller.
+
+- **⚠️ `Except` subtracted nothing when the two operands were unbounded in opposite directions.**
+  `((-∞,5]).Except([1,+∞))` returned `{(-∞,5]}` — the receiver, unchanged — where the answer is
+  `{(-∞,0]}`, and symmetrically `([1,+∞)).Except((-∞,5])` returned `{[1,+∞)}` instead of `{[6,+∞)}`.
+  `RangeSet.Except` reaches the same engine through its merge-join and had it too.
+
+  This is the most damaging of the five, because the result is a **well-formed range of the right
+  shape carrying the wrong values** — nothing to notice at a glance, and a subtraction that quietly
+  keeps what it was asked to remove. Every element type and both discrete and continuous domains
+  were affected.
+
+  `ExceptEngine` dispatched on the receiver's shape; each unbounded receiver's inner switch had an
+  arm for a finite operand and one for an operand unbounded the *same* way, but none for the
+  opposing one, so the `_` fallback rebuilt the receiver. That fallback is reachable *only* for the
+  opposing-unbounded pair — an empty operand is filtered by the `Overlaps` guard and an infinite one
+  by the `Contains` guard — so it was wrong on every call that reached it.
+
+- **⚠️ `Contains` and `IsContainedBy` now agree that the empty range is contained by everything.**
+  `[1,5].Contains(Int32Range.Empty)` returned `false` and now returns `true`, as does
+  `Int32Range.Empty.IsContainedBy(anything)` and `Int32Range.Empty.Contains(Int32Range.Empty)`.
+
+  ∅ ⊆ S for every S: "every value of the inner range is also in the outer" is vacuously satisfied
+  when the inner range has no values. PostgreSQL's `@>` answers the same, so the previous behaviour
+  put the two sides of the wire in disagreement — `r.Period.Contains(DateRange.Empty)` matched no
+  row in memory and every row in SQL.
+
+  It also disagreed with this library. `RangeSet.Contains(RangeSet)` has always answered `true` for
+  an empty operand by iterating zero elements, and `RangeSet.From` drops empty elements — so
+  `RangeSet.Empty` and `Int32Range.Empty` are each other's normalized form, and the two overloads
+  were answering the same question two ways.
+
+  **Migration.** Only comparisons with an explicitly empty operand change. Code that relied on
+  `Contains` to mean "contains and is non-empty" should say so: `outer.Contains(inner) &&
+  !inner.IsEmpty()`. `Overlaps` is unchanged and still `false` for an empty operand — overlap needs
+  a shared value — so a guard that wanted "shares something" was always better written with it.
+
+- **⚠️ `Int64Range.Contains(value)` produced SQL PostgreSQL refused to run**, whenever the value was
+  a constant rather than a captured variable. The range operators are polymorphic
+  (`anyrange @> anyelement`), and PostgreSQL resolves polymorphic operators without applying
+  implicit coercions — so a bare `25`, which it types as `integer`, does not match `int8range`:
+
+  ```
+  WHERE t."Tickets" @> 25          →  42883: operator does not exist: int8range @> integer
+  WHERE t."Tickets" @> 25::bigint  →  runs
+  ```
+
+  Constant element operands now carry an explicit cast when their store type is not the one
+  PostgreSQL infers from a bare numeric literal. `Int64Range` and
+  `RangeSet<Int64Range, long>` were the only types affected: every other element type renders
+  self-describing literal text (`DATE '2024-06-15'`, `TIMESTAMP '…'`), and `integer`/`numeric`
+  literals already arrive as the type their subtype wants — so no other emitted SQL changes.
+
+  The translation test for this asserted `@> ` and stopped there, and no test executed the query,
+  which is exactly the pair of gaps that let it ship.
+
+- **⚠️ `IsStrictlyLeftOf` answered `false` for every range unbounded at its *start***, and
+  `IsStrictlyRightOf` for every such operand. `<<` compares the receiver's **upper** bound with the
+  operand's **lower** bound, so `(-∞, 5]` — which has a perfectly finite upper bound — is strictly
+  left of `[10, 20]`. The implementation switched on the receiver's shape and handled only
+  `IFiniteRange<T>` there, while its inner switch handled unbounded *operands*:
+
+  ```
+  ((-∞,5]).IsStrictlyLeftOf([10,20])     false     ← before
+  '(,5]'::int4range << '[10,20]'         true      ← PostgreSQL, and now the model
+  ```
+
+  The disagreement was **between the two sides of the wire**: the EF translation emits `<<` and
+  was always right, so the same predicate answered `true` when it ran in the database and `false`
+  when it ran in memory — over the same two values. `RangeSet.IsStrictlyLeftOf`/`RightOf` inherited
+  it through their outermost element, so a one-element multirange `{(,5]}` was affected too.
+
+  This is the same receiver-vs-operand asymmetry as the `IsAdjacentTo` bug fixed in 6.2.1, in the
+  one other predicate whose answer depends on the receiver's shape. It is now decided by reading
+  the two bounds rather than by switching on the receiver, so the two directions cannot drift
+  again. **Behaviour changes for anyone comparing an unbounded-start range with `IsStrictlyLeftOf`
+  or `IsStrictlyRightOf` in memory** — from a wrong `false` to the answer PostgreSQL already gave.
+
 ### Known difference
 
 - **A temporal arity's JSON is not byte-identical to its closed sibling's**, though the token type
@@ -84,6 +192,12 @@ breaking changes.
 
   The string, Guid, integer and decimal arities remain byte-identical to their siblings. Give the
   element type its own `[JsonConverter]` if an existing response shape matters.
+
+- **`Count` on a value set carries the canonical-writers precondition, as `==` does.** The
+  documentation claimed only `==` did. `Count` translates to `cardinality`, which ignores order but
+  not duplicates, so a row another tool stored as `{b,a,b}` reads back as the two-element set
+  `{a,b}` while the server counts three. No behaviour changed — `docs/efcore.md` is corrected and
+  the live suite now pins it. `IsEmpty` is unaffected.
 
 ## [6.3.0] — 2026-08-16
 

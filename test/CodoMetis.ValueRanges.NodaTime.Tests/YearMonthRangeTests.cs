@@ -197,6 +197,58 @@ public class YearMonthRangeTests
             Assert.AreEqual(original, original.ToLocalDateRange().ToYearMonthRange());
     }
 
+    /// <summary>
+    /// The month→day expansion asks the calendar for each month's last day, so the value that has
+    /// to survive is the one a fixed-length assumption would get wrong: February, in both a leap
+    /// and a common year, and a span crossing a year boundary.
+    /// </summary>
+    /// <remarks>
+    /// The shape sweep above cannot catch this — every shape converts and inverts cleanly whether
+    /// February ends on the 28th or the 29th, because the same assumption is applied on both legs.
+    /// Only pinning the expanded dates does.
+    /// </remarks>
+    [TestMethod]
+    public void ToLocalDateRange_MonthLengths_FollowTheCalendar()
+    {
+        Assert.AreEqual(
+            "[2024-02-01,2024-02-29]",
+            YearMonthRange.CreateFinite(Ym(2024, 2), Ym(2024, 2)).ToLocalDateRange().ToString());
+
+        Assert.AreEqual(
+            "[2023-02-01,2023-02-28]",
+            YearMonthRange.CreateFinite(Ym(2023, 2), Ym(2023, 2)).ToLocalDateRange().ToString());
+
+        Assert.AreEqual(
+            "[2024-12-01,2025-01-31]",
+            YearMonthRange.CreateFinite(Ym(2024, 12), Ym(2025, 1)).ToLocalDateRange().ToString());
+
+        // …and each one still inverts, so the expansion is exact rather than merely consistent.
+        foreach (var months in new[]
+                 {
+                     YearMonthRange.CreateFinite(Ym(2024, 2), Ym(2024, 2)),
+                     YearMonthRange.CreateFinite(Ym(2023, 2), Ym(2023, 2)),
+                     YearMonthRange.CreateFinite(Ym(2024, 12), Ym(2025, 1))
+                 })
+        {
+            Assert.AreEqual(months, months.ToLocalDateRange().ToYearMonthRange());
+        }
+    }
+
+    /// <summary>
+    /// Month enumeration at the top of the ISO calendar, where a step past the maximum would wrap
+    /// rather than stop.
+    /// </summary>
+    [TestMethod]
+    public void Values_AtTheDomainMaximum_Terminates()
+    {
+        var last  = LocalDate.MaxIsoValue.ToYearMonth();
+        var range = YearMonthRange.CreateFinite(last.PlusMonths(-2), last);
+
+        CollectionAssert.AreEqual(
+            new[] { last.PlusMonths(-2), last.PlusMonths(-1), last },
+            range.Values().ToArray());
+    }
+
     [TestMethod]
     public void ToYearMonthRange_PartialMonth_Throws()
     {

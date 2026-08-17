@@ -163,7 +163,7 @@ public sealed class ValueSetContractTests
     public void Discovery_FindsEverySetFamily()
     {
         // 10 closed core types + 10 core wrapper arities + 5 NodaTime types + 5 NodaTime
-        // wrapper arities, as of 6.4.0. A floor rather than an equality, so adding a set type
+        // wrapper arities, as of 7.0.0. A floor rather than an equality, so adding a set type
         // does not fail an unrelated test — the contract tests below cover it automatically,
         // and the probe test insists on probes.
         const int knownSetTypes = 30;

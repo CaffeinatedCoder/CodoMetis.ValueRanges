@@ -176,6 +176,76 @@ public class ExecutedQueryTests
         Assert.IsTrue(fromOpenEnd.ToFinite, "[4,+∞) -|- [1,3]");
     }
 
+    /// <summary>
+    /// The <c>&lt;&lt;</c> / <c>&gt;&gt;</c> counterpart of the adjacency test above, for the same
+    /// reason: these are receiver-shaped predicates, and the unbounded shapes are where a
+    /// receiver-vs-operand asymmetry hides.
+    /// </summary>
+    /// <remarks>
+    /// <c>&lt;&lt;</c> compares the receiver's upper bound with the operand's lower bound, so an
+    /// <c>UnboundedStart</c> receiver is decided by its finite upper bound. Until 7.0.0 the
+    /// in-memory implementation answered <see langword="false"/> for every such receiver while the
+    /// server answered <see langword="true"/> — a disagreement invisible to the translation tests,
+    /// which only assert that <c>&lt;&lt;</c> is emitted.
+    /// </remarks>
+    [TestMethod]
+    public async Task UnboundedStrictlyLeftRightOf_MatchesPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var openStart = Int32Range.CreateUnboundedStart(5);        // (-∞, 5]
+        var openEnd   = Int32Range.CreateUnboundedEnd(10);         // [10, +∞)
+        var finiteLow = Int32Range.CreateFinite(1, 5);             // [1, 5]
+        var probe     = Int32Range.CreateFinite(10, 20);           // [10, 20]
+
+        await Seed(
+            new Reservation { Id = 2101, Seats = openStart },
+            new Reservation { Id = 2102, Seats = openEnd },
+            new Reservation { Id = 2103, Seats = finiteLow },
+            new Reservation { Id = 2104, Seats = Int32Range.Infinite },
+            new Reservation { Id = 2105, Seats = Int32Range.Empty });
+
+        await using var context = new IntegrationDbContext();
+
+        var server = await context.Reservations
+            .Where(r => r.Id >= 2101 && r.Id <= 2105)
+            .OrderBy(r => r.Id)
+            .Select(r => new
+            {
+                r.Id,
+                r.Seats,
+                LeftOfProbe   = r.Seats.IsStrictlyLeftOf(probe),
+                RightOfProbe  = r.Seats.IsStrictlyRightOf(probe),
+                LeftOfOpenEnd = r.Seats.IsStrictlyLeftOf(openEnd),
+                ProbeLeftOfIt = probe.IsStrictlyLeftOf(r.Seats)
+            })
+            .ToListAsync();
+
+        foreach (var row in server)
+        {
+            Assert.AreEqual(row.Seats.IsStrictlyLeftOf(probe), row.LeftOfProbe, $"'{row.Seats}' << '{probe}'");
+            Assert.AreEqual(row.Seats.IsStrictlyRightOf(probe), row.RightOfProbe, $"'{row.Seats}' >> '{probe}'");
+            Assert.AreEqual(row.Seats.IsStrictlyLeftOf(openEnd), row.LeftOfOpenEnd, $"'{row.Seats}' << '{openEnd}'");
+            Assert.AreEqual(probe.IsStrictlyLeftOf(row.Seats), row.ProbeLeftOfIt, $"'{probe}' << '{row.Seats}'");
+        }
+
+        // The cases that used to disagree, pinned against the server's answers rather than
+        // against the loop, which would agree with a wrong implementation on both sides.
+        var fromOpenStart = server.Single(row => row.Id == 2101);
+        Assert.IsTrue(fromOpenStart.LeftOfProbe, "(-∞,5] << [10,20]");
+        Assert.IsTrue(fromOpenStart.LeftOfOpenEnd, "(-∞,5] << [10,+∞)");
+        Assert.IsFalse(fromOpenStart.ProbeLeftOfIt, "nothing is strictly left of an unbounded start");
+
+        // …and the ones that must stay false: no upper bound on the receiver.
+        Assert.IsFalse(server.Single(row => row.Id == 2102).LeftOfProbe, "[10,+∞) << [10,20]");
+        Assert.IsFalse(server.Single(row => row.Id == 2104).LeftOfProbe, "(,) << [10,20]");
+        Assert.IsFalse(server.Single(row => row.Id == 2105).LeftOfProbe, "empty << [10,20]");
+
+        // The mirror: [1,5] is strictly right of nothing here, but [10,20] is right of it.
+        Assert.IsTrue(server.Single(row => row.Id == 2103).ProbeLeftOfIt is false, "[10,20] is not << [1,5]");
+        Assert.IsTrue(server.Single(row => row.Id == 2103).LeftOfProbe, "[1,5] << [10,20]");
+    }
+
     [TestMethod]
     public async Task MultirangeComparisons_MatchInMemory()
     {

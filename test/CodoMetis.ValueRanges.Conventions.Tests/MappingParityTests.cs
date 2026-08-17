@@ -107,7 +107,7 @@ public sealed class MappingParityTests
     public void Discovery_FindsEveryRangeAndSetType()
     {
         // 7 BCL ranges + 4 NodaTime ranges; 10 closed BCL sets + 10 BCL wrapper arities +
-        // 5 NodaTime sets + 5 NodaTime wrapper arities, as of 6.4.0.
+        // 5 NodaTime sets + 5 NodaTime wrapper arities, as of 7.0.0.
         AssertAtLeast(RangeTypesIn(typeof(Int32Range)),     7,  "BCL range types");
         AssertAtLeast(RangeTypesIn(typeof(LocalDateRange)),  4, "NodaTime range types");
         AssertAtLeast(SetTypesIn(typeof(StringSet)),       10,  "BCL set types");

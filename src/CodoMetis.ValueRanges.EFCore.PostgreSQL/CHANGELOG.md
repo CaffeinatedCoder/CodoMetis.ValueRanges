@@ -3,7 +3,7 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
-## [6.4.0] — 2026-08-17
+## [7.0.0] — 2026-08-17
 
 ### Added
 
@@ -30,6 +30,51 @@ covers all four packages, which share one version number and release together.
   specifier raises the existing contract error naming the type rather than binding a value
   truncated to the second. Behaviour for `StringSet<T>`, `GuidSet<T>`, `Int32Set<T>` and
   `Int64Set<T>` is unchanged.
+
+- No translation changed for either of the two core fixes this release, but the queries they affect
+  behave differently in memory. `Contains` → `@>` was always correct, while the in-memory predicate
+  answered `false` for an empty operand where `@>` answers `true` — so the same comparison matched
+  every row server-side and none client-side. See `CodoMetis.ValueRanges` 7.0.0.
+- The translation of `IsStrictlyLeftOf`/`IsStrictlyRightOf` to `<<`/`>>` was always correct; the
+  in-memory predicate it mirrors was not, so client-side and server-side evaluation of the same
+  comparison disagreed for any range unbounded at its start. See `CodoMetis.ValueRanges` 7.0.0. The
+  live-PostgreSQL parity suite gained a `<<`/`>>` counterpart to its adjacency test, which is what
+  the gap had been hiding behind: the translation tests assert that `<<` is emitted, never what it
+  answers.
+
+### Fixed
+
+- **⚠️ A constant `long` element operand emitted SQL PostgreSQL refused to run.**
+  `Int64Range.Contains(25L)` and `RangeSet<Int64Range, long>.Contains(25L)` translated to
+  `x @> 25`, and PostgreSQL types a bare numeric literal as `integer`. The range operators are
+  polymorphic (`anyrange @> anyelement`) and polymorphic resolution does not apply implicit
+  coercions, so the query failed with `42883: operator does not exist: int8range @> integer`
+  rather than widening the literal. A captured variable was unaffected — it binds as a parameter
+  with its own type — so this hit exactly the inline-constant form.
+
+  Constant element operands now carry an explicit cast when their store type is not the one
+  PostgreSQL infers from a bare numeric literal, which is `integer` for whole numbers and
+  `numeric` for decimals. Only the `int8`-backed types were affected: every other element type
+  this package maps renders self-describing literal text (`DATE '2024-06-15'`, `TIMESTAMP '…'`,
+  `TIME '…'`), so **no other emitted SQL changes**.
+
+  The translation test asserted the prefix `@> ` and no test executed the query. Both halves are
+  fixed: the assertion now pins `@> 7::bigint`, and the live suite executes a constant-operand
+  `Contains` for every element type.
+
+### Known difference
+
+- **`Count` carries the canonical-writers precondition, as `==` does** — the documentation said
+  only `==` did. `Count` translates to `cardinality`, which ignores element order but not
+  multiplicity, so a row another tool stored as `{b,a,b}` materializes as the two-element set
+  `{a,b}` while `WHERE "Tags".cardinality = 2` does not match it and `= 3` does. No behaviour
+  changed here; the claim in `docs/efcore.md` was wrong and is corrected, and the live suite now
+  pins both directions beside the `==` case it already covered.
+
+  `IsEmpty` is unaffected — an array is empty exactly when it has no elements, whatever its
+  multiplicities — so this is `Count`'s alone rather than a property of `cardinality` in general.
+  The divergence is inherent to normalizing on read while leaving the row as written; the
+  alternatives are rewriting foreign rows on read or refusing to translate `Count` at all.
 
 ## [6.3.0] — 2026-08-16
 

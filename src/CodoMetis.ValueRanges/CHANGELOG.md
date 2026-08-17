@@ -3,7 +3,7 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
-## [6.4.0] — 2026-08-17
+## [7.0.0] — 2026-08-17
 
 ### Added
 
@@ -48,6 +48,73 @@ covers all four packages, which share one version number and release together.
   Reads are unchanged: the numeric converters accept a JSON string unconditionally, so payloads
   written either way have always round-tripped. The integer half of this dates to the converters'
   introduction in 6.1.0; `DecimalSet<T>` shipped with it in this release.
+
+- **`DecimalRange.Length` threw `OverflowException` instead of refusing.** The span of
+  `[decimal.MinValue, decimal.MaxValue]` is twice `decimal.MaxValue`, and no wider type exists to
+  compute it in, so the subtraction overflowed out of the property. It now returns `null` — the
+  same answer `Int64Range.Length` gives for a count above `long.MaxValue`, and the behaviour its
+  documentation already described for that sibling. Only a range straddling zero can overflow, and
+  the boundary is exact: a span of exactly `decimal.MaxValue` still measures, one unit more does
+  not.
+
+- **⚠️ `Except` subtracted nothing when the two operands were unbounded in opposite directions.**
+  `((-∞,5]).Except([1,+∞))` returned `{(-∞,5]}` where the answer is `{(-∞,0]}`, and
+  `([1,+∞)).Except((-∞,5])` returned `{[1,+∞)}` where the answer is `{[6,+∞)}`.
+  `RangeSet<TRange,T>.Except` shares the engine through its merge-join and had it too. Both discrete
+  and continuous domains, every element type.
+
+  The result was a well-formed range of the expected shape holding the wrong values, so a
+  subtraction silently kept what it was asked to remove — no exception, nothing odd-looking in a
+  debugger, and a disagreement with the `-` operator the EF translation emits.
+
+  `ExceptEngine` dispatched on the receiver's shape; the inner switch under each unbounded receiver
+  had an arm for a finite operand and one for an operand unbounded the *same* way, but none for the
+  opposing one, so the `_` fallback rebuilt the receiver. That fallback can only be reached by the
+  opposing-unbounded pair — `RangeExtensions.Except` filters an empty operand through its `Overlaps`
+  guard and an infinite one through its `Contains` guard — so it was wrong on every call that
+  reached it. It is now the explicit arm, and the fallback carries a comment saying why it is
+  unreachable.
+
+- **⚠️ The empty range is now contained by every range**, in `RangeExtensions.Contains`,
+  `IsContainedBy` and `RangeSet.Contains(IRange<T>)`. `[1,5].Contains(Int32Range.Empty)` returned
+  `false` and now returns `true`; so do `Int32Range.Empty.IsContainedBy(x)`,
+  `Int32Range.Empty.Contains(Int32Range.Empty)` and `RangeSet.Empty.Contains(Int32Range.Empty)`.
+
+  ∅ ⊆ S for every S — "every value of the inner range is also in the outer" has nothing to falsify
+  it when the inner range has no values. Three things agreed on that already and the single-range
+  overload did not: PostgreSQL's `@>`, so the same comparison answered differently in memory and in
+  SQL; `RangeSet.Contains(RangeSet)`, which reaches it by iterating zero elements; and
+  `RangeSet.From`, which drops empty elements and therefore makes `RangeSet.Empty` and
+  `Int32Range.Empty` the same value asked about two ways.
+
+  The converse is unchanged: `Int32Range.Empty.Contains(nonEmpty)` is still `false`, and `Overlaps`
+  still answers `false` for an empty operand — overlap requires a shared value, containment does
+  not. Nothing internal depended on the old answer: both engine call sites (`Except`, and the
+  multirange subtraction scan) are guarded by `Overlaps` first, so neither can see an empty operand.
+
+  **Migration.** Only comparisons with an explicitly empty operand change. For the old meaning,
+  write `outer.Contains(inner) && !inner.IsEmpty()` — or use `Overlaps`, which is what "shares
+  something" wanted all along.
+
+- **⚠️ `IsStrictlyLeftOf` answered `false` for every range unbounded at its *start***, and
+  `IsStrictlyRightOf` for every such operand. The `<<` relation compares the receiver's **upper**
+  bound with the operand's **lower** bound, so being unbounded at the *other* end is irrelevant:
+  `(-∞, 5]` ends at 5 and is strictly left of `[10, 20]`. The implementation switched on the
+  receiver's shape and handled only `IFiniteRange<T>` there, while its inner switch handled
+  unbounded *operands* — so `((-∞,5]).IsStrictlyLeftOf([10,20])` returned `false` where
+  `'(,5]'::int4range << '[10,20]'` returns `true`.
+
+  The EF translation emits `<<` and was always correct, which is what made this dangerous: the
+  same predicate over the same two values answered `true` server-side and `false` in memory.
+  `RangeSet.IsStrictlyLeftOf`/`RightOf` delegate to their outermost element and inherited it, so a
+  one-element set `{(,5]}` was affected too.
+
+  Now decided by reading the receiver's upper bound and the operand's lower bound rather than by
+  switching on the receiver's shape, so the two directions cannot drift apart again — the same
+  correction `IsAdjacentTo` received in 6.2.1, which was the only other receiver-shaped predicate.
+  A 5×5 shape sweep in both directions and a live-PostgreSQL parity test now cover it.
+  **Behaviour changes for in-memory comparisons involving an unbounded-start range**, from a wrong
+  `false` to the answer the database already gave.
 
 ## [6.3.0] — 2026-08-16
 

@@ -362,11 +362,20 @@ public sealed class RangeSet<TRange, T>
     /// A binary search on lower bounds locates the only candidate element in O(log n).
     /// </remarks>
     /// <param name="range">The range to test.</param>
-    /// <returns><see langword="true"/> if some element contains <paramref name="range"/>.</returns>
+    /// <returns>
+    /// <see langword="true"/> if some element contains <paramref name="range"/>, or if
+    /// <paramref name="range"/> is empty — the empty range is contained by every set,
+    /// the empty set included.
+    /// </returns>
     public bool Contains(IRange<T> range)
     {
+        // ∅ ⊆ S for every S. This has to come before the empty-set guard rather than after it:
+        // the two are the same question, since From drops empty elements and so the empty range
+        // and the empty set are each other's normalized form. It is also the reading
+        // Contains(RangeSet) has always applied, by iterating zero elements.
+        if (range is IEmptyRange<T>) return true;
+
         if (_elements.IsEmpty) return false;
-        if (range is IEmptyRange<T>) return false;
         if (range is IInfinityRange<T>) return IsInfiniteSet;
 
         // The infinite set contains every non-empty range. Also keeps the Infinity element

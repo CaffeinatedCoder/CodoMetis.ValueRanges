@@ -3,7 +3,7 @@
 Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
-## [6.4.0] — 2026-08-17
+## [7.0.0] — 2026-08-17
 
 ### Added
 
@@ -17,6 +17,14 @@ covers all four packages, which share one version number and release together.
   parses with the matching pattern, so a corrupt or decoratively formatted element fails loudly
   at the boundary. `YearMonthSet<T>` bridges through the first day of the month and validates the
   alignment on read, exactly as the closed `YearMonthSet` definition does.
+### Changed
+
+- **The range corrections in `CodoMetis.ValueRanges` 7.0.0 reach the NodaTime range types too** —
+  they are translated by the base plugin and carry the core algebra, so empty-range containment,
+  `IsStrictlyLeftOf`/`IsStrictlyRightOf` and `Except` between opposing unbounded operands all
+  change what they answer in memory. No translation in this package changed; see the core
+  changelog for why in-memory and server-side evaluation disagreed in each case.
+
 
 ## [6.3.0] — 2026-08-16
 
