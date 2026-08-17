@@ -8,135 +8,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com)
 
-Fully functional, in-memory range and set types for .NET — complete interval and membership algebra without any database dependency.
-
-## Overview
-
-`CodoMetis.ValueRanges` provides immutable, canonical-at-construction value domain types with PostgreSQL-native storage shapes: concrete, type-safe **range types** covering the same six value domains as PostgreSQL's built-in range types (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`) with a full in-memory implementation of every range operation PostgreSQL exposes, their **multirange** counterpart `RangeSet<TRange, T>`, and — since v6 — **[value sets](docs/value-sets.md)**, canonical sets of scalar values whose storage shape is a native PostgreSQL array.
-
-The library is designed to stand on its own: all operations execute in process, with no ORM or database driver required. A companion EF Core package ([CodoMetis.ValueRanges.EFCore.PostgreSQL](docs/efcore.md)) bridges the range types to `NpgsqlRange<T>` and the set types to native arrays for automatic LINQ-to-SQL translation, making the same code work both in memory and as PostgreSQL queries.
-
-### Design
-
-Each range type is modelled as a **discriminated union** of five sealed variants:
-
-| Variant          | Represents                  | Interval notation |
-|------------------|-----------------------------|-----------------|
-| `Finite`         | Bounded on both sides       | `[1, 10]`       |
-| `UnboundedStart` | Unbounded on the left       | `(-∞, 10]`      |
-| `UnboundedEnd`   | Unbounded on the right      | `[1, +∞)`       |
-| `EmptyRange`     | The empty range (no values) | `∅`             |
-| `Infinity`       | Unbounded on both ends      | `(-∞, +∞)`      |
-
-The *shape* of a range is encoded in its static type. An `UnboundedEnd` range has no `End` property — the property does not exist at compile time. An `Empty` range carries no bound information whatsoever. Invalid states are unrepresentable by construction, and pattern matching over a range is exhaustive with compiler-enforced coverage.
-
-### Unboundedness is a shape, not a bound value
-
-Encoding the shape in the type also keeps *"there is no upper bound"* apart from *"the upper bound is the largest representable value"* — two different facts that a bounds-plus-flags representation stores in the same object.
-
-In a representation built from two nullable bounds plus an `IsUpperInfinite` bit, the two facts occupy the same fields and have to be reconciled at runtime. `NpgsqlRange<T>` reconciles them by discarding: pass an upper bound together with `upperBoundInfinite: true` and the constructor keeps the flag and silently drops the value. That is a sound invariant, but it is enforced by a constructor rather than by the type, and it leaves `LowerBound`/`UpperBound` typed `T?` on *every* instance — so even code that has already established the range is bounded still has a nullable to answer for.
-
-Here the question cannot be asked in the first place. `UnboundedEnd` has no `End` property to put a sentinel in; `Finite` has no flag to disown its `End`, and its `Start`/`End` are not nullable. The distinction is carried by the type rather than by a constructor rule that callers have to know about:
-
-```csharp
-DateTimeRange.CreateUnboundedEnd(start)                  // UnboundedEnd — genuinely open-ended
-DateTimeRange.CreateFinite(start, DateTime.MaxValue)     // Finite — ends at a specific instant
-```
-
-The two are not interchangeable, and the compiler will not let them be confused. This matters at the database boundary as well, where Npgsql maps `DateTime.MaxValue` to PostgreSQL `infinity` — a *finite bound that happens to be infinite*, which is still distinct from an unbounded side. See [Entity Framework Core](docs/efcore.md) for how that round-trips.
-
-## Why this exists
-
-Every piece of this problem already has a solution in .NET. The gap is that no single type holds
-them at once.
-
-| What you would reach for today | Where it stops |
-|---|---|
-| Two properties (`From`, `To`) | No algebra, no empty or unbounded case; "no end date" becomes a nullable that every reader reinterprets |
-| [`NpgsqlRange<T>`](https://www.npgsql.org/doc/api/NpgsqlTypes.NpgsqlRange-1.html) | Declared in `NpgsqlTypes`, in `Npgsql.dll` — a domain model that uses it references the database driver. The struct carries no algebra of its own ([and reconciles unboundedness at runtime](#unboundedness-is-a-shape-not-a-bound-value)) |
-| NodaTime `Interval` / `DateInterval` with the [Npgsql NodaTime plugin](https://www.npgsql.org/efcore/mapping/nodatime.html) | Two date/time shapes only, and `DateInterval` is always closed and always bounded — no half-open, no unbounded, no empty |
-| [FRange](https://www.nuget.org/packages/FRange/), [Open.Range](https://www.nuget.org/packages/Open.Range) | In-memory only — no PostgreSQL mapping, no SQL translation, no range literals. Neither has a discrete domain, so `[1,10)` and `[1,9]` stay different values and integer or date adjacency cannot be decided |
-| `T[]` / `List<T>` with EF Core primitive collections | Mutable references, so the domain cannot defend an invariant it has already returned; and a list, not a set — order and multiplicity are part of the value |
-
-**On the range side, the SQL translation is not what is missing.** Npgsql already translates the
-full operator set, and this package does not improve on that. What is missing is a domain type to
-hang it on. `NpgsqlRange<T>`'s operations are EF Core extension methods, each documented as *"only
-intended for use via SQL translation as part of an EF Core LINQ query"* — call one from a unit test
-or a domain service and it throws. The algebra therefore exists only inside a query, on a type that
-only exists inside the driver. A domain model that wants both has neither.
-
-The in-memory libraries make the opposite trade, and both keep unboundedness a runtime fact.
-[FRange](https://www.nuget.org/packages/FRange/) comes closest — it has unbounded bounds and
-multiranges — but its C# surface answers `LowerBoundValue` on an unbounded range by throwing
-(`failwith "No bound"`), paired with a `HasLowerBound` you are expected to remember to call first.
-That is the same question [this library refuses to let you
-ask](#unboundedness-is-a-shape-not-a-bound-value): `UnboundedStart` has no `Start` property to
-throw from.
-
-**On the set side there is no equivalent at all.** Persisting a PostgreSQL array today means
-exposing `T[]` or `List<T>` — *mutable* references, so a caller can rewrite an element after load
-and the domain cannot defend an invariant it has already handed out. Order and duplicates are part
-of the value, and canonical form is left to every writer to remember. A set of tags, permissions or
-IDs has no type that says so. These sets are immutable end to end: every construction path —
-`From`, parsing, JSON, materialization from the database — deduplicates and sorts, and there is no
-mutating member to undo it.
-
-This package is the two halves joined: immutable domain types carrying the complete algebra in
-process with no database dependency, which the EF Core companion also translates to the same
-PostgreSQL operators — [checked against a live server](#verified-against-postgresql) rather than
-asserted.
-
-*Landscape surveyed August 2026. If something here is out of date or a comparable library was
-missed, please [open an issue](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues) —
-the claim is meant to be falsifiable.*
-
-## Supported Types
-
-| .NET type              | PostgreSQL equivalent | Element type     | Discrete |
-|------------------------|-----------------------|------------------|----------|
-| `Int32Range`           | `int4range`           | `int`            | ✓        |
-| `Int64Range`           | `int8range`           | `long`           | ✓        |
-| `DecimalRange`         | `numrange`            | `decimal`        | —        |
-| `DateRange`            | `daterange`           | `DateOnly`       | ✓        |
-| `DateTimeRange`        | `tsrange`             | `DateTime`       | —        |
-| `DateTimeOffsetRange`  | `tstzrange`           | `DateTimeOffset` | —        |
-| `TimeRange`            | `timerange` (custom)  | `TimeOnly`       | —        |
-
-Discrete types (`int`, `long`, `DateOnly`) know their step size. This matters for adjacency checks: `[1, 5]` and `[6, 10]` are adjacent for integers because there is no integer between 5 and 6.
-
-`TimeRange` is a time-of-day range — opening hours, shifts, booking slots. A single range cannot cross midnight; a 22:00–06:00 window is two ranges, which is exactly what a two-element `RangeSet` (and its PostgreSQL multirange counterpart) represents. PostgreSQL has no built-in `timerange`, so the EF Core companion maps it to the custom type users conventionally create for this — see [TimeRange and the custom timerange type](docs/efcore.md#timerange-and-the-custom-timerange-type).
-
-### Why these element types
-
-The list is deliberately vetted. Interval algebra needs a total order that the type's own comparisons agree with, and — for adjacency — a defined step between neighbouring values. The first six domains have both and are the six PostgreSQL ships as built-ins; `TimeOnly` (and, in the NodaTime satellite, `YearMonth`) clear the same bar and joined in v5.
-
-`double` and `float` have neither, and fail *quietly*. `double.CompareTo` reports `NaN` as less than every value and equal to itself, which is a total order; the IEEE operators disagree, since `NaN < 5.0`, `NaN > 5.0` and `NaN == NaN` are all `false`. A range library generic over `IComparable<T>` therefore accepts `double` without complaint and answers containment against a `NaN` bound with a straight face. There is no exception to catch and no bound to reject at construction — the result is simply wrong. Restricting `T` to a vetted set is what makes the algebra sound, not a limitation left in for later.
-
-`Guid` is absent for a different reason: v7 values are ordered, so the algebra would be well-defined, but "every GUID between these two" is not a question with a domain meaning.
-
-### NodaTime
-
-For projects that build on NodaTime's primitives instead of the BCL date/time types, the satellite package **[CodoMetis.ValueRanges.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.NodaTime)** provides the three NodaTime types that clear the same bar — a total order the type's own comparisons agree with, mapping onto a PostgreSQL built-in:
-
-| .NET type              | PostgreSQL equivalent      | Element type     | Discrete |
-|------------------------|----------------------------|------------------|----------|
-| `LocalDateRange`       | `daterange`                | `LocalDate`      | ✓        |
-| `LocalDateTimeRange`   | `tsrange`                  | `LocalDateTime`  | —        |
-| `InstantRange`         | `tstzrange`                | `Instant`        | —        |
-| `YearMonthRange`       | `daterange` (month-aligned) | `YearMonth`     | ✓        |
-
-`YearMonthRange` (v5) is a month-granularity range for billing and reporting periods — discrete with a one-month step, so `[2024-01, 2024-03]` and `[2024-04, 2024-06]` are adjacent. It converts losslessly to the `LocalDateRange` covering exactly its months (`ToLocalDateRange()` / `ToYearMonthRange()`), which is also how the EF Core satellite stores it: as a month-aligned `daterange`, with every operator working server-side and reads validating alignment rather than silently shifting boundaries.
-
-The same algebra, literals, JSON support and `RangeSet` multiranges apply unchanged. Notably, the two [timestamp caveats](docs/efcore.md) the BCL types carry do not arise there: `LocalDateTime` is wall-clock time by construction and `Instant` is an instant by construction, so there is no `Kind` to reinterpret and no offset to normalize away. `ZonedDateTime` and `OffsetDateTime` are excluded by the same reasoning as `double` — NodaTime deliberately gives them no default ordering (instant order and local order disagree), so the `IComparable<T>` constraint rejects them at compile time. See the satellite's README for the full rationale and the `Interval`/`DateInterval` interop.
-
-A companion EF Core package, **[CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime)**, maps them to the same PostgreSQL columns through `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`:
-
-```csharp
-options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRangesNodaTime());
-// implies UseNodaTime() and UseValueRanges() — BCL and NodaTime ranges coexist in one model
-```
-
-One point where the model is *stricter* than the database it mirrors: PostgreSQL's `numeric` has a `NaN` value (sorted above all others by fiat), so a `numrange` bound can be `NaN`. .NET's `decimal` has no such value, so `DecimalRange` cannot form one — the case that `numrange` has to define away does not arise.
+Immutable **range types** (`[2025-06-01, 2025-06-08]`) and **value sets** (`{alpha, beta}`) for .NET,
+carrying the complete interval and membership algebra in process — no ORM, no database driver. A
+companion EF Core package translates the same calls to native PostgreSQL range, multirange and array
+columns, so one expression means the same thing in a unit test and in SQL.
 
 ## Installation
 
@@ -144,7 +19,9 @@ One point where the model is *stricter* than the database it mirrors: PostgreSQL
 dotnet add package CodoMetis.ValueRanges
 ```
 
-> Requires .NET 10 or later.
+> Requires .NET 10 or later. For LINQ-to-SQL translation, add
+> [`CodoMetis.ValueRanges.EFCore.PostgreSQL`](docs/efcore.md); for NodaTime primitives, the
+> [satellite packages](#nodatime).
 
 ## Quick start
 
@@ -166,6 +43,18 @@ blocked.Count;        // 2
 blocked.Contains(new DateOnly(2025, 6, 20));   // false — the gap
 ```
 
+Value sets are the same idea one level down — canonical sets of scalar values, stored as native
+PostgreSQL arrays:
+
+```csharp
+var tags = StringSet.From("beta", "alpha", "beta");   // {alpha,beta} — deduplicated, sorted
+StringSet more = ["gamma", "alpha"];                  // collection expressions work
+
+tags.Contains("alpha");        // true
+tags.IsSubsetOf(more);         // false
+tags.Union(more).ToString();   // "{alpha,beta,gamma}"
+```
+
 With the EF Core companion package, the same calls become SQL against a `daterange` column:
 
 ```csharp
@@ -176,15 +65,85 @@ bookings.Where(b => b.Period.Overlaps(request));  // b."Period" && @request
 bookings.OrderBy(b => b.Period.LowerBound());     // ORDER BY lower(b."Period")
 ```
 
+**→ [Getting started](docs/getting-started.md)** takes this from an empty project to a first
+translated query — entity, `DbContext`, migration, and the SQL that comes out — in about five
+minutes.
+
+## Five shapes, encoded in the type
+
+Each range type is a **discriminated union** of five sealed variants:
+
+| Variant          | Represents                  | Interval notation |
+|------------------|-----------------------------|-----------------|
+| `Finite`         | Bounded on both sides       | `[1, 10]`       |
+| `UnboundedStart` | Unbounded on the left       | `(-∞, 10]`      |
+| `UnboundedEnd`   | Unbounded on the right      | `[1, +∞)`       |
+| `EmptyRange`     | The empty range (no values) | `∅`             |
+| `Infinity`       | Unbounded on both ends      | `(-∞, +∞)`      |
+
+The *shape* of a range is encoded in its static type. An `UnboundedEnd` range has no `End` property — the property does not exist at compile time. An `Empty` range carries no bound information whatsoever. Invalid states are unrepresentable by construction, and because the private base constructor admits no external subtype, these five are the only ranges that can exist — so a switch over them is complete in fact, though C# cannot prove it ([pattern matching](docs/ranges.md#pattern-matching)).
+
+That is also what keeps *"there is no upper bound"* apart from *"the upper bound is the largest
+representable value"* — see [Unboundedness is a shape, not a bound
+value](docs/why.md#unboundedness-is-a-shape-not-a-bound-value).
+
+## Supported types
+
+| .NET type              | PostgreSQL equivalent | Element type     | Discrete |
+|------------------------|-----------------------|------------------|----------|
+| `Int32Range`           | `int4range`           | `int`            | ✓        |
+| `Int64Range`           | `int8range`           | `long`           | ✓        |
+| `DecimalRange`         | `numrange`            | `decimal`        | —        |
+| `DateRange`            | `daterange`           | `DateOnly`       | ✓        |
+| `DateTimeRange`        | `tsrange`             | `DateTime`       | —        |
+| `DateTimeOffsetRange`  | `tstzrange`           | `DateTimeOffset` | —        |
+| `TimeRange`            | `timerange` (custom)  | `TimeOnly`       | —        |
+
+Each has a `RangeSet<TRange, T>` multirange counterpart, and there are ten value set families
+(`StringSet`, `GuidSet`, `Int32Set`, … — [full table](docs/value-sets.md)) plus a validated-wrapper
+arity for each, for domain types produced by Vogen, Metalama, StronglyTypedId or by hand.
+
+Discrete types (`int`, `long`, `DateOnly`) know their step size. This matters for adjacency checks: `[1, 5]` and `[6, 10]` are adjacent for integers because there is no integer between 5 and 6.
+
+`TimeRange` is a time-of-day range — opening hours, shifts, booking slots. A single range cannot cross midnight; a 22:00–06:00 window is two ranges, which is exactly what a two-element `RangeSet` (and its PostgreSQL multirange counterpart) represents. PostgreSQL has no built-in `timerange`, so the EF Core companion maps it to the custom type users conventionally create for this — see [TimeRange and the custom timerange type](docs/efcore.md#timerange-and-the-custom-timerange-type).
+
+The element types are a deliberately vetted list, not a generic `IComparable<T>` constraint —
+[why `double`, `float` and `Guid` are absent](docs/why.md#why-these-element-types).
+
+### NodaTime
+
+For projects that build on NodaTime's primitives instead of the BCL date/time types, the satellite package **[CodoMetis.ValueRanges.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.NodaTime)** provides the four NodaTime types that clear the same bar:
+
+| .NET type              | PostgreSQL equivalent      | Element type     | Discrete |
+|------------------------|----------------------------|------------------|----------|
+| `LocalDateRange`       | `daterange`                | `LocalDate`      | ✓        |
+| `LocalDateTimeRange`   | `tsrange`                  | `LocalDateTime`  | —        |
+| `InstantRange`         | `tstzrange`                | `Instant`        | —        |
+| `YearMonthRange`       | `daterange` (month-aligned) | `YearMonth`     | ✓        |
+
+`YearMonthRange` (v5) is a month-granularity range for billing and reporting periods — discrete with a one-month step, so `[2024-01, 2024-03]` and `[2024-04, 2024-06]` are adjacent. It converts losslessly to the `LocalDateRange` covering exactly its months (`ToLocalDateRange()` / `ToYearMonthRange()`), which is also how the EF Core satellite stores it: as a month-aligned `daterange`, with every operator working server-side and reads validating alignment rather than silently shifting boundaries.
+
+The same algebra, literals, JSON support and `RangeSet` multiranges apply unchanged, and the
+satellite adds five value set families of its own. A companion EF Core package,
+**[CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime)**,
+maps them to the same PostgreSQL columns through `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`:
+
+```csharp
+options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRangesNodaTime());
+// implies UseNodaTime() and UseValueRanges() — BCL and NodaTime ranges coexist in one model
+```
+
 ## Documentation
 
 | Page | Covers |
 |---|---|
+| **[Getting started](docs/getting-started.md)** | From an empty project to a first translated query: entity, `DbContext`, migration, querying — and the in-memory-only path |
 | **[Ranges and range sets](docs/ranges.md)** | Construction, pattern matching, the query and set algebra, `RangeSet` multiranges, the interface hierarchy |
 | **[Value sets](docs/value-sets.md)** | Canonical scalar sets stored as native PostgreSQL arrays, validated wrapper elements, set ↔ range conversion |
 | **[Literals, parsing, and JSON](docs/serialization.md)** | PostgreSQL literal round-trips, `ISpanParsable`, System.Text.Json registration and element converters |
 | **[Entity Framework Core](docs/efcore.md)** | Mapping by convention, LINQ-to-SQL translation, the custom `timerange` type, and the exhaustive what-runs-where table |
 | **[Migration guide](docs/migration.md)** | The source changes each major requires |
+| **[Why this exists](docs/why.md)** | The design rationale, the landscape survey, and why the element type list is vetted rather than generic |
 | **[Changelog](CHANGELOG.md)** | Every release in full, including the behavioural notes for each |
 
 Working on the package itself: [architecture](docs/architecture.md), [testing](docs/testing.md), and
