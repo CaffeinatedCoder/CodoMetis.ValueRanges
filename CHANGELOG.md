@@ -108,6 +108,22 @@ decide on the shape *pair*, and a pair with no arm throws instead of returning s
   specification's shape, inclusivity cross-checked against `Contains`, and `Clamp` against the
   bounds those establish — predicting a bound's value directly does not work, because a discrete
   range canonicalizes and an exclusive continuous bound is a value the range does not contain.
+- **`ValueSetNullContractTests`**, pinning by discovery that canonical form's exclusion of nulls is
+  enforced by *refusing*, never by dropping. Silently discarding a null is the value-set shape of the
+  fallback that produced five range bugs — an input nobody wrote a case for, answered plausibly:
+  three supplied elements would yield a set of two, indistinguishable from a duplicate. Every entry
+  point is checked — both `From` overloads, `Add`, `Remove`, `Contains`, an unquoted `NULL` in the
+  PostgreSQL array literal, and a JSON `null` element — and all of them already refused, so nothing
+  changed in the library.
+
+  What is new is that the rule is enforced over *discovered* families rather than by hand. Exactly
+  one qualifies today: every wrapper element is a `readonly record struct` and every NodaTime
+  element is a struct, so `string` in `StringSet` is the only nullable element type among the 30.
+  A family added later over a reference type is covered without anyone remembering to come back.
+  Nulls stay out of `SetProbes`, which feeds sweeps that build valid sets — they need their own test,
+  not a probe entry.
+- **`Reflect.InvokeGeneric`**, so the three discovery-driven suites report a failed assertion
+  directly instead of behind a `TargetInvocationException` frame that says nothing.
 - **`ShapeMatrixCoverageTests`**, which fails when a binary range operation has no row in
   `ShapeMatrixParityTests`. The matrix found three of the five bugs in the receiver-shaped-dispatch
   family, and its weakness is that it is a list: an operation added to `RangeExtensions` without a

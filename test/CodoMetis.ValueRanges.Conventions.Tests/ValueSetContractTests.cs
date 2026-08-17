@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Serialization;
@@ -31,8 +30,6 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 [TestClass]
 public sealed class ValueSetContractTests
 {
-
-
     /// <summary>
     /// Guards the tests below against the worst failure a discovery-driven suite has: finding
     /// nothing and passing. Every assertion here loops over <see cref="SetProbes.AllSetTypes"/>,
@@ -113,10 +110,8 @@ public sealed class ValueSetContractTests
         {
             if (!IsStringBacked(setType)) continue;
 
-            typeof(ValueSetContractTests)
-               .GetMethod(nameof(AssertOrdinalOrder), BindingFlags.NonPublic | BindingFlags.Static)!
-               .MakeGenericMethod(setType, elementType)
-               .Invoke(null, null);
+            Reflect.InvokeGeneric(typeof(ValueSetContractTests), nameof(AssertOrdinalOrder),
+                                  setType, elementType);
 
             checkedFamilies.Add(setType.Name);
         }
@@ -160,10 +155,7 @@ public sealed class ValueSetContractTests
     {
         if (!SetProbes.HasProbes(elementType)) return; // reported by EverySetType_IsCoveredByAProbe
 
-        typeof(ValueSetContractTests)
-           .GetMethod(method, BindingFlags.NonPublic | BindingFlags.Static)!
-           .MakeGenericMethod(setType, elementType)
-           .Invoke(null, null);
+        Reflect.InvokeGeneric(typeof(ValueSetContractTests), method, setType, elementType);
     }
 
     private static void AssertContainsAgreesWithFrom<TSet, TElement>()

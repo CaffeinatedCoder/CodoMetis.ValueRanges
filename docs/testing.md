@@ -198,6 +198,12 @@ independent check that closes it.
 Probes and type discovery are shared with the contract tests through `SetProbes` — one table, so
 the two suites cannot disagree about which families exist or what to feed them.
 
+Nulls are deliberately *not* in that table: it feeds sweeps that build valid sets.
+`ValueSetNullContractTests` covers them separately, asserting that every entry point — both `From`
+overloads, `Add`, `Remove`, `Contains`, an unquoted `NULL` in the array literal, a JSON `null` —
+refuses rather than drops. It runs over families whose element type is a reference type, which is
+`StringSet` alone today and whatever is added later without anyone having to remember.
+
 ### Shape-Combination Matrix
 
 Every binary operation test must cover all five range shapes: `Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`. Tests instantiate the "other" operand in each shape and verify the result type and value.

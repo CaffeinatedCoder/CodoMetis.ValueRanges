@@ -73,10 +73,7 @@ public sealed class SmallModelSetOracleTests
         {
             if (!SetProbes.HasProbes(elementType)) continue; // reported by EverySetType_IsCoveredByAProbe
 
-            typeof(SmallModelSetOracleTests)
-               .GetMethod(sweep, BindingFlags.NonPublic | BindingFlags.Static)!
-               .MakeGenericMethod(setType, elementType)
-               .Invoke(null, null);
+            Reflect.InvokeGeneric(typeof(SmallModelSetOracleTests), sweep, setType, elementType);
 
             swept++;
         }
