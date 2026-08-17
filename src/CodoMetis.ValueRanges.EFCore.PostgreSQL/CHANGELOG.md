@@ -3,6 +3,15 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.4.0] — 2026-08-17
+
+No source change in this package. The translation of `IsStrictlyLeftOf`/`IsStrictlyRightOf` to
+`<<`/`>>` was always correct; the in-memory predicate it mirrors was not, so client-side and
+server-side evaluation of the same comparison disagreed for any range unbounded at its start. See
+`CodoMetis.ValueRanges` 6.4.0. The live-PostgreSQL parity suite gained a `<<`/`>>` counterpart to
+its adjacency test, which is what the gap had been hiding behind: the translation tests assert that
+`<<` is emitted, never what it answers.
+
 ## [6.3.0] — 2026-08-16
 
 ### Added

@@ -9,6 +9,32 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [6.4.0] — 2026-08-17
+
+### Fixed
+
+- **⚠️ `IsStrictlyLeftOf` answered `false` for every range unbounded at its *start***, and
+  `IsStrictlyRightOf` for every such operand. `<<` compares the receiver's **upper** bound with the
+  operand's **lower** bound, so `(-∞, 5]` — which has a perfectly finite upper bound — is strictly
+  left of `[10, 20]`. The implementation switched on the receiver's shape and handled only
+  `IFiniteRange<T>` there, while its inner switch handled unbounded *operands*:
+
+  ```
+  ((-∞,5]).IsStrictlyLeftOf([10,20])     false     ← before
+  '(,5]'::int4range << '[10,20]'         true      ← PostgreSQL, and now the model
+  ```
+
+  The disagreement was **between the two sides of the wire**: the EF translation emits `<<` and
+  was always right, so the same predicate answered `true` when it ran in the database and `false`
+  when it ran in memory — over the same two values. `RangeSet.IsStrictlyLeftOf`/`RightOf` inherited
+  it through their outermost element, so a one-element multirange `{(,5]}` was affected too.
+
+  This is the same receiver-vs-operand asymmetry as the `IsAdjacentTo` bug fixed in 6.2.1, in the
+  one other predicate whose answer depends on the receiver's shape. It is now decided by reading
+  the two bounds rather than by switching on the receiver, so the two directions cannot drift
+  again. **Behaviour changes for anyone comparing an unbounded-start range with `IsStrictlyLeftOf`
+  or `IsStrictlyRightOf` in memory** — from a wrong `false` to the answer PostgreSQL already gave.
+
 ## [6.3.0] — 2026-08-16
 
 Three additions that close gaps in the existing surface rather than extending the model. No

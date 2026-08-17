@@ -268,23 +268,40 @@ public static class RangeExtensions
         /// <returns>
         /// <see langword="true"/> if the upper bound of this range is less than the lower bound of
         /// <paramref name="other"/>, or if they meet at a single point but at least one side is exclusive there.
-        /// Always <see langword="false"/> when this range is <see cref="IUnboundedEndRange{T}"/>,
-        /// <see cref="IUnboundedStartRange{T}"/>, <see cref="IInfinityRange{T}"/>, or <see cref="IEmptyRange{T}"/>.
+        /// Always <see langword="false"/> when this range has no upper bound
+        /// (<see cref="IUnboundedEndRange{T}"/>, <see cref="IInfinityRange{T}"/>) or when
+        /// <paramref name="other"/> has no lower bound (<see cref="IUnboundedStartRange{T}"/>,
+        /// <see cref="IInfinityRange{T}"/>), and whenever either range is <see cref="IEmptyRange{T}"/>.
+        /// An <see cref="IUnboundedStartRange{T}"/> receiver is *not* excluded: <c>(-∞, e]</c> has a
+        /// finite upper bound, so it is strictly left of anything starting after <c>e</c>.
         /// </returns>
-        public bool IsStrictlyLeftOf(IRange<T> other) =>
-            range switch
+        public bool IsStrictlyLeftOf(IRange<T> other)
+        {
+            // <<  compares this range's UPPER bound against other's LOWER bound, so what decides is
+            // which side each operand is unbounded on — not whether it is unbounded at all. Reading
+            // the two bounds separately, rather than switching on the receiver's shape and handling
+            // unbounded operands only in the inner switch, is what keeps the two directions in step:
+            // deciding per receiver is how (-∞, e] came to answer false where PostgreSQL's << answers
+            // true, the same trap IsAdjacentTo fell into before 6.3.0.
+            (T Value, bool Inclusive)? upper = range switch
             {
-                IFiniteRange<T> b =>
-                    other switch
-                    {
-                        IFiniteRange<T> o =>
-                            b.End.CompareTo(o.Start) < 0 || (b.End.CompareTo(o.Start) == 0 && !(b.EndInclusive && o.StartInclusive)),
-                        IUnboundedEndRange<T> e =>
-                            b.End.CompareTo(e.Start) < 0 || (b.End.CompareTo(e.Start) == 0 && !(b.EndInclusive && e.StartInclusive)),
-                        _ => false
-                    },
-                _ => false
+                IFiniteRange<T> f         => (f.End, f.EndInclusive),
+                IUnboundedStartRange<T> s => (s.End, s.EndInclusive),
+                _                         => null // +∞ (or empty): never left of anything
             };
+
+            (T Value, bool Inclusive)? lower = other switch
+            {
+                IFiniteRange<T> f       => (f.Start, f.StartInclusive),
+                IUnboundedEndRange<T> e => (e.Start, e.StartInclusive),
+                _                       => null // -∞ (or empty): nothing is left of it
+            };
+
+            if (upper is not { } end || lower is not { } start) return false;
+
+            int comparison = end.Value.CompareTo(start.Value);
+            return comparison < 0 || (comparison == 0 && !(end.Inclusive && start.Inclusive));
+        }
 
         /// <summary>
         /// Determines whether this range begins strictly after <paramref name="other"/> ends,

@@ -3,6 +3,12 @@
 Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.4.0] — 2026-08-17
+
+No source change in this package. The NodaTime range types inherit the `IsStrictlyLeftOf` /
+`IsStrictlyRightOf` fix from the shared generic surface — see `CodoMetis.ValueRanges` 6.4.0 — so
+`LocalDateRange.CreateUnboundedStart(…)` and its siblings now agree with PostgreSQL's `<<`.
+
 ## [6.3.0] — 2026-08-16
 
 ### Added

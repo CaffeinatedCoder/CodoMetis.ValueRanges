@@ -3,6 +3,30 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.4.0] — 2026-08-17
+
+### Fixed
+
+- **⚠️ `IsStrictlyLeftOf` answered `false` for every range unbounded at its *start***, and
+  `IsStrictlyRightOf` for every such operand. The `<<` relation compares the receiver's **upper**
+  bound with the operand's **lower** bound, so being unbounded at the *other* end is irrelevant:
+  `(-∞, 5]` ends at 5 and is strictly left of `[10, 20]`. The implementation switched on the
+  receiver's shape and handled only `IFiniteRange<T>` there, while its inner switch handled
+  unbounded *operands* — so `((-∞,5]).IsStrictlyLeftOf([10,20])` returned `false` where
+  `'(,5]'::int4range << '[10,20]'` returns `true`.
+
+  The EF translation emits `<<` and was always correct, which is what made this dangerous: the
+  same predicate over the same two values answered `true` server-side and `false` in memory.
+  `RangeSet.IsStrictlyLeftOf`/`RightOf` delegate to their outermost element and inherited it, so a
+  one-element set `{(,5]}` was affected too.
+
+  Now decided by reading the receiver's upper bound and the operand's lower bound rather than by
+  switching on the receiver's shape, so the two directions cannot drift apart again — the same
+  correction `IsAdjacentTo` received in 6.2.1, which was the only other receiver-shaped predicate.
+  A 5×5 shape sweep in both directions and a live-PostgreSQL parity test now cover it.
+  **Behaviour changes for in-memory comparisons involving an unbounded-start range**, from a wrong
+  `false` to the answer the database already gave.
+
 ## [6.3.0] — 2026-08-16
 
 ### Added

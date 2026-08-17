@@ -3,6 +3,13 @@
 Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [6.4.0] — 2026-08-17
+
+No source change in this package. The NodaTime range types are translated by the base plugin, so
+the `IsStrictlyLeftOf`/`IsStrictlyRightOf` correction applies here too — see
+`CodoMetis.ValueRanges` 6.4.0 for why in-memory and server-side evaluation disagreed for a range
+unbounded at its start.
+
 ## [6.3.0] — 2026-08-16
 
 No source change in this package. The NodaTime range sets are translated by the base plugin, so
