@@ -11,20 +11,22 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
 
 ## [7.0.0] — 2026-08-17
 
-Four corrections from an audit of the range and multirange types. **The public API is unchanged** —
-nothing was added, removed or resignatured, and package validation passes against 6.3.0 — but two
-of the three change what existing calls *answer*, which is why this is a major rather than a minor.
+Five corrections from an audit of the range and multirange types. **The public API is unchanged** —
+nothing was added, removed or resignatured, and package validation passes against 6.3.0 — but three
+of the five change what existing calls *answer*, silently, which is why this is a major rather than
+a minor.
 
-All four shared one shape: the EF translation was correct and the in-memory implementation was not,
-so the same expression gave one answer when it ran in PostgreSQL and another when it ran in memory.
-Nothing threw. If you evaluate range operations only server-side, or only in memory, you saw
-consistent (in some cases consistently wrong) results either way; the disagreement was visible only
-to code that did both.
+Those three shared one shape: the EF translation was correct and the in-memory implementation was
+not, so the same expression gave one answer when it ran in PostgreSQL and another when it ran in
+memory. Nothing threw. If you evaluate range operations only server-side, or only in memory, you
+saw consistent (in these cases consistently wrong) results either way; the disagreement was visible
+only to code that did both. The remaining two were loud rather than silent — a query PostgreSQL
+refused to run, and a property that threw.
 
-Three of the four were the same mistake: an operation that dispatches on the *receiver's* shape and
-handles the *operand's* shapes in an inner switch, where a missing arm falls through to a default
-that answers `false` or returns the receiver unchanged. `IsAdjacentTo` had it in 6.2.1;
-`IsStrictlyLeftOf` and `Except` had it here.
+Two of the three are the same mistake, and it is the third time this repository has made it: an
+operation that dispatches on the *receiver's* shape and handles the *operand's* shapes in an inner
+switch, where the missing arm falls through to a default that answers `false` or returns the
+receiver unchanged. `IsAdjacentTo` had it in 6.2.1; `IsStrictlyLeftOf` and `Except` have it here.
 
 The audit's durable output is `ShapeMatrixParityTests`, which asks PostgreSQL for all eight binary
 predicates *and* the four value-producing operations over every ordered pair of range shapes, and
@@ -32,12 +34,22 @@ requires the model to match — some 3,300 comparisons, no exclusions.
 
 ### Fixed
 
+- **`DecimalRange.Length` threw `OverflowException` for a range wider than `decimal` itself.**
+  `DecimalRange.CreateFinite(decimal.MinValue, decimal.MaxValue).Length` raised instead of
+  answering; the span is twice `decimal.MaxValue` and there is no wider type to compute it in. It
+  now returns `null`, which is the answer `Int64Range.Length` already gave for a count above
+  `long.MaxValue` and documented as "too large to represent". Only a range straddling zero can
+  reach it, and the refusal is exact — a span of exactly `decimal.MaxValue` still measures.
+
+  This was the only measure in the family that could fail, and a property that throws breaks
+  debugger evaluation and LINQ projections as much as it breaks the caller.
+
 - **⚠️ `Except` subtracted nothing when the two operands were unbounded in opposite directions.**
   `((-∞,5]).Except([1,+∞))` returned `{(-∞,5]}` — the receiver, unchanged — where the answer is
   `{(-∞,0]}`, and symmetrically `([1,+∞)).Except((-∞,5])` returned `{[1,+∞)}` instead of `{[6,+∞)}`.
   `RangeSet.Except` reaches the same engine through its merge-join and had it too.
 
-  This is the most damaging of the four, because the result is a **well-formed range of the right
+  This is the most damaging of the five, because the result is a **well-formed range of the right
   shape carrying the wrong values** — nothing to notice at a glance, and a subtraction that quietly
   keeps what it was asked to remove. Every element type and both discrete and continuous domains
   were affected.

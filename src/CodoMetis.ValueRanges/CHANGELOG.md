@@ -7,6 +7,14 @@ covers all four packages, which share one version number and release together.
 
 ### Fixed
 
+- **`DecimalRange.Length` threw `OverflowException` instead of refusing.** The span of
+  `[decimal.MinValue, decimal.MaxValue]` is twice `decimal.MaxValue`, and no wider type exists to
+  compute it in, so the subtraction overflowed out of the property. It now returns `null` — the
+  same answer `Int64Range.Length` gives for a count above `long.MaxValue`, and the behaviour its
+  documentation already described for that sibling. Only a range straddling zero can overflow, and
+  the boundary is exact: a span of exactly `decimal.MaxValue` still measures, one unit more does
+  not.
+
 - **⚠️ `Except` subtracted nothing when the two operands were unbounded in opposite directions.**
   `((-∞,5]).Except([1,+∞))` returned `{(-∞,5]}` where the answer is `{(-∞,0]}`, and
   `([1,+∞)).Except((-∞,5])` returned `{[1,+∞)}` where the answer is `{[6,+∞)}`.

@@ -59,9 +59,39 @@ public class RangeValuesAndClampTests
     {
         var atMax = Int32Range.CreateFinite(int.MaxValue - 2, int.MaxValue);
 
+        // The same at the other end, where a decrementing step could underflow instead.
+        CollectionAssert.AreEqual(
+            new[] { int.MinValue, int.MinValue + 1, int.MinValue + 2 },
+            Int32Range.CreateFinite(int.MinValue, int.MinValue + 2).Values().ToArray());
+
         CollectionAssert.AreEqual(
             new[] { int.MaxValue - 2, int.MaxValue - 1, int.MaxValue },
             atMax.Values().ToList());
+    }
+
+    /// <summary>
+    /// The same termination guarantee for the other core discrete domains, which had it only for
+    /// <see cref="Int32Range"/>. A step that overflowed instead of stopping does not throw — it
+    /// wraps to the domain minimum and enumerates forever, so the failure mode is a hang.
+    /// </summary>
+    [TestMethod]
+    public void Values_AtTheDomainMaximum_TerminatesForEveryDiscreteType()
+    {
+        CollectionAssert.AreEqual(
+            new[] { long.MaxValue - 2, long.MaxValue - 1, long.MaxValue },
+            Int64Range.CreateFinite(long.MaxValue - 2, long.MaxValue).Values().ToArray());
+
+        CollectionAssert.AreEqual(
+            new[] { long.MinValue, long.MinValue + 1, long.MinValue + 2 },
+            Int64Range.CreateFinite(long.MinValue, long.MinValue + 2).Values().ToArray());
+
+        CollectionAssert.AreEqual(
+            new[] { DateOnly.MaxValue.AddDays(-2), DateOnly.MaxValue.AddDays(-1), DateOnly.MaxValue },
+            DateRange.CreateFinite(DateOnly.MaxValue.AddDays(-2), DateOnly.MaxValue).Values().ToArray());
+
+        CollectionAssert.AreEqual(
+            new[] { DateOnly.MinValue, DateOnly.MinValue.AddDays(1), DateOnly.MinValue.AddDays(2) },
+            DateRange.CreateFinite(DateOnly.MinValue, DateOnly.MinValue.AddDays(2)).Values().ToArray());
     }
 
     /// <summary>
