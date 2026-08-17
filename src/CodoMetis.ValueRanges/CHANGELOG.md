@@ -7,6 +7,24 @@ covers all four packages, which share one version number and release together.
 
 ### Fixed
 
+- **⚠️ `Except` subtracted nothing when the two operands were unbounded in opposite directions.**
+  `((-∞,5]).Except([1,+∞))` returned `{(-∞,5]}` where the answer is `{(-∞,0]}`, and
+  `([1,+∞)).Except((-∞,5])` returned `{[1,+∞)}` where the answer is `{[6,+∞)}`.
+  `RangeSet<TRange,T>.Except` shares the engine through its merge-join and had it too. Both discrete
+  and continuous domains, every element type.
+
+  The result was a well-formed range of the expected shape holding the wrong values, so a
+  subtraction silently kept what it was asked to remove — no exception, nothing odd-looking in a
+  debugger, and a disagreement with the `-` operator the EF translation emits.
+
+  `ExceptEngine` dispatched on the receiver's shape; the inner switch under each unbounded receiver
+  had an arm for a finite operand and one for an operand unbounded the *same* way, but none for the
+  opposing one, so the `_` fallback rebuilt the receiver. That fallback can only be reached by the
+  opposing-unbounded pair — `RangeExtensions.Except` filters an empty operand through its `Overlaps`
+  guard and an infinite one through its `Contains` guard — so it was wrong on every call that
+  reached it. It is now the explicit arm, and the fallback carries a comment saying why it is
+  unreachable.
+
 - **⚠️ The empty range is now contained by every range**, in `RangeExtensions.Contains`,
   `IsContainedBy` and `RangeSet.Contains(IRange<T>)`. `[1,5].Contains(Int32Range.Empty)` returned
   `false` and now returns `true`; so do `Int32Range.Empty.IsContainedBy(x)`,

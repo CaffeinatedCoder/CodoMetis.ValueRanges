@@ -284,4 +284,73 @@ public class RangeExceptTests
         Assert.AreEqual(8, right.Start);  // canonical: (7, ∞) ≡ [8, ∞)
         Assert.IsTrue(right.StartInclusive);
     }
+
+    /// <summary>
+    /// Two operands unbounded in *opposite* directions: each one's bounded edge cuts the other.
+    /// </summary>
+    /// <remarks>
+    /// This returned the receiver unchanged until 7.0.0 — subtracting nothing at all.
+    /// <c>ExceptEngine</c> dispatched on the receiver's shape, and the inner switch for each
+    /// unbounded receiver had an arm for a *finite* operand and one for an operand unbounded the
+    /// *same* way, but none for the opposing one; the `_` fallback rebuilt the receiver. It is the
+    /// only pair of shapes that reaches that arm, since an empty operand is filtered by the
+    /// `Overlaps` guard and an infinite one by the `Contains` guard, so the fallback was wrong
+    /// every single time it ran.
+    /// </remarks>
+    [TestMethod]
+    public void Except_OpposingUnboundedOperands_TrimsAtTheOperandsBoundedEdge()
+    {
+        // (-∞, 5] ∖ [1, ∞) — everything at or below 5 that is not at or above 1, i.e. (-∞, 0].
+        var upTo5   = Int32Range.CreateUnboundedStart(5, true);
+        var from1   = Int32Range.CreateUnboundedEnd(1, true);
+        var trimmed = upTo5.Except(from1);
+
+        Assert.AreEqual(1, trimmed.Count);
+        var head = trimmed[0] as IUnboundedStartRange<int>;
+        Assert.IsNotNull(head);
+        Assert.AreEqual(0, head.End);      // canonical: (-∞, 1) ≡ (-∞, 0]
+        Assert.IsTrue(head.EndInclusive);
+
+        // The mirror: [1, ∞) ∖ (-∞, 5] leaves [6, ∞).
+        var tailSet = from1.Except(upTo5);
+
+        Assert.AreEqual(1, tailSet.Count);
+        var tail = tailSet[0] as IUnboundedEndRange<int>;
+        Assert.IsNotNull(tail);
+        Assert.AreEqual(6, tail.Start);    // canonical: (5, ∞) ≡ [6, ∞)
+        Assert.IsTrue(tail.StartInclusive);
+    }
+
+    /// <summary>
+    /// The same pair on a continuous domain, where inclusivity rather than a step decides the
+    /// cut — and where the boundary value itself must survive on exactly one side.
+    /// </summary>
+    [TestMethod]
+    public void Except_OpposingUnboundedOperands_Continuous_InvertsTheBoundary()
+    {
+        var upTo9 = DecimalRange.CreateUnboundedStart(9m, true);  // (-∞, 9]
+        var from5 = DecimalRange.CreateUnboundedEnd(5m, true);    // [5, ∞)
+
+        var head = upTo9.Except(from5);
+        Assert.AreEqual(1, head.Count);
+        Assert.AreEqual("(,5)", head[0].ToString());              // 5 belongs to the subtrahend
+
+        var tail = from5.Except(upTo9);
+        Assert.AreEqual(1, tail.Count);
+        Assert.AreEqual("(9,)", tail[0].ToString());              // 9 belongs to the subtrahend
+    }
+
+    /// <summary>
+    /// <see cref="RangeSet{TRange,T}.Except(RangeSet{TRange,T})"/> reaches the same engine through
+    /// its merge-join, so the multirange path had the defect too.
+    /// </summary>
+    [TestMethod]
+    public void Except_Set_OpposingUnboundedElements_TrimsCorrectly()
+    {
+        var upTo5 = RangeSet<Int32Range, int>.From([Int32Range.CreateUnboundedStart(5, true)]);
+        var from1 = RangeSet<Int32Range, int>.From([Int32Range.CreateUnboundedEnd(1, true)]);
+
+        Assert.AreEqual("{(,0]}", upTo5.Except(from1).ToString());
+        Assert.AreEqual("{[6,)}", from1.Except(upTo5).ToString());
+    }
 }

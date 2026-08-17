@@ -11,21 +11,42 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
 
 ## [7.0.0] — 2026-08-17
 
-Three corrections from an audit of the range and multirange types. **The public API is unchanged** —
+Four corrections from an audit of the range and multirange types. **The public API is unchanged** —
 nothing was added, removed or resignatured, and package validation passes against 6.3.0 — but two
 of the three change what existing calls *answer*, which is why this is a major rather than a minor.
 
-All three shared one shape: the EF translation was correct and the in-memory implementation was
-not, so the same expression gave one answer when it ran in PostgreSQL and another when it ran in
-memory. Nothing threw. If you evaluate range predicates only server-side, or only in memory, you
-saw consistent (in one case consistently wrong) results either way; the disagreement was visible
-only to code that did both.
+All four shared one shape: the EF translation was correct and the in-memory implementation was not,
+so the same expression gave one answer when it ran in PostgreSQL and another when it ran in memory.
+Nothing threw. If you evaluate range operations only server-side, or only in memory, you saw
+consistent (in some cases consistently wrong) results either way; the disagreement was visible only
+to code that did both.
+
+Three of the four were the same mistake: an operation that dispatches on the *receiver's* shape and
+handles the *operand's* shapes in an inner switch, where a missing arm falls through to a default
+that answers `false` or returns the receiver unchanged. `IsAdjacentTo` had it in 6.2.1;
+`IsStrictlyLeftOf` and `Except` had it here.
 
 The audit's durable output is `ShapeMatrixParityTests`, which asks PostgreSQL for all eight binary
-predicates over every ordered pair of range shapes and requires the model to match — 2,464
-comparisons, no exclusions.
+predicates *and* the four value-producing operations over every ordered pair of range shapes, and
+requires the model to match — some 3,300 comparisons, no exclusions.
 
 ### Fixed
+
+- **⚠️ `Except` subtracted nothing when the two operands were unbounded in opposite directions.**
+  `((-∞,5]).Except([1,+∞))` returned `{(-∞,5]}` — the receiver, unchanged — where the answer is
+  `{(-∞,0]}`, and symmetrically `([1,+∞)).Except((-∞,5])` returned `{[1,+∞)}` instead of `{[6,+∞)}`.
+  `RangeSet.Except` reaches the same engine through its merge-join and had it too.
+
+  This is the most damaging of the four, because the result is a **well-formed range of the right
+  shape carrying the wrong values** — nothing to notice at a glance, and a subtraction that quietly
+  keeps what it was asked to remove. Every element type and both discrete and continuous domains
+  were affected.
+
+  `ExceptEngine` dispatched on the receiver's shape; each unbounded receiver's inner switch had an
+  arm for a finite operand and one for an operand unbounded the *same* way, but none for the
+  opposing one, so the `_` fallback rebuilt the receiver. That fallback is reachable *only* for the
+  opposing-unbounded pair — an empty operand is filtered by the `Overlaps` guard and an infinite one
+  by the `Contains` guard — so it was wrong on every call that reached it.
 
 - **⚠️ `Contains` and `IsContainedBy` now agree that the empty range is contained by everything.**
   `[1,5].Contains(Int32Range.Empty)` returned `false` and now returns `true`, as does

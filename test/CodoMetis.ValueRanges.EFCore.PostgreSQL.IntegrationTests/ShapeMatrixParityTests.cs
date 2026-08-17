@@ -237,4 +237,158 @@ public sealed class ShapeMatrixParityTests
 
         CollectionAssert.AreEqual(new[] { true, true, true, true, true, true, false, false }, server);
     }
+
+    // -------------------------------------------------------------------------
+    // The algebra: the same matrix over the operations that produce values
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Evaluates each expression and returns PostgreSQL's own text for the result.
+    /// </summary>
+    private static async Task<List<string>> EvaluateText(List<string> expressions)
+    {
+        await using var connection = new NpgsqlConnection(ContainerLifecycle.ConnectionString);
+        await connection.OpenAsync();
+
+        var results = new List<string>();
+
+        foreach (var batch in expressions.Chunk(200))
+        {
+            var projection = string.Join(", ", batch.Select((expression, index) => $"({expression})::text AS c{index}"));
+
+            await using var command = new NpgsqlCommand($"SELECT {projection}", connection);
+            await using var reader  = await command.ExecuteReaderAsync();
+            await reader.ReadAsync();
+
+            for (var index = 0; index < batch.Length; index++) results.Add(reader.GetString(index));
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// <c>Intersect</c>, <c>Merge</c>, <c>Union</c> and <c>Except</c> over every ordered shape
+    /// pair, against <c>*</c>, <c>range_merge</c>, <c>+</c> and <c>-</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The predicate matrix above compares booleans; this compares values, which is where a wrong
+    /// answer is both more damaging and easier to miss — nothing throws and the result is a
+    /// well-formed range. <c>Except</c> shipped returning its receiver unchanged whenever the two
+    /// operands were unbounded in opposite directions, because <c>ExceptEngine</c> dispatched on
+    /// the receiver's shape and its inner switch had no arm for the opposing unbounded operand: the
+    /// <c>_</c> fallback was the identity. Fixed in 7.0.0.
+    /// </para>
+    /// <para>
+    /// The server's text is re-parsed through the model before comparing, so the discrete
+    /// canonical forms (PostgreSQL half-open, the model closed) are not themselves the difference —
+    /// the comparison is about the value, not its rendering.
+    /// </para>
+    /// </remarks>
+    private static async Task AssertAlgebraAgrees<TRange, T>(
+        string rangeType,
+        string multirangeType,
+        (string Name, TRange Range)[] shapes
+    )
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var labels = new List<(string Label, bool IsSet, string Model)>();
+        var sql    = new List<string>();
+
+        foreach (var (leftName, left) in shapes)
+        foreach (var (rightName, right) in shapes)
+        {
+            string a = $"'{Literal(left!)}'::{rangeType}", b = $"'{Literal(right!)}'::{rangeType}";
+            string setA = $"{multirangeType}({a})", setB = $"{multirangeType}({b})";
+
+            labels.Add(($"Intersect '{leftName}' ∩ '{rightName}'", false, Literal(left.Intersect(right)!)));
+            sql.Add($"{a} * {b}");
+
+            labels.Add(($"Merge '{leftName}' ⊔ '{rightName}'", false, Literal(left.Merge(right)!)));
+            sql.Add($"range_merge({a}, {b})");
+
+            labels.Add(($"Union '{leftName}' ∪ '{rightName}'", true, left.Union(right).ToString()));
+            sql.Add($"{setA} + {setB}");
+
+            labels.Add(($"Except '{leftName}' ∖ '{rightName}'", true, left.Except(right).ToString()));
+            sql.Add($"{setA} - {setB}");
+        }
+
+        var server = await EvaluateText(sql);
+
+        var disagreements = new List<string>();
+
+        for (var index = 0; index < labels.Count; index++)
+        {
+            var (label, isSet, model) = labels[index];
+            var text = server[index];
+
+            string asModel;
+            try
+            {
+                asModel = isSet
+                              ? RangeSet<TRange, T>.Parse(text, CultureInfo.InvariantCulture).ToString()
+                              : Literal(TRange.Parse(text, CultureInfo.InvariantCulture)!);
+            }
+            catch (Exception exception)
+            {
+                asModel = $"<could not parse '{text}': {exception.GetType().Name}>";
+            }
+
+            if (asModel != model) disagreements.Add($"{label}: model={model}, PostgreSQL={text} (as model: {asModel})");
+        }
+
+        Assert.AreEqual(
+            0, disagreements.Count,
+            $"{disagreements.Count} of {labels.Count} {rangeType} results disagree with PostgreSQL:\n"
+          + string.Join("\n", disagreements));
+    }
+
+    [TestMethod]
+    public async Task Int32Range_Algebra_AgreesWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await AssertAlgebraAgrees<Int32Range, int>("int4range", "int4multirange",
+        [
+            ("empty",   Int32Range.Empty),
+            ("[1,5]",   Int32Range.CreateFinite(1, 5)),
+            ("[6,10]",  Int32Range.CreateFinite(6, 10)),
+            ("[3,8]",   Int32Range.CreateFinite(3, 8)),
+            ("[20,30]", Int32Range.CreateFinite(20, 30)),
+            ("(,0)",    Int32Range.CreateUnboundedStart(0)),
+            ("(,5)",    Int32Range.CreateUnboundedStart(5)),
+            ("[6,)",    Int32Range.CreateUnboundedEnd(6)),
+            ("[1,)",    Int32Range.CreateUnboundedEnd(1)),
+            ("(,)",     Int32Range.Infinite)
+        ]);
+    }
+
+    /// <summary>
+    /// The continuous domain needs shapes that overlap *across* the two unbounded directions —
+    /// <c>(-∞,9]</c> against <c>[5,+∞)</c> — or the opposing-unbounded case never arises. The first
+    /// version of this sweep used <c>(-∞,5)</c> and <c>[5,+∞)</c>, which are disjoint, and reported
+    /// zero disagreements over the very defect it was written to catch.
+    /// </summary>
+    [TestMethod]
+    public async Task DecimalRange_Algebra_AgreesWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await AssertAlgebraAgrees<DecimalRange, decimal>("numrange", "nummultirange",
+        [
+            ("empty", DecimalRange.Empty),
+            ("[1,5)", DecimalRange.CreateFinite(1m, 5m)),
+            ("[5,9)", DecimalRange.CreateFinite(5m, 9m)),
+            ("(1,5]", DecimalRange.CreateFinite(1m, 5m, false, true)),
+            ("(5,9)", DecimalRange.CreateFinite(5m, 9m, false, false)),
+            ("[3,7)", DecimalRange.CreateFinite(3m, 7m)),
+            ("(,5)",  DecimalRange.CreateUnboundedStart(5m, false)),
+            ("(,9]",  DecimalRange.CreateUnboundedStart(9m, true)),
+            ("[5,)",  DecimalRange.CreateUnboundedEnd(5m)),
+            ("(3,)",  DecimalRange.CreateUnboundedEnd(3m, false)),
+            ("(,)",   DecimalRange.Infinite)
+        ]);
+    }
 }
