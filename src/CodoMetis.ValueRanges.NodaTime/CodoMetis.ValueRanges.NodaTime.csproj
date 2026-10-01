@@ -31,7 +31,7 @@ v6 adds the NodaTime value sets — LocalDateSet (date[]), LocalDateTimeSet (tim
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="NodaTime" Version="3.3.3" />
+        <PackageReference Include="NodaTime" Version="3.3.5" />
     </ItemGroup>
 
 </Project>
