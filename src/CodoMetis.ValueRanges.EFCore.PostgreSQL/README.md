@@ -115,6 +115,10 @@ tabulates both halves together.
   `array_cat`, which concatenates without deduplicating. Harmless inside the duplicate-insensitive
   operators and on materialization (reads re-canonicalize), but `Count` over a union is refused
   rather than counting duplicates.
+- **Inside a `ToJson()` column** a range, multirange or value set is stored as its PostgreSQL
+  literal, and queries into the document translate through a cast
+  (`CAST(doc ->> 'Period' AS daterange) @> @day`). The `YearMonth` types are written in their
+  month-aligned date form there, since the cast reads dates.
 - **Sets are mapped as scalars** with plugin-owned mappings and translators, never through EF's
   primitive-collection machinery.
 - **Reverse engineering** (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`

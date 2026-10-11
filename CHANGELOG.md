@@ -11,15 +11,32 @@ Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-f
 
 ## [9.0.0] — 2026-10-11
 
-Two wire-format defects in the System.Text.Json support, found by wrapping a `DateRange` in a
-downstream value object and putting it on an ASP.NET Core API. **Nothing was removed or
+Wire-format corrections, and the machinery that proves them. It started from three gaps measured
+by wrapping a `DateRange` in a downstream value object and putting it on an ASP.NET Core API —
+JSON with nothing registered, dictionary keys, OpenAPI — and a value-semantics review of the result
+found more of the same kind, each one answering wrongly without throwing. **Nothing was removed or
 resignatured** — package validation passes against the 8.0.0 baseline.
 
-This is a major for the reason 7.0.0 and 8.0.0 were: `JsonSerializer.Serialize(range)` with
-default options now *answers* differently, and a caller cannot discover that from a compile error.
-The old answer was a defect — it could not be read back by anything, this package included — but a
-consumer that only ever wrote it, into a response or a log, sees its shape change, and a floating
-`8.*` reference must not pick that up silently.
+This is a major for the reason 7.0.0 and 8.0.0 were: several existing calls now *answer*
+differently, and a caller cannot discover that from a compile error. A floating `8.*` reference
+must not pick any of these up silently.
+
+**What can break you, in order of likelihood:**
+
+1. **`JsonSerializer.Serialize(range)` with default options writes the literal**, not
+   `{"Length":181}`. The old form could not be read back by anything, this package included, but a
+   consumer that only ever wrote it — into a response, a document, a log — sees its shape change.
+2. **A culture provider no longer reaches the literal.** `Parse(s, culture)` reads the invariant
+   literal, and formatting without a format string writes it. Code that parsed culture-formatted
+   text through `Parse(s, de-DE)` deliberately must parse the bounds itself.
+3. **Lenient decimal forms are refused.** `"1,000"`, `"(5)"` and currency symbols in a
+   `DecimalRange` or `DecimalSet` literal are a `FormatException`, as they are in PostgreSQL.
+4. **Interpolating an integer or decimal range is invariant under every culture.** Only code that
+   depended on `[1,5,2)` — which parsed back as a different range — is affected.
+
+Everything else is additive: a `TypeConverter` on every type, ranges as dictionary keys, ranges
+and sets inside EF Core JSON columns, Native AOT, and an OpenAPI transformer to copy. The
+[migration guide](docs/migration.md#migration-from-v8x) has the call-site edits.
 
 ### Changed
 
