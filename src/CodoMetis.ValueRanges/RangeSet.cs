@@ -77,6 +77,12 @@ public sealed class RangeSet<TRange, T>
     where TRange : IRangeFactory<TRange, T>, IRange<T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(RangeSet<TRange, T>),
+        static () => new RangeSetJsonConverter<TRange, T>(),
+        static () => new RangeSetTypeConverter<TRange, T>());
+
     /// <summary>The empty set — contains no ranges and no values.</summary>
     public static RangeSet<TRange, T> Empty { get; } = new([]);
 

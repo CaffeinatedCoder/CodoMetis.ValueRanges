@@ -207,6 +207,12 @@ public sealed class YearMonthSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<YearMonthSet<TElement>, TElement>, IEquatable<YearMonthSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(YearMonthSet<TElement>),
+        static () => new ValueSetJsonConverter<YearMonthSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<YearMonthSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private YearMonthSet(ImmutableArray<TElement> elements) => _elements = elements;

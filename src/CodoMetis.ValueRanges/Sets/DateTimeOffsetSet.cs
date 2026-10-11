@@ -154,6 +154,12 @@ public sealed class DateTimeOffsetSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<DateTimeOffsetSet<TElement>, TElement>, IEquatable<DateTimeOffsetSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(DateTimeOffsetSet<TElement>),
+        static () => new ValueSetJsonConverter<DateTimeOffsetSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<DateTimeOffsetSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private DateTimeOffsetSet(ImmutableArray<TElement> elements) => _elements = elements;

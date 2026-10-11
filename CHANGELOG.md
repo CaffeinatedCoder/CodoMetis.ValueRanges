@@ -109,6 +109,16 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
     carries a narrowing converter that refuses another shape.
   - ASP.NET Core model binding is unaffected — minimal APIs and MVC bind through the static
     `TryParse` these types already have.
+- **Native AOT and trimming.** `RangeSet` and the validated-wrapper sets failed under Native AOT
+  with "missing native code": their JSON converters and `TypeConverter`s were built with
+  `MakeGenericType` over instantiations the AOT compiler never generated, and whether one existed
+  depended on unrelated code elsewhere in the program. Each generic type now registers its own
+  closed converters, which are compiled with it, so even a type a program only deserializes works.
+  `RangeJsonConverterFactory` and `LiteralTypeConverter` no longer use `MakeGenericType` or walk
+  interfaces, `ValueSetJsonConverter` resolves elements through `JsonTypeInfo<T>`, and both
+  libraries build with `IsAotCompatible` — no trim or AOT warnings in a consumer's publish. The
+  consumer smoke test gained a NativeAOT consumer that publishes and runs a native binary; seeding
+  out `RangeSet`'s own registration fails exactly the range set cases there.
 - **Ranges and multiranges as dictionary keys.** `Dictionary<DateRange, int>` threw
   `NotSupportedException` in both directions, registered or not. `RangeJsonConverter`,
   `RangeVariantJsonConverter` and `RangeSetJsonConverter` now override

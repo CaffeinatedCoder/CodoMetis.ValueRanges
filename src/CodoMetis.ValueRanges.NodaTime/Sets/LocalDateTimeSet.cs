@@ -195,6 +195,12 @@ public sealed class LocalDateTimeSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<LocalDateTimeSet<TElement>, TElement>, IEquatable<LocalDateTimeSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(LocalDateTimeSet<TElement>),
+        static () => new ValueSetJsonConverter<LocalDateTimeSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<LocalDateTimeSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private LocalDateTimeSet(ImmutableArray<TElement> elements) => _elements = elements;

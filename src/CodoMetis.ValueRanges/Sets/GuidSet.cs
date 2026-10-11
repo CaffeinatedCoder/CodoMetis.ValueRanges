@@ -137,6 +137,12 @@ public sealed class GuidSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<GuidSet<TElement>, TElement>, IEquatable<GuidSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(GuidSet<TElement>),
+        static () => new ValueSetJsonConverter<GuidSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<GuidSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private GuidSet(ImmutableArray<TElement> elements) => _elements = elements;

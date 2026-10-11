@@ -231,22 +231,41 @@ conventions project discovers every type and fails on one that serializes differ
 
 ### Variants and the factory
 
-The sealed variants inherit the union's `IRangeFactory<TRange, T>` but do not satisfy
-`TRange : IRangeFactory<TRange, T>` themselves — `Int32Range.Finite` implements
-`IRangeFactory<Int32Range, int>`, not `IRangeFactory<Int32Range.Finite, int>`. So the factory reads
-`TRange` off the interface and compares it to the type it was handed: equal means the union and
-`RangeJsonConverter`, unequal means a variant and `RangeVariantJsonConverter`. Constructing the
-plain converter for a variant instead throws a reflection `ArgumentException` out of
-`MakeGenericType`, which is what used to happen for `object`-typed values.
+System.Text.Json resolves converters by the type it is handed, so `Serialize<object>(range)`, an
+`object`-typed property and an `object`-typed collection all present the *runtime* type, which is
+always a variant. That is why every variant carries its own `[JsonConverter]` naming
+`RangeVariantJsonConverter` (see *Type-level attributes* above).
 
-This is not an edge case — System.Text.Json resolves converters by the type it is handed, so
-`Serialize<object>(range)`, an `object`-typed property and an `object`-typed collection all present
-the *runtime* type, which is always a variant.
+Since 9.0.0 `RangeJsonConverterFactory` builds nothing at runtime. It reads the type's own
+`[JsonConverter]`: a non-generic type names a closed converter, which the factory creates from the
+attribute (whose `ConverterType` is annotated for its constructor, so this is trim-safe); a generic
+type names the factory itself, and the closed converter comes from `GenericConverters` (below).
+`CanConvert` is "names a converter of this package", so the factory no longer walks interfaces.
 
-Value set types have no variants and are sealed; the factory rejects a hypothetical subclass with a
-directed `NotSupportedException` rather than the same reflection failure. A property declared as the
-`IRange<T>`/`IValueSet<T>` *interface* is not handled — the interface carries no factory to parse
-back through, so it falls to System.Text.Json's default handling.
+A property declared as the `IRange<T>`/`IValueSet<T>` *interface* is not handled — the interface
+carries no factory to parse back through, so it falls to System.Text.Json's default handling.
+
+### Native AOT and `GenericConverters`
+
+`RangeSet<TRange, T>` and the wrapper arities cannot name a converter closed over their own type
+arguments, so they name `RangeJsonConverterFactory`/`LiteralTypeConverter`, which receive only a
+`Type`. Until 9.0.0 those built the converter with `MakeGenericType` — fine under the JIT, and a
+`NotSupportedException` under Native AOT, because the instantiation over a value type
+(`RangeSetJsonConverter<DateRange, DateOnly>`) was never compiled. Whether it was depended on
+unrelated code elsewhere in the program, so an AOT test could pass by accident.
+
+Each generic type now registers delegates for its own closed converters from a static field
+initializer (`ConvertersRegistered`); `GenericConverters.Get` runs the type's initializer and looks
+it up. The delegates are part of the type, so they are compiled for every instantiation the program
+uses — including one it only ever deserializes, which the Native AOT consumer in
+`test/consumer-smoke-test.sh` proves for a core range set, a NodaTime range set and a wrapper set.
+Explicit registration of the eleven range sets (they are a closed set) was tried and removed: seeded
+out, the AOT consumer still passed, so it was guarding nothing. Seeding out a type's *own*
+registration fails exactly that type's cases with the registry's `NotSupportedException`.
+
+Both shipping libraries build with `IsAotCompatible`, so the trim and AOT analyzers run on every
+build and, with warnings as errors, an unannotated reflection path cannot be merged. The analyzers
+cannot see whether code is *compiled* under AOT — only the native consumer shows that.
 
 ### Element converters (`IValueSetFactory<TSet, T>.ElementJsonConverter`)
 

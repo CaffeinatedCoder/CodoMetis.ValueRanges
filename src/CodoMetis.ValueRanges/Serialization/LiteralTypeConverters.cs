@@ -128,7 +128,7 @@ public class ValueSetTypeConverter<TSet, T> : LiteralTypeConverterBase<TSet>
 /// The <see cref="TypeConverter"/> named by the generic types — <see cref="RangeSet{TRange,T}"/>
 /// and the validated-wrapper value set arities — which an attribute cannot close over their type
 /// arguments. <see cref="TypeDescriptor"/> constructs it with the closed type, and it delegates to
-/// <see cref="RangeSetTypeConverter{TRange,T}"/> or <see cref="ValueSetTypeConverter{TSet,T}"/>.
+/// that type's <see cref="RangeSetTypeConverter{TRange,T}"/> or <see cref="ValueSetTypeConverter{TSet,T}"/>.
 /// </summary>
 public sealed class LiteralTypeConverter : TypeConverter
 {
@@ -137,20 +137,14 @@ public sealed class LiteralTypeConverter : TypeConverter
     /// <summary>Creates the converter for <paramref name="type"/>, a closed range set or value set type.</summary>
     /// <param name="type">The type being converted.</param>
     /// <exception cref="NotSupportedException"><paramref name="type"/> is neither.</exception>
+    /// <remarks>
+    /// The closed converter comes from the delegate the type registered for itself, never from
+    /// <c>MakeGenericType</c>, so this works under Native AOT.
+    /// </remarks>
     public LiteralTypeConverter(Type type)
     {
         ArgumentNullException.ThrowIfNull(type);
-
-        Type converter;
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(RangeSet<,>))
-            converter = typeof(RangeSetTypeConverter<,>).MakeGenericType(type.GetGenericArguments());
-        else if (Array.Find(type.GetInterfaces(), i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IValueSetFactory<,>)) is { } set
-              && set.GetGenericArguments()[0] == type)
-            converter = typeof(ValueSetTypeConverter<,>).MakeGenericType(type, set.GetGenericArguments()[1]);
-        else
-            throw new NotSupportedException($"'{type}' is not a range set or value set type.");
-
-        _inner = (TypeConverter)Activator.CreateInstance(converter)!;
+        _inner = GenericConverters.Get(type).Text();
     }
 
     /// <inheritdoc />
