@@ -83,10 +83,12 @@ public sealed class RangeLiteralGrammarContractTests
         Reads($"[ {lo} , {hi} )", finite);
 
         // Structure PostgreSQL refuses: a second comma, a closing bracket inside a bound, an
-        // unterminated quote or escape.
+        // unterminated quote or escape, Unicode whitespace where only ASCII whitespace is skipped.
         foreach (var literal in new[]
                  {
-                     $"[{lo},{hi},{hi})", $"[{lo}),{hi})", $"[{lo}],{hi})", $"[\"{lo},{hi})", $"[{lo},{hi}\\)"
+                     $"[{lo},{hi},{hi})", $"[{lo}),{hi})", $"[{lo}],{hi})", $"[\"{lo},{hi})", $"[{lo},{hi}\\)",
+                     // Only ASCII whitespace is skipped, as in PostgreSQL: a no-break space is bound text.
+                     $"[\u00A0{lo},{hi})", $"\u00A0[{lo},{hi})"
                  })
         {
             Refused(literal);

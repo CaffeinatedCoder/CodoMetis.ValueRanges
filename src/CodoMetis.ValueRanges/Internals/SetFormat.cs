@@ -39,13 +39,14 @@ internal static class SetFormat
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
     {
-        s = s.Trim();
+        s = LiteralWhiteSpace.Trim(s);
 
         if (s.Length < 2 || s[0] != '{' || s[^1] != '}')
             throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid array literal.");
 
-        var inner = s[1..^1].Trim();
-        if (inner.IsEmpty) return TSet.Empty;
+        // Not trimmed: a trailing escaped space ({a\ }) belongs to the last element.
+        var inner = s[1..^1];
+        if (LiteralWhiteSpace.Trim(inner).IsEmpty) return TSet.Empty;
 
         var values   = new List<T>();
         var position = 0;
@@ -54,7 +55,7 @@ internal static class SetFormat
         {
             values.Add(ParseElement<TSet, T>(inner, ref position));
 
-            while (position < inner.Length && char.IsWhiteSpace(inner[position])) position++;
+            while (position < inner.Length && LiteralWhiteSpace.Is(inner[position])) position++;
 
             if (position == inner.Length) break;
 
@@ -88,15 +89,17 @@ internal static class SetFormat
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
     {
-        while (position < inner.Length && char.IsWhiteSpace(inner[position])) position++;
+        while (position < inner.Length && LiteralWhiteSpace.Is(inner[position])) position++;
 
         if (position == inner.Length)
             throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal.");
 
         if (inner[position] == '"')
         {
-            // Quoted element: `\"` and `\\` unescape; the text is taken verbatim otherwise,
-            // so a quoted "NULL" is the four-character value, not the null marker.
+            // Quoted element: a backslash takes the next character literally; the text is taken
+            // verbatim otherwise, so a quoted "NULL" is the four-character value, not the null
+            // marker. Only whitespace may follow the closing quote (the caller then requires the
+            // delimiter or the end), so {"a"b} is refused, as PostgreSQL refuses it.
             position++;
             var sb = new StringBuilder();
             while (true)
@@ -122,24 +125,53 @@ internal static class SetFormat
             }
         }
 
-        var start = position;
-        while (position < inner.Length && inner[position] is not ',' and not '"')
+        if (inner[position] == '{')
+            throw new FormatException(
+                $"The input string '{{{LiteralExcerpt.Of(inner)}}}' is a multi-dimensional array literal; a value set is one-dimensional.");
+
+        // Unquoted element, as PostgreSQL's array_in reads it: a backslash takes the next character
+        // literally; an unescaped brace or quote is malformed; whitespace around the element is
+        // dropped and whitespace inside it kept. Only a bare, unescaped NULL is the null marker.
+        var text        = new StringBuilder();
+        var significant = 0;
+        var escaped     = false;
+
+        while (position < inner.Length && inner[position] != ',')
         {
-            position++;
+            var c = inner[position++];
+
+            if (c == '\\')
+            {
+                if (position == inner.Length)
+                    throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' has an unterminated escape sequence.");
+
+                text.Append(inner[position++]);
+                significant = text.Length;
+                escaped     = true;
+            }
+            else if (c is '{' or '}' or '"')
+            {
+                throw new FormatException(
+                    $"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal: unexpected '{c}' in an unquoted element.");
+            }
+            else
+            {
+                text.Append(c);
+                if (!LiteralWhiteSpace.Is(c)) significant = text.Length;
+            }
         }
 
-        if (position < inner.Length && inner[position] == '"')
+        text.Length = significant;
+
+        if (text.Length == 0)
             throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal.");
 
-        var text = inner[start..position].Trim();
+        var value = text.ToString();
 
-        if (text.IsEmpty)
-            throw new FormatException($"The input string '{{{LiteralExcerpt.Of(inner)}}}' is not a valid array literal.");
-
-        if (text.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+        if (!escaped && value.Equals("NULL", StringComparison.OrdinalIgnoreCase))
             throw new FormatException("Value sets cannot contain null elements.");
 
-        return ParseElementValue<TSet, T>(text, inner);
+        return ParseElementValue<TSet, T>(value, inner);
     }
 
     /// <summary>

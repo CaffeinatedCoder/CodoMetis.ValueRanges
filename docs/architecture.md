@@ -191,8 +191,11 @@ of them; one that swallows it is rejected at the persistence boundary.
   failure modes are a wrong answer, a leaked NodaTime exception, or a non-ISO element smuggled
   into an empty set. The EF satellite mirrors it through the definition's `normalizeValue`,
   which now also backs an `ElementTypeMapping` so the same probe normalizes on the server.
-- `Internals/SetFormat` implements PostgreSQL array-literal parse/format (quoting, escaping,
-  unquoted `NULL` rejected — sets never contain null; reads throw on corrupt data).
+- `Internals/SetFormat` implements PostgreSQL array-literal parse/format with `array_in`'s grammar
+  (quoting; backslash escapes in quoted and unquoted elements; an unescaped brace or quote inside
+  an unquoted element, or a nested `{`, refused — sets are one-dimensional; ASCII whitespace only
+  around elements; unquoted `NULL` rejected — sets never contain null; reads throw on corrupt data).
+  `Internals/RangeFormat` reads bounds with `range_in`'s: only an absent bound is infinite.
 
 ## JSON Serialization (`Serialization/`)
 

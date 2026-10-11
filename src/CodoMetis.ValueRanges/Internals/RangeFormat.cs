@@ -12,7 +12,7 @@ internal static class RangeFormat
         where TRange : IRangeFactory<TRange, T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
-        s = s.Trim();
+        s = LiteralWhiteSpace.Trim(s);
 
         if (s.Equals("empty", StringComparison.OrdinalIgnoreCase))
             return TRange.Empty;
@@ -72,7 +72,9 @@ internal static class RangeFormat
     /// <c>12</c>), a doubled quote inside one is a literal quote, and a backslash takes the next
     /// character literally, inside quotes or out. An unquoted, unescaped comma, <c>)</c> or <c>]</c>
     /// ends the bound. Whitespace around the unquoted part is dropped: PostgreSQL hands it to the
-    /// element's input function, and every input function behind these types ignores it.
+    /// element's input function, and every input function behind these types ignores it. That is
+    /// ASCII whitespace only (<see cref="LiteralWhiteSpace"/>): a no-break space stays in the bound,
+    /// where the element parser refuses it as PostgreSQL's does.
     /// </para>
     /// </remarks>
     private static string? ScanBound(ReadOnlySpan<char> inner, ref int position, ReadOnlySpan<char> literal)
@@ -114,7 +116,7 @@ internal static class RangeFormat
                     inQuotes = false;
                 }
             }
-            else if (inQuotes || !char.IsWhiteSpace(c))
+            else if (inQuotes || !LiteralWhiteSpace.Is(c))
             {
                 sb.Append(c);
                 significant = sb.Length;
@@ -188,12 +190,12 @@ internal static class RangeFormat
     /// </summary>
     internal static IReadOnlyList<string> SplitSetLiterals(ReadOnlySpan<char> s)
     {
-        s = s.Trim();
+        s = LiteralWhiteSpace.Trim(s);
 
         if (s.Length < 2 || s[0] != '{' || s[^1] != '}')
             throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range set literal.");
 
-        var inner  = s[1..^1].Trim();
+        var inner  = LiteralWhiteSpace.Trim(s[1..^1]);
         var result = new List<string>();
 
         if (inner.IsEmpty)
@@ -221,13 +223,13 @@ internal static class RangeFormat
                     depth--;
                     break;
                 case ',' when depth == 0 && !inQuotes:
-                    result.Add(inner[start..i].Trim().ToString());
+                    result.Add(LiteralWhiteSpace.Trim(inner[start..i]).ToString());
                     start = i + 1;
                     break;
             }
         }
 
-        result.Add(inner[start..].Trim().ToString());
+        result.Add(LiteralWhiteSpace.Trim(inner[start..]).ToString());
         return result;
     }
 }

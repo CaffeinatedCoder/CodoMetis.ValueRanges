@@ -260,7 +260,12 @@ whatever the invariant culture could, month first. These are now a `FormatExcept
 
 A range bound that is a quoted `""` or only whitespace — `["",5)`, `( , )` — is now a `FormatException`
 rather than an infinite bound, as in PostgreSQL; only an absent bound (`(,5)`) is infinite. A backslash
-outside quotes now escapes the next character in a range bound, as it does in PostgreSQL.
+outside quotes now escapes the next character, in a range bound and in an array element alike, as
+it does in PostgreSQL: `StringSet.Parse(@"{a\,b}")` is the one element `a,b`, where it was the two
+elements `a\` and `b`. An array literal PostgreSQL refuses or reads as multi-dimensional — `{{a,b}}`,
+`{a}b}`, `{a"b}` — is a `FormatException`; `{{a,b}}` used to be the set `{"{a","b}"}`. Only ASCII
+whitespace is skipped around elements and bounds; a no-break space is now kept as element text (and
+refused inside a range bound), where it was trimmed.
 
 `HH:mm` without seconds, PostgreSQL's space-separated output, any number of fraction digits (truncated to 100 ns) and `infinity` / `-infinity` are accepted.
 The temporal wrapper arities read the text as their primitive first, so a lenient generated element
