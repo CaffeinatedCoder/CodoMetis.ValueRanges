@@ -30,10 +30,15 @@ internal sealed class ValueSetsMemberTranslator(ISqlExpressionFactory sqlExpress
         // Union translates to array_cat, whose result is concatenated rather than
         // deduplicated. cardinality would then count shared elements twice — {a,c} unioned
         // with {a,b} is 4 on the server and 3 in memory. PostgreSQL has no array_distinct to
-        // wrap it in, so Count over a server-computed union is refused: EF reports the query
-        // as untranslatable, which beats returning a number that is quietly too large.
-        // IsEmpty stays translatable — a concatenation is empty exactly when both sides are.
-        if (member.Name == nameof(StringSet.Count) && DerivesFromUnion(instance))
+        // wrap it in, so Count over a server-computed union is declined: in a projection EF
+        // then evaluates it on the client against the materialized (canonical) set, and in a
+        // predicate it reports the query as untranslatable, which beats filtering on a number
+        // that is quietly too large. Declining looks through array_remove (which preserves a
+        // concatenation rather than canonicalizing it), CASE and COALESCE. A union reaching
+        // cardinality through a subquery column is invisible from here and is refused on the
+        // final SQL by ValueSetSqlGuard instead. IsEmpty stays translatable — a concatenation
+        // is empty exactly when both sides are.
+        if (member.Name == nameof(StringSet.Count) && ValueSetSqlGuard.MayBeConcatenation(instance))
             return null;
 
         var set = sqlExpressionFactory.ApplyTypeMapping(instance, definition.SetTypeMapping);
@@ -45,29 +50,6 @@ internal sealed class ValueSetsMemberTranslator(ISqlExpressionFactory sqlExpress
                    _                         => null
                };
     }
-
-    /// <summary>
-    /// Whether the operand is a union, or something built on one that did not restore canonical
-    /// form.
-    /// </summary>
-    /// <remarks>
-    /// Matching only the outermost call let the refusal be side-stepped by anything wrapping the
-    /// union. <c>array_remove</c> is the case that exists today: it preserves whatever canonical
-    /// form its input had, which for a concatenation is none, so
-    /// <c>Tags.Union(Other).Remove(x).Count</c> reached <c>cardinality</c> and counted shared
-    /// elements twice — 4 against live PostgreSQL where the in-memory expression is 3.
-    /// Canonicality-preserving wrappers therefore have to be looked through rather than treated
-    /// as a fresh start.
-    /// </remarks>
-    private static bool DerivesFromUnion(SqlExpression expression) => expression switch
-    {
-        SqlFunctionExpression { Name: "array_cat" } => true,
-
-        SqlFunctionExpression { Name: "array_remove", Arguments.Count: > 0 } remove
-            => DerivesFromUnion(remove.Arguments[0]),
-
-        _ => false
-    };
 
     private SqlExpression Cardinality(SqlExpression set)
         => sqlExpressionFactory.Function(

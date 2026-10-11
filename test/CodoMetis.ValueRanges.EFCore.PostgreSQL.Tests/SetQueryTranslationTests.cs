@@ -234,17 +234,21 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
-    public void Union_Equality_InAProjection_StillWorks()
+    public void Union_Equality_InAProjection_IsRefused_WhileCountFallsBackToTheClient()
     {
-        // The refusal covers the contexts EF must translate in full. A projection is not one:
-        // EF falls back to client evaluation there and computes the comparison against the
-        // materialized set, which is correct. Refusing it too would be stricter than the defect —
-        // and would put equality out of step with Count, which degrades to client evaluation in a
-        // projection for exactly the same reason.
+        // EF does not fall back to client evaluation for a comparison it can translate: in a
+        // projection it emits SELECT array_cat(…) = @p, which answered false against live
+        // PostgreSQL for {a,c} ∪ {a,b} = {a,b,c}. So equality is refused in a projection too
+        // (UnionCanonicalityTests runs both against a server). Count differs: its translator
+        // declines a union, which is what hands a projection back to the client.
         using var context = new TestDbContext();
 
-        _ = context.Bookings.Select(b => b.Tags.Union(Wanted) == Wanted).ToQueryString();
-        _ = context.Bookings.Select(b => b.Tags.Union(Wanted).Count).ToQueryString();
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Select(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+
+        var count = context.Bookings.Select(b => b.Tags.Union(Wanted).Count).ToQueryString();
+        Assert.DoesNotContain("cardinality", count);
+        StringAssert.Contains(count, "array_cat");
     }
 
     [TestMethod]
