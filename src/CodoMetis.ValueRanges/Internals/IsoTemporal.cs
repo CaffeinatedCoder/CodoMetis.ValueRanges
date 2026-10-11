@@ -15,9 +15,11 @@ namespace CodoMetis.ValueRanges.Internals;
 /// already strict (<c>NodaPatterns</c>); this is the same rule for the BCL types.
 /// </para>
 /// <para>
-/// Accepted: a date <c>yyyy-MM-dd</c>; a time <c>HH:mm</c> or <c>HH:mm:ss</c> with up to seven
-/// fraction digits; date and time joined by <c>T</c> (this library) or a space (PostgreSQL); for a
-/// <c>DateTime</c> an optional <c>Z</c> or <c>±HH:mm</c> suffix, read with round-trip semantics; for a
+/// Accepted: a date <c>yyyy-MM-dd</c>; a time <c>HH:mm</c> or <c>HH:mm:ss</c> with any number of
+/// fraction digits, truncated to the 100 ns the BCL types hold (Go and Java write nine, and
+/// System.Text.Json truncates them the same way); date and time joined by <c>T</c> (this library) or a
+/// space (PostgreSQL); for a <c>DateTime</c> an optional <c>Z</c>, <c>±HH</c> or <c>±HH:mm</c> suffix,
+/// read with round-trip semantics; for a
 /// <c>DateTimeOffset</c> a required <c>Z</c>, <c>±HH</c>, <c>±HH:mm</c> or <c>±HH:mm:ss</c> — the last is
 /// how PostgreSQL writes a historical local-mean-time offset (<c>Asia/Kolkata</c> before 1854 is
 /// <c>+05:53:28</c>), which <c>DateTimeOffset</c> cannot hold, so that instant is kept at offset zero; and PostgreSQL's
@@ -36,11 +38,14 @@ internal static class IsoTemporal
 
     private static readonly string[] TimeFormats = ["HH:mm:ss.FFFFFFF", "HH:mm"];
 
-    // K: nothing (Unspecified), Z (Utc) or ±HH:mm (Local) under RoundtripKind — what "O" writes.
+    // K: nothing (Unspecified), Z (Utc) or ±HH:mm (Local) under RoundtripKind — what "O" writes;
+    // zz: the short ±HH, also read as Local.
     private static readonly string[] DateTimeFormats =
     [
         "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK", "yyyy-MM-dd' 'HH:mm:ss.FFFFFFFK",
-        "yyyy-MM-dd'T'HH:mmK",            "yyyy-MM-dd' 'HH:mmK"
+        "yyyy-MM-dd'T'HH:mmK",            "yyyy-MM-dd' 'HH:mmK",
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzz", "yyyy-MM-dd' 'HH:mm:ss.FFFFFFFzz",
+        "yyyy-MM-dd'T'HH:mmzz",            "yyyy-MM-dd' 'HH:mmzz"
     ];
 
     // Every form carries an offset, so AssumeUniversal only ever gives the literal Z its meaning.
@@ -64,7 +69,7 @@ internal static class IsoTemporal
     }
 
     internal static TimeOnly ParseTime(ReadOnlySpan<char> s)
-        => TimeOnly.TryParseExact(s, TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
+        => TimeOnly.TryParseExact(TruncateFraction(s), TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
             ? value
             : throw new FormatException("Expected an ISO 8601 time of day, HH:mm or HH:mm:ss with up to seven fraction digits.");
 
@@ -72,7 +77,7 @@ internal static class IsoTemporal
     {
         if (TryParseInfinity(s, out var positive)) return positive ? DateTime.MaxValue : DateTime.MinValue;
 
-        return DateTime.TryParseExact(s, DateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value)
+        return DateTime.TryParseExact(TruncateFraction(s), DateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value)
             ? value
             : throw new FormatException(
                 "Expected an ISO 8601 date and time, yyyy-MM-dd then T or a space then HH:mm[:ss[.fffffff]], "
@@ -83,8 +88,9 @@ internal static class IsoTemporal
     {
         if (TryParseInfinity(s, out var positive)) return positive ? DateTimeOffset.MaxValue : DateTimeOffset.MinValue;
 
-        return DateTimeOffset.TryParseExact(s, DateTimeOffsetFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
-            || TryParseSecondsOffset(s, out value)
+        var trimmed = TruncateFraction(s);
+        return DateTimeOffset.TryParseExact(trimmed, DateTimeOffsetFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
+            || TryParseSecondsOffset(trimmed, out value)
             ? value
             : throw new FormatException(
                 "Expected an ISO 8601 date and time with an offset, yyyy-MM-dd then T or a space then "
@@ -119,6 +125,21 @@ internal static class IsoTemporal
 
         value = new DateTimeOffset(utc, TimeSpan.Zero);
         return true;
+    }
+
+    /// <summary>
+    /// The text with a fraction of more than seven digits cut to seven — truncation, as
+    /// System.Text.Json does. A <c>.</c> anywhere else (a dotted date) is left for the formats to refuse.
+    /// </summary>
+    private static ReadOnlySpan<char> TruncateFraction(ReadOnlySpan<char> s)
+    {
+        var dot = s.IndexOf('.');
+        if (dot < 0) return s;
+
+        var end = dot + 1;
+        while (end < s.Length && char.IsAsciiDigit(s[end])) end++;
+
+        return end - dot - 1 <= 7 ? s : string.Concat(s[..(dot + 8)], s[end..]);
     }
 
     private static bool TryParseInfinity(ReadOnlySpan<char> s, out bool positive)

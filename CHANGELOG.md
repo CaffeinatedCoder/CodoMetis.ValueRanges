@@ -78,8 +78,9 @@ OpenAPI transformer to copy. The
   invariant culture month first: `[01.02.2027,05.03.2027)` was January 2 to May 2, `9:30 AM` was
   09:30, and a `DateTimeOffset` without an offset took whichever machine parsed it — all silently.
   They now accept exactly what this library writes and what PostgreSQL prints in its ISO
-  `DateStyle`: `yyyy-MM-dd`; `HH:mm` or `HH:mm:ss` with up to seven fraction digits; `T` or a space
-  between them; for a `DateTime` an optional `Z` or `±HH:mm` (round-trip semantics), for a
+  `DateStyle`: `yyyy-MM-dd`; `HH:mm` or `HH:mm:ss` with any number of fraction digits, truncated to
+  100 ns; `T` or a space between them; for a `DateTime` an optional `Z`, `±HH` or `±HH:mm`
+  (round-trip semantics), for a
   `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (a historical local-mean-time
   offset, kept as the instant at offset zero); and `infinity` / `-infinity` as `MaxValue` /
   `MinValue`, what Npgsql materializes for them. Everything else is a `FormatException` through
@@ -88,9 +89,10 @@ OpenAPI transformer to copy. The
   form, so a lenient generated element `Parse` never sees non-ISO text, and an element that
   ignores the format specifier fails on read instead of truncating silently. The NodaTime types
   were already strict; they now also read `infinity` for `Instant`, `LocalDate` and
-  `LocalDateTime`, the types Npgsql maps it for. A closed `DateTimeOffsetSet` reads its JSON array
-  through System.Text.Json's own converter, which accepts an offset-less timestamp in the local
-  offset as it does for any `DateTimeOffset` property. `TemporalLiteralGrammarTests` pins the
+  `LocalDateTime`, the types Npgsql maps it for. **A closed temporal set reads its JSON elements with
+  the same grammar** — System.Text.Json's own converter read an offset-less `DateTimeOffset`, or a
+  bare date, in the parsing machine's offset — unless a converter is registered for the element
+  type, which still wins; the written form is System.Text.Json's, unchanged. `TemporalLiteralGrammarTests` pins the
   grammar; `TemporalLiteralStrictnessContractTests` (conventions) refuses a non-ISO element through
   every entry point of all 26 temporal range and set types.
 
@@ -173,6 +175,15 @@ OpenAPI transformer to copy. The
   so the stored array's `cardinality` disagreed with the set's `Count`; it is now deduplicated on
   every path. Npgsql's own literal for a range's *element* operand (`range.Contains(constant)`)
   is unchanged — it differs from its parameter only before 2000, and in nanoseconds for NodaTime.
+
+- **A range built inline in a query failed to translate.** `r.Period == DateRange.CreateFinite(new
+  DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31))` — or `Int32Range.Parse("[1,5]", null)`, or any
+  factory call over values that depend on nothing in the query — threw "does not have a type mapping
+  assigned" under `==`, `!=`, `Equals` and inside a conditional. EF Core evaluates such a call on the
+  client and inlines the result as a constant typed by its sealed variant, for which no mapping
+  exists. The query interceptor now retypes it to its range type; the literal goes through the
+  store text like any other constant. `Contains`, `Overlaps`, captured variables and `EF.Constant`
+  were never affected. `InlineRangeConstantExecutionTests` (integration) runs one per range type.
 
 ### Added
 

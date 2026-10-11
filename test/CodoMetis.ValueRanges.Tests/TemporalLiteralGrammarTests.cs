@@ -71,6 +71,22 @@ public class TemporalLiteralGrammarTests
         Assert.AreEqual(DateTime.SpecifyKind(Wall.AddHours(-1), DateTimeKind.Utc), local.ToUniversalTime());
     }
 
+    /// <summary>
+    /// ISO 8601 puts no limit on fraction digits; Go and Java write nine. They are truncated to the
+    /// 100 ns the BCL types hold, as System.Text.Json truncates them.
+    /// </summary>
+    [TestMethod]
+    [DataRow("2026-01-01T09:30:00.123456789")]
+    [DataRow("2026-01-01T09:30:00.1234567890123456")]
+    public void DateTime_Accepts_MoreThanSevenFractionDigits_Truncated(string text)
+        => Assert.AreEqual(Wall.AddTicks(1_234_567), DateTimeRange.ParseValue(text, null));
+
+    [TestMethod]
+    public void DateTime_Accepts_AShortOffset_AsLocal()
+        => Assert.AreEqual(
+            DateTime.SpecifyKind(Wall.AddHours(-1), DateTimeKind.Utc),
+            DateTimeRange.ParseValue("2026-01-01T09:30:00+01", null).ToUniversalTime());
+
     [TestMethod]
     public void DateTime_Accepts_Infinity()
     {
@@ -85,8 +101,6 @@ public class TemporalLiteralGrammarTests
     [DataRow("2027-02-01")]                         // date-only for a date-time
     [DataRow("2027-02-01T09")]
     [DataRow("2027-02-01T09:30:00,5")]              // comma fraction
-    [DataRow("2027-02-01T09:30:00.12345678")]       // eight fraction digits
-    [DataRow("2027-02-01T09:30:00+01")]             // short offset is a DateTimeOffset form
     [DataRow("2027-02-01T25:00:00")]
     [DataRow("2027-02-01T09:30:00 BC")]
     public void DateTime_Rejects(string text)
@@ -126,6 +140,12 @@ public class TemporalLiteralGrammarTests
     }
 
     [TestMethod]
+    public void DateTimeOffset_Accepts_NineFractionDigits_Truncated()
+        => Assert.AreEqual(
+            new DateTimeOffset(Wall.AddTicks(1_234_567), TimeSpan.Zero),
+            DateTimeOffsetRange.ParseValue("2026-01-01T09:30:00.123456789Z", null));
+
+    [TestMethod]
     public void DateTimeOffset_Accepts_Infinity()
     {
         Assert.AreEqual(DateTimeOffset.MaxValue, DateTimeOffsetRange.ParseValue("infinity", null));
@@ -149,15 +169,16 @@ public class TemporalLiteralGrammarTests
     [DataRow("09:30:00", 0L)]
     [DataRow("09:30:00.1234567", 1_234_567L)]
     [DataRow("09:30:00.123456", 1_234_560L)]
+    [DataRow("09:30:00.123456789", 1_234_567L)]
     public void Time_Accepts(string text, long extraTicks)
         => Assert.AreEqual(new TimeOnly(9, 30).Add(TimeSpan.FromTicks(extraTicks)), TimeRange.ParseValue(text, null));
 
     [TestMethod]
     [DataRow("9:30 AM")]
+    [DataRow("9:30")]
     [DataRow("24:00:00")]                           // PostgreSQL's end of day: unrepresentable
     [DataRow("09.30")]
     [DataRow("09:30:00,5")]
-    [DataRow("09:30:00.12345678")]
     [DataRow("T09:30")]
     [DataRow("infinity")]                           // time has no infinity in PostgreSQL either
     public void Time_Rejects(string text)

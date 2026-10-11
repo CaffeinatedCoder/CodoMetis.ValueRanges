@@ -20,28 +20,27 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// grammar itself is pinned in <c>TemporalLiteralGrammarTests</c>.
 /// </para>
 /// <para>
-/// The probes are the dotted culture forms, because every path refuses those. One thing this sweep
-/// deliberately does not assert: a closed <c>DateTimeOffsetSet</c> reads its JSON elements through
-/// System.Text.Json's own converter, which accepts an ISO timestamp without an offset and assumes
-/// the local one — as it does for every <c>DateTimeOffset</c> property in the same payload. The
-/// literal grammar refuses that form.
+/// The probes are the culture forms the lenient parser read, and — for the offset-bearing types — an
+/// ISO timestamp without an offset and a bare date, which System.Text.Json's own converter read in the
+/// parsing machine's offset. A closed temporal set reads its JSON elements through that converter's
+/// replacement, the strict literal grammar, unless a converter is registered for the element type.
 /// </para>
 /// </remarks>
 [TestClass]
 public sealed class TemporalLiteralStrictnessContractTests
 {
-    /// <summary>A non-ISO element per temporal primitive, each one the lenient parser read.</summary>
-    private static readonly Dictionary<Type, string> NonIso = new()
+    /// <summary>Non-ISO elements per temporal primitive, each one a lenient parser read — into a different value.</summary>
+    private static readonly Dictionary<Type, string[]> NonIso = new()
     {
-        [typeof(DateOnly)]       = "01.02.2027",
-        [typeof(DateTime)]       = "01.02.2027 09:30:00",
-        [typeof(DateTimeOffset)] = "01.02.2027 09:30:00 +01:00",
-        [typeof(TimeOnly)]       = "9:30 AM",
-        [typeof(LocalDate)]      = "01.02.2027",
-        [typeof(LocalDateTime)]  = "01.02.2027 09:30:00",
-        [typeof(Instant)]        = "01.02.2027 09:30:00 +01:00",
-        [typeof(LocalTime)]      = "9:30 AM",
-        [typeof(YearMonth)]      = "02.2027"
+        [typeof(DateOnly)]       = ["01.02.2027"],
+        [typeof(DateTime)]       = ["01.02.2027 09:30:00", "2027-02-01"],
+        [typeof(DateTimeOffset)] = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01"],
+        [typeof(TimeOnly)]       = ["9:30 AM", "9:30"],
+        [typeof(LocalDate)]      = ["01.02.2027"],
+        [typeof(LocalDateTime)]  = ["01.02.2027 09:30:00", "2027-02-01"],
+        [typeof(Instant)]        = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01"],
+        [typeof(LocalTime)]      = ["9:30 AM"],
+        [typeof(YearMonth)]      = ["02.2027"]
     };
 
     /// <summary>8 temporal range types and 18 temporal set types (9 closed, 9 wrapper arities), as of 9.0.0.</summary>
@@ -84,7 +83,16 @@ public sealed class TemporalLiteralStrictnessContractTests
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
-        var literal = $"[\"{NonIso[typeof(T)]}\",\"{NonIso[typeof(T)]}\"]";
+        foreach (var element in NonIso[typeof(T)])
+            RefusesElement<TRange, T>(element);
+        return null;
+    }
+
+    private static void RefusesElement<TRange, T>(string element)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var literal = $"[\"{element}\",\"{element}\"]";
         var label   = $"{typeof(TRange).Name} {literal}";
 
         Assert.ThrowsExactly<FormatException>(() => TRange.Parse(literal, CultureInfo.InvariantCulture), $"{label}: Parse accepted it.");
@@ -97,14 +105,21 @@ public sealed class TemporalLiteralStrictnessContractTests
         var multirange = $"{{{literal}}}";
         Assert.ThrowsExactly<FormatException>(
             () => RangeSet<TRange, T>.Parse(multirange, CultureInfo.InvariantCulture), $"{label}: RangeSet.Parse accepted it.");
-        return null;
     }
 
     private static object? AssertSetRefuses<TSet, T, TPrimitive>()
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
     {
-        var element = NonIso[typeof(TPrimitive)];
+        foreach (var element in NonIso[typeof(TPrimitive)])
+            SetRefusesElement<TSet, T>(element);
+        return null;
+    }
+
+    private static void SetRefusesElement<TSet, T>(string element)
+        where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
+        where T : IEquatable<T>
+    {
         var literal = $"{{\"{element}\"}}";
         var label   = $"{(typeof(TSet).IsGenericType ? $"{typeof(TSet).Name.Split('`')[0]}<{typeof(T).Name}>" : typeof(TSet).Name)} {literal}";
 
@@ -113,6 +128,5 @@ public sealed class TemporalLiteralStrictnessContractTests
         Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<TSet>($"[{JsonSerializer.Serialize(element)}]"), $"{label}: JSON accepted it.");
         Assert.ThrowsExactly<FormatException>(
             () => TypeDescriptor.GetConverter(typeof(TSet)).ConvertFromInvariantString(literal), $"{label}: the TypeConverter accepted it.");
-        return null;
     }
 }

@@ -23,6 +23,10 @@ covers all four packages, which share one version number and release together.
   - `ExecuteUpdate` of a value set inside a JSON column is refused at query compilation: EF Core
     writes it with `to_jsonb`, a JSON array the document cannot hold. Ranges, multiranges and the
     whole JSON property can be set. `docs/efcore.md` has the full matrix.
+- **A range built inline in a query failed to translate** — `r.Period == DateRange.CreateFinite(…)`
+  over values that depend on nothing in the query threw "does not have a type mapping assigned".
+  EF Core inlines such a range as a constant typed by its sealed variant; the query interceptor now
+  retypes it to its range type.
 - **⚠️ Temporal SQL constants carried more precision than the database.** A temporal range,
   multirange or set constant was rendered with seven fraction digits, which the server rounds while
   a parameter is truncated, and `DateTime.MinValue` as a finite date where a parameter carries
