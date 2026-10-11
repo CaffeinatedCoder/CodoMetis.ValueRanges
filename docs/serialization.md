@@ -184,7 +184,7 @@ var set = RangeSet<Int32Range, int>.From([
 ]);
 string setJson = JsonSerializer.Serialize(set);   // "\"{[1,5],[7,10]}\""
 
-// Works with all six range types and their multirange counterparts
+// Works with every range type and its multirange counterpart
 var dates = JsonSerializer.Serialize(
     DateRange.CreateFinite(new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31)));
 // "\"[2025-01-01,2025-12-31]\""

@@ -46,7 +46,7 @@ must not pick any of these up silently.
 Everything else is additive: a `TypeConverter` on every type, ranges as dictionary keys, ranges
 and sets inside EF Core JSON columns, Native AOT, `Deconstruct` on every bounded variant, and an
 OpenAPI transformer to copy. The
-[migration guide](docs/migration.md#migration-from-v8x) has the call-site edits.
+[migration guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x) has the call-site edits.
 
 ### Changed
 

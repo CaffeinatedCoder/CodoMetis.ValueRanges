@@ -27,7 +27,7 @@ A range says *"every moment between these two"*; a set says *"exactly these mome
 | `LocalTimeSet`     | `LocalTime`     | `time[]`              |
 | `YearMonthSet`     | `YearMonth`     | `date[]` (month-aligned) |
 
-The whole core set algebra applies: `Contains`, `Overlaps`, `IsSubsetOf`/`IsSupersetOf` and their proper variants, `Union`, `Remove`, `Count`, `IsEmpty`, plus client-side `Intersect`/`Except`/`Add` — along with array-literal parsing/formatting, JSON ([one call to set up](#json)), and collection expressions.
+The whole core set algebra applies: `Contains`, `Overlaps`, `IsSubsetOf`/`IsSupersetOf` and their proper variants, `Union`, `Remove`, `Count`, `IsEmpty`, plus client-side `Intersect`/`Except`/`Add` — along with array-literal parsing/formatting, JSON ([no setup needed](#json)), and collection expressions.
 
 ```csharp
 using CodoMetis.ValueRanges;
@@ -145,7 +145,9 @@ InstantRange range = interval.ToInstantRange();          // [start, end) Finite
 Interval back      = range.ToInterval();                 // round-trips
 
 if (LocalDateRange.Parse("[2025-01-01,2025-01-31]", null) is LocalDateRange.Finite finite)
+{
     DateInterval dates = finite.ToDateInterval();
+}
 ```
 
 What the range types add over `Interval`/`DateInterval`: the empty range, unbounded date ranges, all four bound-inclusiveness combinations, the full set algebra (`Union`/`Except`/`Intersect`/`Merge`/`Complement`), multiranges, PostgreSQL literals, and LINQ-to-SQL translation.

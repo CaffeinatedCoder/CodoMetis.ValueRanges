@@ -224,8 +224,9 @@ what each attribute names:
   directly with no reflection.
 - **`RangeSet<TRange, T>` and the wrapper arities name `RangeJsonConverterFactory`.** An attribute
   cannot name an open generic converter (`typeof(RangeSetJsonConverter<,>)` fails at runtime with
-  `ContainsGenericParameters`), so these go through the factory's `MakeGenericType`, as a registered
-  factory always did.
+  `ContainsGenericParameters`), so these go through the factory, which looks the closed converter up
+  in `GenericConverters`: each generic type registers its own from a static field, never through
+  `MakeGenericType`, so the converter exists under Native AOT.
 
 `[TypeConverter]` follows the same three rules with `RangeTypeConverter`, `RangeVariantTypeConverter`,
 `ValueSetTypeConverter` and, for the generic types, `LiteralTypeConverter` — which `TypeDescriptor`
