@@ -178,6 +178,8 @@ public sealed class IntegrationDbContext : DbContext
 
     public DbSet<JsonDocumentRow> JsonDocuments => Set<JsonDocumentRow>();
 
+    public DbSet<TemporalParityRow> TemporalParityRows => Set<TemporalParityRow>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseNpgsql(
             ContainerLifecycle.ConnectionString!,
@@ -195,6 +197,14 @@ public sealed class IntegrationDbContext : DbContext
         modelBuilder.Entity<JsonDocumentRow>(row =>
         {
             row.Property(r => r.Id).ValueGeneratedNever();
+            row.ComplexProperty(r => r.Doc, doc => doc.ToJson());
+        });
+
+        // Every temporal type as a column and inside a jsonb document (TemporalStoreParityTests).
+        modelBuilder.Entity<TemporalParityRow>(row =>
+        {
+            row.Property(r => r.Id).ValueGeneratedNever();
+            row.ComplexProperty(r => r.Native);
             row.ComplexProperty(r => r.Doc, doc => doc.ToJson());
         });
 

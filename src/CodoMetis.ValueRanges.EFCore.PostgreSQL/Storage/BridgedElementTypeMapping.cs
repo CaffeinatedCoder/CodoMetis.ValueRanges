@@ -86,14 +86,16 @@ internal static class SetProviderText
     /// <summary>
     /// The invariant text form of a primitive. BCL date/time types use the round-trip format —
     /// their null-format <see cref="IFormattable"/> output is the culture "general" form, which
-    /// PostgreSQL reads DateStyle-dependently.
+    /// PostgreSQL reads DateStyle-dependently — and the extremes Npgsql maps to infinity are written
+    /// <c>-infinity</c> / <c>infinity</c>, as a parameter would arrive. The values reaching here are
+    /// already truncated to the store's microsecond by the set definitions' normalization.
     /// </summary>
     internal static string Of<TPrimitive>(TPrimitive primitive)
         => primitive switch
            {
-               DateTime value       => value.ToString("O", CultureInfo.InvariantCulture),
-               DateTimeOffset value => value.ToString("O", CultureInfo.InvariantCulture),
-               DateOnly value       => value.ToString("O", CultureInfo.InvariantCulture),
+               DateTime value       => StoreTemporal.InfinityText(value) ?? value.ToString("O", CultureInfo.InvariantCulture),
+               DateTimeOffset value => StoreTemporal.InfinityText(value) ?? value.ToString("O", CultureInfo.InvariantCulture),
+               DateOnly value       => StoreTemporal.InfinityText(value) ?? value.ToString("O", CultureInfo.InvariantCulture),
                TimeOnly value       => value.ToString("O", CultureInfo.InvariantCulture),
                IFormattable value   => value.ToString(null, CultureInfo.InvariantCulture),
                null                 => throw new InvalidOperationException("Value sets cannot contain null elements."),

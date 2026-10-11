@@ -42,6 +42,7 @@ public sealed class JsonDocument
     public InstantSet         NodaStamps { get; set; } = InstantSet.Empty;
     public YearMonthSet       Months    { get; set; } = YearMonthSet.Empty;
     public StringSet<TextKey> Keys      { get; set; } = StringSet<TextKey>.Empty;
+    public YearMonthSet<BillingMonth> WrappedMonths { get; set; } = YearMonthSet<BillingMonth>.Empty;
 }
 
 /// <summary>
@@ -84,7 +85,8 @@ public sealed class JsonColumnTests
         NodaDays   = LocalDateSet.From(new LocalDate(2026, 1, 1)),
         NodaStamps = InstantSet.From(Instant.FromUtc(2026, 1, 1, 9, 30)),
         Months     = YearMonthSet.From(new YearMonth(2026, 1), new YearMonth(2026, 6)),
-        Keys       = StringSet<TextKey>.From(TextKey.Parse("users.read", null))
+        Keys       = StringSet<TextKey>.From(TextKey.Parse("users.read", null)),
+        WrappedMonths = YearMonthSet<BillingMonth>.From(new BillingMonth(new YearMonth(2026, 2)), new BillingMonth(new YearMonth(2026, 5)))
     };
 
     /// <summary>Every property: (name, value from the sample, value from a row, server-side equality filter).</summary>
@@ -116,6 +118,7 @@ public sealed class JsonColumnTests
         yield return ("NodaStamps",    d => d.NodaStamps,    r => r.Doc.NodaStamps == s.NodaStamps);
         yield return ("Months",        d => d.Months,        r => r.Doc.Months == s.Months);
         yield return ("Keys",          d => d.Keys,          r => r.Doc.Keys == s.Keys);
+        yield return ("WrappedMonths", d => d.WrappedMonths, r => r.Doc.WrappedMonths == s.WrappedMonths);
     }
 
     private static async Task<JsonDocumentRow> Insert(int id)
@@ -183,7 +186,7 @@ public sealed class JsonColumnTests
         await using var connection = new NpgsqlConnection(ContainerLifecycle.ConnectionString);
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(
-            """SELECT "Doc" ->> 'Period', "Doc" ->> 'Tags', "Doc" ->> 'Billing', "Doc" ->> 'Months' FROM "JsonDocuments" WHERE "Id" = 9003""",
+            """SELECT "Doc" ->> 'Period', "Doc" ->> 'Tags', "Doc" ->> 'Billing', "Doc" ->> 'Months', "Doc" ->> 'WrappedMonths' FROM "JsonDocuments" WHERE "Id" = 9003""",
             connection);
         await using var reader = await command.ExecuteReaderAsync();
         await reader.ReadAsync();
@@ -195,5 +198,9 @@ public sealed class JsonColumnTests
         // a query into the document casts the text to daterange / date[], which only reads dates.
         Assert.AreEqual("[2026-01-01,2026-06-30]", reader.GetString(2));
         Assert.AreEqual("{2026-01-01,2026-06-01}", reader.GetString(3));
+
+        // The wrapper arity too. Until 9.0.0 it was written in its element's own form, {2026-02,2026-05},
+        // which the cast to date[] refuses — every query into it failed.
+        Assert.AreEqual("{2026-02-01,2026-05-01}", reader.GetString(4));
     }
 }

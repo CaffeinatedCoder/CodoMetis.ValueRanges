@@ -17,29 +17,54 @@ internal sealed class SetTypeDefinition<TSet, T> : ISetTypeDefinition
     where TSet : class, IValueSetFactory<TSet, T>, IValueSet<T>
     where T : IEquatable<T>
 {
+    /// <param name="elementStoreType">The PostgreSQL type of one element, e.g. <c>date</c>.</param>
+    /// <param name="normalizeValue">
+    /// The element normalization the set type's <c>From</c> applies (CLAUDE.md: the same function as
+    /// <c>NormalizeElement</c>), for parameters, literals and a bare element operand.
+    /// </param>
+    /// <param name="literalText">The element's SQL literal form; defaults to <see cref="SetProviderText.Of"/>.</param>
+    /// <param name="storeValue">
+    /// The element at the store's resolution, applied after <paramref name="normalizeValue"/> — for a
+    /// temporal family <see cref="StoreTemporal"/>'s truncation.
+    /// </param>
+    /// <param name="storeText">
+    /// Whether the set's store text — a JSON document — is the array of its store primitives rather
+    /// than its own literal: the temporal families, whose store value is truncated and whose extremes
+    /// are <c>infinity</c>.
+    /// </param>
     internal SetTypeDefinition(
         string           elementStoreType,
         Func<T, T>?      normalizeValue = null,
-        Func<T, string>? literalText    = null
+        Func<T, string>? literalText    = null,
+        Func<T, T>?      storeValue     = null,
+        bool             storeText      = false
     )
     {
+        var toStore = (normalizeValue, storeValue) switch
+                      {
+                          (null, null)   => static value => value,
+                          ({ } n, null)  => n,
+                          (null, { } v)  => v,
+                          ({ } n, { } v) => (Func<T, T>)(value => v(n(value)))
+                      };
+
         ElementStoreType = elementStoreType;
         ArrayStoreType   = elementStoreType + "[]";
         SetTypeMapping   = new ValueSetTypeMapping<TSet, T, T>(
-            ArrayStoreType,
-            normalizeValue ?? (static value => value),
-            static value => value,
-            literalText);
+            ArrayStoreType, toStore, static value => value, literalText, storeText: storeText);
 
         // The same normalization has to reach a bare element operand: in `column @> ARRAY[@p]`
         // the probe bypasses the set mapping entirely, and the provider's default mapping for
         // the element CLR type does not normalize. Without this, a probe that From would have
         // normalized binds raw — a non-ISO NodaTime date silently queries for its own
         // calendar's field values read as ISO.
+        //
+        // Keyed on normalizeValue, not on the store resolution: a family without a normalization
+        // keeps the provider's element mapping, which Npgsql already truncates on the wire.
         ElementTypeMapping = normalizeValue is null
                                  ? null
                                  : new BridgedElementTypeMapping<T, T>(
-                                     elementStoreType, normalizeValue, static value => value, literalText);
+                                     elementStoreType, toStore, static value => value, literalText);
     }
 
     public Type SetClrType => typeof(TSet);
@@ -127,6 +152,7 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
     private readonly string?                  _elementFormat;
     private readonly Func<string, TPrimitive> _parsePrimitive;
     private readonly Func<TPrimitive, string> _formatPrimitive;
+    private readonly Func<TPrimitive, TPrimitive>? _storeValue;
 
     /// <param name="elementStoreType">The PostgreSQL type of one element, e.g. <c>integer</c>.</param>
     /// <param name="elementFormat">
@@ -142,22 +168,36 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
     /// <param name="literalText">
     /// The primitive's SQL literal form; defaults to <see cref="SetProviderText.Of"/>.
     /// </param>
+    /// <param name="storeValue">The primitive at the store's resolution — a temporal family's truncation.</param>
+    /// <param name="storeText">
+    /// Whether the set's store text is the array of its store primitives rather than its own
+    /// literal — see <see cref="SetTypeDefinition{TSet,T}"/>.
+    /// </param>
+    /// <param name="parseStoreText">
+    /// The store primitives back from that text, where the set's own <c>Parse</c> cannot read it:
+    /// <c>YearMonthSet&lt;T&gt;</c> stores <c>2024-06-01</c> and its element speaks <c>2024-06</c>.
+    /// </param>
     public BridgedSetTypeDefinition(
-        string                    elementStoreType,
-        string?                   elementFormat,
-        Func<string, TPrimitive>  parsePrimitive,
-        Func<TPrimitive, string>  formatPrimitive,
-        Func<TPrimitive, string>? literalText = null
+        string                                      elementStoreType,
+        string?                                     elementFormat,
+        Func<string, TPrimitive>                    parsePrimitive,
+        Func<TPrimitive, string>                    formatPrimitive,
+        Func<TPrimitive, string>?                   literalText    = null,
+        Func<TPrimitive, TPrimitive>?               storeValue     = null,
+        bool                                        storeText      = false,
+        Func<string, IEnumerable<TPrimitive>>?      parseStoreText = null
     )
     {
         _elementFormat   = elementFormat;
         _parsePrimitive  = parsePrimitive;
         _formatPrimitive = formatPrimitive;
+        _storeValue      = storeValue;
 
         ElementStoreType = elementStoreType;
         ArrayStoreType   = elementStoreType + "[]";
         SetTypeMapping   = new ValueSetTypeMapping<TSet, TElement, TPrimitive>(
-            ArrayStoreType, ToPrimitive, FromPrimitive, literalText);
+            ArrayStoreType, ToPrimitive, FromPrimitive, literalText,
+            storeText: storeText, parseStoreText: parseStoreText);
         ElementTypeMapping = new BridgedElementTypeMapping<TElement, TPrimitive>(
             ElementStoreType, ToPrimitive, FromPrimitive, literalText);
     }
@@ -165,9 +205,10 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
     private TPrimitive ToPrimitive(TElement element)
     {
         var text = element.ToString(_elementFormat, CultureInfo.InvariantCulture);
+        TPrimitive primitive;
         try
         {
-            return _parsePrimitive(text);
+            primitive = _parsePrimitive(text);
         }
         catch (FormatException ex)
         {
@@ -180,6 +221,8 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
               + $"'{typeof(TPrimitive)}' value. Value set elements must format to exactly the "
               + "backing primitive's text form.", ex);
         }
+
+        return _storeValue is null ? primitive : _storeValue(primitive);
     }
 
     private TElement FromPrimitive(TPrimitive primitive)

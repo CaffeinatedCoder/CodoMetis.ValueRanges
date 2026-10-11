@@ -53,12 +53,14 @@ public sealed class SqlLiteralTests
     // The literal is the only place the bridge's output is observable without a database, and
     // the sub-second digits are the whole point: a bridge that asked its elements for their
     // default text form instead of the round-trip one would render 10:30:00.0000000 here and
-    // store a value silently truncated to the second.
+    // store a value silently truncated to the second. The seventh digit is 0 since 9.0.0: the
+    // literal carries the value at the store's microsecond, truncated exactly as Npgsql truncates
+    // the parameter, so a constant and a parameter for the same value agree.
 
     [TestMethod]
     public void WrapperTimestampSet_KeepsSubSecondPrecision() =>
         Assert.AreEqual(
-            "ARRAY['2024-06-15T10:30:00.1234567']::timestamp without time zone[]",
+            "ARRAY['2024-06-15T10:30:00.1234560']::timestamp without time zone[]",
             LiteralOf(DateTimeSet<TestStamp>.From(
                 TestStamp.Parse("2024-06-15T10:30:00.1234567", CultureInfo.InvariantCulture))));
 
@@ -70,7 +72,7 @@ public sealed class SqlLiteralTests
     [TestMethod]
     public void WrapperTimestampSet_NormalizesKindToUnspecified() =>
         Assert.AreEqual(
-            "ARRAY['2024-06-15T10:30:00.1234567']::timestamp without time zone[]",
+            "ARRAY['2024-06-15T10:30:00.1234560']::timestamp without time zone[]",
             LiteralOf(DateTimeSet<TestStamp>.From(
                 TestStamp.Parse("2024-06-15T10:30:00.1234567Z", CultureInfo.InvariantCulture))));
 

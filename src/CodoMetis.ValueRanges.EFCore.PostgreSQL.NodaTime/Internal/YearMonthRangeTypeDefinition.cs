@@ -143,9 +143,9 @@ internal sealed class YearMonthRangeTypeMapping : RelationalTypeMapping
                                  $"Cannot generate a '{StoreType}' SQL literal for a value of type '{value.GetType()}'.")
                     };
 
-        // ToString() formats with the invariant culture; string interpolation would route
-        // through IFormattable with the current culture instead.
-        return $"'{range.ToString()}'::{StoreType}";
+        // The date form's store text: its invariant literal, with LocalDate.MaxIsoValue — the end of a
+        // range up to 9999-12 — written as infinity, as Npgsql sends it.
+        return $"'{StoreText<LocalDateRange>.Format(range)}'::{StoreType}";
     }
 }
 
@@ -204,7 +204,7 @@ internal sealed class YearMonthRangeSetTypeMapping : RelationalTypeMapping
                                $"Cannot generate a '{StoreType}' SQL literal for a value of type '{value.GetType()}'.")
                   };
 
-        return $"'{set.ToString()}'::{StoreType}";
+        return $"'{StoreText<RangeSet<LocalDateRange, LocalDate>>.Format(set)}'::{StoreType}";
     }
 }
 
@@ -273,6 +273,6 @@ internal sealed class YearMonthTypeMapping : RelationalTypeMapping
                                 $"Cannot generate a '{StoreType}' SQL literal for a value of type '{value.GetType()}'.")
                    };
 
-        return $"DATE '{LocalDatePattern.Iso.Format(date)}'";
+        return $"DATE '{NodaStoreTemporal.Literal(date)}'";
     }
 }

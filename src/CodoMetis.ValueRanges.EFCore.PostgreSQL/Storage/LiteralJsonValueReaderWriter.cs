@@ -23,6 +23,13 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 /// from the document as text casts to <c>daterange</c>, <c>text[]</c> and so on.
 /// </para>
 /// <para>
+/// A temporal type is written at the store's resolution, as Npgsql would bind it — microseconds,
+/// truncated toward 2000-01-01, with the extremes as <c>-infinity</c> / <c>infinity</c> — so the
+/// value a query casts out of the document is the value a parameter or a native column holds. The
+/// per-type text comes from <see cref="Internal.StoreText{TValue}"/>, which is static for the reason
+/// below.
+/// </para>
+/// <para>
 /// Public because a compiled model (<c>dotnet ef dbcontext optimize</c>) re-creates the reader/writer
 /// through <see cref="ConstructorExpression"/>, which generated code must be able to reference.
 /// </para>
@@ -43,11 +50,11 @@ public sealed class LiteralJsonValueReaderWriter<TValue> : JsonValueReaderWriter
 
     /// <inheritdoc />
     public override TValue FromJsonTyped(ref Utf8JsonReaderManager manager, object? existingObject = null)
-        => TValue.Parse(manager.CurrentReader.GetString()!, CultureInfo.InvariantCulture);
+        => Internal.StoreText<TValue>.Parse(manager.CurrentReader.GetString()!);
 
     /// <inheritdoc />
     public override void ToJsonTyped(Utf8JsonWriter writer, TValue value)
-        => writer.WriteStringValue(value.ToString(null, CultureInfo.InvariantCulture));
+        => writer.WriteStringValue(Internal.StoreText<TValue>.Format(value));
 
     /// <inheritdoc />
     public override Expression ConstructorExpression => Expression.Property(null, InstanceProperty);

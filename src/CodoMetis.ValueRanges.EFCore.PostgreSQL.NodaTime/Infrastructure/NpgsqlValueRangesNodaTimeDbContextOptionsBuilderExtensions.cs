@@ -24,15 +24,18 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
     // idempotent no-op for already-known range CLR types on every later options build.
     private static readonly IRangeTypeDefinition[] Definitions =
         [
-            new RangeTypeDefinition<LocalDateRange, LocalDate>("daterange", "datemultirange", "date"),
+            // No Kind or offset reinterpretation: a LocalDateTime is wall-clock time by construction
+            // and an Instant is an instant. What remains is the store's resolution — nanoseconds
+            // truncated to microseconds and the extremes written as infinity, exactly as Npgsql
+            // sends them, so a JSON document and a SQL literal carry the value a parameter would.
+            new RangeTypeDefinition<LocalDateRange, LocalDate>(
+                "daterange", "datemultirange", "date", infinityText: NodaStoreTemporal.InfinityText),
             new RangeTypeDefinition<LocalDateTimeRange, LocalDateTime>(
-                "tsrange", "tsmultirange", "timestamp without time zone"),
+                "tsrange", "tsmultirange", "timestamp without time zone",
+                storeValue: NodaStoreTemporal.Truncate, infinityText: NodaStoreTemporal.InfinityText),
             new RangeTypeDefinition<InstantRange, Instant>(
-                "tstzrange", "tstzmultirange", "timestamp with time zone"),
-
-            // No element normalization anywhere: a LocalDateTime is wall-clock time by
-            // construction and an Instant is an instant by construction — the Kind and
-            // offset reinterpretations of the BCL definitions have nothing to fix here.
+                "tstzrange", "tstzmultirange", "timestamp with time zone",
+                storeValue: NodaStoreTemporal.Truncate, infinityText: NodaStoreTemporal.InfinityText),
 
             // YearMonth has no PostgreSQL representation: this definition stores the range
             // as a month-aligned daterange, converting every boundary through its days.
@@ -49,21 +52,28 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             // the normalization also backs the element mapping used for a bare probe in
             // `column @> ARRAY[@p]`, where a non-ISO value would otherwise bind its own
             // calendar's year/month/day as if they were ISO.
+            //
+            // The temporal sets also truncate to the store's microsecond and write the extremes as
+            // infinity, as Npgsql does, and a JSON document holds those store values (storeText).
             new SetTypeDefinition<LocalDateSet, LocalDate>(
                 "date",
                 static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
-                NodaTime.Text.LocalDatePattern.Iso.Format),
+                NodaStoreTemporal.Literal,
+                storeText: true),
             new SetTypeDefinition<LocalDateTimeSet, LocalDateTime>(
                 "timestamp without time zone",
                 static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
-                NodaTime.Text.LocalDateTimePattern.ExtendedIso.Format),
+                NodaStoreTemporal.Literal,
+                storeValue: NodaStoreTemporal.Truncate, storeText: true),
 
-            // No normalization: an Instant is an instant and a LocalTime a time of day by
-            // construction — neither carries a calendar.
+            // An Instant is an instant and a LocalTime a time of day by construction — neither
+            // carries a calendar, so the store's resolution is all there is to normalize.
             new SetTypeDefinition<InstantSet, Instant>(
-                "timestamp with time zone", literalText: NodaTime.Text.InstantPattern.ExtendedIso.Format),
+                "timestamp with time zone", literalText: NodaStoreTemporal.Literal,
+                storeValue: NodaStoreTemporal.Truncate, storeText: true),
             new SetTypeDefinition<LocalTimeSet, LocalTime>(
-                "time without time zone", literalText: NodaTime.Text.LocalTimePattern.ExtendedIso.Format),
+                "time without time zone", literalText: NodaTime.Text.LocalTimePattern.ExtendedIso.Format,
+                storeValue: NodaStoreTemporal.Truncate, storeText: true),
 
             // YearMonth has no PostgreSQL representation: this definition stores the set
             // as a month-aligned date[], converting every element through its first day.
@@ -87,34 +97,41 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             // a LocalDate becomes 'Saturday, 15 June 2024', which is not a date literal at all.
             // Instant and LocalTime would survive the default because theirs happen to be ISO;
             // relying on that per type is exactly the trap this argument exists to close.
+            // The temporal families truncate to the store's microsecond and write the extremes as
+            // infinity, as Npgsql does; a JSON document holds those store values (storeText).
             (typeof(LocalDateSet<>), SetTypeRegistry.Bridged(
                  "date", LocalDatePattern.Iso.PatternText,
                  ParseWith(LocalDatePattern.Iso), LocalDatePattern.Iso.Format,
-                 LocalDatePattern.Iso.Format)),
+                 NodaStoreTemporal.Literal, storeText: true)),
 
             (typeof(LocalDateTimeSet<>), SetTypeRegistry.Bridged(
                  "timestamp without time zone", LocalDateTimePattern.ExtendedIso.PatternText,
                  ParseWith(LocalDateTimePattern.ExtendedIso), LocalDateTimePattern.ExtendedIso.Format,
-                 LocalDateTimePattern.ExtendedIso.Format)),
+                 NodaStoreTemporal.Literal, NodaStoreTemporal.Truncate, storeText: true)),
 
             (typeof(InstantSet<>), SetTypeRegistry.Bridged(
                  "timestamp with time zone", InstantPattern.ExtendedIso.PatternText,
                  ParseWith(InstantPattern.ExtendedIso), InstantPattern.ExtendedIso.Format,
-                 InstantPattern.ExtendedIso.Format)),
+                 NodaStoreTemporal.Literal, NodaStoreTemporal.Truncate, storeText: true)),
 
             (typeof(LocalTimeSet<>), SetTypeRegistry.Bridged(
                  "time without time zone", LocalTimePattern.ExtendedIso.PatternText,
                  ParseWith(LocalTimePattern.ExtendedIso), LocalTimePattern.ExtendedIso.Format,
-                 LocalTimePattern.ExtendedIso.Format)),
+                 LocalTimePattern.ExtendedIso.Format, NodaStoreTemporal.Truncate, storeText: true)),
 
             // The one family whose element text form and store text form differ: the element
             // speaks 2024-06 and the column holds 2024-06-01. formatPrimitive therefore feeds
             // the element its own granularity back, while literalText renders the date.
+            //
+            // In a JSON document it is written as those dates too (storeText) — its own literal says
+            // {2024-06}, which a query cannot cast to date[] — and read back through LocalDateSet.
             (typeof(YearMonthSet<>), SetTypeRegistry.Bridged<LocalDate>(
                  "date", YearMonthPattern.Iso.PatternText,
                  static text => YearMonthPattern.Iso.Parse(text).GetValueOrThrow().OnDayOfMonth(1),
                  static date => YearMonthPattern.Iso.Format(YearMonthOf(date)),
-                 LocalDatePattern.Iso.Format))
+                 LocalDatePattern.Iso.Format,
+                 storeText: true,
+                 parseStoreText: static text => LocalDateSet.Parse(text, null).Values))
         ];
 
     /// <summary>

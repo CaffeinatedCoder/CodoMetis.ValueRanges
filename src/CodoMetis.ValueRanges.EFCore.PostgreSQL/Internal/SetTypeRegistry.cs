@@ -63,14 +63,19 @@ internal static class SetTypeRegistry
             // its own default form is a contract violation, and the strict parse turns it into
             // the loud InvalidOperationException the bridge raises rather than a value quietly
             // truncated to whole minutes or seconds.
+            //
+            // The temporal families also truncate to the store's microsecond, as Npgsql does on the
+            // wire, and write a JSON document as those store values (storeText) — see StoreTemporal.
             [typeof(DateSet<>)] = Bridged<DateOnly>(
                 "date", "yyyy-MM-dd",
                 static text => DateOnly.ParseExact(text, "yyyy-MM-dd", Invariant),
-                static value => value.ToString("yyyy-MM-dd", Invariant)),
+                static value => value.ToString("yyyy-MM-dd", Invariant),
+                storeText: true),
             [typeof(TimeSet<>)] = Bridged<TimeOnly>(
                 "time without time zone", "O",
                 static text => TimeOnly.ParseExact(text, "O", Invariant),
-                static value => value.ToString("O", Invariant)),
+                static value => value.ToString("O", Invariant),
+                storeValue: StoreTemporal.Truncate, storeText: true),
 
             // The same store-side normalization the closed siblings apply: PostgreSQL
             // `timestamp` has no time zone, so elements are written as wall-clock time with
@@ -82,13 +87,15 @@ internal static class SetTypeRegistry
                 static text => DateTime.SpecifyKind(
                     DateTime.ParseExact(text, "O", Invariant, DateTimeStyles.RoundtripKind),
                     DateTimeKind.Unspecified),
-                static value => value.ToString("O", Invariant)),
+                static value => value.ToString("O", Invariant),
+                storeValue: StoreTemporal.Truncate, storeText: true),
             [typeof(DateTimeOffsetSet<>)] = Bridged<DateTimeOffset>(
                 "timestamp with time zone", "O",
                 static text => DateTimeOffset
                               .ParseExact(text, "O", Invariant, DateTimeStyles.AssumeUniversal)
                               .ToUniversalTime(),
-                static value => value.ToString("O", Invariant))
+                static value => value.ToString("O", Invariant),
+                storeValue: StoreTemporal.Truncate, storeText: true)
         }.ToFrozenDictionary();
 
     private static CultureInfo Invariant => CultureInfo.InvariantCulture;
@@ -111,12 +118,18 @@ internal static class SetTypeRegistry
     /// <param name="parsePrimitive">The element's text form to the store primitive.</param>
     /// <param name="formatPrimitive">The store primitive back to text the element can parse.</param>
     /// <param name="literalText">The primitive's SQL literal form; defaults to the invariant one.</param>
+    /// <param name="storeValue">The primitive at the store's resolution — a temporal family's truncation.</param>
+    /// <param name="storeText">Whether a JSON document holds the store primitives — the temporal families.</param>
+    /// <param name="parseStoreText">The store primitives back from that text, where the set cannot parse it.</param>
     internal static Func<Type, ISetTypeDefinition> Bridged<TPrimitive>(
-        string                    elementStoreType,
-        string?                   elementFormat,
-        Func<string, TPrimitive>  parsePrimitive,
-        Func<TPrimitive, string>  formatPrimitive,
-        Func<TPrimitive, string>? literalText = null
+        string                                 elementStoreType,
+        string?                                elementFormat,
+        Func<string, TPrimitive>               parsePrimitive,
+        Func<TPrimitive, string>               formatPrimitive,
+        Func<TPrimitive, string>?              literalText    = null,
+        Func<TPrimitive, TPrimitive>?          storeValue     = null,
+        bool                                   storeText      = false,
+        Func<string, IEnumerable<TPrimitive>>? parseStoreText = null
     )
         where TPrimitive : struct
         => closed =>
@@ -126,7 +139,7 @@ internal static class SetTypeRegistry
 
             return (ISetTypeDefinition)Activator.CreateInstance(
                 definitionType,
-                [elementStoreType, elementFormat, parsePrimitive, formatPrimitive, literalText])!;
+                [elementStoreType, elementFormat, parsePrimitive, formatPrimitive, literalText, storeValue, storeText, parseStoreText])!;
         };
 
     private static volatile Snapshot Current = BuildSnapshot(
@@ -137,21 +150,26 @@ internal static class SetTypeRegistry
             new SetTypeDefinition<Int32Set, int>("integer"),
             new SetTypeDefinition<Int64Set, long>("bigint"),
             new SetTypeDefinition<DecimalSet, decimal>("numeric"),
-            new SetTypeDefinition<DateSet, DateOnly>("date"),
-            new SetTypeDefinition<TimeSet, TimeOnly>("time without time zone"),
+            // The temporal sets write a JSON document as their store values (storeText): truncated
+            // to the store's microsecond as Npgsql truncates them, the extremes as infinity.
+            new SetTypeDefinition<DateSet, DateOnly>("date", storeText: true),
+            new SetTypeDefinition<TimeSet, TimeOnly>(
+                "time without time zone", storeValue: StoreTemporal.Truncate, storeText: true),
 
             // PostgreSQL `timestamp` has no time zone: Npgsql rejects UTC-kinded values, so
             // elements are written as wall-clock time with DateTimeKind.Unspecified.
             new SetTypeDefinition<DateTimeSet, DateTime>(
                 "timestamp without time zone",
-                static value => DateTime.SpecifyKind(value, DateTimeKind.Unspecified)),
+                static value => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
+                storeValue: StoreTemporal.Truncate, storeText: true),
 
             // PostgreSQL `timestamptz` stores an instant: Npgsql requires offset zero, so
             // elements are normalized to UTC. This preserves the instant (equality and
             // canonical order are instant-based).
             new SetTypeDefinition<DateTimeOffsetSet, DateTimeOffset>(
                 "timestamp with time zone",
-                static value => value.ToUniversalTime())
+                static value => value.ToUniversalTime(),
+                storeValue: StoreTemporal.Truncate, storeText: true)
         ]);
 
     /// <summary>All registered closed set type definitions (excluding cached family instantiations).</summary>

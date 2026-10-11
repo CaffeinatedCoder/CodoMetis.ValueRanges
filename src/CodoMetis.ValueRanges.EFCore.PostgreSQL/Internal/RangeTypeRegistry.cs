@@ -34,24 +34,31 @@ internal static class RangeTypeRegistry
             new RangeTypeDefinition<Int32Range, int>("int4range", "int4multirange", "integer"),
             new RangeTypeDefinition<Int64Range, long>("int8range", "int8multirange", "bigint"),
             new RangeTypeDefinition<DecimalRange, decimal>("numrange", "nummultirange", "numeric"),
-            new RangeTypeDefinition<DateRange, DateOnly>("daterange", "datemultirange", "date"),
+            // The temporal definitions end in StoreTemporal: bounds truncated to the store's
+            // microsecond and the extremes written as infinity, exactly as Npgsql sends them, so a
+            // JSON document and a SQL literal carry the value a parameter would.
+            new RangeTypeDefinition<DateRange, DateOnly>(
+                "daterange", "datemultirange", "date", infinityText: StoreTemporal.InfinityText),
 
             // PostgreSQL `timestamp` has no time zone: Npgsql rejects UTC-kinded values, so
             // bounds are written as wall-clock time with DateTimeKind.Unspecified.
             new RangeTypeDefinition<DateTimeRange, DateTime>(
                 "tsrange", "tsmultirange", "timestamp without time zone",
-                value => DateTime.SpecifyKind(value, DateTimeKind.Unspecified)),
+                value => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
+                StoreTemporal.Truncate, StoreTemporal.InfinityText),
 
             // PostgreSQL `timestamptz` stores an instant: Npgsql requires offset zero, so bounds
             // are normalized to UTC. This preserves the instant (DateTimeOffset compares by UTC ticks).
             new RangeTypeDefinition<DateTimeOffsetRange, DateTimeOffset>(
                 "tstzrange", "tstzmultirange", "timestamp with time zone",
-                value => value.ToUniversalTime()),
+                value => value.ToUniversalTime(),
+                StoreTemporal.Truncate, StoreTemporal.InfinityText),
 
             // `timerange` is not built into PostgreSQL: the database needs
             // `CREATE TYPE timerange AS RANGE (subtype = time)` (e.g. via HasPostgresRange)
             // and the Npgsql data source needs EnableUnmappedTypes() to put it on the wire.
-            new RangeTypeDefinition<TimeRange, TimeOnly>("timerange", "timemultirange", "time without time zone")
+            new RangeTypeDefinition<TimeRange, TimeOnly>(
+                "timerange", "timemultirange", "time without time zone", storeValue: StoreTemporal.Truncate)
         ],
         [typeof(RangeAggregateExtensions)]);
 
