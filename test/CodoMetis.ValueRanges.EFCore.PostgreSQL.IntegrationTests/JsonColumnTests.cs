@@ -27,6 +27,8 @@ public sealed class JsonDocument
     public InstantRange        NodaWindow  { get; set; } = InstantRange.Empty;
     public YearMonthRange      Billing     { get; set; } = YearMonthRange.Empty;
     public Int32Range?         MaybeSeats  { get; set; }
+    public DateTimeOffsetRange? MaybeWindow { get; set; }
+    public StringSet?          MaybeTags   { get; set; }
 
     public RangeSet<DateRange, DateOnly>        Blocks        { get; set; } = RangeSet<DateRange, DateOnly>.Empty;
     public RangeSet<DecimalRange, decimal>      Bands         { get; set; } = RangeSet<DecimalRange, decimal>.Empty;
@@ -43,6 +45,27 @@ public sealed class JsonDocument
     public YearMonthSet       Months    { get; set; } = YearMonthSet.Empty;
     public StringSet<TextKey> Keys      { get; set; } = StringSet<TextKey>.Empty;
     public YearMonthSet<BillingMonth> WrappedMonths { get; set; } = YearMonthSet<BillingMonth>.Empty;
+}
+
+public sealed class OwnedJsonRow
+{
+    public int Id { get; set; }
+    public OwnedJsonDocument Doc { get; set; } = new();
+}
+
+/// <summary>
+/// A JSON document mapped as an owned entity rather than a complex type: EF then writes a changed
+/// property on its own, with <c>jsonb_set</c>, instead of rewriting the document.
+/// </summary>
+public sealed class OwnedJsonDocument
+{
+    public Int32Range           Seats       { get; set; } = Int32Range.Empty;
+    public DateTimeRange        WallClock   { get; set; } = DateTimeRange.Empty;
+    public StringSet            Tags        { get; set; } = StringSet.Empty;
+    public InstantSet           NodaStamps  { get; set; } = InstantSet.Empty;
+    public Int32Range?          MaybeSeats  { get; set; }
+    public DateTimeOffsetRange? MaybeWindow { get; set; }
+    public StringSet?           MaybeTags   { get; set; }
 }
 
 /// <summary>
@@ -174,6 +197,188 @@ public sealed class JsonColumnTests
         }
 
         Assert.AreEqual(0, failures.Count, string.Join(" | ", failures));
+    }
+
+    /// <summary>
+    /// A tracked document changed and saved — the path an application takes, which is not
+    /// <c>ExecuteUpdate</c>'s. A range and a value set are replaced, and a nullable range, temporal
+    /// range and value set each go from null to a value and back, one change per save. Once every value
+    /// is set, and again once they are back to null, the document is read through a new context and
+    /// queried on the server, and every property no change touched is still the sample's.
+    /// A complex type's document is rewritten whole on every save (<c>SET "Doc" = @p</c>); the owned
+    /// counterpart below is the property-by-property path.
+    /// </summary>
+    [TestMethod]
+    public async Task TrackedChanges_AndNullTransitions_SaveAndReadBack()
+    {
+        ContainerLifecycle.RequireDatabase();
+        const int id = 9004;
+
+        var seed = Copy(Sample);
+        seed.MaybeSeats = null;
+        await using (var write = new IntegrationDbContext())
+        {
+            write.JsonDocuments.Add(new JsonDocumentRow { Id = id, Doc = seed });
+            await write.SaveChangesAsync();
+        }
+
+        var seats  = Int32Range.CreateFinite(100, 200);
+        var tags   = StringSet.From("replaced", "Tags");
+        var maybe  = Int32Range.CreateUnboundedStart(7);
+        var window = DateTimeOffsetRange.CreateFinite(new DateTimeOffset(2026, 4, 1, 8, 0, 0, TimeSpan.FromHours(2)),
+                                                      new DateTimeOffset(2026, 4, 1, 9, 0, 0, TimeSpan.FromHours(2)));
+        var maybeTags = StringSet.From("x");
+        string[] changed = ["Seats", "Tags", "MaybeSeats", "MaybeWindow", "MaybeTags"];
+
+        // One change per save, so each has to be detected on its own: a save rewrites the whole
+        // document, which would carry along a change the tracker missed next to one it saw.
+        Action<JsonDocument>[] toValues =
+            [d => d.Seats = seats, d => d.Tags = tags, d => d.MaybeSeats = maybe, d => d.MaybeWindow = window, d => d.MaybeTags = maybeTags];
+        foreach (var change in toValues) await Change(id, change);
+
+        var afterSet = await ReadBack(id);
+        Assert.AreEqual(seats, afterSet.Seats);
+        Assert.AreEqual(tags, afterSet.Tags);
+        Assert.AreEqual(maybe, afterSet.MaybeSeats);
+        Assert.AreEqual(window, afterSet.MaybeWindow);
+        Assert.AreEqual(maybeTags, afterSet.MaybeTags);
+        AssertUntouched(afterSet, changed);
+        Assert.AreEqual(1, await CountWhere(id, r => r.Doc.Seats == seats && r.Doc.Tags == tags && r.Doc.MaybeSeats == maybe
+                                                  && r.Doc.MaybeWindow == window && r.Doc.MaybeTags == maybeTags));
+
+        Action<JsonDocument>[] toNull = [d => d.MaybeSeats = null, d => d.MaybeWindow = null, d => d.MaybeTags = null];
+        foreach (var change in toNull) await Change(id, change);
+
+        var afterNull = await ReadBack(id);
+        Assert.IsNull(afterNull.MaybeSeats);
+        Assert.IsNull(afterNull.MaybeWindow);
+        Assert.IsNull(afterNull.MaybeTags);
+        Assert.AreEqual(seats, afterNull.Seats);
+        Assert.AreEqual(tags, afterNull.Tags);
+        AssertUntouched(afterNull, changed);
+        Assert.AreEqual(1, await CountWhere(id, r => r.Doc.MaybeSeats == null && r.Doc.MaybeWindow == null && r.Doc.MaybeTags == null
+                                                  && r.Doc.Seats == seats && r.Doc.Tags == tags));
+    }
+
+    /// <summary>
+    /// The same transitions on an owned JSON document, one property per save, which EF writes as
+    /// <c>jsonb_set("Doc", '{MaybeTags}', @p)</c> — the value alone, through the plugin's JSON writer,
+    /// next to siblings it must leave as they were.
+    /// </summary>
+    [TestMethod]
+    public async Task OwnedDocument_TrackedChanges_AndNullTransitions_SaveAndReadBack()
+    {
+        ContainerLifecycle.RequireDatabase();
+        const int id = 9005;
+
+        var wall   = DateTimeRange.CreateFinite(new DateTime(2026, 1, 1, 9, 30, 0), new DateTime(2026, 1, 1, 17, 0, 0));
+        var stamps = InstantSet.From(Instant.FromUtc(2026, 1, 1, 9, 30), Instant.FromUtc(2026, 6, 1, 0, 0));
+        await using (var write = new IntegrationDbContext())
+        {
+            write.OwnedJsonDocuments.Add(new OwnedJsonRow
+            {
+                Id  = id,
+                Doc = new OwnedJsonDocument { Seats = Int32Range.CreateFinite(1, 5), WallClock = wall, Tags = StringSet.From("a"), NodaStamps = stamps }
+            });
+            await write.SaveChangesAsync();
+        }
+
+        var seats  = Int32Range.CreateFinite(100, 200);
+        var tags   = StringSet.From("replaced", "Tags");
+        var maybe  = Int32Range.CreateUnboundedStart(7);
+        var window = DateTimeOffsetRange.CreateFinite(new DateTimeOffset(2026, 4, 1, 8, 0, 0, TimeSpan.FromHours(2)),
+                                                      new DateTimeOffset(2026, 4, 1, 9, 0, 0, TimeSpan.FromHours(2)));
+        var maybeTags = StringSet.From("x");
+
+        // One change per save: EF writes a lone changed property with jsonb_set, but rewrites the
+        // document when several change at once.
+        Action<OwnedJsonDocument>[] toValues =
+            [d => d.Seats = seats, d => d.Tags = tags, d => d.MaybeSeats = maybe, d => d.MaybeWindow = window, d => d.MaybeTags = maybeTags];
+        foreach (var change in toValues) await ChangeOwned(id, change);
+
+        var afterSet = await ReadBackOwned(id);
+        Assert.AreEqual(seats, afterSet.Seats);
+        Assert.AreEqual(tags, afterSet.Tags);
+        Assert.AreEqual(maybe, afterSet.MaybeSeats);
+        Assert.AreEqual(window, afterSet.MaybeWindow);
+        Assert.AreEqual(maybeTags, afterSet.MaybeTags);
+        Assert.AreEqual(wall, afterSet.WallClock);
+        Assert.AreEqual(stamps, afterSet.NodaStamps);
+        Assert.AreEqual(1, await CountOwnedWhere(id, r => r.Doc.Seats == seats && r.Doc.Tags == tags && r.Doc.MaybeSeats == maybe
+                                                       && r.Doc.MaybeWindow == window && r.Doc.MaybeTags == maybeTags
+                                                       && r.Doc.WallClock == wall && r.Doc.NodaStamps == stamps));
+
+        Action<OwnedJsonDocument>[] toNull = [d => d.MaybeSeats = null, d => d.MaybeWindow = null, d => d.MaybeTags = null];
+        foreach (var change in toNull) await ChangeOwned(id, change);
+
+        var afterNull = await ReadBackOwned(id);
+        Assert.IsNull(afterNull.MaybeSeats);
+        Assert.IsNull(afterNull.MaybeWindow);
+        Assert.IsNull(afterNull.MaybeTags);
+        Assert.AreEqual(seats, afterNull.Seats);
+        Assert.AreEqual(tags, afterNull.Tags);
+        Assert.AreEqual(wall, afterNull.WallClock);
+        Assert.AreEqual(stamps, afterNull.NodaStamps);
+        Assert.AreEqual(1, await CountOwnedWhere(id, r => r.Doc.MaybeSeats == null && r.Doc.MaybeWindow == null && r.Doc.MaybeTags == null
+                                                       && r.Doc.Seats == seats && r.Doc.Tags == tags
+                                                       && r.Doc.WallClock == wall && r.Doc.NodaStamps == stamps));
+    }
+
+    private static async Task ChangeOwned(int id, Action<OwnedJsonDocument> change)
+    {
+        await using var ctx = new IntegrationDbContext();
+        var row = await ctx.OwnedJsonDocuments.SingleAsync(r => r.Id == id);
+        change(row.Doc);
+        Assert.AreEqual(1, await ctx.SaveChangesAsync(), "the change tracker saw no change");
+    }
+
+    private static async Task<OwnedJsonDocument> ReadBackOwned(int id)
+    {
+        await using var ctx = new IntegrationDbContext();
+        return (await ctx.OwnedJsonDocuments.AsNoTracking().SingleAsync(r => r.Id == id)).Doc;
+    }
+
+    private static async Task<int> CountOwnedWhere(int id, Expression<Func<OwnedJsonRow, bool>> filter)
+    {
+        await using var ctx = new IntegrationDbContext();
+        return await ctx.OwnedJsonDocuments.Where(r => r.Id == id).Where(filter).CountAsync();
+    }
+
+    private static async Task Change(int id, Action<JsonDocument> change)
+    {
+        await using var ctx = new IntegrationDbContext();
+        var row = await ctx.JsonDocuments.SingleAsync(r => r.Id == id);
+        change(row.Doc);
+        Assert.AreEqual(1, await ctx.SaveChangesAsync(), "the change tracker saw no change");
+    }
+
+    private static async Task<JsonDocument> ReadBack(int id)
+    {
+        await using var ctx = new IntegrationDbContext();
+        return (await ctx.JsonDocuments.AsNoTracking().SingleAsync(r => r.Id == id)).Doc;
+    }
+
+    private static async Task<int> CountWhere(int id, Expression<Func<JsonDocumentRow, bool>> filter)
+    {
+        await using var ctx = new IntegrationDbContext();
+        return await ctx.JsonDocuments.Where(r => r.Id == id).Where(filter).CountAsync();
+    }
+
+    private static void AssertUntouched(JsonDocument doc, string[] changed)
+    {
+        var wrong = typeof(JsonDocument).GetProperties()
+                                        .Where(p => !changed.Contains(p.Name) && !Equals(p.GetValue(Sample), p.GetValue(doc)))
+                                        .Select(p => $"{p.Name}: was {p.GetValue(Sample)}, now {p.GetValue(doc)}")
+                                        .ToList();
+        Assert.AreEqual(0, wrong.Count, string.Join("; ", wrong));
+    }
+
+    private static JsonDocument Copy(JsonDocument source)
+    {
+        var copy = new JsonDocument();
+        foreach (var property in typeof(JsonDocument).GetProperties())
+            property.SetValue(copy, property.GetValue(source));
+        return copy;
     }
 
     /// <summary>The document itself, as another client reading the column sees it.</summary>

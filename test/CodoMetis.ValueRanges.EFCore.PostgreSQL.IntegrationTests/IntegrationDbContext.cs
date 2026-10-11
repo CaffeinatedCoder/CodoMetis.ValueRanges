@@ -178,6 +178,8 @@ public sealed class IntegrationDbContext : DbContext
 
     public DbSet<JsonDocumentRow> JsonDocuments => Set<JsonDocumentRow>();
 
+    public DbSet<OwnedJsonRow> OwnedJsonDocuments => Set<OwnedJsonRow>();
+
     public DbSet<TemporalParityRow> TemporalParityRows => Set<TemporalParityRow>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -198,6 +200,13 @@ public sealed class IntegrationDbContext : DbContext
         {
             row.Property(r => r.Id).ValueGeneratedNever();
             row.ComplexProperty(r => r.Doc, doc => doc.ToJson());
+        });
+
+        // An owned JSON document, which EF updates property by property with jsonb_set (JsonColumnTests).
+        modelBuilder.Entity<OwnedJsonRow>(row =>
+        {
+            row.Property(r => r.Id).ValueGeneratedNever();
+            row.OwnsOne(r => r.Doc, doc => doc.ToJson());
         });
 
         // Every temporal type as a column and inside a jsonb document (TemporalStoreParityTests).

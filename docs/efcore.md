@@ -263,7 +263,7 @@ hot, keep the value in a plain column of its own as well.
 
 | Operation | |
 |---|---|
-| `SaveChanges`: insert, tracked change, nested complex types, replacing the whole document | ✓ — a complex type rewrites the whole document; an owned type updates the one property with `jsonb_set` |
+| `SaveChanges`: insert, tracked change (to and from `null` too), nested complex types, replacing the whole document | ✓ — a complex type rewrites the whole document; an owned type writes a lone changed property with `jsonb_set`, and rewrites the document when several change |
 | `null` and empty, kept apart | ✓ |
 | the range and set operators, bounds, `Count`, projections | ✓ |
 | `ExecuteUpdate` of the whole JSON property, a JSON-to-JSON copy, a range or multirange | ✓ — a range is then stored in PostgreSQL's own text form, which reads back |
