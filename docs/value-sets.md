@@ -114,6 +114,8 @@ public string ToString(string? format, IFormatProvider? provider)
 
 A wrapper that swallows the argument and returns its own form is rejected rather than silently truncated.
 
+The reverse direction belongs to the family, not the element: every arity reads element text with its primitive sibling's grammar first — PostgreSQL's `numeric` grammar for `DecimalSet<T>`, a signed integer for the integer arities, strict ISO 8601 for the temporal and NodaTime ones — and only then hands the element the parsed primitive's invariant text, so its `Parse` still validates. Whatever a generated `Parse` accepts (`decimal.Parse` with `NumberStyles.Number` takes group separators and no exponent), `DecimalSet<Money>` reads `{"1,5"}` as a `FormatException` and `{1e3}` as 1000, exactly as `DecimalSet` does — through `Parse`, `TryParse`, JSON and configuration binding.
+
 ### Ordering and JSON
 
 String-backed wrappers sort ordinal over their text form — deliberately not the element's own `IComparable`, whose generated implementations typically delegate to culture-sensitive string comparison.

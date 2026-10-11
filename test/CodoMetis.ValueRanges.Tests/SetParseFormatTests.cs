@@ -182,4 +182,33 @@ public class SetParseFormatTests
     [TestMethod]
     public void DecimalElement_WithAGroupSeparator_IsRejected()
         => Assert.ThrowsExactly<FormatException>(() => DecimalSet.Parse("{\"1,000\"}", null));
+
+    // The wrapper arity reads the same grammar, whatever its element's Parse accepts. TestMoney is
+    // the generated shape — decimal.Parse with NumberStyles.Number — which allows group separators
+    // and no exponent: the opposite of PostgreSQL's numeric grammar on both counts.
+
+    /// <summary>
+    /// A group separator is refused by the wrapper arity too. Before 9.0.0 the raw text reached
+    /// <c>TestMoney.Parse</c>, and <c>{"1,5"}</c> was fifteen, silently.
+    /// </summary>
+    [TestMethod]
+    public void WrapperDecimalElement_WithAGroupSeparator_IsRejected()
+    {
+        Assert.ThrowsExactly<FormatException>(() => DecimalSet<TestMoney>.Parse("{\"1,5\"}", null));
+        Assert.ThrowsExactly<FormatException>(() => DecimalSet<TestMoney>.Parse("{\"1,000.5\"}", null));
+        Assert.IsFalse(DecimalSet<TestMoney>.TryParse("{\"1,000\"}", null, out _));
+    }
+
+    /// <summary>Exponent notation is numeric grammar, and reads as it does for the primitive family.</summary>
+    [TestMethod]
+    public void WrapperDecimalElement_InExponentNotation_ReadsLikeThePrimitive()
+    {
+        Assert.AreEqual(DecimalSet<TestMoney>.From(new TestMoney(1000m)), DecimalSet<TestMoney>.Parse("{1e3}", null));
+        Assert.AreEqual(DecimalSet.Parse("{1.5E-1}", null).ToString(), DecimalSet<TestMoney>.Parse("{1.5E-1}", null).ToString());
+    }
+
+    /// <summary>Parsing with the family grammar first must not cost the element its scale.</summary>
+    [TestMethod]
+    public void WrapperDecimalElement_KeepsItsScale()
+        => Assert.AreEqual("{1.50,12.500}", DecimalSet<TestMoney>.Parse("{12.500,1.50}", null).ToString());
 }

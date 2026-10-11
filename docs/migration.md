@@ -238,7 +238,11 @@ var range = DateRange.CreateFinite(DateOnly.Parse("01.01.2025", de), DateOnly.Pa
 ```
 
 Decimal bounds also parse with PostgreSQL's `numeric` grammar now: `"1,000"`, `"(5)"` and currency
-symbols are a `FormatException` rather than 1000, −5 and 5.
+symbols are a `FormatException` rather than 1000, −5 and 5. That includes the wrapper arities:
+`DecimalSet<T>` and the integer ones read the element text with the primitive family's grammar before
+the element's own `Parse` sees it, so a generated `Parse` that accepts group separators no longer
+turns `{"1,5"}` into fifteen, and `DecimalSet<T>` now reads exponent notation (`{1e3}`, a JSON
+`1.5e1`) as `DecimalSet` does.
 
 ### Temporal literals are strict ISO 8601
 

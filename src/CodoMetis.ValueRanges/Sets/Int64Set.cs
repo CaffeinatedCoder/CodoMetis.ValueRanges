@@ -181,11 +181,21 @@ public sealed class Int64Set<TElement> :
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <summary>
-    /// Parses an element via <see cref="IParsable{TSelf}"/>, which re-runs the element's
-    /// validation — corrupt data throws rather than materializing.
+    /// Parses an element with the family's grammar — an optionally signed integer (<see cref="System.Globalization.NumberStyles.Integer"/>, invariant), exactly as
+    /// <see cref="Int64Set.ParseValue"/> reads it — and hands the element the parsed
+    /// <see cref="long"/>'s invariant text via <see cref="IParsable{TSelf}"/>, which re-runs
+    /// its validation: corrupt data throws rather than materializing.
     /// </summary>
+    /// <remarks>
+    /// The element's own <c>Parse</c> never sees the raw text. A generated wrapper's
+    /// <c>Parse</c> is typically the BCL default or wider, and would otherwise decide the grammar
+    /// — before 9.0.0 a group separator made <c>"1,5"</c> fifteen here while the primitive family
+    /// refused it.
+    /// </remarks>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(s.ToString(), provider ?? CultureInfo.InvariantCulture);
+        => TElement.Parse(
+            Int64Set.ParseValue(s, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture),
+            CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text form.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)

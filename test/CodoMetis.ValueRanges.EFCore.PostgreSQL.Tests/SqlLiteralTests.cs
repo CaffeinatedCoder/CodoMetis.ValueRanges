@@ -85,6 +85,29 @@ public sealed class SqlLiteralTests
                 TestRate.Parse("13", CultureInfo.InvariantCulture))));
 
     /// <summary>
+    /// The bridge reads an element's text with the family's grammar. An element formatting in the
+    /// current culture writes <c>1,5</c> under <c>de-DE</c>; <c>NumberStyles.Number</c> read that
+    /// as fifteen and bound it, silently. Refused instead, with the same message as any other
+    /// element that does not format as its primitive.
+    /// </summary>
+    [TestMethod]
+    public void WrapperDecimalSet_ElementLeakingTheCulture_IsRejected()
+    {
+        var leaky    = DecimalSet<TestCultureLeakingRate>.From(new TestCultureLeakingRate(1.5m));
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+        try
+        {
+            var error = Assert.ThrowsExactly<InvalidOperationException>(() => LiteralOf(leaky));
+            StringAssert.Contains(error.Message, nameof(TestCultureLeakingRate));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    /// <summary>
     /// The other half of the temporal contract: an element that swallows the format argument
     /// answers with a form the bridge refuses, rather than one it would quietly truncate. The
     /// message has to name the type and the contract, because the consumer's next question is
