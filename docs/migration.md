@@ -327,7 +327,9 @@ equality), or materialize first. Projecting the union itself, and composing it w
 - **NodaTime:** `AddNodaTimeRangeConverters()` no longer outranks `ConfigureForNodaTime` when
   registered first, and a bare `LocalDate`, `LocalDateTime` or `YearMonth` in a non-ISO calendar is
   refused on write (`ArgumentException`), where it was written in its own calendar's fields and read
-  back days off. Convert with `WithCalendar(CalendarSystem.Iso)` first.
+  back days off. The same holds for an element of `LocalDateSet<T>`, `LocalDateTimeSet<T>` or
+  `YearMonthSet<T>`, in memory and through EF Core. Convert with `WithCalendar(CalendarSystem.Iso)`
+  first.
 
 ### Ranges can be dictionary keys
 

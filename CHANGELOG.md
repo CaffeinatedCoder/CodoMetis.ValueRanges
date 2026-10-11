@@ -54,8 +54,9 @@ must not pick any of these up silently.
    (`Local`) on every machine; it was converted into the parsing machine's zone.
 10. **JSON precedence and coverage changed in three places.** A union converter registered on the
     options now reaches values serialized through `object` or as a variant; a property declared as
-    a range or set interface writes the literal (it wrote `{}`); and a bare NodaTime date in a
-    non-ISO calendar is refused on write, where it was written thirteen days off.
+    a range or set interface writes the literal (it wrote `{}`); and a NodaTime date in a non-ISO
+    calendar — bare, or as a wrapper-set element — is refused, where it was written thirteen days
+    off.
 
 Everything else is additive: a `TypeConverter` on every type, ranges as dictionary keys, ranges
 and sets inside EF Core JSON columns, Native AOT, `Deconstruct` on every bounded variant, and an
@@ -197,6 +198,17 @@ OpenAPI transformer to copy. The
   `LocalDate`, `LocalDateTime` or `YearMonth` in a non-ISO calendar is refused on write with
   `ArgumentException`, as NodaTime's own converter refuses it. **Convert with
   `WithCalendar(CalendarSystem.Iso)` first.**
+
+- **⚠️ NodaTime wrapper sets stored an element in another calendar as a different date.**
+  NodaTime's ISO patterns format a value in its own calendar's fields, so a `LocalDateSet<T>` over a
+  Julian `LocalDate(2024, 1, 1)` — ISO 2024-01-14 — wrote `{2024-01-01}` and `["2024-01-01"]`, and
+  the EF Core bridge bound, inlined and stored ISO 2024-01-01: thirteen days off, with no error and
+  an unequal round trip. `LocalDateTimeSet<T>` and `YearMonthSet<T>` likewise; against live
+  PostgreSQL a Julian-January parameter matched a row holding ISO January. The closed sets convert
+  such a value to ISO; a wrapper arity can only build its element by parsing, so it now **refuses**
+  it with `ArgumentException` — in `From`, collection expressions and reads, and as the probe of
+  `Contains`/`Add`/`Remove` — and the EF Core bridge refuses one as a bare operand. **If you wrapped
+  non-ISO values, convert them with `WithCalendar(CalendarSystem.Iso)` first.**
 
 - **⚠️ A culture provider no longer changes the literal.** `Parse(s, provider)` handed the provider
   to the element parser, and `ToString(null, provider)` to the element formatter. `th-TH` uses the

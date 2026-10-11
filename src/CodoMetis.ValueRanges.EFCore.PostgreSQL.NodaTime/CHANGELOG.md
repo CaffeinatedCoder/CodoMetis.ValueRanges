@@ -29,6 +29,9 @@ covers all four packages, which share one version number and release together.
   its own fields.** `Contains(EF.Constant(julianDate))` rendered the Julian year, month and day as
   if they were ISO and missed its row, and a `LocalDate` parameter threw inside Npgsql. The operand
   is now converted to ISO, as the bounds are and as the NodaTime sets already did.
+- **⚠️ A non-ISO element of `LocalDateSet<T>`, `LocalDateTimeSet<T>` or `YearMonthSet<T>` is
+  refused as a bare operand** instead of being bound, inlined or written as the ISO date its own
+  calendar's fields spell (a Julian January parameter matched rows holding ISO January).
 
 ## [8.0.0] — 2026-08-17
 
