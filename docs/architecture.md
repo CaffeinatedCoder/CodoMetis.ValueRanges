@@ -224,8 +224,8 @@ what each attribute names:
   directly with no reflection.
 - **`RangeSet<TRange, T>` and the wrapper arities name `RangeJsonConverterFactory`.** An attribute
   cannot name an open generic converter (`typeof(RangeSetJsonConverter<,>)` fails at runtime with
-  `ContainsGenericParameters`), so these go through the factory's `MakeGenericType`, as a registered
-  factory always did.
+  `ContainsGenericParameters`), so these name the factory, which takes the closed converter from the
+  type's own `GenericConverters` registration (see *Native AOT* below) — never from `MakeGenericType`.
 
 `[TypeConverter]` follows the same three rules with `RangeTypeConverter`, `RangeVariantTypeConverter`,
 `ValueSetTypeConverter` and, for the generic types, `LiteralTypeConverter` — which `TypeDescriptor`
@@ -243,6 +243,15 @@ System.Text.Json resolves converters by the type it is handed, so `Serialize<obj
 `object`-typed property and an `object`-typed collection all present the *runtime* type, which is
 always a variant. That is why every variant carries its own `[JsonConverter]` naming
 `RangeVariantJsonConverter` (see *Type-level attributes* above).
+
+The same rule means a converter a consumer registers on the options for the *union* never matches a
+variant on its own — `JsonConverter<Int32Range>.CanConvert(typeof(Int32Range.Finite))` is false — so
+the variant's attribute would answer with the literal while union-typed declarations got the custom
+form. `RangeVariantJsonConverter` therefore looks up what System.Text.Json would choose for the union
+from `Converters` (first match, a factory expanded through its own `CreateConverter`) and delegates to
+it, values and keys, unless that is a converter from this package. The lookup is cached per options
+instance once the options are read-only. Reads go through the union and narrow, as the literal path
+does. Nothing is built by reflection.
 
 Since 9.0.0 `RangeJsonConverterFactory` builds nothing at runtime. It reads the type's own
 `[JsonConverter]`: a non-generic type names a closed converter, which the factory creates from the

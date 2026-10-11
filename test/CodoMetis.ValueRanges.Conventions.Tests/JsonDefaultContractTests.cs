@@ -120,6 +120,73 @@ public sealed class JsonDefaultContractTests
     }
 
     /// <summary>
+    /// A converter registered on the options for a union reaches every one of its shapes, however
+    /// the value is declared — the union, its variant, <see langword="object"/>, an
+    /// <c>object</c> collection, a dictionary value or a variant-typed key. Before 9.0.0 it reached
+    /// only union-typed declarations: the rest resolved to the variant's own attribute and wrote the
+    /// literal, so one payload mixed two wire forms.
+    /// </summary>
+    [TestMethod]
+    public void EveryRangeShape_HonoursAUnionConverterOnTheOptions()
+    {
+        foreach (var (rangeType, elementType) in RangeProbes.AllRangeTypes())
+            Reflect.InvokeGeneric(typeof(JsonDefaultContractTests), nameof(AssertUnionConverterReachesShapes), rangeType, elementType);
+    }
+
+    private static void AssertUnionConverterReachesShapes<TRange, T>()
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var options = new JsonSerializerOptions { Converters = { new TaggedRangeConverter<TRange, T>() } };
+
+        foreach (var range in RangeProbes.Shapes<TRange, T>())
+        {
+            var variant  = range.GetType();
+            var label    = $"{typeof(TRange).Name}.{variant.Name} {range}";
+            var expected = JsonSerializer.Serialize(range, options);
+
+            Assert.StartsWith("\"tag:", expected, $"{label}: declared as the union, the registered converter was not used.");
+            Assert.AreEqual(expected, JsonSerializer.Serialize(range, variant, options), $"{label}: declared as its variant.");
+            Assert.AreEqual(expected, JsonSerializer.Serialize<object>(range, options), $"{label}: through object.");
+            Assert.AreEqual($"[{expected}]", JsonSerializer.Serialize(new List<object> { range }, options), $"{label}: in a List<object>.");
+            Assert.AreEqual($"{{\"v\":{expected}}}",
+                JsonSerializer.Serialize(new Dictionary<string, object> { ["v"] = range }, options), $"{label}: as a dictionary value.");
+
+            Assert.AreEqual(range, JsonSerializer.Deserialize(expected, variant, options), $"{label}: did not read back through its variant.");
+
+            var byVariant = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(variant, typeof(int)))!;
+            byVariant.Add(range, 1);
+            var variantJson = JsonSerializer.Serialize(byVariant, byVariant.GetType(), options);
+            Assert.AreEqual($"{{{expected}:1}}", variantJson, $"{label}: as a variant-typed key.");
+            Assert.AreEqual(range, ((IDictionary)JsonSerializer.Deserialize(variantJson, byVariant.GetType(), options)!).Keys.Cast<object>().Single(),
+                $"{label}: as a variant-typed key, did not read back.");
+        }
+    }
+
+    /// <summary>A custom wire form for any range type: its literal behind a prefix, keys included.</summary>
+    private sealed class TaggedRangeConverter<TRange, T> : System.Text.Json.Serialization.JsonConverter<TRange>
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        public override TRange Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => Parse(reader.GetString()!);
+
+        public override void Write(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
+            => writer.WriteStringValue($"tag:{value}");
+
+        public override TRange ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => Parse(reader.GetString()!);
+
+        public override void WriteAsPropertyName(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
+            => writer.WritePropertyName($"tag:{value}");
+
+        private static TRange Parse(string s)
+            => s.StartsWith("tag:", StringComparison.Ordinal)
+                   ? TRange.Parse(s.AsSpan("tag:".Length), null)
+                   : throw new JsonException($"Expected a tagged literal, got '{s}'.");
+    }
+
+    /// <summary>
     /// As a dictionary key the value is the same literal as its value form, and reads back.
     /// </summary>
     private static void AssertKey<TKey>(string label, TKey key, string expectedValueJson)

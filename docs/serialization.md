@@ -152,7 +152,13 @@ JsonSerializer.Serialize(DateRange.CreateFinite(new DateOnly(2026, 1, 1),
 
 > Before 9.0 the converters were opt-in. Without the registration System.Text.Json fell back to dumping public properties — `DateRange` wrote `{"Length":181}` — and could not read any of it back.
 
-The attribute is the lowest-precedence way System.Text.Json picks a converter, so one you register on the options or put on a property still wins. `AddRangeConverters()` and `RangeJsonConverterFactory` remain and produce the same output; registering them is harmless and now redundant:
+The attribute is the lowest-precedence way System.Text.Json picks a converter, so one you register on the options or put on a property still wins.
+
+A converter registered on the options for a range union also reaches the union's variants. System.Text.Json resolves a converter by the exact type it is handed, and a range reached through `object` — a boxed value, an `object` collection, a dictionary of `object` — or declared as a variant (`Int32Range.Finite`) is handed over as its variant, whose own attribute would answer with the literal. So the variant converter looks for the converter System.Text.Json would choose for the union from `Converters` (the first that handles it, a `JsonConverter<Int32Range>` or a factory producing one) and, unless that is this package's own, hands the value to it: values and dictionary keys, on write and on read. A read goes through the union and narrows, so a variant-typed declaration still refuses a value of another shape with `JsonException`. One payload therefore has one wire form per type, however its values are declared. A converter on a *property* stays scoped to that property, and one registered for a variant type itself wins for that variant, as for any type.
+
+> Before 9.0 a converter on the options for `Int32Range` reached union-typed declarations only: `Serialize(range)` used it, while `Serialize<object>(range)`, a `List<object>` and a variant-typed property wrote the literal.
+
+`AddRangeConverters()` and `RangeJsonConverterFactory` remain and produce the same output; registering them is harmless and now redundant:
 
 ```csharp
 using CodoMetis.ValueRanges.Serialization;
