@@ -21,7 +21,8 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 /// untouched by <c>Truncate</c> so a parameter still reaches that mapping, and
 /// <c>InfinityText</c> spells them the same way in text. Both rules were measured against
 /// PostgreSQL 17 rather than taken from the documentation; <c>TemporalStoreParityTests</c> holds
-/// them.
+/// them, and <c>InfinityConversionsDisabledTests</c> — in a process of its own, with the switch set —
+/// holds the extremes staying finite.
 /// </para>
 /// </remarks>
 internal static class StoreTemporal

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <NoWarn>$(NoWarn);1591</NoWarn>
+    </PropertyGroup>
+
+    <!--
+        The reason this project exists. Npgsql and the plugin each read the switch once per process
+        and cache it, so it cannot be flipped inside a test run that has already touched either —
+        and the other integration project has, everywhere. Written into this project's
+        runtimeconfig.json, it is set before any code runs, as a consumer's
+        AppContext.SetSwitch at startup would be. TheSwitch_IsInEffect checks it took.
+    -->
+    <ItemGroup>
+        <RuntimeHostConfigurationOption Include="Npgsql.DisableDateTimeInfinityConversions" Value="true" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MSTest" Version="4.5.1" />
+        <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- A wrapper arity's element type, shared rather than copied — see the other integration project. -->
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\WrapperElements.cs"
+                 Link="WrapperElements.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.EFCore.PostgreSQL\CodoMetis.ValueRanges.EFCore.PostgreSQL.csproj" />
+        <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.csproj" />
+    </ItemGroup>
+
+</Project>
