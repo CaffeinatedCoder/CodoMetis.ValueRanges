@@ -114,7 +114,7 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
     /// Formats a <see cref="YearMonth"/> value using ISO 8601 (<c>uuuu-MM</c>) by default.
     /// </summary>
     public static string FormatValue(YearMonth value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.YearMonth.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 
@@ -269,7 +269,7 @@ public sealed class YearMonthSet<TElement> :
     /// <summary>Formats an element using ISO 8601 (<c>uuuu-MM</c>) by default — see the class
     /// remarks.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? RoundTripFormat, provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string

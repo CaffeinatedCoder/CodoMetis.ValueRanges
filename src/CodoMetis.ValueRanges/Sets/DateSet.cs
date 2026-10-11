@@ -75,7 +75,7 @@ public sealed class DateSet : IValueSet<DateOnly>, IValueSetFactory<DateSet, Dat
 
     /// <summary>Formats a <see cref="DateOnly"/> value using ISO 8601 (<c>yyyy-MM-dd</c>) by default.</summary>
     public static string FormatValue(DateOnly value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? "yyyy-MM-dd", provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? "yyyy-MM-dd" : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{2024-01-01,2024-12-24}</c>, <c>{}</c>) into a
@@ -214,7 +214,7 @@ public sealed class DateSet<TElement> :
     /// <summary>Formats an element using ISO 8601 (<c>yyyy-MM-dd</c>) by default — see the
     /// class remarks.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? RoundTripFormat, provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string

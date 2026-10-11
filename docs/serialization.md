@@ -42,7 +42,7 @@ The optional `format` parameter is forwarded to the element type, so you can con
 That is display text, not a literal: it does not parse back, because temporal literals are ISO 8601
 only (see below).
 
-**The literal never depends on a culture.** Without a format string — `ToString()`, `ToString(null, provider)`, string interpolation, `string.Format`, a logging template — the result is the invariant literal, whatever provider is passed or current. A provider applies only alongside an explicit format, because that asks for display text rather than a literal:
+**The literal never depends on a culture.** Without a format string — `ToString()`, `ToString(null, provider)`, `ToString("", provider)` (an empty format is the general format, as everywhere in .NET), string interpolation, `string.Format`, a logging template — the result is the invariant literal, whatever provider is passed or current. A provider applies only alongside an explicit format, because that asks for display text rather than a literal:
 
 ```csharp
 var thai = CultureInfo.GetCultureInfo("th-TH");

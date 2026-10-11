@@ -223,8 +223,9 @@ type's attribute.
 ### The literal ignores the culture
 
 `Parse(s, provider)` and `TryParse(s, provider, …)` now read the invariant literal and ignore the
-provider, and `ToString(null, provider)` — or interpolation, or `string.Format` — always writes the
-invariant literal. A provider still applies with an explicit format string.
+provider, and `ToString(null, provider)` — or `ToString("", provider)`, interpolation, or
+`string.Format` — always writes the invariant literal. A provider still applies with an explicit,
+non-empty format string.
 
 Before, the provider reached each bound: `DateRange.Parse(s, th-TH)` was 543 years early,
 `DecimalRange.Parse("[1.5,2.5)", de-DE)` was `[15,25)`, and `$"{decimalRange}"` under `de-DE` wrote

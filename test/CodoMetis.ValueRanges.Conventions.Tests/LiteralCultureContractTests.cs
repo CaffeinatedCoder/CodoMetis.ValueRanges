@@ -13,7 +13,8 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// <c>Int64Range</c>, <c>DecimalRange</c>) formatted a null provider in the current culture.
 /// Under <c>de-DE</c>, <c>$"{DecimalRange [1.5,2)}"</c> was <c>[1,5,2)</c>, which the parser reads
 /// back as <c>[1,52)</c> — a different range, silently. Under <c>sv-SE</c> a negative bound took
-/// U+2212 as its minus sign and no longer parsed.
+/// U+2212 as its minus sign and no longer parsed. An empty format string is swept alongside
+/// <see langword="null"/>: .NET treats the two identically, so the literal must as well.
 /// </remarks>
 [TestClass]
 public sealed class LiteralCultureContractTests
@@ -66,6 +67,9 @@ public sealed class LiteralCultureContractTests
                   + "invariant literal. A FormatValue is formatting a null provider in the current culture.");
                 Assert.AreEqual(literal, value.ToString(),
                     $"{label} under {culture}: ToString() is not the invariant literal.");
+                Assert.AreEqual(literal, value.ToString("", null),
+                    $"{label} under {culture}: ToString(\"\", null) is not the invariant literal. An empty "
+                  + "format is the general format, exactly like null, and must not count as an explicit one.");
             }
             finally
             {

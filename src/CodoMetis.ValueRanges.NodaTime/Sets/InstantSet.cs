@@ -92,7 +92,7 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
     /// Formats a <see cref="Instant"/> value using ISO 8601 (<c>uuuu-MM-ddTHH:mm:ssZ</c> with optional subseconds) by default.
     /// </summary>
     public static string FormatValue(Instant value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.Instant.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 
@@ -243,7 +243,7 @@ public sealed class InstantSet<TElement> :
     /// <summary>Formats an element using extended ISO 8601
     /// (<c>uuuu-MM-ddTHH:mm:ss.FFFFFFFFFZ</c>) by default — see the class remarks.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? RoundTripFormat, provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string

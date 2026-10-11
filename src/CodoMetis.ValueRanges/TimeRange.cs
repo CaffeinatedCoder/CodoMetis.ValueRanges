@@ -211,7 +211,7 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
     /// preserving full precision.
     /// </summary>
     public static string FormatValue(TimeOnly value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? "O", provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? "O" : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Parses a PostgreSQL range literal (e.g. <c>[09:00:00,17:00:00)</c>, <c>empty</c>, <c>(,)</c>)

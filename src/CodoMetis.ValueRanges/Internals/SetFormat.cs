@@ -18,7 +18,9 @@ internal static class SetFormat
         if (elements.IsEmpty) return "{}";
 
         // No format means the literal, which is invariant whatever provider is passed; a provider
-        // applies only alongside an explicit format, which asks for display text.
+        // applies only alongside an explicit format, which asks for display text. An empty format
+        // is no format — .NET reads "" as the general format, exactly like null.
+        if (string.IsNullOrEmpty(format)) format = null;
         provider = format is null ? CultureInfo.InvariantCulture : provider ?? CultureInfo.InvariantCulture;
 
         var sb = new StringBuilder(elements.Length * 8).Append('{');
