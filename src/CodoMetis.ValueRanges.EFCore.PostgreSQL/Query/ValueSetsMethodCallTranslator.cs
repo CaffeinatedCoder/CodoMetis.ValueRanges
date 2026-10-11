@@ -124,9 +124,10 @@ internal sealed class ValueSetsMethodCallTranslator(
             case nameof(ValueSetExtensions.Union) when arguments.Count == 2:
                 // The server-side result is unsorted and undeduplicated — fine inside
                 // predicates (the operators above ignore both), and a materialized result
-                // re-canonicalizes on read.
+                // re-canonicalizes on read. Emitted under a placeholder name that only
+                // ValueSetSqlGuard renames to array_cat, so the guard cannot be skipped silently.
                 return sqlExpressionFactory.Function(
-                    "array_cat",
+                    ValueSetSqlGuard.UnguardedUnion,
                     [Set(0), Set(1)],
                     nullable: true,
                     argumentsPropagateNullability: [true, true],

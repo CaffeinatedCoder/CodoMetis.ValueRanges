@@ -187,6 +187,15 @@ LINQ-level pattern caught only `==`/`Equals` in predicates and `Count` over a ba
 projection, a conditional, a coalesce, a grouping key, `Distinct` and `ExecuteUpdate` all ran and
 answered wrongly.)
 
+The check runs from a decorator around the provider's `IRelationalParameterBasedSqlProcessorFactory`,
+and it **fails closed**: a translated `Union` carries the placeholder name
+`valueranges_union_without_sql_guard` until the check renames it to `array_cat`. If something
+replaces that service after `UseValueRanges()` — a `ReplaceService` call, or another extension that
+replaces rather than decorates it — every query with a server-side `Union` fails with PostgreSQL's
+`function valueranges_union_without_sql_guard(…) does not exist` instead of answering as if the
+check were not there. Decorate the registered factory rather than replacing it, and both keep
+working.
+
 `Count` in a **projection** still works: its translator declines a union, so EF evaluates it on the
 client against the materialized set. A comparison does not get that fallback — EF translates `==`
 itself — so it is refused in a projection too:

@@ -328,6 +328,12 @@ through `SaveChanges` to canonicalize. Use `IsSubsetOf`/`IsSupersetOf` (both tog
 equality), or materialize first. Projecting the union itself, and composing it with `Contains`,
 `Overlaps`, the subset/superset family, `Remove` and `IsEmpty`, keep working.
 
+**If you replace `IRelationalParameterBasedSqlProcessorFactory`** after `UseValueRanges()` — with
+`ReplaceService`, or through another library — every query with a server-side `Union` now fails with
+`function valueranges_union_without_sql_guard(…) does not exist`. The check runs from that service,
+and a translated `Union` only becomes `array_cat` once the check has run. Wrap the registered factory
+instead of replacing it.
+
 ### Three JSON precedence and coverage changes
 
 - **A converter you register on the options for a range type now reaches its variants.** A range

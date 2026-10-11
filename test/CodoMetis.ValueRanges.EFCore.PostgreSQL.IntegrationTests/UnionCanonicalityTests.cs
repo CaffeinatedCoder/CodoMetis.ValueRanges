@@ -1,4 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Query;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Query.Internal;
+
+// NpgsqlParameterBasedSqlProcessorFactory is Npgsql-internal (EF1001): replacing the service with
+// the provider's own factory is the realistic way a third-party registration drops the guard.
+#pragma warning disable EF1001
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -313,5 +321,61 @@ public sealed class UnionCanonicalityTests
         Assert.AreEqual(3, await FirstRow(context).Select(r => (r.OptionalTags ?? r.Tags.Union(Operand)).Count).SingleAsync());
     }
 
+    // -- Fail-closed: the guard replaced away --
+
+    /// <summary>
+    /// A later <c>ReplaceService</c> of the processor factory drops the decorator the guard runs from.
+    /// Before the final 9.0.0 review the refused shapes then ran silently and answered as in 8.x — here,
+    /// no rows where memory finds both. Every server-side <c>Union</c> now fails instead, harmless
+    /// compositions included: only the guard turns the translator's placeholder into <c>array_cat</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task WithTheProcessorFactoryReplaced_AUnionFailsInsteadOfAnsweringWrongly()
+    {
+        await (await Context()).DisposeAsync();
+        await using var context = new ReplacedProcessorContext();
+        Assert.IsInstanceOfType<PlainProcessorFactory>(context.GetService<IRelationalParameterBasedSqlProcessorFactory>());
+
+        var inMemory = new[] { StringSet.From("a", "c"), StringSet.From("b", "c") }.Count(tags => tags.Union(Operand) == Target);
+        Assert.AreEqual(2, inMemory);
+
+        foreach (var query in new Func<Task>[]
+                 {
+                     () => context.Reservations.Where(r => (r.Id == First || r.Id == Second) && r.Tags.Union(Operand) == Target)
+                                  .Select(r => r.Id).ToListAsync(),
+                     () => context.Reservations.Where(r => r.Id == First && r.Tags.Union(Operand).Contains("a"))
+                                  .Select(r => r.Id).ToListAsync()
+                 })
+        {
+            var refusal = await Assert.ThrowsExactlyAsync<PostgresException>(query);
+            Assert.AreEqual(PostgresErrorCodes.UndefinedFunction, refusal.SqlState);
+            StringAssert.Contains(refusal.MessageText, "valueranges_union_without_sql_guard");
+        }
+    }
+
     private sealed record UnionDto(int Id, StringSet Union);
+
+    /// <summary>The integration model's configuration, with the parameter-based processor factory replaced.</summary>
+    private sealed class ReplacedProcessorContext : DbContext
+    {
+        public DbSet<Reservation> Reservations => Set<Reservation>();
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseNpgsql(
+                                  ContainerLifecycle.ConnectionString!,
+                                  npgsql => npgsql.UseValueRangesNodaTime()
+                                                  .ConfigureDataSource(dataSource => dataSource.EnableUnmappedTypes()))
+                             .ReplaceService<IRelationalParameterBasedSqlProcessorFactory, PlainProcessorFactory>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.Entity<Reservation>().Property(r => r.Id).ValueGeneratedNever();
+    }
+
+    /// <summary>What a library replacing the service registers: the provider's own processor, no guard.</summary>
+    private sealed class PlainProcessorFactory(RelationalParameterBasedSqlProcessorDependencies dependencies)
+        : IRelationalParameterBasedSqlProcessorFactory
+    {
+        public RelationalParameterBasedSqlProcessor Create(RelationalParameterBasedSqlProcessorParameters parameters)
+            => new NpgsqlParameterBasedSqlProcessorFactory(dependencies).Create(parameters);
+    }
 }

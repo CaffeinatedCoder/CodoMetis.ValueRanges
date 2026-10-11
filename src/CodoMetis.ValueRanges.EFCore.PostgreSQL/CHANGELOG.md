@@ -51,7 +51,10 @@ covers all four packages, which share one version number and release together.
   tree, through a decorator around the provider's `IRelationalParameterBasedSqlProcessorFactory`,
   and follows a union through `array_remove`, `CASE`, `COALESCE` and subquery columns. It may still
   feed `@>`, `<@`, `&&`, `Remove`, `IsEmpty`, or the outermost projection, which materializes
-  canonical. `Count` in a projection still falls back to the client.
+  canonical. `Count` in a projection still falls back to the client. The check fails closed: a
+  translated `Union` is named `valueranges_union_without_sql_guard` until the check renames it to
+  `array_cat`, so if a later `ReplaceService` (or another extension) replaces that factory instead
+  of decorating it, every server-side `Union` fails on the server instead of skipping the check.
 - **The numeric wrapper arities' bridge reads element text with the family's grammar**, so an
   element formatting in the current culture (`1,5` under `de-DE`) is refused instead of bound as 15.
 - **A `DateTimeSet<T>` element keeps its wall clock** on the way to the column, even one the

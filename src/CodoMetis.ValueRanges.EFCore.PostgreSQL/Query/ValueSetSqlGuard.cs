@@ -56,11 +56,34 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// written rather than by how the setter lambda named the property, covers every route to the
 /// property — a join, <c>EF.Property</c>, a nested complex type.
 /// </para>
+/// <para>
+/// <b>The guard fails closed.</b> It runs from a decorated service, and a later
+/// <c>ReplaceService</c> — or another extension replacing rather than decorating the same service —
+/// would drop it without a trace, after which every refused shape answers wrongly again. So
+/// <see cref="ValueSetsMethodCallTranslator"/> does not emit <c>array_cat</c>: it emits
+/// <see cref="UnguardedUnion"/>, a function PostgreSQL does not have, and only <see cref="Check"/>
+/// renames it. Without the guard a query over a server-side <c>Union</c> fails on the server, naming
+/// the placeholder; a decorator <em>around</em> the guard still reaches it and changes nothing.
+/// </para>
 /// </remarks>
 internal static class ValueSetSqlGuard
 {
-    /// <summary>Checks a query, update or delete expression; throws when it holds a refused shape.</summary>
-    public static void Check(Expression queryExpression) => new Walker().Root(queryExpression);
+    /// <summary>
+    /// The function name a translated <c>Union</c> carries until <see cref="Check"/> renames it to
+    /// <c>array_cat</c>. It reaches PostgreSQL — as <c>function … does not exist</c> — only when the
+    /// guard did not run, which is the point.
+    /// </summary>
+    public const string UnguardedUnion = "valueranges_union_without_sql_guard";
+
+    /// <summary>
+    /// Checks a query, update or delete expression and throws when it holds a refused shape; returns it
+    /// with every <see cref="UnguardedUnion"/> renamed to <c>array_cat</c>.
+    /// </summary>
+    public static Expression Check(Expression queryExpression)
+    {
+        new Walker().Root(queryExpression);
+        return UnionNamer.Instance.Visit(queryExpression);
+    }
 
     /// <summary>
     /// Whether an expression may evaluate to a server-computed union, judged from the expression
@@ -70,7 +93,7 @@ internal static class ValueSetSqlGuard
     /// </summary>
     public static bool MayBeConcatenation(SqlExpression? expression) => expression switch
     {
-        SqlFunctionExpression { Name: "array_cat" } when IsSet(expression)                         => true,
+        SqlFunctionExpression { Name: UnguardedUnion } when IsSet(expression)                      => true,
         SqlFunctionExpression { Name: "array_remove", Arguments: [var input, _] } when IsSet(expression) => MayBeConcatenation(input),
         SqlFunctionExpression { Name: "COALESCE", Arguments: { } arguments }                       => arguments.Any(MayBeConcatenation),
         CaseExpression conditional => conditional.WhenClauses.Any(c => MayBeConcatenation(c.Result)) || MayBeConcatenation(conditional.ElseResult),
@@ -220,7 +243,7 @@ internal static class ValueSetSqlGuard
                 case ColumnExpression column:
                     return _derivedColumns.Contains((column.TableAlias, column.Name));
 
-                case SqlFunctionExpression { Name: "array_cat", Arguments: { } arguments } when IsSet(expression):
+                case SqlFunctionExpression { Name: UnguardedUnion, Arguments: { } arguments } when IsSet(expression):
                     foreach (var argument in arguments) Derived(argument);
                     return true;
 
@@ -328,6 +351,21 @@ internal static class ValueSetSqlGuard
 
         private static SqlExpression Unwrap(SqlExpression expression)
             => expression is SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert ? Unwrap(convert.Operand) : expression;
+    }
+
+    /// <summary>Gives every checked <see cref="UnguardedUnion"/> the name PostgreSQL knows.</summary>
+    private sealed class UnionNamer : ExpressionVisitor
+    {
+        public static readonly UnionNamer Instance = new();
+
+        protected override Expression VisitExtension(Expression node)
+        {
+            var visited = base.VisitExtension(node);
+            return visited is SqlFunctionExpression { Name: UnguardedUnion, Arguments: { } arguments } union
+                ? new SqlFunctionExpression(
+                    "array_cat", arguments, union.IsNullable, union.ArgumentsPropagateNullability!, union.Type, union.TypeMapping)
+                : visited;
+        }
     }
 
     /// <summary>Collects an extension node's direct children without descending into them.</summary>

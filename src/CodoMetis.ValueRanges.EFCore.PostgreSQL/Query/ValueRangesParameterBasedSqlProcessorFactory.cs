@@ -6,7 +6,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
 /// Wraps the provider's <see cref="IRelationalParameterBasedSqlProcessorFactory"/> so that every
-/// processor it creates runs <see cref="ValueSetSqlGuard"/> over its result.
+/// processor it creates runs <see cref="ValueSetSqlGuard"/> over its result — which is also what
+/// turns a translated <c>Union</c> into <c>array_cat</c>, so a query that bypasses this decorator
+/// fails on the server instead of skipping the guard.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -73,10 +75,6 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
     ) : RelationalParameterBasedSqlProcessor(dependencies, parameters)
     {
         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
-        {
-            var processed = inner.Process(queryExpression, parametersDecorator);
-            ValueSetSqlGuard.Check(processed);
-            return processed;
-        }
+            => ValueSetSqlGuard.Check(inner.Process(queryExpression, parametersDecorator));
     }
 }
