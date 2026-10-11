@@ -366,9 +366,24 @@ public class RangeParseFormatTests
 
     /// <summary>
     /// An explicit comma-decimal provider used to read <c>1.5</c> as fifteen, silently: <c>.</c> is
-    /// de-DE's group separator. It is now a format error.
+    /// de-DE's group separator. The literal is invariant, so the provider no longer reaches it.
     /// </summary>
     [TestMethod]
-    public void DecimalBound_UnderACommaDecimalProvider_FailsInsteadOfMisreading()
-        => Assert.ThrowsExactly<FormatException>(() => DecimalRange.Parse("[1.5,2.5)", CultureInfo.GetCultureInfo("de-DE")));
+    public void DecimalBound_UnderACommaDecimalProvider_ReadsTheInvariantLiteral()
+        => Assert.AreEqual(DecimalRange.CreateFinite(1.5m, 2.5m, endInclusive: false),
+                           DecimalRange.Parse("[1.5,2.5)", CultureInfo.GetCultureInfo("de-DE")));
+
+    /// <summary>
+    /// A provider still applies alongside an explicit format, which asks for display text, not a
+    /// literal — and only there.
+    /// </summary>
+    [TestMethod]
+    public void Provider_AppliesOnlyWithAnExplicitFormat()
+    {
+        var range = DateRange.CreateFinite(new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30));
+        var thai  = CultureInfo.GetCultureInfo("th-TH");
+
+        Assert.AreEqual("[2026-01-01,2026-06-30]", ((IFormattable)range).ToString(null, thai));
+        Assert.AreEqual("[2569-01-01,2569-06-30]", ((IFormattable)range).ToString("yyyy-MM-dd", thai));
+    }
 }

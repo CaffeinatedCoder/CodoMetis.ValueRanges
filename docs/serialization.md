@@ -39,6 +39,16 @@ The optional `format` parameter is forwarded to the element type, so you can con
 // "[Jan 1 2025,Mar 31 2025]"
 ```
 
+**The literal never depends on a culture.** Without a format string — `ToString()`, `ToString(null, provider)`, string interpolation, `string.Format`, a logging template — the result is the invariant literal, whatever provider is passed or current. A provider applies only alongside an explicit format, because that asks for display text rather than a literal:
+
+```csharp
+var thai = CultureInfo.GetCultureInfo("th-TH");
+((IFormattable)range).ToString(null, thai);           // "[2025-01-01,2025-03-31]" — the literal
+((IFormattable)range).ToString("yyyy-MM-dd", thai);   // "[2568-01-01,2568-03-31]" — Buddhist-era display text
+```
+
+> Before 9.0 a provider reached the element formatter even without a format: `th-TH` wrote Buddhist-era years, `de-DE` a decimal comma that collides with the bound separator (`[1,5,2)`), and a null provider meant the *current* culture for `Int32Range`, `Int64Range` and `DecimalRange`.
+
 `RangeSet<TRange, T>` formats as a PostgreSQL multirange literal:
 
 ```csharp
@@ -63,6 +73,8 @@ var r5 = Int32Range.Parse("empty", null);       // Empty
 if (Int32Range.TryParse(userInput, null, out var range))
     Console.WriteLine(range);
 ```
+
+`Parse` and `TryParse` read the invariant literal and **ignore the provider**, as `Guid.Parse` does: the text is PostgreSQL's, which has no culture. Before 9.0 the provider reached the element parser, so `DateRange.Parse("[2026-01-01,2026-06-30]", th-TH)` returned a range in 1483 and `DecimalRange.Parse("[1.5,2.5)", de-DE)` returned `[15,25)`, with no error. Decimal bounds follow PostgreSQL's `numeric` grammar — sign, digits, point, exponent — so a group separator or currency symbol is a `FormatException`.
 
 Discrete types canonicalize on parse — `"[1,10)"` is equivalent to `"[1,9]"` and both parse to the same closed `[1, 9]` range:
 

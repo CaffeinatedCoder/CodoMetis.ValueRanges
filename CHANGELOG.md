@@ -67,6 +67,24 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
   inputs are a `FormatException`. Integer types already used `NumberStyles.Integer`. **If you
   relied on the lenient forms, they now fail.**
 
+- **⚠️ A culture provider no longer changes the literal.** `Parse(s, provider)` handed the provider
+  to the element parser, and `ToString(null, provider)` to the element formatter. `th-TH` uses the
+  Buddhist calendar, so `DateRange.Parse("[2026-01-01,2026-06-30]", th-TH)` returned
+  **`[1483-01-01,1483-06-30]`** and `ToString(null, th-TH)` wrote `2569`; `ar-SA` read dates as
+  Hijri; `de-DE` read the decimal `1.5` as fifteen. Nothing threw. The literal is PostgreSQL's
+  text and has no culture, so:
+  - `Parse`/`TryParse` (string and span, every range, `RangeSet` and value set) read the invariant
+    literal and ignore the provider, as `Guid.Parse` does.
+  - Without a format string, formatting writes the invariant literal whatever the provider. A
+    provider still applies alongside an explicit format (`ToString("yyyy-MM-dd", th-TH)`), which
+    asks for display text.
+  - The library's own paths — JSON, the `TypeConverter`, EF Core — always passed the invariant
+    culture and are unaffected, as is ASP.NET Core model binding, which passes it too.
+  `LiteralProviderContractTests` (conventions) parses and formats every shape, multirange and set
+  family under `de-DE`, `sv-SE`, `fa-IR`, `th-TH` and `ar-SA`. **If you parsed culture-formatted
+  text through `Parse(s, culture)` deliberately, parse the elements yourself and build the range
+  with the factories.**
+
 ### Added
 
 - **A `TypeConverter` on every range, variant, multirange and value set.** None had one, so

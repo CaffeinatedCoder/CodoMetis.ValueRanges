@@ -158,6 +158,25 @@ from a response, a stored document nobody deserializes — can depend on them. T
 for a property, put your own `[JsonConverter]` on it or register one on the options; both outrank the
 type's attribute.
 
+### The literal ignores the culture
+
+`Parse(s, provider)` and `TryParse(s, provider, …)` now read the invariant literal and ignore the
+provider, and `ToString(null, provider)` — or interpolation, or `string.Format` — always writes the
+invariant literal. A provider still applies with an explicit format string.
+
+Before, the provider reached each bound: `DateRange.Parse(s, th-TH)` was 543 years early,
+`DecimalRange.Parse("[1.5,2.5)", de-DE)` was `[15,25)`, and `$"{decimalRange}"` under `de-DE` wrote
+`[1,5,2)`, which parsed back as `[1,52)`. If you relied on culture-specific parsing — reading
+`[01.01.2025,31.03.2025]` with `de-DE`, say — parse the bounds yourself and use the factories:
+
+```csharp
+var de    = CultureInfo.GetCultureInfo("de-DE");
+var range = DateRange.CreateFinite(DateOnly.Parse("01.01.2025", de), DateOnly.Parse("31.03.2025", de));
+```
+
+Decimal bounds also parse with PostgreSQL's `numeric` grammar now: `"1,000"`, `"(5)"` and currency
+symbols are a `FormatException` rather than 1000, −5 and 5.
+
 ### Ranges can be dictionary keys
 
 `Dictionary<DateRange, …>` used to throw `NotSupportedException`; it now writes the literal as the

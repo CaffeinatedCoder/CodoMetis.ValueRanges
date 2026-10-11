@@ -27,6 +27,11 @@ covers all four packages, which share one version number and release together.
   instead of `Any`): `"1,000"`, `"(5)"` and currency symbols are a `FormatException` rather than
   1000, −5 and 5, and `DecimalRange.Parse("[1.5,2.5)", de-DE)` fails instead of returning `[15,25)`.
 
+- **⚠️ A culture provider no longer changes the literal.** `Parse(s, th-TH)` read
+  `2026-01-01` as a Buddhist-era date (Gregorian 1483) and `ToString(null, th-TH)` wrote `2569`;
+  `de-DE` read `1.5` as fifteen. `Parse`/`TryParse` now ignore the provider, and formatting without
+  a format string is always the invariant literal; a provider applies only with an explicit format.
+
 ### Added
 
 - **A `TypeConverter` on every range, variant, `RangeSet` and value set.** Configuration binding of

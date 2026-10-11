@@ -134,14 +134,18 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
     /// </summary>
     /// <param name="format">
     /// A format string forwarded to the bound value formatter, or <see langword="null"/>
-    /// to use the type-specific default (ISO 8601 for date/time types).
+    /// for the literal — the type-specific default (ISO 8601 for date/time types).
     /// </param>
     /// <param name="provider">
-    /// An <see cref="IFormatProvider"/> forwarded to the bound value formatter.
+    /// An <see cref="IFormatProvider"/> forwarded to the bound value formatter alongside an explicit
+    /// <paramref name="format"/>. Without one it is ignored: the literal is a wire format and is
+    /// always invariant — a <c>th-TH</c> provider would otherwise write Buddhist-era years, and a
+    /// <c>de-DE</c> one a decimal comma that collides with the bound separator.
     /// </param>
     string IFormattable.ToString(string? format, IFormatProvider? provider)
     {
-        string Fmt(T v) => TRange.FormatValue(v, format, provider);
+        var effective = format is null ? CultureInfo.InvariantCulture : provider;
+        string Fmt(T v) => TRange.FormatValue(v, format, effective);
         return this switch
         {
             IEmptyRange<T>          => "empty",

@@ -17,7 +17,9 @@ internal static class SetFormat
         var elements = set.Values;
         if (elements.IsEmpty) return "{}";
 
-        provider ??= CultureInfo.InvariantCulture;
+        // No format means the literal, which is invariant whatever provider is passed; a provider
+        // applies only alongside an explicit format, which asks for display text.
+        provider = format is null ? CultureInfo.InvariantCulture : provider ?? CultureInfo.InvariantCulture;
 
         var sb = new StringBuilder(elements.Length * 8).Append('{');
         for (var i = 0; i < elements.Length; i++)
@@ -29,6 +31,8 @@ internal static class SetFormat
         return sb.Append('}').ToString();
     }
 
+    // `provider` arrives through the IParsable signatures and is deliberately unused: the literal is
+    // invariant (see ParseElementValue). Do not thread it back to the element parser.
     internal static TSet Parse<TSet, T>(ReadOnlySpan<char> s, IFormatProvider? provider)
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
@@ -46,7 +50,7 @@ internal static class SetFormat
 
         while (true)
         {
-            values.Add(ParseElement<TSet, T>(inner, ref position, provider));
+            values.Add(ParseElement<TSet, T>(inner, ref position));
 
             while (position < inner.Length && char.IsWhiteSpace(inner[position])) position++;
 
@@ -78,7 +82,7 @@ internal static class SetFormat
         }
     }
 
-    private static T ParseElement<TSet, T>(ReadOnlySpan<char> inner, ref int position, IFormatProvider? provider)
+    private static T ParseElement<TSet, T>(ReadOnlySpan<char> inner, ref int position)
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
     {
@@ -107,7 +111,7 @@ internal static class SetFormat
                 }
                 else if (c == '"')
                 {
-                    return ParseElementValue<TSet, T>(sb.ToString(), inner, provider);
+                    return ParseElementValue<TSet, T>(sb.ToString(), inner);
                 }
                 else
                 {
@@ -133,7 +137,7 @@ internal static class SetFormat
         if (text.Equals("NULL", StringComparison.OrdinalIgnoreCase))
             throw new FormatException("Value sets cannot contain null elements.");
 
-        return ParseElementValue<TSet, T>(text, inner, provider);
+        return ParseElementValue<TSet, T>(text, inner);
     }
 
     /// <summary>
@@ -142,13 +146,14 @@ internal static class SetFormat
     /// <see cref="LiteralExcerpt"/> exists to cut. A validated wrapper's own reason survives as
     /// an excerpt.
     /// </summary>
-    private static T ParseElementValue<TSet, T>(ReadOnlySpan<char> text, ReadOnlySpan<char> inner, IFormatProvider? provider)
+    private static T ParseElementValue<TSet, T>(ReadOnlySpan<char> text, ReadOnlySpan<char> inner)
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
     {
         try
         {
-            return TSet.ParseValue(text, provider);
+            // Always invariant, whatever provider the caller handed Parse: the literal is a wire format.
+            return TSet.ParseValue(text, CultureInfo.InvariantCulture);
         }
         catch (FormatException ex)
         {
