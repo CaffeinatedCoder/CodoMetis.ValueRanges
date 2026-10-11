@@ -192,6 +192,108 @@ public class NodaTimeSetElementBridgeTests
             () => JsonSerializer.Deserialize<LocalDateSet<CalendarDay>>("[\"not-a-date\"]", Options));
 
     // -----------------------------------------------------------------------
+    // Elements backed by a calendar other than ISO — refused, not stored as another value
+    // -----------------------------------------------------------------------
+
+    private static readonly CalendarDay JulianDay =
+        new(new LocalDate(2024, 1, 1, CalendarSystem.Julian));               // ISO 2024-01-14
+
+    private static readonly WallClockStamp JulianStamp =
+        new(new LocalDateTime(2024, 1, 1, 8, 0, CalendarSystem.Julian));
+
+    private static readonly BillingMonth JulianMonth =
+        new(new YearMonth(2024, 1, CalendarSystem.Julian));
+
+    /// <summary>
+    /// The pinned ISO pattern formats a value in its own calendar's fields, so a wrapper over a
+    /// Julian 2024-01-01 — ISO 2024-01-14 — wrote <c>{2024-01-01}</c>, and JSON
+    /// <c>["2024-01-01"]</c>, both reading back as ISO 2024-01-01: thirteen days off, silently. The
+    /// closed sets convert such a value to ISO; a wrapper arity cannot construct its element from
+    /// an ISO primitive except by parsing, so it refuses it instead.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSets_RefuseANonIsoElement_AtConstruction()
+    {
+        var day = Assert.ThrowsExactly<ArgumentException>(() => LocalDateSet<CalendarDay>.From(JulianDay));
+        StringAssert.Contains(day.Message, "ISO");
+        StringAssert.Contains(day.Message, "2024-01-01");
+
+        Assert.ThrowsExactly<ArgumentException>(() => LocalDateSet<CalendarDay>.From(new List<CalendarDay> { JulianDay }));
+        Assert.ThrowsExactly<ArgumentException>(() => { LocalDateSet<CalendarDay> _ = [JulianDay]; });
+
+        Assert.ThrowsExactly<ArgumentException>(() => LocalDateTimeSet<WallClockStamp>.From(JulianStamp));
+        Assert.ThrowsExactly<ArgumentException>(() => LocalDateTimeSet<WallClockStamp>.From(new List<WallClockStamp> { JulianStamp }));
+
+        Assert.ThrowsExactly<ArgumentException>(() => YearMonthSet<BillingMonth>.From(JulianMonth));
+        Assert.ThrowsExactly<ArgumentException>(() => YearMonthSet<BillingMonth>.From(new List<BillingMonth> { JulianMonth }));
+    }
+
+    /// <summary>
+    /// The bare-element probe: <c>Contains</c>, <c>Add</c> and <c>Remove</c> refuse what
+    /// <c>From</c> refuses. A Julian probe compared against ISO storage would otherwise answer
+    /// <see langword="false"/> for a date the set holds.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSets_RefuseANonIsoProbe()
+    {
+        var days   = LocalDateSet<CalendarDay>.From(new CalendarDay(new LocalDate(2024, 1, 14)));
+        var stamps = LocalDateTimeSet<WallClockStamp>.From(new WallClockStamp(new LocalDateTime(2024, 1, 14, 8, 0)));
+        var months = YearMonthSet<BillingMonth>.From(new BillingMonth(new YearMonth(2024, 2)));
+
+        Assert.ThrowsExactly<ArgumentException>(() => days.Contains(JulianDay));
+        Assert.ThrowsExactly<ArgumentException>(() => days.Add(JulianDay));
+        Assert.ThrowsExactly<ArgumentException>(() => days.Remove(JulianDay));
+        Assert.ThrowsExactly<ArgumentException>(() => stamps.Contains(JulianStamp));
+        Assert.ThrowsExactly<ArgumentException>(() => months.Contains(JulianMonth));
+
+        // Against a non-empty set NodaTime's own CompareTo happens to throw across calendars; against
+        // the empty set nothing is compared, so Contains answered false and Add stored the Julian
+        // element that From refuses.
+        StringAssert.Contains(Assert.ThrowsExactly<ArgumentException>(() => days.Contains(JulianDay)).Message, "ISO 8601");
+        Assert.ThrowsExactly<ArgumentException>(() => LocalDateSet<CalendarDay>.Empty.Contains(JulianDay));
+        Assert.ThrowsExactly<ArgumentException>(() => LocalDateSet<CalendarDay>.Empty.Add(JulianDay));
+        Assert.ThrowsExactly<ArgumentException>(() => LocalDateTimeSet<WallClockStamp>.Empty.Add(JulianStamp));
+        Assert.ThrowsExactly<ArgumentException>(() => YearMonthSet<BillingMonth>.Empty.Add(JulianMonth));
+    }
+
+    /// <summary>
+    /// A converter registered for the element is consulted on read, and can hand back a non-ISO
+    /// value; the set refuses it there too, as a <see cref="JsonException"/>.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSets_RefuseANonIsoElement_FromARegisteredElementConverter()
+    {
+        var options = new JsonSerializerOptions { Converters = { new JulianDayConverter() } };
+
+        var ex = Assert.ThrowsExactly<JsonException>(
+            () => JsonSerializer.Deserialize<LocalDateSet<CalendarDay>>("[\"2024-01-01\"]", options));
+        Assert.IsInstanceOfType<ArgumentException>(ex.InnerException);
+    }
+
+    /// <summary>ISO elements are untouched, at the extremes too.</summary>
+    [TestMethod]
+    public void WrapperSets_AcceptIsoElements_AtTheExtremes()
+    {
+        var days = LocalDateSet<CalendarDay>.From(
+            new CalendarDay(LocalDate.MinIsoValue), new CalendarDay(LocalDate.MaxIsoValue));
+        Assert.AreEqual(2, days.Count);
+        Assert.IsTrue(days.Contains(new CalendarDay(LocalDate.MaxIsoValue)));
+
+        var stamps = LocalDateTimeSet<WallClockStamp>.From(
+            new WallClockStamp(LocalDateTime.MinIsoValue), new WallClockStamp(LocalDateTime.MaxIsoValue));
+        Assert.AreEqual(2, stamps.Count);
+    }
+
+    private sealed class JulianDayConverter : JsonConverter<CalendarDay>
+    {
+        public override CalendarDay Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => new(LocalDatePattern.Iso.Parse(reader.GetString()!).Value.WithCalendar(CalendarSystem.Julian));
+
+        public override void Write(Utf8JsonWriter writer, CalendarDay value, JsonSerializerOptions options)
+            => writer.WriteStringValue(value.ToString());
+    }
+
+    // -----------------------------------------------------------------------
     // The counterexample
     // -----------------------------------------------------------------------
 
