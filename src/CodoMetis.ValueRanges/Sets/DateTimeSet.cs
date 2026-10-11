@@ -71,8 +71,10 @@ public sealed class DateTimeSet : IValueSet<DateTime>, IValueSetFactory<DateTime
     public ImmutableArray<DateTime>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
+    /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
+    /// <c>infinity</c> / <c>-infinity</c> as the maximum / minimum value; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static DateTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        => IsoTemporal.ParseDateTime(s);
 
     /// <summary>Formats a <see cref="DateTime"/> value using the round-trip format specifier (<c>O</c>) by default, preserving full precision and <see cref="DateTimeKind"/>.</summary>
     public static string FormatValue(DateTime value, string? format, IFormatProvider? provider)
@@ -206,11 +208,13 @@ public sealed class DateTimeSet<TElement> :
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <summary>
-    /// Parses an element via <see cref="IParsable{TSelf}"/>, which re-runs the element's
-    /// validation — corrupt data throws rather than materializing.
+    /// Parses an element strictly as a DateTime first — the grammar of <see cref="DateTimeSet"/> — then
+    /// hands the element its own round-trip form through <see cref="IParsable{TSelf}"/>, which re-runs
+    /// the element's validation. A lenient element parser cannot misread non-ISO text that way, and
+    /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(s.ToString(), provider ?? CultureInfo.InvariantCulture);
+        => TElement.Parse(IsoTemporal.ParseDateTime(s).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
     /// — see the class remarks.</summary>

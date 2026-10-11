@@ -43,6 +43,7 @@ public sealed class WrapperSetTranslationTests
     private static readonly TestRate      Rate   = TestRate.Parse("12.50", CultureInfo.InvariantCulture);
     private static readonly TestDay       Day    = new(new DateOnly(2024, 6, 15));
     private static readonly TestSlot      Slot   = new(new TimeOnly(9, 30, 15, 250));
+    // Seven fraction digits: the literal keeps the six the store can hold, truncated as Npgsql truncates.
     private static readonly TestStamp     Stamp  = TestStamp.Parse("2024-06-15T10:30:00.1234567", CultureInfo.InvariantCulture);
     private static readonly TestInstant   Moment = new(new DateTimeOffset(2024, 6, 15, 10, 30, 0, TimeSpan.FromHours(2)));
 
@@ -121,7 +122,7 @@ public sealed class WrapperSetTranslationTests
     [TestMethod]
     public void WrapperDateTimeSet_Contains_KeepsSubSecondPrecision()
         => Assert.AreEqual(
-            "WHERE b.\"Audits\" @> ARRAY['2024-06-15T10:30:00.1234567']::timestamp without time zone[]",
+            "WHERE b.\"Audits\" @> ARRAY['2024-06-15T10:30:00.1234560']::timestamp without time zone[]",
             Where(db => db.Bookings.Where(b => b.Audits.Contains(EF.Constant(Stamp)))));
 
     /// <summary>
@@ -167,7 +168,7 @@ public sealed class WrapperSetTranslationTests
              "09:30:15.2500000", "09:30 — truncated to the minute"),
 
             (Where(db => db.Bookings.Where(b => b.Audits.Contains(EF.Constant(Stamp)))),
-             "2024-06-15T10:30:00.1234567", "06/15/2024 10:30:00 — sub-seconds and Kind dropped"),
+             "2024-06-15T10:30:00.1234560", "06/15/2024 10:30:00 — sub-seconds and Kind dropped"),
 
             (Where(db => db.Bookings.Where(b => b.WrappedRates.Contains(EF.Constant(Rate)))),
              "12.50", "12.5 — the stored scale shortened"),
@@ -209,7 +210,7 @@ public sealed class WrapperSetTranslationTests
     [TestMethod]
     public void WrapperDateTimeSet_Remove_RendersABareElement()
         => Assert.AreEqual(
-            "WHERE cardinality(array_remove(b.\"Audits\", '2024-06-15T10:30:00.1234567')) = 0",
+            "WHERE cardinality(array_remove(b.\"Audits\", '2024-06-15T10:30:00.1234560')) = 0",
             Where(db => db.Bookings.Where(b => b.Audits.Remove(EF.Constant(Stamp)).IsEmpty)));
 
     [TestMethod]

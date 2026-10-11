@@ -83,7 +83,7 @@ Notes:
 
 Timestamp semantics:
 
-- `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified` — a UTC-kinded `DateTime` is reinterpreted as wall-clock time, not converted. `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz`: the instant is preserved, but the original offset is not round-tripped (values read back carry offset `+00:00` and compare equal to what was written, since `DateTimeOffset` equality is instant-based).
+- `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified` — a UTC-kinded `DateTime` is reinterpreted as wall-clock time, not converted. `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz`: the instant is preserved, but the original offset is not round-tripped (values read back carry offset `+00:00` and compare equal to what was written, since `DateTimeOffset` equality is instant-based). The same normalization applies to an element operand: `range.Contains(dto)` takes a `DateTimeOffset` with any offset, and `range.Contains(dt)` a `DateTime` of any `Kind`.
 - Npgsql by default maps `DateTime.MinValue`/`MaxValue` to PostgreSQL `-infinity`/`infinity`. A *finite* bound of `DateTime.MaxValue` therefore becomes an explicit `infinity` bound in the database — which is distinct from an *unbounded* side (`upper_inf` stays `false`), so shape checks behave consistently.
 - Reverse engineering (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`, not to these types — the plugin provides no design-time services. Apply the range types manually after scaffolding.
 
@@ -227,24 +227,49 @@ A range, multirange or value set can sit inside a complex or owned type mapped t
 modelBuilder.Entity<Contract>().ComplexProperty(c => c.Terms, terms => terms.ToJson());
 ```
 
-Each is stored as its PostgreSQL literal, so the document reads naturally and other clients can
-parse it:
+**The document holds the store's text, not the API's JSON.** Each property is written as the text of
+its PostgreSQL store type, which is what a query reaching into the document casts it to — so the
+operators translate exactly as on a plain column:
 
 ```json
 { "Period": "[2026-01-01,2026-06-30]", "Blocks": "{[2026-02-01,2026-02-28]}", "Tags": "{a,b}" }
 ```
 
-The literal is also what makes queries into the document work. EF extracts a property as text and
-casts it to the store type, so the operators translate exactly as on a plain column:
-
 ```sql
 WHERE CAST(c."Terms" ->> 'Period' AS daterange) @> @day
 ```
 
-The `YearMonth` types are the exception to "their own literal": they are written in their store's
-month-aligned date form (`[2026-01-01,2026-06-30]`, `{2026-01-01,2026-06-01}`), because the cast
-reads dates, not `2026-01`. A filter that casts out of the document does not use an index on the
-column; if such a query is hot, keep the value in a plain column of its own as well.
+That is a database representation, and it differs from what System.Text.Json writes for the same
+value in an API payload:
+
+| Value | API JSON | Inside the document |
+|---|---|---|
+| a value set | `["a","b"]` | `"{a,b}"` |
+| a `YearMonth` range or set (wrapper arity too) | `"[2026-01,2026-06]"`, `["2026-01"]` | month-aligned dates: `"[2026-01-01,2026-06-30]"`, `"{2026-01-01}"` — the cast reads dates |
+| a temporal value | every tick (BCL) or nanosecond (NodaTime) | the store's microsecond, truncated toward 2000-01-01 as Npgsql truncates a parameter |
+| `MinValue` / `MaxValue` of `DateTime`, `DateTimeOffset`, `DateOnly`, and `Instant`, `LocalDate`, `LocalDateTime` extremes | the extreme value | `-infinity` / `infinity`, as Npgsql sends them |
+
+It is also a **persisted format**: changing it later would mean migrating stored documents, not
+recompiling. The temporal rule is what keeps the three copies of a value in agreement — a document
+materializes to what a native column would, and a query that casts out of the document compares
+the value a parameter carries. Writing every digit and letting the server round them would make
+`Doc.Period == period` miss the row it was saved from. `TemporalStoreParityTests` holds the rule
+against a live server.
+
+A filter that casts out of the document does not use an index on the column; if such a query is
+hot, keep the value in a plain column of its own as well.
+
+**What works inside the document** (measured against PostgreSQL 17):
+
+| Operation | |
+|---|---|
+| `SaveChanges`: insert, tracked change (to and from `null` too), nested complex types, replacing the whole document | ✓ — a complex type rewrites the whole document; an owned type writes a lone changed property with `jsonb_set`, and rewrites the document when several change |
+| `null` and empty, kept apart | ✓ |
+| the range and set operators, bounds, `Count`, projections | ✓ |
+| `ExecuteUpdate` of the whole JSON property, a JSON-to-JSON copy, a range or multirange | ✓ — a range is then stored in PostgreSQL's own text form, which reads back |
+| `ExecuteUpdate` of a value set | **refused** — EF Core would write it with `to_jsonb`, a JSON array the document cannot hold, and the row would no longer load |
+| `ExecuteUpdate` setting a property to `null` | fails in Npgsql (`42804`), for every type |
+| `ExecuteUpdate` on an owned JSON type | refused by EF Core |
 
 > Before 9.0 a `ToJson()` type holding any of these could not be saved: `SaveChanges` threw a
 > `NullReferenceException` from inside EF, because the plugin's type mappings had no JSON

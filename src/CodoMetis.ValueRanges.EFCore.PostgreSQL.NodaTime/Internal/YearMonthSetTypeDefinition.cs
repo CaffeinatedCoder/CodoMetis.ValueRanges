@@ -43,7 +43,7 @@ internal sealed class YearMonthSetTypeDefinition : ISetTypeDefinition
     public string ArrayStoreType => "date[]";
 
     public RelationalTypeMapping SetTypeMapping { get; } = new ValueSetTypeMapping<YearMonthSet, YearMonth, LocalDate>(
-        "date[]", ToPrimitive, FromPrimitive, global::NodaTime.Text.LocalDatePattern.Iso.Format,
+        "date[]", ToPrimitive, FromPrimitive, NodaStoreTemporal.Literal,
         YearMonthSetJsonValueReaderWriter.Instance);
 
     /// <summary>

@@ -2,11 +2,15 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Internal;
 using Microsoft.EntityFrameworkCore.Storage.Json;
 using NodaTime;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Storage;
+
+// EF1001: the core plugin's `EntityFrameworkCore.*.Internal` namespace, which this satellite builds on by design.
+#pragma warning disable EF1001
 
 // The YearMonth types are stored month-aligned (daterange, datemultirange, date[]), so inside an
 // EF Core JSON column they are written in that same date form rather than their own "2026-01"
@@ -37,7 +41,7 @@ public sealed class YearMonthRangeJsonValueReaderWriter : JsonValueReaderWriter<
 
     /// <inheritdoc />
     public override void ToJsonTyped(Utf8JsonWriter writer, YearMonthRange value)
-        => writer.WriteStringValue(YearMonthRangeConversion.DateForm(value).ToString());
+        => writer.WriteStringValue(StoreText<LocalDateRange>.Format(YearMonthRangeConversion.DateForm(value)));
 
     /// <inheritdoc />
     public override Expression ConstructorExpression => Expression.Property(null, InstanceProperty);
@@ -67,7 +71,7 @@ public sealed class YearMonthRangeSetJsonValueReaderWriter : JsonValueReaderWrit
 
     /// <inheritdoc />
     public override void ToJsonTyped(Utf8JsonWriter writer, RangeSet<YearMonthRange, YearMonth> value)
-        => writer.WriteStringValue(YearMonthRangeConversion.DateForm(value).ToString());
+        => writer.WriteStringValue(StoreText<RangeSet<LocalDateRange, LocalDate>>.Format(YearMonthRangeConversion.DateForm(value)));
 
     /// <inheritdoc />
     public override Expression ConstructorExpression => Expression.Property(null, InstanceProperty);
@@ -98,7 +102,7 @@ public sealed class YearMonthSetJsonValueReaderWriter : JsonValueReaderWriter<Ye
     /// <inheritdoc />
     public override void ToJsonTyped(Utf8JsonWriter writer, YearMonthSet value)
         => writer.WriteStringValue(
-               LocalDateSet.From(value.Values.Select(YearMonthSetTypeDefinition.ToPrimitive)).ToString());
+               StoreText<LocalDateSet>.Format(LocalDateSet.From(value.Values.Select(YearMonthSetTypeDefinition.ToPrimitive))));
 
     /// <inheritdoc />
     public override Expression ConstructorExpression => Expression.Property(null, InstanceProperty);

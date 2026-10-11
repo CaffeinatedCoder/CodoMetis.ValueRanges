@@ -201,8 +201,10 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
         };
 
     /// <inheritdoc />
+    /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
+    /// <c>HH:mm</c> without seconds; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static TimeOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TimeOnly.Parse(s, provider ?? CultureInfo.InvariantCulture);
+        => IsoTemporal.ParseTime(s);
 
     /// <summary>
     /// Formats a <see cref="TimeOnly"/> value using the round-trip format specifier (<c>O</c>) by default,

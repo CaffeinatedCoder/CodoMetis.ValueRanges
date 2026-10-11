@@ -16,6 +16,17 @@ covers all four packages, which share one version number and release together.
   old form. See the [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
   for source generation and why this is a major.
 
+- **⚠️ Temporal bounds and elements parse as strict ISO 8601.** The BCL temporal ranges, sets
+  and wrapper arities read element text with the lenient BCL `Parse`, month first:
+  `[01.02.2027,05.03.2027)` was January 2 to May 2, and a `DateTimeOffset` without an offset took
+  the parsing machine's. They now accept what this library and PostgreSQL write — `yyyy-MM-dd`,
+  `HH:mm[:ss[.f…]]` (extra fraction digits truncated to 100 ns), `T` or a space, `Z` / `±HH` /
+  `±HH:mm` / `±HH:mm:ss` offsets (required for a `DateTimeOffset`) — and `infinity` / `-infinity` as
+  `MaxValue` / `MinValue`; everything else is a `FormatException`. The wrapper arities parse as the
+  primitive first, so a lenient element `Parse` never sees non-ISO text. **A closed temporal set's
+  JSON elements use the same grammar**: System.Text.Json's own converter read an offset-less
+  `DateTimeOffset` in the machine's offset. A converter registered for the element type still wins.
+
 ### Fixed
 
 - **⚠️ `$"{range}"` under a comma-decimal culture produced a different range.** `Int32Range`,

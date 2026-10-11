@@ -78,7 +78,7 @@ Every value set family has an arity: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`
 
 `IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain. Every arity except `StringSet<T>` additionally requires `IComparable<TElement>` (canonical order delegates to the backing primitive; `StringSet<T>` orders ordinally over the text form and deliberately ignores the element's own comparison).
 
-There is no private constructor to find, no source generator to integrate with and no value converter to write. Reading calls `TElement.Parse(text, invariant)` and writing calls `element.ToString(format, invariant)` — which is why Vogen, Metalama, StronglyTypedId and hand-written wrappers all work identically, and why a wrapper that omits `IParsable` does not work at all regardless of what generated it.
+There is no private constructor to find, no source generator to integrate with and no value converter to write. Reading calls `TElement.Parse(text, invariant)` — for the temporal families after parsing the text strictly as the backing primitive and handing the element that primitive's round-trip form, so a lenient generated `Parse` never sees non-ISO text — and writing calls `element.ToString(format, invariant)` — which is why Vogen, Metalama, StronglyTypedId and hand-written wrappers all work identically, and why a wrapper that omits `IParsable` does not work at all regardless of what generated it.
 
 ### Why the element must be a struct
 

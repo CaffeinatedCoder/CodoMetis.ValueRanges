@@ -228,6 +228,10 @@ Case("aot-stringset", () =>
 });
 // Through object: the serializer resolves the runtime type (the variant) from the context.
 Case("aot-object", () => JsonSerializer.Serialize<object>(h1, ctx.Object));
+// A closed temporal set reads its elements with the literal grammar: an offset is required.
+Case("aot-dtoset", () => JsonSerializer.Serialize(
+    JsonSerializer.Deserialize("[\"2026-01-01T09:30:00+01:00\"]", ctx.DateTimeOffsetSet)!, ctx.DateTimeOffsetSet));
+Case("aot-dtoset-offsetless", () => JsonSerializer.Deserialize("[\"2026-01-01T09:30:00\"]", ctx.DateTimeOffsetSet)!.ToString());
 #pragma warning disable IL2026 // TypeDescriptor is not trim-safe in general; the converter lookup is what is tested.
 Case("aot-typeconverter", () => TypeDescriptor.GetConverter(typeof(RangeSet<Int64Range, long>)).ConvertFromInvariantString("{[1,5]}")!.ToString()!);
 #pragma warning restore IL2026
@@ -252,6 +256,8 @@ public readonly record struct Key(string Value) : IFormattable, IParsable<Key>
 [JsonSerializable(typeof(StringSet))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(object))]
+[JsonSerializable(typeof(DateTimeOffsetSet))]
+[JsonSerializable(typeof(DateTimeOffset))]
 internal partial class SmokeJson : JsonSerializerContext;
 
 public readonly record struct Code(int Value) : IFormattable, IParsable<Code>, IComparable<Code>
@@ -300,6 +306,8 @@ assert_contains 'aot-wrapper=["users.read"] roundtrip'         "$work/aot.native
 assert_contains 'aot-wrapper-read={1,2}'                       "$work/aot.native.out" "AOT: a validated-wrapper set the program never constructs deserializes"
 assert_contains 'aot-stringset=["alpha","beta"] roundtrip'     "$work/aot.native.out" "AOT: a primitive set round-trips through the documented minimal context"
 assert_contains 'aot-object="[2026-01-01,2026-06-30]"'         "$work/aot.native.out" "AOT: a range serializes through object"
+assert_contains 'aot-dtoset=["2026-01-01T09:30:00+01:00"]'     "$work/aot.native.out" "AOT: a DateTimeOffsetSet round-trips"
+assert_contains 'aot-dtoset-offsetless=FAILED JsonException'   "$work/aot.native.out" "AOT: a DateTimeOffsetSet element without an offset is refused"
 assert_contains 'aot-typeconverter={[1,5]}'                    "$work/aot.native.out" "AOT: TypeConverter for a RangeSet the program never constructs"
 
 # ── EF Core + NodaTime satellite: the whole dependency chain ──────────────────────────────────────

@@ -29,15 +29,20 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
             throw new JsonException($"Expected a JSON array for {typeof(TSet).Name}.");
 
         var fallback = ResolveElementConverter(options);
+        var strict   = ReadsThroughTheLiteralGrammar(options);
         var values   = new List<T>();
         while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
         {
             if (reader.TokenType == JsonTokenType.Null)
                 throw new JsonException($"{typeof(TSet).Name} cannot contain null elements.");
 
-            var element = fallback is null
-                              ? JsonSerializer.Deserialize(ref reader, ElementTypeInfo(options))
-                              : fallback.Read(ref reader, typeof(T), options);
+            var element = strict
+                              ? reader.TokenType == JsonTokenType.String
+                                    ? ValueSetElementJson.Parse<TSet, T>(reader.GetString()!)
+                                    : throw new JsonException($"Expected a JSON string for a {typeof(T).Name} element of {typeof(TSet).Name}.")
+                              : fallback is null
+                                  ? JsonSerializer.Deserialize(ref reader, ElementTypeInfo(options))
+                                  : fallback.Read(ref reader, typeof(T), options);
 
             if (element is null)
                 throw new JsonException($"{typeof(TSet).Name} cannot contain null elements.");
@@ -89,6 +94,40 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     /// reports <see cref="JsonTypeInfoKind.None"/> and stays authoritative; only the reflection
     /// fallback, which would property-dump the element, hands over.
     /// </summary>
+    /// <summary>
+    /// Whether a BCL temporal element would be read by System.Text.Json's own converter — in which case
+    /// it is read through the family's strict <see cref="IValueSetFactory{TSet,T}.ParseValue"/>
+    /// instead, the grammar its literal uses.
+    /// </summary>
+    /// <remarks>
+    /// System.Text.Json's <see cref="DateTimeOffset"/> converter reads an ISO timestamp without an
+    /// offset — or a bare date — in the parsing machine's offset, so a <c>DateTimeOffsetSet</c> from the
+    /// same JSON held different instants on different servers, while its literal refused the text. The
+    /// write side is unchanged: System.Text.Json's output is ISO 8601 that the literal grammar reads.
+    /// Compared by converter type, so a converter registered on the options — or one a source-generated
+    /// context substitutes — still reads, as for every other element type.
+    /// </remarks>
+    private static bool ReadsThroughTheLiteralGrammar(JsonSerializerOptions options)
+    {
+        if (BuiltInTemporalConverter is not { } builtIn) return false;
+
+        try
+        {
+            return options.GetTypeInfo(typeof(T)).Converter.GetType() == builtIn;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static readonly Type? BuiltInTemporalConverter =
+        typeof(T) == typeof(DateTimeOffset) ? JsonMetadataServices.DateTimeOffsetConverter.GetType()
+      : typeof(T) == typeof(DateTime)       ? JsonMetadataServices.DateTimeConverter.GetType()
+      : typeof(T) == typeof(DateOnly)       ? JsonMetadataServices.DateOnlyConverter.GetType()
+      : typeof(T) == typeof(TimeOnly)       ? JsonMetadataServices.TimeOnlyConverter.GetType()
+      : null;
+
     private static JsonConverter<T>? ResolveElementConverter(JsonSerializerOptions options)
     {
         try

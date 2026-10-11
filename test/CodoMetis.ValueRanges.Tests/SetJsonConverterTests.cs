@@ -383,4 +383,37 @@ public class SetJsonConverterTests
     public void Deserialize_WrapperSet_InvalidElement_Throws()
         => Assert.ThrowsExactly<FormatException>(
             () => JsonSerializer.Deserialize<StringSet<TestPermission>>("[\"no-dot\"]", Options));
+
+    // -----------------------------------------------------------------------
+    // Null and empty stay apart
+    // -----------------------------------------------------------------------
+
+    private sealed class NullableSets
+    {
+        public StringSet? Tags { get; set; }
+        public RangeSet<Int32Range, int>? Blocks { get; set; }
+    }
+
+    /// <summary>
+    /// <see langword="null"/> is absent and the empty set is a value: <c>null</c> on one side, <c>[]</c>
+    /// for a set and <c>"{}"</c> for a multirange on the other, each reading back as what was written.
+    /// The range types pin the same (<c>RangeJsonConverterTests.NullAndEmpty_StayDistinctAcrossARoundTrip</c>).
+    /// </summary>
+    [TestMethod]
+    public void NullAndEmpty_StayDistinct_ForSetsAndMultiranges()
+    {
+        var absent = JsonSerializer.Serialize(new NullableSets());
+        var empty  = JsonSerializer.Serialize(new NullableSets { Tags = StringSet.Empty, Blocks = RangeSet<Int32Range, int>.Empty });
+
+        Assert.AreEqual("""{"Tags":null,"Blocks":null}""", absent);
+        Assert.AreEqual("""{"Tags":[],"Blocks":"{}"}""", empty);
+
+        var readAbsent = JsonSerializer.Deserialize<NullableSets>(absent)!;
+        var readEmpty  = JsonSerializer.Deserialize<NullableSets>(empty)!;
+
+        Assert.IsNull(readAbsent.Tags);
+        Assert.IsNull(readAbsent.Blocks);
+        Assert.AreEqual(StringSet.Empty, readEmpty.Tags);
+        Assert.AreEqual(RangeSet<Int32Range, int>.Empty, readEmpty.Blocks);
+    }
 }

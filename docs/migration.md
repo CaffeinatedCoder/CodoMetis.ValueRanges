@@ -239,6 +239,35 @@ var range = DateRange.CreateFinite(DateOnly.Parse("01.01.2025", de), DateOnly.Pa
 Decimal bounds also parse with PostgreSQL's `numeric` grammar now: `"1,000"`, `"(5)"` and currency
 symbols are a `FormatException` rather than 1000, −5 and 5.
 
+### Temporal literals are strict ISO 8601
+
+A temporal bound or element — through `Parse`, `TryParse`, JSON, the `TypeConverter` or configuration
+binding — must be ISO 8601, as this library and PostgreSQL write it. The BCL parser used before read
+whatever the invariant culture could, month first. These are now a `FormatException`:
+
+| Input | Was read as | Write instead |
+|---|---|---|
+| `01.02.2027`, `01/02/2027`, `Feb 1 2027` | January 2 | `2027-02-01` |
+| `2027-02-01` for a `DateTime` or `DateTimeOffset` | midnight | `2027-02-01T00:00` |
+| a `DateTimeOffset` without an offset | the parsing machine's offset | append `Z` or the offset |
+| `9:30 AM`, `9:30` | 09:30 | `09:30` |
+| the same forms as JSON elements of a `DateTimeOffsetSet`, `DateTimeSet` or `TimeSet` | as above — System.Text.Json's converter read the offset-less ones in the machine's offset | as above, or register a converter for the element type |
+
+`HH:mm` without seconds, PostgreSQL's space-separated output, any number of fraction digits (truncated to 100 ns) and `infinity` / `-infinity` are accepted.
+The temporal wrapper arities read the text as their primitive first, so a lenient generated element
+`Parse` no longer sees non-ISO text, and an element that ignores the format specifier now fails on
+read instead of truncating silently. The NodaTime types were already strict.
+
+### Temporal values reach the database as text at its resolution
+
+The EF Core provider writes a temporal SQL constant, and a temporal value inside a JSON column, as
+the value Npgsql would bind: truncated to the microsecond toward 2000-01-01, with the extremes as
+`-infinity` / `infinity`. A constant used to carry seven fraction digits that the server rounded, so
+it could miss the row a parameter matched. A temporal set whose elements are less than a microsecond
+apart is now stored with one of them — the column could only ever hold one value, and the stored
+array's `cardinality` disagreed with the set's `Count`. `ExecuteUpdate` of a value set inside a JSON
+column is refused (it would have written a document the row no longer loads from).
+
 ### Ranges can be dictionary keys
 
 `Dictionary<DateRange, …>` used to throw `NotSupportedException`; it now writes the literal as the

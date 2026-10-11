@@ -7,10 +7,16 @@ namespace CodoMetis.ValueRanges.Core;
 /// Provides abstract static factory methods for constructing range instances, and
 /// default implementations of <see cref="IParsable{TSelf}"/> and <see cref="IFormattable"/>
 /// using the PostgreSQL range literal format (e.g. <c>[1,5)</c>, <c>empty</c>, <c>(,)</c>).
-/// Implement this interface on a concrete range type to gain access to the set operation
-/// extension methods (<c>Intersect</c>, <c>Union</c>, <c>Except</c>) as well as automatic
-/// <see cref="System.Text.Json"/> support via <c>RangeJsonConverter&lt;TRange, T&gt;</c>.
+/// Every range type this library ships implements it; it is what the set operation extension
+/// methods (<c>Intersect</c>, <c>Union</c>, <c>Except</c>), <see cref="RangeSet{TRange,T}"/> and the
+/// JSON and <see cref="System.ComponentModel.TypeConverter"/> support are written against.
 /// </summary>
+/// <remarks>
+/// The range interfaces are the shared vocabulary of the shipped range types, not an extension
+/// point: implementing them outside this library is not supported. The engines, the EF Core provider
+/// (whose registries are internal) and the parity tests against PostgreSQL cover only the shipped
+/// types, and these interfaces may gain members in a minor version.
+/// </remarks>
 /// <typeparam name="TRange">The concrete range type being constructed.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
 public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable

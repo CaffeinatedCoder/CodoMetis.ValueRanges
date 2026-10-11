@@ -15,6 +15,12 @@ covers all four packages, which share one version number and release together.
   `IsAotCompatible` and is tagged `native-aot` and `trimming`. Parsing ignores the
   provider, as for the core types (the NodaTime element parsers already used fixed ISO patterns). See
   `CodoMetis.ValueRanges` 9.0.0.
+- **⚠️ The wrapper arities parse as their primitive first.** `LocalDateSet<T>`, `LocalDateTimeSet<T>`,
+  `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>` handed element text straight to the
+  element's own `Parse`, as lenient as the consumer wrote it; they now read it with the family's ISO
+  patterns and hand the element its round-trip form. `Instant`, `LocalDate` and `LocalDateTime`
+  bounds and elements also read PostgreSQL's `infinity` / `-infinity`, as the extremes Npgsql maps
+  them from (`MaxValue` / `MinValue`, `MaxIsoValue` / `MinIsoValue`).
 
 ### Added
 

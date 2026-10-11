@@ -114,6 +114,32 @@ public class NodaTimeParseFormatTests
         Assert.AreEqual("[2024-06-01T00:00:00Z,2024-07-01T00:00:00Z)", range.ToString());
     }
 
+    /// <summary>
+    /// PostgreSQL writes <c>infinity</c> / <c>-infinity</c> for the values Npgsql maps from the
+    /// extremes of <c>Instant</c>, <c>LocalDate</c> and <c>LocalDateTime</c>; they read back as those
+    /// extremes, so text the server or <c>to_jsonb</c> produced parses to what Npgsql would have
+    /// materialized.
+    /// </summary>
+    [TestMethod]
+    public void Parse_PostgresInfinity_ReadsAsTheExtremeValues()
+    {
+        Assert.AreEqual(
+            InstantRange.CreateFinite(Instant.MinValue, Instant.MaxValue),
+            InstantRange.Parse("[-infinity,infinity)", null));
+        Assert.AreEqual(
+            LocalDateRange.CreateFinite(LocalDate.MinIsoValue, LocalDate.MaxIsoValue),
+            LocalDateRange.Parse("[-infinity,infinity]", null));
+        Assert.AreEqual(
+            LocalDateTimeRange.CreateFinite(LocalDateTime.MinIsoValue, LocalDateTime.MaxIsoValue),
+            LocalDateTimeRange.Parse("[-infinity,INFINITY)", null));
+        Assert.AreEqual(InstantSet.From(Instant.MaxValue), InstantSet.Parse("{infinity}", null));
+    }
+
+    /// <summary>A time of day has no infinity, in PostgreSQL or in NodaTime.</summary>
+    [TestMethod]
+    public void Parse_Infinity_IsRefusedForATimeOfDay()
+        => Assert.ThrowsExactly<FormatException>(() => LocalTimeSet.Parse("{infinity}", null));
+
     [TestMethod]
     public void Parse_Instant_NonUtcOffset_ConvertsToInstant()
     {

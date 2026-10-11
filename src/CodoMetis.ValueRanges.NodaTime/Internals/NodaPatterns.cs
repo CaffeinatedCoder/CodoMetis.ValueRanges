@@ -9,6 +9,12 @@ namespace CodoMetis.ValueRanges.Internals;
 /// date/time, numeric UTC offsets) so that literals copied from <c>psql</c> output parse
 /// directly. All patterns are culture-invariant — ISO 8601 has no culture-sensitive parts.
 /// </summary>
+/// <remarks>
+/// PostgreSQL's <c>infinity</c> / <c>-infinity</c> are read for the three types Npgsql maps them to
+/// — <see cref="NodaTime.Instant"/> (<c>MaxValue</c> / <c>MinValue</c>), <see cref="LocalDate"/> and
+/// <see cref="LocalDateTime"/> (<c>MaxIsoValue</c> / <c>MinIsoValue</c>) — so the text PostgreSQL writes
+/// for such a bound reads back as the value Npgsql would have materialized. Formatting is unchanged.
+/// </remarks>
 internal static class NodaPatterns
 {
     /// <summary>ISO 8601 date: <c>2024-06-01</c>. Also the PostgreSQL wire form.</summary>
@@ -40,7 +46,9 @@ internal static class NodaPatterns
         OffsetDateTimePattern.CreateWithInvariantCulture("uuuu'-'MM'-'dd' 'HH':'mm':'ss;FFFFFFFFFo<G>");
 
     internal static LocalDate ParseDate(string text)
-        => Date.Parse(text).GetValueOrThrow();
+        => IsInfinity(text, out var positive)
+            ? positive ? LocalDate.MaxIsoValue : LocalDate.MinIsoValue
+            : Date.Parse(text).GetValueOrThrow();
 
     internal static YearMonth ParseYearMonth(string text)
         => YearMonth.Parse(text).GetValueOrThrow();
@@ -50,6 +58,8 @@ internal static class NodaPatterns
 
     internal static LocalDateTime ParseDateTime(string text)
     {
+        if (IsInfinity(text, out var positive)) return positive ? LocalDateTime.MaxIsoValue : LocalDateTime.MinIsoValue;
+
         var iso = DateTime.Parse(text);
         if (iso.Success) return iso.Value;
 
@@ -59,6 +69,8 @@ internal static class NodaPatterns
 
     internal static Instant ParseInstant(string text)
     {
+        if (IsInfinity(text, out var positive)) return positive ? NodaTime.Instant.MaxValue : NodaTime.Instant.MinValue;
+
         var iso = Instant.Parse(text);
         if (iso.Success) return iso.Value;
 
@@ -67,5 +79,11 @@ internal static class NodaPatterns
 
         var offsetSpace = InstantOffsetSpace.Parse(text);
         return offsetSpace.Success ? offsetSpace.Value.ToInstant() : iso.GetValueOrThrow();
+    }
+
+    private static bool IsInfinity(string text, out bool positive)
+    {
+        positive = text.Equals("infinity", StringComparison.OrdinalIgnoreCase);
+        return positive || text.Equals("-infinity", StringComparison.OrdinalIgnoreCase);
     }
 }
