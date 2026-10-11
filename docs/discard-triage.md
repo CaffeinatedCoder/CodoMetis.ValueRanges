@@ -59,7 +59,7 @@ because an empty or infinity operand genuinely reaches them and genuinely has an
 `ValueRangesAggregateMethodCallTranslator`, `ValueRangesQueryExpressionInterceptor`,
 `ValueSetsMemberTranslator` (×2). Returning `null` from a translator means "not mine, try the next
 one" — the discard is how EF composition works, not a gap. `DerivesFromUnion`'s `_ => false`
-terminates a recursion.
+terminates a recursion (since 9.0.0 it is `ValueSetSqlGuard.MayBeConcatenation`).
 
 ## Fixed (2)
 

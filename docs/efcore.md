@@ -168,21 +168,36 @@ bookings.Where(b => b.Tags.Union(more).Contains(tag));
 `Union` is the one translated operation whose result is **not** canonical — `array_cat`
 concatenates. That is invisible to the operators above (all duplicate-insensitive) and to
 materialization (reads re-canonicalize), but anything sensitive to order or multiplicity is
-**refused** rather than translated: `Count`, and since 8.0.0 `==`/`!=`/`Equals`. Array equality
-is sensitive to both, and the ordering half is the one that surprises — on the server
-`{a,c} ∪ {a,b} = {a,b,c}` is false for the repeated element, and `{a,c} ∪ {b} = {a,b,c}` is false
-for the ordering alone, where nothing repeats. Both are true in memory. Compare with
-`IsSubsetOf`/`IsSupersetOf` instead, which mean the same thing for canonical sets and ignore both,
-or materialize first with `AsEnumerable()` and let the in-memory algebra answer.
+**refused** rather than translated. Array equality is sensitive to both, and the ordering half is
+the one that surprises — on the server `{a,c} ∪ {a,b} = {a,b,c}` is false for the repeated
+element, and `{a,c} ∪ {b} = {a,b,c}` is false for the ordering alone, where nothing repeats. Both
+are true in memory. Compare with `IsSubsetOf`/`IsSupersetOf` instead, which mean the same thing for
+canonical sets and ignore both, or materialize first with `AsEnumerable()` and let the in-memory
+algebra answer.
 
-The refusals cover only the contexts EF must translate in full — `Where`, `Any`, `All`, the
-ordering and grouping keys, and the predicate overloads. **In a projection both still work**, because
-EF falls back to client evaluation there and computes against the materialized set:
+Since 9.0.0 the refusal is made on the **translated SQL**, just before it is sent, so it does not
+depend on how the query is written. A value derived from a union — `array_cat` itself,
+`array_remove` over one, a conditional or `??` that may yield one, a subquery or `Concat` column
+projecting one — may only feed `@>`, `<@`, `&&` (`Contains`, `Overlaps`, the subset and superset
+family), `Remove`, `IsEmpty`, a null test, or the outermost projection, which is materialized. It is
+refused under equality, `Count`, `GroupBy`, `Distinct`, `OrderBy`, `Union`/`Intersect`/`Except` of
+queries, `Contains` over a sequence of sets, and as an `ExecuteUpdate` value — which would store
+the concatenation, after which equality and `Count` on that row are wrong for good. (Before 9.0.0 a
+LINQ-level pattern caught only `==`/`Equals` in predicates and `Count` over a bare union; a
+projection, a conditional, a coalesce, a grouping key, `Distinct` and `ExecuteUpdate` all ran and
+answered wrongly.)
+
+`Count` in a **projection** still works: its translator declines a union, so EF evaluates it on the
+client against the materialized set. A comparison does not get that fallback — EF translates `==`
+itself — so it is refused in a projection too:
 
 ```csharp
-bookings.Where(b => b.Tags.Union(more).Count > 2);      // throws — must translate
-bookings.Select(b => b.Tags.Union(more).Count);         // fine — client-evaluated, correct
-bookings.AsEnumerable().Where(b => b.Tags.Union(more).Count > 2);  // fine — in memory
+bookings.Select(b => b.Tags.Union(more));                    // fine — materialized canonical
+bookings.Select(b => b.Tags.Union(more).Count);              // fine — client-evaluated, correct
+bookings.Where(b => b.Tags.Union(more).IsSupersetOf(need));  // fine — @> ignores order and duplicates
+bookings.Where(b => b.Tags.Union(more).Count > 2);           // throws
+bookings.Select(b => b.Tags.Union(more) == expected);        // throws
+bookings.AsEnumerable().Where(b => b.Tags.Union(more) == expected);  // fine — in memory
 ```
 
 There is no package-specific opt-in for the in-memory form, deliberately: `AsEnumerable()` is the
@@ -267,7 +282,8 @@ hot, keep the value in a plain column of its own as well.
 | `null` and empty, kept apart | ✓ |
 | the range and set operators, bounds, `Count`, projections | ✓ |
 | `ExecuteUpdate` of the whole JSON property, a JSON-to-JSON copy, a range or multirange | ✓ — a range is then stored in PostgreSQL's own text form, which reads back |
-| `ExecuteUpdate` of a value set | **refused** — EF Core would write it with `to_jsonb`, a JSON array the document cannot hold, and the row would no longer load |
+| `ExecuteUpdate` of a value set | **refused** — EF Core would write it with `to_jsonb`, a JSON array the document cannot hold, and the row would no longer load. Recognized in the translated `UPDATE`, so it holds however the setter reaches the property (a join, `EF.Property`, a nested complex type) |
+| `ExecuteUpdate` of a whole complex property that contains a value set | ✓ — EF serializes the complex value through the plugin's writer |
 | `ExecuteUpdate` setting a property to `null` | fails in Npgsql (`42804`), for every type |
 | `ExecuteUpdate` on an owned JSON type | refused by EF Core |
 

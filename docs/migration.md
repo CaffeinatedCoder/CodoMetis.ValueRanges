@@ -161,12 +161,11 @@ relied on this comparison it was already returning wrong rows.** Your options:
   `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `IsEmpty`, and the proper subset/superset
   pair.
 - Materialize first with `AsEnumerable()` to get the in-memory answer deliberately.
-- Keep it in a **projection**, where it still works — EF falls back to client evaluation there and
-  computes against the materialized set.
 
-The refusal covers only the contexts EF must translate in full: `Where`, `Any`, `All`, the predicate
-overloads, and the ordering and grouping keys. It matches how `Count` over a union has been refused
-since 6.2.0.
+The 8.0 refusal covered only `Where`, `Any`, `All`, the predicate overloads, and the ordering and
+grouping keys, on the claim that EF evaluates a comparison in a projection on the client. It does
+not — it translates it, and the projection answered wrongly. 9.0.0 closes that and every other
+shape; see [the v8.x section](#a-server-computed-value-set-union-is-refused-wherever-it-would-answer-wrongly).
 
 ### `RangeSet.Except` with an infinity operand, and `Complement()`
 
@@ -266,7 +265,30 @@ the value Npgsql would bind: truncated to the microsecond toward 2000-01-01, wit
 it could miss the row a parameter matched. A temporal set whose elements are less than a microsecond
 apart is now stored with one of them — the column could only ever hold one value, and the stored
 array's `cardinality` disagreed with the set's `Count`. `ExecuteUpdate` of a value set inside a JSON
-column is refused (it would have written a document the row no longer loads from).
+column is refused, however the setter reaches the property (it would have written a document the
+row no longer loads from); setting a whole complex property that contains the set still works.
+
+### A server-computed value set `Union` is refused wherever it would answer wrongly
+
+`Union` translates to `array_cat`, a concatenation. 8.0 refused `==`/`Equals` over it in predicates
+and `Count` over a bare union; everything else ran and answered differently from memory. These now
+throw `InvalidOperationException` naming the remedy:
+
+```csharp
+db.Rows.Select(r => r.Tags.Union(x) == target);                    // was: false where memory says true
+db.Rows.Where(r => (r.Id > 0 ? r.Tags.Union(x) : r.Tags) == target); // and the ?? form: was 0 rows
+db.Rows.GroupBy(r => r.Tags.Union(x));                             // was: one group per operand order
+db.Rows.Select(r => r.Tags.Union(x)).Distinct();                   // was: duplicates kept
+db.Rows.OrderBy(r => r.Tags.Union(x));
+db.Rows.Where(r => (r.OptionalTags ?? r.Tags.Union(x)).Count == 3); // was: duplicates counted
+db.Rows.ExecuteUpdate(s => s.SetProperty(r => r.Tags, r => r.Tags.Union(x)));  // was: stored {a,c,a,b}
+```
+
+**A query that ran into one of these was already returning wrong rows**, and an `ExecuteUpdate` of
+a union left rows that compare and count wrongly on the server until rewritten — load and save them
+through `SaveChanges` to canonicalize. Use `IsSubsetOf`/`IsSupersetOf` (both together are set
+equality), or materialize first. Projecting the union itself, and composing it with `Contains`,
+`Overlaps`, the subset/superset family, `Remove` and `IsEmpty`, keep working.
 
 ### Ranges can be dictionary keys
 
