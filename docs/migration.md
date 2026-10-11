@@ -257,6 +257,13 @@ whatever the invariant culture could, month first. These are now a `FormatExcept
 | `9:30 AM`, `9:30` | 09:30 | `09:30` |
 | the same forms as JSON elements of a `DateTimeOffsetSet`, `DateTimeSet` or `TimeSet` | as above — System.Text.Json's converter read the offset-less ones in the machine's offset | as above, or register a converter for the element type |
 
+A `DateTime` bound or element with an offset — `2026-01-01T09:30+05:30` — now keeps the wall clock
+as written, with `DateTimeKind.Local`, as PostgreSQL's `timestamp` input does. It used to be
+converted into the parsing machine's zone: 05:00 in Berlin, 04:00 on a UTC server, and a `tsrange`
+stores that wall clock. If a payload carries offsets because it means instants, the type it wants is
+`DateTimeOffsetRange` (`tstzrange`); convert explicitly (`ToUniversalTime()`) before building a
+`DateTimeRange`. Offsets are `±HH`, `±HH:mm` or `±HH:mm:ss`; `+0530` and `+5:30` are refused.
+
 A range bound that is a quoted `""` or only whitespace — `["",5)`, `( , )` — is now a `FormatException`
 rather than an infinite bound, as in PostgreSQL; only an absent bound (`(,5)`) is infinite. A backslash
 outside quotes now escapes the next character, in a range bound and in an array element alike, as
@@ -306,6 +313,21 @@ a union left rows that compare and count wrongly on the server until rewritten �
 through `SaveChanges` to canonicalize. Use `IsSubsetOf`/`IsSupersetOf` (both together are set
 equality), or materialize first. Projecting the union itself, and composing it with `Contains`,
 `Overlaps`, the subset/superset family, `Remove` and `IsEmpty`, keep working.
+
+### Three JSON precedence and coverage changes
+
+- **A converter you register on the options for a range type now reaches its variants.** A range
+  serialized through `object`, an `object` collection or a variant-typed property used to bypass it
+  and write the literal; it now goes through your converter, so one payload no longer mixes two
+  wire forms. If you relied on the mixed form, declare those properties as a type your converter
+  does not claim.
+- **A property declared as `IRange<T>`, a shape interface or `IValueSet<T>`** writes the literal (or
+  array) of its runtime type, where it wrote `{}` or a property dump. Reading one still cannot work —
+  the concrete type is unknown — and now throws `NotSupportedException`; declare the concrete type.
+- **NodaTime:** `AddNodaTimeRangeConverters()` no longer outranks `ConfigureForNodaTime` when
+  registered first, and a bare `LocalDate`, `LocalDateTime` or `YearMonth` in a non-ISO calendar is
+  refused on write (`ArgumentException`), where it was written in its own calendar's fields and read
+  back days off. Convert with `WithCalendar(CalendarSystem.Iso)` first.
 
 ### Ranges can be dictionary keys
 
