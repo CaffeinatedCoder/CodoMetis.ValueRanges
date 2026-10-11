@@ -110,18 +110,18 @@ containing null, with structural equality. It relates to a PostgreSQL array colu
 `RangeSet<DateRange, DateOnly>` relates to `datemultirange`: the CLR type models the domain concept,
 the column is its storage encoding.
 
-| .NET type           | Element type     | PostgreSQL column | Wrapper arity        |
-|---------------------|------------------|-------------------|----------------------|
-| `StringSet`         | `string`         | `text[]`          | `StringSet<TElement>` |
-| `GuidSet`           | `Guid`           | `uuid[]`          | `GuidSet<TElement>`  |
-| `Int16Set`          | `short`          | `smallint[]`      | —                    |
-| `Int32Set`          | `int`            | `integer[]`       | `Int32Set<TElement>` |
-| `Int64Set`          | `long`           | `bigint[]`        | `Int64Set<TElement>` |
-| `DecimalSet`        | `decimal`        | `numeric[]`       | —                    |
-| `DateSet`           | `DateOnly`       | `date[]`          | —                    |
-| `TimeSet`           | `TimeOnly`       | `time[]`          | —                    |
-| `DateTimeSet`       | `DateTime`       | `timestamp[]`     | —                    |
-| `DateTimeOffsetSet` | `DateTimeOffset` | `timestamptz[]`   | —                    |
+| .NET type           | Element type     | PostgreSQL column | Wrapper arity                 |
+|---------------------|------------------|-------------------|-------------------------------|
+| `StringSet`         | `string`         | `text[]`          | `StringSet<TElement>`         |
+| `GuidSet`           | `Guid`           | `uuid[]`          | `GuidSet<TElement>`           |
+| `Int16Set`          | `short`          | `smallint[]`      | `Int16Set<TElement>`          |
+| `Int32Set`          | `int`            | `integer[]`       | `Int32Set<TElement>`          |
+| `Int64Set`          | `long`           | `bigint[]`        | `Int64Set<TElement>`          |
+| `DecimalSet`        | `decimal`        | `numeric[]`       | `DecimalSet<TElement>`        |
+| `DateSet`           | `DateOnly`       | `date[]`          | `DateSet<TElement>`           |
+| `TimeSet`           | `TimeOnly`       | `time[]`          | `TimeSet<TElement>`           |
+| `DateTimeSet`       | `DateTime`       | `timestamp[]`     | `DateTimeSet<TElement>`       |
+| `DateTimeOffsetSet` | `DateTimeOffset` | `timestamptz[]`   | `DateTimeOffsetSet<TElement>` |
 
 ```csharp
 var tags = StringSet.From("beta", "alpha", "beta");   // {alpha,beta} — deduplicated, sorted

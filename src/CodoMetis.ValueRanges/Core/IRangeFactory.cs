@@ -139,7 +139,7 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
     /// <see cref="FormatValue"/> for each bound value.
     /// </summary>
     /// <param name="format">
-    /// A format string forwarded to the bound value formatter, or <see langword="null"/>
+    /// A format string forwarded to the bound value formatter, or <see langword="null"/> or empty
     /// for the literal — the type-specific default (ISO 8601 for date/time types).
     /// </param>
     /// <param name="provider">
@@ -150,6 +150,9 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
     /// </param>
     string IFormattable.ToString(string? format, IFormatProvider? provider)
     {
+        // An empty format is the general format, exactly as null is — .NET reads the two alike — so
+        // it asks for the literal too. Normalized here so FormatValue sees one spelling of "none".
+        if (string.IsNullOrEmpty(format)) format = null;
         var effective = format is null ? CultureInfo.InvariantCulture : provider;
         string Fmt(T v) => TRange.FormatValue(v, format, effective);
         return this switch

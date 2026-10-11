@@ -25,13 +25,20 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
     private static readonly IRangeTypeDefinition[] Definitions =
         [
             // No Kind or offset reinterpretation: a LocalDateTime is wall-clock time by construction
-            // and an Instant is an instant. What remains is the store's resolution — nanoseconds
-            // truncated to microseconds and the extremes written as infinity, exactly as Npgsql
-            // sends them, so a JSON document and a SQL literal carry the value a parameter would.
+            // and an Instant is an instant. The calendar-bearing types normalize to ISO, as their
+            // factories do with the bounds — a no-op for a bound, but it backs the element mapping
+            // of a bare operand (`range @> @p`), where a non-ISO value would otherwise bind its own
+            // calendar's year/month/day as if they were ISO. What remains is the store's
+            // resolution — nanoseconds truncated to microseconds and the extremes written as
+            // infinity, exactly as Npgsql sends them, so a JSON document and a SQL literal carry
+            // the value a parameter would.
             new RangeTypeDefinition<LocalDateRange, LocalDate>(
-                "daterange", "datemultirange", "date", infinityText: NodaStoreTemporal.InfinityText),
+                "daterange", "datemultirange", "date",
+                normalizeValue: static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
+                infinityText: NodaStoreTemporal.InfinityText),
             new RangeTypeDefinition<LocalDateTimeRange, LocalDateTime>(
                 "tsrange", "tsmultirange", "timestamp without time zone",
+                normalizeValue: static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
                 storeValue: NodaStoreTemporal.Truncate, infinityText: NodaStoreTemporal.InfinityText),
             new RangeTypeDefinition<InstantRange, Instant>(
                 "tstzrange", "tstzmultirange", "timestamp with time zone",
@@ -89,6 +96,11 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
     // output is the culture's form. The element's own ToString(format, provider) is what
     // produces it, so a wrapper that forwards its format argument — which is what the
     // generators emit — needs no configuration.
+    //
+    // The three calendar-bearing families also set requireRoundTrip. The ISO pattern formats a
+    // value in its own calendar's fields, so an element backed by a Julian 2024-01-01 (ISO
+    // 2024-01-14) would bind, inline and store as ISO 2024-01-01. The sets refuse such an element
+    // at construction; requireRoundTrip refuses it as a bare operand (`column @> ARRAY[@p]`) too.
     private static readonly (Type Family, Func<Type, ISetTypeDefinition> Factory)[] SetFamilies =
         [
             // literalText is passed explicitly on every one of these, for the same reason the
@@ -102,12 +114,12 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             (typeof(LocalDateSet<>), SetTypeRegistry.Bridged(
                  "date", LocalDatePattern.Iso.PatternText,
                  ParseWith(LocalDatePattern.Iso), LocalDatePattern.Iso.Format,
-                 NodaStoreTemporal.Literal, storeText: true)),
+                 NodaStoreTemporal.Literal, storeText: true, requireRoundTrip: true)),
 
             (typeof(LocalDateTimeSet<>), SetTypeRegistry.Bridged(
                  "timestamp without time zone", LocalDateTimePattern.ExtendedIso.PatternText,
                  ParseWith(LocalDateTimePattern.ExtendedIso), LocalDateTimePattern.ExtendedIso.Format,
-                 NodaStoreTemporal.Literal, NodaStoreTemporal.Truncate, storeText: true)),
+                 NodaStoreTemporal.Literal, NodaStoreTemporal.Truncate, storeText: true, requireRoundTrip: true)),
 
             (typeof(InstantSet<>), SetTypeRegistry.Bridged(
                  "timestamp with time zone", InstantPattern.ExtendedIso.PatternText,
@@ -131,7 +143,8 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
                  static date => YearMonthPattern.Iso.Format(YearMonthOf(date)),
                  LocalDatePattern.Iso.Format,
                  storeText: true,
-                 parseStoreText: static text => LocalDateSet.Parse(text, null).Values))
+                 parseStoreText: static text => LocalDateSet.Parse(text, null).Values,
+                 requireRoundTrip: true))
         ];
 
     /// <summary>

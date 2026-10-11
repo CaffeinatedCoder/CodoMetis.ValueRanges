@@ -203,7 +203,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// preserving full precision and UTC offset.
     /// </summary>
     public static string FormatValue(DateTimeOffset value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? "O", provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? "O" : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Parses a PostgreSQL range literal into a <see cref="DateTimeOffsetRange"/>.

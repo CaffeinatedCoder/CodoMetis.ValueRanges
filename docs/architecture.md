@@ -191,8 +191,11 @@ of them; one that swallows it is rejected at the persistence boundary.
   failure modes are a wrong answer, a leaked NodaTime exception, or a non-ISO element smuggled
   into an empty set. The EF satellite mirrors it through the definition's `normalizeValue`,
   which now also backs an `ElementTypeMapping` so the same probe normalizes on the server.
-- `Internals/SetFormat` implements PostgreSQL array-literal parse/format (quoting, escaping,
-  unquoted `NULL` rejected — sets never contain null; reads throw on corrupt data).
+- `Internals/SetFormat` implements PostgreSQL array-literal parse/format with `array_in`'s grammar
+  (quoting; backslash escapes in quoted and unquoted elements; an unescaped brace or quote inside
+  an unquoted element, or a nested `{`, refused — sets are one-dimensional; ASCII whitespace only
+  around elements; unquoted `NULL` rejected — sets never contain null; reads throw on corrupt data).
+  `Internals/RangeFormat` reads bounds with `range_in`'s: only an absent bound is infinite.
 
 ## JSON Serialization (`Serialization/`)
 
@@ -224,8 +227,8 @@ what each attribute names:
   directly with no reflection.
 - **`RangeSet<TRange, T>` and the wrapper arities name `RangeJsonConverterFactory`.** An attribute
   cannot name an open generic converter (`typeof(RangeSetJsonConverter<,>)` fails at runtime with
-  `ContainsGenericParameters`), so these go through the factory's `MakeGenericType`, as a registered
-  factory always did.
+  `ContainsGenericParameters`), so these name the factory, which takes the closed converter from the
+  type's own `GenericConverters` registration (see *Native AOT* below) — never from `MakeGenericType`.
 
 `[TypeConverter]` follows the same three rules with `RangeTypeConverter`, `RangeVariantTypeConverter`,
 `ValueSetTypeConverter` and, for the generic types, `LiteralTypeConverter` — which `TypeDescriptor`
@@ -244,14 +247,32 @@ System.Text.Json resolves converters by the type it is handed, so `Serialize<obj
 always a variant. That is why every variant carries its own `[JsonConverter]` naming
 `RangeVariantJsonConverter` (see *Type-level attributes* above).
 
+The same rule means a converter a consumer registers on the options for the *union* never matches a
+variant on its own — `JsonConverter<Int32Range>.CanConvert(typeof(Int32Range.Finite))` is false — so
+the variant's attribute would answer with the literal while union-typed declarations got the custom
+form. `RangeVariantJsonConverter` therefore looks up what System.Text.Json would choose for the union
+from `Converters` (first match, a factory expanded through its own `CreateConverter`) and delegates to
+it, values and keys, unless that is a converter from this package. The lookup is cached per options
+instance once the options are read-only. Reads go through the union and narrow, as the literal path
+does. Nothing is built by reflection.
+
 Since 9.0.0 `RangeJsonConverterFactory` builds nothing at runtime. It reads the type's own
 `[JsonConverter]`: a non-generic type names a closed converter, which the factory creates from the
 attribute (whose `ConverterType` is annotated for its constructor, so this is trim-safe); a generic
 type names the factory itself, and the closed converter comes from `GenericConverters` (below).
 `CanConvert` is "names a converter of this package", so the factory no longer walks interfaces.
 
-A property declared as the `IRange<T>`/`IValueSet<T>` *interface* is not handled — the interface
-carries no factory to parse back through, so it falls to System.Text.Json's default handling.
+A value declared as one of the *interfaces* — `IRange<T>`, the five shape interfaces, `IValueSet<T>` —
+resolves the interface, whose attribute is not inherited from anything and would otherwise be absent
+(System.Text.Json then dumps the interface's members). Each carries
+`[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]`, one non-generic `JsonConverter<object>`
+that System.Text.Json casts to the declared interface: it writes through
+`options.GetTypeInfo(value.GetType())` — the runtime type's own resolution, reflection-based or
+source-generated, so no generic converter is closed at runtime — and refuses a read with
+`NotSupportedException`, since an interface does not say which type to construct.
+`JsonDefaultContractTests` discovers the core-namespace interfaces each variant implements and checks
+both legs for every shape. The factory interfaces are excluded: their static abstract members rule
+them out as a declared type.
 
 ### Native AOT and `GenericConverters`
 
@@ -301,14 +322,17 @@ asserted rather than fixed (`SetJsonConverterTests`) — matching the native wri
 would mean reproducing System.Text.Json's temporal formatting for an element known only through
 `IFormattable`, and the round-trip form is the one the array literal and the EF bridge share.
 The NodaTime satellite defines
-one per set (`Serialization/NodaTimeElementJsonConverter.cs`, namespace
+one per element type (`Serialization/NodaElementJsonConverters.cs`, namespace
 `CodoMetis.ValueRanges.Serialization`), each reusing the family's own `ParseValue`/`FormatValue` so
-JSON, array literals and the wire form share one text form. The satellite additionally exposes
-`AddNodaTimeRangeConverters()`, which puts those same converters on the options — the hook only
-reaches set elements, so this is what covers bare NodaTime properties alongside a set. It skips
-element types an existing converter already claims, which makes it idempotent and
-order-independent against `ConfigureForNodaTime`. Range types are unaffected throughout — they
-format themselves.
+JSON, array literals and the wire form share one text form; the three calendar-bearing ones refuse a
+non-ISO value on write, as NodaTime's own converter does (a set has already normalized it). The
+satellite additionally exposes `AddNodaTimeRangeConverters()`, which puts those same converters on
+the options behind a factory — the hook only reaches set elements, so this is what covers bare
+NodaTime properties alongside a set. The factory is resolved only once the options are in use, so it
+looks past itself and hands over any other converter registered for the type, wherever it sits in
+`Converters`: that is what keeps `ConfigureForNodaTime` authoritative in either call order (a plain
+converter list is first-match, which made the order decide). Range types are unaffected throughout —
+they format themselves.
 
 ## EF Core PostgreSQL (`src/CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
 
@@ -323,7 +347,8 @@ format themselves.
   - **Element mappings** (`BridgedElementTypeMapping`): a bare element parameter in `col @> ARRAY[@p]` binds as its backing primitive — the same definition-supplied converting-element-mapping seam `YearMonth` uses. Two producers: the wrapper families (text-form contract fails loudly here with an error naming it), and any `SetTypeDefinition` carrying a `normalizeValue`, which gets an element mapping applying that same normalization (the server-side half of `NormalizeElement`)
   - **`BridgedSetTypeDefinition`** carries the wrapper bridge itself: an element format plus parse/format delegates over the primitive, rather than the element's default text form and `IParsable<TPrimitive>`. Both halves are load-bearing. The format is what keeps a temporal element from being truncated on the way to the column. The delegates exist because `IParsable` is too narrow twice over — `DateTime.Parse` reached through it cannot ask for `DateTimeStyles.RoundtripKind`, so a UTC element arrives as `DateTimeKind.Local`, and NodaTime's value types do not implement `IParsable` at all. The temporal families parse strictly (`ParseExact`), which turns "the wrapper ignored the format specifier" from silent truncation into the contract error
   - **Translators**: `ValueSetsMethodCallTranslator` (Contains → `@>` `ARRAY[value]` unconditionally — always GIN-servable; Overlaps/IsSubsetOf/IsSupersetOf → `&&`/`<@`/`@>`; IsProperSubsetOf/IsProperSupersetOf → the operator paired with its **negated converse** rather than `<>`, keeping both halves multiplicity-insensitive; Remove → `array_remove`; Union → `array_cat`) and `ValueSetsMemberTranslator` (`Count`/`IsEmpty` → `cardinality`). `Intersect`/`Except`/`Add` have no translation: PostgreSQL's array type has only 9 operators (`@> <@ && = <> < <= > >=`) against the range type's 17 — there is no array intersection or difference, and no sorted insert (`array_sort` orders by collation, not ordinal). They stay in the core library because it has no EF dependency and is an in-memory type family first. Set `==` is translated by EF itself as `col = @p` and assumes canonical writers; all package-translated operators are order-insensitive and stay correct against non-canonical rows
-  - **Composing on a translated `Union`**: `array_cat` concatenates rather than canonicalizing. That is invisible to the operators above and to materialization (reads route through `From`), but `cardinality` would double-count shared elements — so `Count` over an `array_cat` operand is **refused** by the member translator (EF reports the query as untranslatable, which beats a quietly inflated number), while `IsEmpty` stays translated (a concatenation is empty exactly when both sides are). **Equality over a union is wrong and cannot be intercepted** — EF emits the `=` itself. Canonicalizing server-side is not available: PostgreSQL has no array-distinct function (verified against 18.4 — `array_sort`/`array_reverse`/`array_shuffle` exist, nothing that deduplicates; `intarray.uniq` is `int[]`-only and not installed by default), so it would need a `SELECT DISTINCT … ORDER BY` subquery whose ordering could not match CLR canonical order anyway (`text` orders by database collation, not ordinal; `uuid` orders byte-wise where `Guid.CompareTo` orders field-wise)
+  - **Composing on a translated `Union`**: `array_cat` concatenates rather than canonicalizing. That is invisible to the operators above and to materialization (reads route through `From`), but not to anything sensitive to order or multiplicity. Since 9.0.0 that is refused on the **final SQL tree** by `ValueSetSqlGuard`, run from `ValueRangesParameterBasedSqlProcessorFactory` — a decorator around the provider's `IRelationalParameterBasedSqlProcessorFactory`, the last stage before SQL generation and the one every query, `ExecuteUpdate` and `ExecuteDelete` passes through (EF has no plugin seam there, so the registration wraps Npgsql's rather than replacing it). The guard fails closed: the translator emits `Union` as `ValueSetSqlGuard.UnguardedUnion` (`valueranges_union_without_sql_guard`, a function PostgreSQL does not have) and only `Check` renames it to `array_cat`, so a later registration that *replaces* the factory — dropping the decorator — makes every server-side `Union` fail on the server rather than skip the guard; one that decorates around it still reaches it. Detecting the decorator instead would refuse that legitimate wrapper. The guard tracks values *derived* from `array_cat` — through `array_remove`, `CASE`, `COALESCE`, and subquery or set-operation columns — and allows them only under `@>`/`<@`/`&&`, `cardinality(…) = 0` (`IsEmpty`), a null test, or in the outermost projection; equality, `cardinality`, `GROUP BY`, `DISTINCT`, `ORDER BY`, deduplicating set operations, `IN` and `UPDATE` setters are refused. `ValueSetsMemberTranslator` additionally *declines* `Count` over a union it can see (via `ValueSetSqlGuard.MayBeConcatenation`), which is what lets EF client-evaluate it in a projection. The 8.0.0 LINQ-level guard it replaced matched `==`/`Equals` inside a list of operators and missed every other shape. Canonicalizing server-side is not available: PostgreSQL has no array-distinct function (verified against 18.4 — `array_sort`/`array_reverse`/`array_shuffle` exist, nothing that deduplicates; `intarray.uniq` is `int[]`-only and not installed by default), so it would need a `SELECT DISTINCT … ORDER BY` subquery whose ordering could not match CLR canonical order anyway (`text` orders by database collation, not ordinal; `uuid` orders byte-wise where `Guid.CompareTo` orders field-wise)
+  - **`ExecuteUpdate` into a JSON column**: Npgsql writes a scalar setter inside a document as `jsonb_set(doc, path, to_jsonb(value))`, which for a value set stores a JSON array where the document holds the literal — the row then no longer loads. The same guard refuses any `to_jsonb`/`to_json` of a value set inside an `UPDATE` setter, naming the column and path, so it holds however the setter reached the property (join, `EF.Property`, nested complex type); a whole complex value is serialized by EF through the plugin's writer and stays allowed
   - `YearMonthSet` gets a hand-written `YearMonthSetTypeDefinition` (month-aligned `date[]`, reads throw on non-aligned dates), reusing the range family's `YearMonthTypeMapping` as its element mapping
 - **Enable**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());` — or `npgsql.UseValueRangesNodaTime()` from the NodaTime satellite, which implies it
 

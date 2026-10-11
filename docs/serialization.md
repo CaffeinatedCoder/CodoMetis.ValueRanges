@@ -42,7 +42,7 @@ The optional `format` parameter is forwarded to the element type, so you can con
 That is display text, not a literal: it does not parse back, because temporal literals are ISO 8601
 only (see below).
 
-**The literal never depends on a culture.** Without a format string — `ToString()`, `ToString(null, provider)`, string interpolation, `string.Format`, a logging template — the result is the invariant literal, whatever provider is passed or current. A provider applies only alongside an explicit format, because that asks for display text rather than a literal:
+**The literal never depends on a culture.** Without a format string — `ToString()`, `ToString(null, provider)`, `ToString("", provider)` (an empty format is the general format, as everywhere in .NET), string interpolation, `string.Format`, a logging template — the result is the invariant literal, whatever provider is passed or current. A provider applies only alongside an explicit format, because that asks for display text rather than a literal:
 
 ```csharp
 var thai = CultureInfo.GetCultureInfo("th-TH");
@@ -79,7 +79,7 @@ if (Int32Range.TryParse(userInput, null, out var range))
 
 `Parse` and `TryParse` read the invariant literal and **ignore the provider**, as `Guid.Parse` does: the text is PostgreSQL's, which has no culture. Before 9.0 the provider reached the element parser, so `DateRange.Parse("[2026-01-01,2026-06-30]", th-TH)` returned a range in 1483 and `DecimalRange.Parse("[1.5,2.5)", de-DE)` returned `[15,25)`, with no error. Decimal bounds follow PostgreSQL's `numeric` grammar — sign, digits, point, exponent — so a group separator or currency symbol is a `FormatException`.
 
-Temporal bounds and elements are **strict ISO 8601** — the forms this library writes and the forms PostgreSQL prints in its default ISO `DateStyle`, nothing else: a date `yyyy-MM-dd`; a time `HH:mm` or `HH:mm:ss` with any number of fraction digits, truncated to the 100 ns the BCL types hold (Go and Java write nine); date and time joined by `T` or a space; for a `DateTime` an optional `Z`, `±HH` or `±HH:mm`, read with round-trip semantics; for a `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (PostgreSQL's historical local-mean-time offsets, kept as the instant at offset zero). `infinity` / `-infinity` read as `MaxValue` / `MinValue`, which is what Npgsql materializes for them. Before 9.0 the lenient BCL parser read `[01.02.2027,05.03.2027)` month first, as January 2 to May 2, and a `DateTimeOffset` without an offset took the parsing machine's. A closed temporal set's JSON array is read with the same grammar. System.Text.Json's own converter — what read it before 9.0 — is ISO 8601 too, but reads a `DateTimeOffset` without an offset, or a bare date, in the parsing machine's offset, so one payload held different instants on different servers. A converter you register for the element type still wins, and the written form is System.Text.Json's, unchanged.
+Temporal bounds and elements are **strict ISO 8601** — the forms this library writes and the forms PostgreSQL prints in its default ISO `DateStyle`, nothing else: a date `yyyy-MM-dd`; a time `HH:mm` or `HH:mm:ss` with any number of fraction digits, truncated to the 100 ns the BCL types hold (Go and Java write nine); date and time joined by `T` or a space; for a `DateTime` an optional `Z` (read as `Utc`) or `±HH`, `±HH:mm` or `±HH:mm:ss` (read as `Local`), with the wall clock kept as written and the offset never applied — PostgreSQL's rule for `timestamp` input, and what a `tsrange` stores, so one literal is one value on every machine and a local value round-trips with its kind; for a `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (PostgreSQL's historical local-mean-time offsets, kept as the instant at offset zero). `infinity` / `-infinity` read as `MaxValue` / `MinValue`, which is what Npgsql materializes for them. The NodaTime types follow the same grammar, `HH:mm` included (an `Instant` still needs its offset or `Z`). Before 9.0 the lenient BCL parser read `[01.02.2027,05.03.2027)` month first, as January 2 to May 2, and a `DateTimeOffset` without an offset took the parsing machine's. A closed temporal set's JSON array is read with the same grammar. System.Text.Json's own converter — what read it before 9.0 — is ISO 8601 too, but reads a `DateTimeOffset` without an offset, or a bare date, in the parsing machine's offset, so one payload held different instants on different servers. A converter you register for the element type still wins, and the written form is System.Text.Json's, unchanged.
 
 Discrete types canonicalize on parse — `"[1,10)"` is equivalent to `"[1,9]"` and both parse to the same closed `[1, 9]` range:
 
@@ -118,7 +118,9 @@ PostgreSQL allows quoting individual bounds to embed commas, brackets, or other 
 Int32Range.Parse("[\"1\",\"10\"]", null);   // [1, 10]
 ```
 
-Inside quotes, `\"` is unescaped to `"` and `\\` to `\`, matching PostgreSQL's quoted-bound syntax. The no-quote fast path stays allocation-free; unescaping only runs when a backslash is actually present inside the quotes.
+A bound is read as PostgreSQL's `range_in` reads it. A double quote opens or closes a quoted section anywhere in a bound (`"1"2` is `12`), a doubled quote inside one is a literal `"`, and a backslash takes the next character literally, inside quotes or out (`[\1,5)` is `[1,5)`). Whitespace around the unquoted part of a bound is dropped.
+
+**Only an absent bound is infinite.** `(,5)` is unbounded below; `["",5)` and `[ ,5)` are not — their lower bound is present and empty, which no element type reads, so they are a `FormatException`, as PostgreSQL answers `invalid input syntax for type integer: ""`. Before 9.0, `["",5)` read as `(,4]` and `("","")` as `(,)`.
 
 ### TypeConverter and configuration binding
 
@@ -152,7 +154,13 @@ JsonSerializer.Serialize(DateRange.CreateFinite(new DateOnly(2026, 1, 1),
 
 > Before 9.0 the converters were opt-in. Without the registration System.Text.Json fell back to dumping public properties — `DateRange` wrote `{"Length":181}` — and could not read any of it back.
 
-The attribute is the lowest-precedence way System.Text.Json picks a converter, so one you register on the options or put on a property still wins. `AddRangeConverters()` and `RangeJsonConverterFactory` remain and produce the same output; registering them is harmless and now redundant:
+The attribute is the lowest-precedence way System.Text.Json picks a converter, so one you register on the options or put on a property still wins.
+
+A converter registered on the options for a range union also reaches the union's variants. System.Text.Json resolves a converter by the exact type it is handed, and a range reached through `object` — a boxed value, an `object` collection, a dictionary of `object` — or declared as a variant (`Int32Range.Finite`) is handed over as its variant, whose own attribute would answer with the literal. So the variant converter looks for the converter System.Text.Json would choose for the union from `Converters` (the first that handles it, a `JsonConverter<Int32Range>` or a factory producing one) and, unless that is this package's own, hands the value to it: values and dictionary keys, on write and on read. A read goes through the union and narrows, so a variant-typed declaration still refuses a value of another shape with `JsonException`. One payload therefore has one wire form per type, however its values are declared. A converter on a *property* stays scoped to that property, and one registered for a variant type itself wins for that variant, as for any type.
+
+> Before 9.0 a converter on the options for `Int32Range` reached union-typed declarations only: `Serialize(range)` used it, while `Serialize<object>(range)`, a `List<object>` and a variant-typed property wrote the literal.
+
+`AddRangeConverters()` and `RangeJsonConverterFactory` remain and produce the same output; registering them is harmless and now redundant:
 
 ```csharp
 using CodoMetis.ValueRanges.Serialization;
@@ -184,7 +192,7 @@ var set = RangeSet<Int32Range, int>.From([
 ]);
 string setJson = JsonSerializer.Serialize(set);   // "\"{[1,5],[7,10]}\""
 
-// Works with all six range types and their multirange counterparts
+// Works with every range type and its multirange counterpart
 var dates = JsonSerializer.Serialize(
     DateRange.CreateFinite(new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31)));
 // "\"[2025-01-01,2025-12-31]\""
@@ -201,7 +209,19 @@ JsonSerializer.Serialize<object>(Int32Range.CreateFinite(1, 5));   // "\"[1,5]\"
 JsonSerializer.Serialize(new List<object> { range, dateRange });   // ["[1,5]","[2024-01-01,2024-03-01]"]
 ```
 
-Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `"empty"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening. A property declared as the `IRange<T>` interface is *not* covered — the interface carries no factory to parse back through; declare it as the union type.
+Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `"empty"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening.
+
+A value declared as one of the package's interfaces — `IRange<T>`, a shape interface such as `IFiniteRange<T>`, or `IValueSet<T>` — is written through its runtime type's converter, so it is the same literal or array as when it is declared as that type (and a converter you registered for that type applies). Reading into such a declaration throws `NotSupportedException`: the interface does not say which type to construct, and the remedy is to declare the concrete type, which reads the same JSON. `null` round-trips as for any reference type. Under a source-generated context the runtime type must be listed, or the write fails naming it.
+
+```csharp
+record Booking(IRange<int> Seats, IValueSet<string> Tags);
+
+JsonSerializer.Serialize(new Booking(Int32Range.CreateFinite(1, 4), StringSet.From("a")));
+// {"Seats":"[1,4]","Tags":["a"]}
+JsonSerializer.Deserialize<Booking>(json);   // NotSupportedException: declare the concrete type
+```
+
+> Before 9.0 the interfaces carried no converter, so System.Text.Json dumped the interface's members: `IRange<int>` wrote `{}` and `IValueSet<string>` wrote `{"Values":["a"]}`, with no error, and neither read back.
 
 ### Dictionary keys
 
@@ -242,7 +262,7 @@ It is consulted last — only when System.Text.Json has no scalar converter for 
 JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)));   // ["2024-01-01"]
 ```
 
-The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
+The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach. Those converters are a fallback too — any other converter on the options for the same type wins, in either registration order, so NodaTime.Serialization.SystemTextJson stays authoritative — and a bare `LocalDate`, `LocalDateTime` or `YearMonth` in a calendar other than ISO is refused on write with an `ArgumentException`, as NodaTime's converter refuses it. See the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
 
 ## Native AOT
 

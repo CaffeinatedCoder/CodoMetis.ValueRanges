@@ -176,7 +176,7 @@ internal sealed class ValueSetDecimalElementJsonConverter<TSet, T> : JsonConvert
     {
         var text = TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
 
-        if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number))
+        if (!decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
             throw new JsonException(
                 $"{typeof(T).Name} formats as '{text}', which is not a decimal number. An element of "
               + $"{typeof(TSet).Name} must format as exactly the text form of the primitive it wraps.");

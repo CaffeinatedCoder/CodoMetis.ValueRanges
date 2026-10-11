@@ -126,6 +126,41 @@ public class SetJsonConverterTests
     }
 
     /// <summary>
+    /// The element converter reads with the family grammar: a JSON number in exponent notation is
+    /// read as System.Text.Json reads it for <see cref="decimal"/>, and a JSON string holding a
+    /// group separator is refused — it was fifteen through the element's own <c>Parse</c>.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_DecimalBacked_ReadsTheFamilyGrammar()
+    {
+        Assert.AreEqual(
+            JsonSerializer.Deserialize<DecimalSet>("[1.5e1]", Options)!.ToString(),
+            JsonSerializer.Deserialize<DecimalSet<TestMoney>>("[1.5e1]", Options)!.ToString());
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<DecimalSet<TestMoney>>("[\"1,5\"]", Options));
+    }
+
+    /// <summary>
+    /// The write leg checks the element's text with the family grammar too. An element formatting
+    /// in the current culture writes <c>1,5</c> under <c>de-DE</c>; read with
+    /// <c>NumberStyles.Number</c> that was the number 15 in the payload.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_DecimalBacked_ElementLeakingTheCulture_IsRefusedOnWrite()
+    {
+        var set      = DecimalSet<TestCultureLeakingMoney>.From(new TestCultureLeakingMoney(1.5m));
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+        try
+        {
+            Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Serialize(set, Options));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    /// <summary>
     /// The temporal arities write the family's round-trip text form as a JSON string — the same
     /// token type System.Text.Json uses for the primitives they wrap, and the same text the
     /// array literal carries. The sub-second digits are the assertion: the element's default

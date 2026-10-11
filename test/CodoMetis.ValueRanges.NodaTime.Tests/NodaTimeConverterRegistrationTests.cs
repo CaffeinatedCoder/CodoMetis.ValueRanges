@@ -116,6 +116,103 @@ public class NodaTimeConverterRegistrationTests
         }
     }
 
+    /// <summary>
+    /// The registration-order claim, measured where it can fail: before 9.0.0 the element
+    /// converters claimed a type by being first in <c>Converters</c>, so with
+    /// <c>AddNodaTimeRangeConverters()</c> called first the library's converter shadowed
+    /// NodaTime's for all five types. Now the library's converter defers to any other converter
+    /// on the same options, wherever it sits.
+    /// </summary>
+    [TestMethod]
+    public void ConfigureForNodaTime_StaysAuthoritative_InEitherOrder()
+    {
+        JsonSerializerOptions[] variants =
+        [
+            new JsonSerializerOptions().AddNodaTimeRangeConverters().ConfigureForNodaTime(DateTimeZoneProviders.Tzdb),
+            new JsonSerializerOptions().ConfigureForNodaTime(DateTimeZoneProviders.Tzdb).AddNodaTimeRangeConverters()
+        ];
+
+        foreach (var options in variants)
+        {
+            Assert.AreSame(NodaConverters.LocalDateConverter, options.GetConverter(typeof(LocalDate)));
+            Assert.AreSame(NodaConverters.LocalDateTimeConverter, options.GetConverter(typeof(LocalDateTime)));
+            Assert.AreSame(NodaConverters.LocalTimeConverter, options.GetConverter(typeof(LocalTime)));
+            Assert.AreSame(NodaConverters.InstantConverter, options.GetConverter(typeof(Instant)));
+            Assert.AreSame(NodaConverters.YearMonthConverter, options.GetConverter(typeof(YearMonth)));
+
+            // NodaTime's own refusal, so the outcome no longer depends on the call order.
+            Assert.ThrowsExactly<ArgumentException>(
+                () => JsonSerializer.Serialize(new LocalDate(2024, 1, 1, CalendarSystem.Julian), options));
+        }
+    }
+
+    /// <summary>
+    /// Not only NodaTime's converters: the element converters are a fallback, so any converter
+    /// registered for the element type wins over them, before or after.
+    /// </summary>
+    [TestMethod]
+    public void ElementConverterRegisteredAfterwards_Wins()
+    {
+        var options = new JsonSerializerOptions().AddNodaTimeRangeConverters();
+        options.Converters.Add(new ShoutyLocalDateConverter());
+
+        Assert.AreEqual("\"DATE:2024-01-01\"", JsonSerializer.Serialize(new LocalDate(2024, 1, 1), options));
+        Assert.AreEqual("[\"DATE:2024-01-01\"]",
+            JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)), options));
+        Assert.AreEqual(new LocalDate(2024, 1, 1), JsonSerializer.Deserialize<LocalDate>("\"DATE:2024-01-01\"", options));
+    }
+
+    // -----------------------------------------------------------------------
+    // Bare values in a calendar other than ISO — refused, as NodaTime's converter refuses them
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// A Julian <c>LocalDate(2024, 1, 1)</c> is ISO 2024-01-14. Written in its own calendar's
+    /// fields it was <c>"2024-01-01"</c>, which reads back as ISO 2024-01-01 — thirteen days off,
+    /// with no error on either leg.
+    /// </summary>
+    [TestMethod]
+    public void BareNonIsoValues_AreRefusedOnWrite()
+    {
+        var options = Standalone();
+
+        var date = Assert.ThrowsExactly<ArgumentException>(
+            () => JsonSerializer.Serialize(new LocalDate(2024, 1, 1, CalendarSystem.Julian), options));
+        StringAssert.Contains(date.Message, "Julian");
+        StringAssert.Contains(date.Message, "WithCalendar(CalendarSystem.Iso)");
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => JsonSerializer.Serialize(new LocalDateTime(2024, 1, 1, 8, 0, CalendarSystem.Julian), options));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => JsonSerializer.Serialize(new YearMonth(2024, 1, CalendarSystem.Julian), options));
+
+        // Coptic wrote "1740-13-05", which failed only on the way back in; now it fails on the way out.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => JsonSerializer.Serialize(new LocalDate(1740, 13, 5, CalendarSystem.Coptic), options));
+
+        // Inside a DTO, as a list element and through object alike.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => JsonSerializer.Serialize(new Dto(new LocalDate(2024, 1, 1, CalendarSystem.Julian), LocalDateSet.Empty), options));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => JsonSerializer.Serialize<object>(new LocalDate(2024, 1, 1, CalendarSystem.Julian), options));
+    }
+
+    /// <summary>
+    /// The refusal is the element converter's, not the set's: a set normalizes a non-ISO date at
+    /// construction (and <c>YearMonthSet</c> rejects one), so what reaches the converter from a
+    /// set is always ISO — the same date, already in the calendar the wire form speaks.
+    /// </summary>
+    [TestMethod]
+    public void SetsOfNonIsoDates_StillSerialize_BecauseConstructionNormalized()
+    {
+        var options = Standalone();
+        var julian  = new LocalDate(2024, 1, 1, CalendarSystem.Julian);
+
+        Assert.AreEqual("[\"2024-01-14\"]", JsonSerializer.Serialize(LocalDateSet.From(julian), options));
+        Assert.AreEqual("[\"2024-01-14\"]", JsonSerializer.Serialize(LocalDateSet.From(julian)));
+        Assert.AreEqual("\"2024-01-14\"", JsonSerializer.Serialize(julian.WithCalendar(CalendarSystem.Iso), options));
+    }
+
     [TestMethod]
     public void ComposesWithAddRangeConverters_WithoutDuplicatingTheFactory()
     {

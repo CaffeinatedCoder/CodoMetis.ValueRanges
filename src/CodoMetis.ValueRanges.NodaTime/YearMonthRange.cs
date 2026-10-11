@@ -288,7 +288,7 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
     /// Formats a <see cref="YearMonth"/> value using ISO 8601 (<c>uuuu-MM</c>) by default.
     /// </summary>
     public static string FormatValue(YearMonth value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.YearMonth.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 

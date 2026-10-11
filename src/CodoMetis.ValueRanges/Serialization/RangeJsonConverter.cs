@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
@@ -92,6 +93,15 @@ public class RangeJsonConverter<TRange, T> : JsonConverter<TRange>
 /// A literal that parses to a different variant is a read error, not a silent widening:
 /// <c>"empty"</c> cannot be read into a declaration of type <c>Finite</c>.
 /// </para>
+/// <para>
+/// A converter for the <em>union</em> registered on <see cref="JsonSerializerOptions.Converters"/>
+/// reaches the variants too: when the first converter there that handles <typeparamref name="TRange"/>
+/// is not this package's, this converter hands every value and every dictionary key to it — reading
+/// a union and narrowing it as above. Without that, System.Text.Json would apply the custom converter
+/// to union-typed declarations only, and one payload would carry two wire forms for the same type.
+/// A converter placed on a property, and one registered for the variant type itself, are chosen by
+/// System.Text.Json before this one is consulted, as for any type.
+/// </para>
 /// </remarks>
 /// <typeparam name="TVariant">The sealed variant type being converted.</typeparam>
 /// <typeparam name="TRange">The range union that declares the variant.</typeparam>
@@ -104,6 +114,9 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
     /// <inheritdoc />
     public override TVariant Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
+        if (UnionConverterOn(options) is { } union)
+            return Narrow(union.Read(ref reader, typeof(TRange), options));
+
         var s = reader.GetString()
              ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TVariant).Name} value.");
 
@@ -112,11 +125,18 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
 
     /// <inheritdoc />
     public override TVariant ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => Parse(reader.GetString()!);
+        => UnionConverterOn(options) is { } union
+               ? Narrow(union.ReadAsPropertyName(ref reader, typeof(TRange), options))
+               : Parse(reader.GetString()!);
 
     /// <inheritdoc />
     public override void WriteAsPropertyName(Utf8JsonWriter writer, TVariant value, JsonSerializerOptions options)
-        => writer.WritePropertyName(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+    {
+        if (UnionConverterOn(options) is { } union)
+            union.WriteAsPropertyName(writer, value, options);
+        else
+            writer.WritePropertyName(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+    }
 
     private static TVariant Parse(string s)
     {
@@ -131,6 +151,16 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
         return variant;
     }
 
+    private static TVariant Narrow(TRange? parsed)
+        => parsed switch
+        {
+            null              => default!,
+            TVariant variant  => variant,
+            _                 => throw new JsonException(
+                                     $"Cannot read a {typeof(TRange).Name}.{parsed.GetType().Name} as "
+                                   + $"{typeof(TRange).Name}.{typeof(TVariant).Name}.")
+        };
+
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, TVariant value, JsonSerializerOptions options)
     {
@@ -140,7 +170,49 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
             return;
         }
 
+        if (UnionConverterOn(options) is { } union)
+        {
+            union.Write(writer, value, options);
+            return;
+        }
+
         writer.WriteStringValue(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+    }
+
+    // Keyed by the options instance. Once System.Text.Json has used an options instance it is read-only,
+    // so what its Converters resolve to cannot change; an instance still being configured is not cached.
+    private static readonly ConditionalWeakTable<JsonSerializerOptions, StrongBox<JsonConverter<TRange>?>> UnionConverters = new();
+
+    /// <summary>
+    /// The converter System.Text.Json would choose for <typeparamref name="TRange"/> from
+    /// <see cref="JsonSerializerOptions.Converters"/> — the first one that can handle it — unless that
+    /// is this package's own, which writes the same literal this converter does.
+    /// </summary>
+    private static JsonConverter<TRange>? UnionConverterOn(JsonSerializerOptions options)
+        => options.IsReadOnly
+               ? UnionConverters.GetValue(options, static o => new StrongBox<JsonConverter<TRange>?>(FindUnionConverter(o))).Value
+               : FindUnionConverter(options);
+
+    private static JsonConverter<TRange>? FindUnionConverter(JsonSerializerOptions options)
+    {
+        foreach (var candidate in options.Converters)
+        {
+            if (!candidate.CanConvert(typeof(TRange)))
+                continue;
+
+            var converter = candidate is JsonConverterFactory factory
+                                ? factory.CreateConverter(typeof(TRange), options)
+                                : candidate;
+
+            // First match decides, as it does for the union itself: if that is the package's own
+            // converter, the variant keeps writing the literal.
+            return converter is JsonConverter<TRange> union
+                && converter.GetType().Assembly != typeof(RangeJsonConverter<,>).Assembly
+                       ? union
+                       : null;
+        }
+
+        return null;
     }
 }
 

@@ -42,11 +42,26 @@ must not pick any of these up silently.
    constant now carries the microsecond Npgsql would bind, so a query that compared a constant
    against its own row and missed now matches; and a temporal set whose elements are less than a
    microsecond apart is stored with one of them, as the database could only ever hold one.
+7. **EF Core queries composing on a server-computed value set `Union` throw where they answered
+   wrongly** — equality in a projection or on a projected union, a conditional or `??` around one,
+   `GroupBy`, `Distinct`, `OrderBy`, set operations, `Count` through `??`, and `ExecuteUpdate` to a
+   union. Each returned rows that disagreed with memory, or stored a non-canonical array.
+8. **The literal grammar follows PostgreSQL's.** A quoted-empty or whitespace-only range bound is
+   refused instead of read as unbounded; a backslash escapes in unquoted array elements and range
+   bounds (`{a\,b}` is one element); `{{a,b}}`, `{a}b}` and `{a"b}` are refused; only ASCII
+   whitespace is skipped. An empty format string writes the literal, as `null` does.
+9. **A `DateTime` literal with an offset keeps its wall clock.** `2026-01-01T09:30+05:30` is 09:30
+   (`Local`) on every machine; it was converted into the parsing machine's zone.
+10. **JSON precedence and coverage changed in three places.** A union converter registered on the
+    options now reaches values serialized through `object` or as a variant; a property declared as
+    a range or set interface writes the literal (it wrote `{}`); and a NodaTime date in a non-ISO
+    calendar — bare, or as a wrapper-set element — is refused, where it was written thirteen days
+    off.
 
 Everything else is additive: a `TypeConverter` on every type, ranges as dictionary keys, ranges
 and sets inside EF Core JSON columns, Native AOT, `Deconstruct` on every bounded variant, and an
 OpenAPI transformer to copy. The
-[migration guide](docs/migration.md#migration-from-v8x) has the call-site edits.
+[migration guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x) has the call-site edits.
 
 ### Changed
 
@@ -79,8 +94,12 @@ OpenAPI transformer to copy. The
   09:30, and a `DateTimeOffset` without an offset took whichever machine parsed it — all silently.
   They now accept exactly what this library writes and what PostgreSQL prints in its ISO
   `DateStyle`: `yyyy-MM-dd`; `HH:mm` or `HH:mm:ss` with any number of fraction digits, truncated to
-  100 ns; `T` or a space between them; for a `DateTime` an optional `Z`, `±HH` or `±HH:mm`
-  (round-trip semantics), for a
+  100 ns; `T` or a space between them; for a `DateTime` an optional `Z` (`Utc`) or `±HH`,
+  `±HH:mm` or `±HH:mm:ss` (`Local`) with the wall clock kept as written — **the offset is no longer
+  applied**: it was converted into the parsing machine's zone, so `2026-01-01T09:30+05:30` was
+  05:00 in Berlin and 04:00 on a UTC server, and a `tsrange` stores the wall clock; PostgreSQL's own
+  `timestamp` input drops the offset the same way, and a local value now round-trips exactly, even
+  across a DST gap — for a
   `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (a historical local-mean-time
   offset, kept as the instant at offset zero); and `infinity` / `-infinity` as `MaxValue` /
   `MinValue`, what Npgsql materializes for them. Everything else is a `FormatException` through
@@ -95,6 +114,12 @@ OpenAPI transformer to copy. The
   type, which still wins; the written form is System.Text.Json's, unchanged. `TemporalLiteralGrammarTests` pins the
   grammar; `TemporalLiteralStrictnessContractTests` (conventions) refuses a non-ISO element through
   every entry point of all 26 temporal range and set types.
+
+- **The range interfaces are declared not to be an extension point.** `IRange<T>`, the shape
+  interfaces and `IRangeFactory<TRange, T>` are the shared vocabulary of the shipped range types;
+  implementing them outside the library is unsupported, and they may gain members in a minor
+  version. Nothing changes for code that consumes them. The XML docs and `docs/architecture.md`
+  state the policy.
 
 ### Fixed
 
@@ -116,7 +141,74 @@ OpenAPI transformer to copy. The
   explicit comma-decimal provider misread silently: `DecimalRange.Parse("[1.5,2.5)", de-DE)` was
   `[15,25)`. They now parse with `NumberStyles.Float` — sign, digits, point, exponent — and those
   inputs are a `FormatException`. Integer types already used `NumberStyles.Integer`. **If you
-  relied on the lenient forms, they now fail.**
+  relied on the lenient forms, they now fail.** The wrapper arities are covered too: `DecimalSet<T>`
+  and the integer arities handed the raw element text to the element's own `Parse`, and a generated
+  one (`decimal.Parse(s, provider)`, `NumberStyles.Number`) accepts group separators, so
+  `DecimalSet<Price>.Parse("{\"1,5\"}")` was `{15}` — through `TryParse`, configuration binding and
+  a JSON string too — while `DecimalSet` refused it. They now parse with the family's grammar first
+  and hand the element its invariant text, so its validation still runs and scale is kept; the
+  decimal JSON writer and the EF Core bridge read element text the same way.
+  `WrapperGrammarContractTests` (conventions) holds every wrapper family to its primitive sibling.
+
+- **⚠️ An empty format string wrote a culture-formatted literal.** .NET reads `""` as the general
+  format, exactly like `null`, but the literal checked only for `null`: `ToString("", de-DE)` on
+  `DecimalRange [1.5,2)` wrote `[1,5,2)`, a `DateRange` with `("", th-TH)` Buddhist-era short
+  dates. An empty format now writes the invariant literal everywhere `null` does.
+  `LiteralProviderContractTests` and `LiteralCultureContractTests` sweep `""` alongside `null`.
+
+- **⚠️ A quoted empty range bound read as an unbounded one.** `Int32Range.Parse("[\"\",5)")` was
+  `(,4]` and `("","")` was `(,)`, silently, where PostgreSQL answers `invalid input syntax`; a
+  whitespace-only bound (`[ ,5)`) was trimmed to nothing the same way. Bounds now follow PostgreSQL's
+  `range_in`: only an absent bound is infinite, quotes may wrap any part of a bound, and a backslash
+  escapes the next character inside quotes or out. Applies to every range type and multirange.
+
+- **⚠️ Array literals departed from PostgreSQL's `array_in`.** `StringSet.Parse(@"{a\,b}")` was two
+  elements, `a\` and `b`, where PostgreSQL reads the one element `a,b`; `{{a,b}}` was the set
+  `{"{a","b}"}` where PostgreSQL reads a two-dimensional array; `{a}b}` was `{"a}b"}` where
+  PostgreSQL errors. Unquoted elements now honour backslash escapes, an unescaped `{`, `}` or `"`
+  inside one is a `FormatException`, and whitespace inside an element is kept. Both literal parsers
+  skip only the ASCII whitespace PostgreSQL skips. `LiteralGrammarParityTests` (integration) asks a
+  live server for the same answer.
+
+- **The NodaTime types refused `HH:mm`.** `TimeRange.Parse("[09:00,17:00)")` parsed but
+  `LocalTimeSet.Parse("{09:00}")` threw. `HH:mm` is now accepted wherever the BCL types accept it —
+  a `LocalTime`, the time part of a `LocalDateTime`, an `Instant` with its offset or `Z`.
+
+- **⚠️ A converter registered on the options for a range union reached union-typed declarations
+  only.** System.Text.Json resolves a converter by the exact type, and a range reached through
+  `object` or declared as a variant is handed over as its variant, whose own `[JsonConverter]`
+  wrote the literal — so with a custom `Int32Range` converter, `Serialize(range)` wrote the custom
+  form and `Serialize<object>(range)` wrote `"[1,2]"`. The variant converter now hands values and
+  dictionary keys, on both legs, to whatever System.Text.Json would choose for the union from
+  `Converters`, unless that is this package's own; a read goes through the union and narrows.
+  **Payload change** for anyone who registered a union converter and serialized ranges through
+  `object`.
+
+- **⚠️ A property declared as a range or set interface was written as a property dump.**
+  `IRange<int>` wrote `{}` and `IValueSet<string>` `{"Values":["a"]}`, with no error, and neither
+  read back. The interfaces now carry `InterfaceDeclaredJsonConverter`, which writes through the
+  runtime type's contract (the literal, or a converter registered for that type) and refuses a read
+  with `NotSupportedException` naming the remedy: declare the concrete type.
+
+- **⚠️ NodaTime: `AddNodaTimeRangeConverters()` shadowed `ConfigureForNodaTime`, and wrote bare
+  non-ISO values in their own calendar's fields.** Registered first, its element converters won for
+  all five NodaTime types, contrary to the documented "either order"; and a Julian
+  `LocalDate(2024, 1, 1)` — ISO 2024-01-14 — was written `"2024-01-01"` and read back thirteen days
+  off. Any other converter registered for the type now wins wherever it sits, and a bare
+  `LocalDate`, `LocalDateTime` or `YearMonth` in a non-ISO calendar is refused on write with
+  `ArgumentException`, as NodaTime's own converter refuses it. **Convert with
+  `WithCalendar(CalendarSystem.Iso)` first.**
+
+- **⚠️ NodaTime wrapper sets stored an element in another calendar as a different date.**
+  NodaTime's ISO patterns format a value in its own calendar's fields, so a `LocalDateSet<T>` over a
+  Julian `LocalDate(2024, 1, 1)` — ISO 2024-01-14 — wrote `{2024-01-01}` and `["2024-01-01"]`, and
+  the EF Core bridge bound, inlined and stored ISO 2024-01-01: thirteen days off, with no error and
+  an unequal round trip. `LocalDateTimeSet<T>` and `YearMonthSet<T>` likewise; against live
+  PostgreSQL a Julian-January parameter matched a row holding ISO January. The closed sets convert
+  such a value to ISO; a wrapper arity can only build its element by parsing, so it now **refuses**
+  it with `ArgumentException` — in `From`, collection expressions and reads, and as the probe of
+  `Contains`/`Add`/`Remove` — and the EF Core bridge refuses one as a bare operand. **If you wrapped
+  non-ISO values, convert them with `WithCalendar(CalendarSystem.Iso)` first.**
 
 - **⚠️ A culture provider no longer changes the literal.** `Parse(s, provider)` handed the provider
   to the element parser, and `ToString(null, provider)` to the element formatter. `th-TH` uses the
@@ -150,9 +242,11 @@ OpenAPI transformer to copy. The
     different value from the column, so `Doc.Period == period` could miss the row it was saved
     from and `Contains` disagreed at the bounds. Materializing from the document now gives what
     materializing from a native column gives.
-  - **`ExecuteUpdate` of a value set inside the document is refused** at query compilation: EF Core
-    writes it with `to_jsonb`, storing a JSON array the document cannot hold, after which the row no
-    longer loads. Ranges and multiranges can be set; the whole JSON property too.
+  - **`ExecuteUpdate` of a value set inside the document is refused**: EF Core writes it with
+    `to_jsonb`, storing a JSON array the document cannot hold, after which the row no longer loads.
+    The refusal reads the translated `UPDATE`, so a join or `EF.Property` cannot reach past it.
+    Ranges, multiranges, a whole complex property holding a set, and the whole JSON property can be
+    set.
   - `SaveChanges` (complex and owned, nested, null and empty kept apart) and the operators inside
     the document were checked against a live server, `ExecuteUpdate` to `null` fails in Npgsql for
     any type, and EF Core refuses `ExecuteUpdate` on owned JSON types — `docs/efcore.md` has the
@@ -187,6 +281,24 @@ OpenAPI transformer to copy. The
   exists. The query interceptor now retypes it to its range type; the literal goes through the
   store text like any other constant. `Contains`, `Overlaps`, captured variables and `EF.Constant`
   were never affected. `InlineRangeConstantExecutionTests` (integration) runs one per range type.
+
+- **⚠️ A server-computed value set `Union` is refused wherever it would answer wrongly (EF Core).**
+  `Union` translates to `array_cat`, which concatenates; 8.0.0's LINQ-level refusal caught only
+  `==`/`Equals` in predicates and `Count` over a bare union, and its claim that a projection is
+  client-evaluated was false. Against live PostgreSQL, with `{a,c} ∪ {a,b}` and target `{a,b,c}`: a
+  projected comparison answered `false`, a ternary or `??` around the union matched 0 rows,
+  `GroupBy` made 2 groups where memory makes 1, `Distinct().Count()` said 2, and `ExecuteUpdate`
+  stored `{a,c,a,b}`. The refusal now runs on the final SQL tree, through a decorator around the
+  provider's `IRelationalParameterBasedSqlProcessorFactory`, and follows a union through
+  `array_remove`, `CASE`, `COALESCE` and subquery columns. It may still feed `@>`, `<@`, `&&`,
+  `Remove`, `IsEmpty`, or the outermost projection, which materializes canonical.
+  `UnionCanonicalityTests` (integration) executes every shape and the legal compositions.
+
+- **A NodaTime range's element operand in another calendar was compared by its own fields (EF
+  Core).** `LocalDateRange` and `LocalDateTimeRange` passed no ISO normalization for an operand, so
+  `Contains(EF.Constant(julianDate))` rendered the Julian year, month and day as if they were ISO
+  and missed its row, and a `LocalDate` parameter threw inside Npgsql. The operand is now converted
+  to ISO, as the bounds are and as the NodaTime sets already did.
 
 ### Added
 

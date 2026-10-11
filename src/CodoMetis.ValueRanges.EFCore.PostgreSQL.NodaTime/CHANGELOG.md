@@ -14,7 +14,7 @@ covers all four packages, which share one version number and release together.
   because a query into the document casts the text to `daterange`/`date[]`, which only reads
   dates. Reads validate month alignment. `YearMonthRangeJsonValueReaderWriter`,
   `YearMonthRangeSetJsonValueReaderWriter` and `YearMonthSetJsonValueReaderWriter` are public for
-  compiled models. The wrapper `YearMonthSet<T>` is written in the date form too; its own
+  compiled models (`dotnet ef dbcontext optimize`; `--nativeaot` is not supported yet). The wrapper `YearMonthSet<T>` is written in the date form too; its own
   `{2026-02}` literal could not be cast, so every query into it failed.
 - **NodaTime values written as text at the database's resolution.** In a JSON document and in a SQL
   constant, `Instant`, `LocalDateTime` and `LocalTime` carried all nine fraction digits, which the
@@ -25,6 +25,13 @@ covers all four packages, which share one version number and release together.
   constant of an `InstantSet` or `LocalTimeSet` probe — and of an `InstantRange` or
   `LocalDateTimeRange` element operand — which was Npgsql's nine-digit literal. See
   `CodoMetis.ValueRanges.EFCore.PostgreSQL` 9.0.0.
+- **A `LocalDateRange` or `LocalDateTimeRange` element operand in another calendar was compared by
+  its own fields.** `Contains(EF.Constant(julianDate))` rendered the Julian year, month and day as
+  if they were ISO and missed its row, and a `LocalDate` parameter threw inside Npgsql. The operand
+  is now converted to ISO, as the bounds are and as the NodaTime sets already did.
+- **⚠️ A non-ISO element of `LocalDateSet<T>`, `LocalDateTimeSet<T>` or `YearMonthSet<T>` is
+  refused as a bare operand** instead of being bound, inlined or written as the ISO date its own
+  calendar's fields spell (a Julian January parameter matched rows holding ISO January).
 
 ## [8.0.0] — 2026-08-17
 

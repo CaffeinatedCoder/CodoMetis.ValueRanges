@@ -92,7 +92,7 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
     /// Formats a <see cref="LocalTime"/> value using ISO 8601 (<c>HH:mm:ss</c> with optional subseconds) by default.
     /// </summary>
     public static string FormatValue(LocalTime value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.Time.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 
@@ -103,7 +103,7 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
     /// </summary>
     static JsonConverter<LocalTime>? IValueSetFactory<LocalTimeSet, LocalTime>.ElementJsonConverter
-        => ValueSetTextElementJsonConverter<LocalTimeSet, LocalTime>.Instance;
+        => NodaElementJson.LocalTime;
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{09:00:00,17:30:00}</c>, <c>{}</c>) into a
@@ -243,7 +243,7 @@ public sealed class LocalTimeSet<TElement> :
     /// <summary>Formats an element using extended ISO 8601 (<c>HH:mm:ss.FFFFFFFFF</c>) by
     /// default — see the class remarks.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? RoundTripFormat, provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string

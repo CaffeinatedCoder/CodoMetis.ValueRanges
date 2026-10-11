@@ -107,7 +107,7 @@ public sealed class LocalDateTimeSet : IValueSet<LocalDateTime>, IValueSetFactor
     /// Formats a <see cref="LocalDateTime"/> value using ISO 8601 (<c>uuuu-MM-ddTHH:mm:ss</c> with optional subseconds) by default.
     /// </summary>
     public static string FormatValue(LocalDateTime value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.DateTime.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 
@@ -118,7 +118,7 @@ public sealed class LocalDateTimeSet : IValueSet<LocalDateTime>, IValueSetFactor
     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
     /// </summary>
     static JsonConverter<LocalDateTime>? IValueSetFactory<LocalDateTimeSet, LocalDateTime>.ElementJsonConverter
-        => ValueSetTextElementJsonConverter<LocalDateTimeSet, LocalDateTime>.Instance;
+        => NodaElementJson.LocalDateTime;
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{2024-06-01T08:00:00,2024-06-02T08:00:00}</c>, <c>{}</c>) into a
@@ -185,6 +185,14 @@ public sealed class LocalDateTimeSet : IValueSet<LocalDateTime>, IValueSetFactor
 /// Canonical order is the element's own <see cref="IComparable{T}"/>, which for generated
 /// wrappers delegates to the backing <see cref="LocalDateTime"/>.
 /// </para>
+/// <para>
+/// The element must be backed by a value in the ISO calendar. The closed <see cref="LocalDateTimeSet"/>
+/// converts a non-ISO value; this arity cannot build its element from an ISO value except by parsing
+/// it, so an element whose ISO text reads back as a different element — what a non-ISO value does,
+/// since the pattern spells its own calendar's fields — is refused with
+/// <see cref="ArgumentException"/> in <c>From</c>, in a collection expression, on read, and as the
+/// probe of <c>Contains</c>, <c>Add</c> and <c>Remove</c>.
+/// </para>
 /// </remarks>
 /// <typeparam name="TElement">The validated element type backed by a <see cref="LocalDateTime"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
@@ -216,13 +224,29 @@ public sealed class LocalDateTimeSet<TElement> :
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.Empty"/>
     public static LocalDateTimeSet<TElement> Empty { get; } = new([]);
 
-    /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
-    public static LocalDateTimeSet<TElement> From(IEnumerable<TElement> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, Comparer<TElement>.Default));
+    // An element backed by a calendar other than ISO is refused rather than stored as the ISO value
+    // its fields spell; the closed set converts one, which a wrapper cannot. See IsoWrapperElement.
+    private static TElement RequireIso(TElement value) => IsoWrapperElement.Require<LocalDateTimeSet<TElement>, TElement>(value);
+
+    // Contains, Add and Remove refuse the probe From would refuse: against the empty set nothing is
+    // compared, so a non-ISO probe answered false and Add stored it.
+    TElement IValueSet<TElement>.NormalizeElement(TElement value) => RequireIso(value);
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element is backed by a value in a calendar other than ISO.</exception>
+    public static LocalDateTimeSet<TElement> From(IEnumerable<TElement> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return FromTrusted(ValueSetCore.Canonicalize(values.Select(RequireIso), Comparer<TElement>.Default));
+    }
+
+    /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element is backed by a value in a calendar other than ISO.</exception>
     public static LocalDateTimeSet<TElement> From(params ReadOnlySpan<TElement> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, Comparer<TElement>.Default));
+    {
+        foreach (var value in values) RequireIso(value);
+        return FromTrusted(ValueSetCore.Canonicalize(values, Comparer<TElement>.Default));
+    }
 
     internal static LocalDateTimeSet<TElement> FromTrusted(ImmutableArray<TElement> elements)
         => elements.IsEmpty ? Empty : new(elements);
@@ -258,7 +282,7 @@ public sealed class LocalDateTimeSet<TElement> :
     /// <summary>Formats an element using extended ISO 8601
     /// (<c>uuuu-MM-ddTHH:mm:ss.FFFFFFFFF</c>) by default — see the class remarks.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? RoundTripFormat, provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string

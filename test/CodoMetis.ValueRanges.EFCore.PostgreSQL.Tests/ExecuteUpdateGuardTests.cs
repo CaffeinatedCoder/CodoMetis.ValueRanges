@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests;
@@ -41,8 +39,8 @@ public sealed class UpdateTestContext : DbContext
 }
 
 /// <summary>
-/// <c>ExecuteUpdate</c> setting a value set inside a JSON column is refused at query compilation — no
-/// database needed, the refusal comes before a connection. What stays allowed is exercised against a
+/// <c>ExecuteUpdate</c> setting a value set inside a JSON column is refused while the command is built —
+/// no database needed, the refusal comes before a connection. What stays allowed is exercised against a
 /// live server in <c>ExecuteUpdateJsonTests</c> (integration).
 /// </summary>
 /// <remarks>
@@ -74,24 +72,5 @@ public sealed class ExecuteUpdateGuardTests
             () => context.Rows.ExecuteUpdate(s => s.SetProperty(r => r.Doc.Nested.Flags, StringSet.From("a"))));
 
         StringAssert.Contains(refusal.Message, "'Doc.Nested.Flags'");
-    }
-
-    /// <summary>
-    /// The guard matches EF Core's private lowering of <c>ExecuteUpdate</c> by its shape. If an EF
-    /// upgrade changes it, the guard would silently stop recognising the call; this fails instead.
-    /// </summary>
-    [TestMethod]
-    public void EfCoresExecuteUpdateLowering_HasTheShapeTheGuardMatches()
-    {
-        var lowering = typeof(EntityFrameworkQueryableExtensions)
-                      .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
-                      .Where(m => m is { Name: "ExecuteUpdate", IsGenericMethodDefinition: true })
-                      .Where(m => m.GetParameters() is [_, { ParameterType: var setters }] && setters == typeof(IReadOnlyList<ITuple>))
-                      .ToList();
-
-        Assert.AreEqual(
-            1, lowering.Count,
-            "EF Core no longer lowers ExecuteUpdate to ExecuteUpdate<TSource>(IQueryable<TSource>, IReadOnlyList<ITuple>). "
-          + "Update JsonValueSetUpdateGuard in ValueRangesQueryExpressionInterceptor to the new shape.");
     }
 }

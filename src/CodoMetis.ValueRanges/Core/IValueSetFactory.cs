@@ -126,12 +126,13 @@ public interface IValueSetFactory<TSet, T> : ISpanParsable<TSet>, IFormattable
     /// <see cref="FormatValue"/> for each element.
     /// </summary>
     /// <param name="format">
-    /// A format string forwarded to the element formatter, or <see langword="null"/>
-    /// to use the type-specific default (ISO 8601 for date/time types).
+    /// A format string forwarded to the element formatter, or <see langword="null"/> or empty
+    /// for the literal — the type-specific default (ISO 8601 for date/time types).
     /// </param>
     /// <param name="provider">
-    /// An <see cref="IFormatProvider"/> forwarded to the element formatter;
-    /// <see langword="null"/> defaults to the invariant culture.
+    /// An <see cref="IFormatProvider"/> forwarded to the element formatter alongside an explicit
+    /// <paramref name="format"/>. Without one it is ignored: the literal is a wire format and is
+    /// always invariant.
     /// </param>
     string IFormattable.ToString(string? format, IFormatProvider? provider)
         => SetFormat.Format<TSet, T>((IValueSet<T>)this, format, provider);

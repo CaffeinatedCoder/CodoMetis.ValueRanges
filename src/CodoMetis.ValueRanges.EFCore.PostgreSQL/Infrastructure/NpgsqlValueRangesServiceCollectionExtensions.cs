@@ -35,6 +35,10 @@ public static class NpgsqlValueRangesServiceCollectionExtensions
            .TryAdd<IAggregateMethodCallTranslatorPlugin, ValueRangesAggregateMethodCallTranslatorPlugin>()
            .TryAdd<IInterceptor, ValueRangesQueryExpressionInterceptor>();
 
+        // No plugin seam exists after translation, so the final-SQL check decorates the provider's
+        // parameter-based processor rather than replacing it.
+        ValueRangesParameterBasedSqlProcessorFactory.Decorate(serviceCollection);
+
         return serviceCollection;
     }
 }

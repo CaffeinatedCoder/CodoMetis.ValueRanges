@@ -232,9 +232,26 @@ Case("aot-object", () => JsonSerializer.Serialize<object>(h1, ctx.Object));
 Case("aot-dtoset", () => JsonSerializer.Serialize(
     JsonSerializer.Deserialize("[\"2026-01-01T09:30:00+01:00\"]", ctx.DateTimeOffsetSet)!, ctx.DateTimeOffsetSet));
 Case("aot-dtoset-offsetless", () => JsonSerializer.Deserialize("[\"2026-01-01T09:30:00\"]", ctx.DateTimeOffsetSet)!.ToString());
+// Declared as an interface: written through the runtime type's contract, which the context lists.
+Case("aot-interface", () => JsonSerializer.Serialize(new Declared(h1, StringSet.From("alpha")), ctx.Declared));
+// A union converter on the options reaches the variant through object, and reads into a variant.
+var tagged = new SmokeJson(new JsonSerializerOptions { Converters = { new TaggedDateRange() } });
+Case("aot-union-converter", () => JsonSerializer.Serialize<object>(h1, tagged.Object)
+                                + " " + JsonSerializer.Deserialize("\"tag:[2026-01-01,2026-06-30]\"", tagged.Finite));
 #pragma warning disable IL2026 // TypeDescriptor is not trim-safe in general; the converter lookup is what is tested.
 Case("aot-typeconverter", () => TypeDescriptor.GetConverter(typeof(RangeSet<Int64Range, long>)).ConvertFromInvariantString("{[1,5]}")!.ToString()!);
 #pragma warning restore IL2026
+
+public sealed record Declared(CodoMetis.ValueRanges.Core.IRange<DateOnly> Period, CodoMetis.ValueRanges.Core.IValueSet<string> Tags);
+
+public sealed class TaggedDateRange : JsonConverter<DateRange>
+{
+    public override DateRange Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => DateRange.Parse(reader.GetString()!["tag:".Length..], null);
+
+    public override void Write(Utf8JsonWriter writer, DateRange value, JsonSerializerOptions options)
+        => writer.WriteStringValue($"tag:{value}");
+}
 
 public readonly record struct Key(string Value) : IFormattable, IParsable<Key>
 {
@@ -258,6 +275,7 @@ public readonly record struct Key(string Value) : IFormattable, IParsable<Key>
 [JsonSerializable(typeof(object))]
 [JsonSerializable(typeof(DateTimeOffsetSet))]
 [JsonSerializable(typeof(DateTimeOffset))]
+[JsonSerializable(typeof(Declared))]
 internal partial class SmokeJson : JsonSerializerContext;
 
 public readonly record struct Code(int Value) : IFormattable, IParsable<Code>, IComparable<Code>
@@ -309,6 +327,8 @@ assert_contains 'aot-object="[2026-01-01,2026-06-30]"'         "$work/aot.native
 assert_contains 'aot-dtoset=["2026-01-01T09:30:00+01:00"]'     "$work/aot.native.out" "AOT: a DateTimeOffsetSet round-trips"
 assert_contains 'aot-dtoset-offsetless=FAILED JsonException'   "$work/aot.native.out" "AOT: a DateTimeOffsetSet element without an offset is refused"
 assert_contains 'aot-typeconverter={[1,5]}'                    "$work/aot.native.out" "AOT: TypeConverter for a RangeSet the program never constructs"
+assert_contains 'aot-interface={"Period":"[2026-01-01,2026-06-30]","Tags":["alpha"]}' "$work/aot.native.out" "AOT: interface-declared properties write through the runtime type"
+assert_contains 'aot-union-converter="tag:[2026-01-01,2026-06-30]" [2026-01-01,2026-06-30]' "$work/aot.native.out" "AOT: a union converter on the options reaches the variant"
 
 # ── EF Core + NodaTime satellite: the whole dependency chain ──────────────────────────────────────
 

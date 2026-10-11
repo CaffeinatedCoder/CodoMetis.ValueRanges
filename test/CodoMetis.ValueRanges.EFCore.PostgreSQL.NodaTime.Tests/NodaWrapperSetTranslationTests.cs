@@ -211,4 +211,47 @@ public sealed class NodaWrapperSetTranslationTests
         StringAssert.Contains(clause, "r.\"WrappedHolidays\" @> ARRAY[@");
         StringAssert.Contains(clause, "]::date[]");
     }
+
+    // -------------------------------------------------------------------------
+    // A bare element backed by a calendar other than ISO
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// The bridge formats the element with the family's ISO pattern and parses the text as the
+    /// store primitive, and the pattern formats a value in its own calendar's fields: a wrapper
+    /// over a Julian 2024-01-01 — ISO 2024-01-14 — rendered <c>ARRAY['2024-01-01']::date[]</c> and
+    /// queried for a date thirteen days off, silently. The bridge now refuses an element whose
+    /// primitive does not read back as that element, as the in-memory set refuses it.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSets_NonIsoElementOperand_IsRefused()
+    {
+        var julianDay   = new CalendarDay(new LocalDate(2024, 1, 1, CalendarSystem.Julian));
+        var julianMark  = new WallClockStamp(new LocalDateTime(2024, 1, 1, 8, 0, CalendarSystem.Julian));
+        var julianMonth = new BillingMonth(new YearMonth(2024, 1, CalendarSystem.Julian));
+
+        AssertRefused(db => db.Reservations.Where(r => r.WrappedHolidays.Contains(EF.Constant(julianDay))));
+        AssertRefused(db => db.Reservations.Where(r => r.WrappedMarks.Contains(EF.Constant(julianMark))));
+        AssertRefused(db => db.Reservations.Where(r => r.WrappedMonths.Contains(EF.Constant(julianMonth))));
+    }
+
+    private static void AssertRefused(Func<NodaTestDbContext, IQueryable<Reservation>> query)
+    {
+        string sql;
+        try
+        {
+            sql = Where(query);
+        }
+        catch (Exception ex) when (Causes(ex).OfType<ArgumentException>().Any(a => a.Message.Contains("ISO", StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        Assert.Fail($"A non-ISO element reached SQL as another value: {sql}");
+    }
+
+    private static IEnumerable<Exception> Causes(Exception? ex)
+    {
+        for (; ex is not null; ex = ex.InnerException) yield return ex;
+    }
 }

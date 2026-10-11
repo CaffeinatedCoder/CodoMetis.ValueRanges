@@ -44,14 +44,14 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// <b>Composing on a translated <c>Union</c>.</b> <c>array_cat</c> concatenates rather than
 /// canonicalizing, which is invisible to the operators above (all order- and
 /// multiplicity-insensitive) and to materialization (reads route through <c>From</c>), but not
-/// to everything: <c>Count</c> over a union is refused by <c>ValueSetsMemberTranslator</c>
-/// rather than counting duplicates — including through a wrapping <c>Remove</c>, which
-/// preserves the concatenation rather than canonicalizing it — and <b>equality over a union is
-/// wrong and cannot be intercepted</b> — EF emits the <c>=</c> itself, so
-/// <c>Tags.Union(x) == y</c> compares a concatenated array against a canonical one and is false
-/// even where the in-memory union equals <c>y</c>. The same applies to
-/// <c>Tags.Union(x).Remove(e) == y</c>, for the same reason and with the same remedy. Canonicalizing server-side is not an option: PostgreSQL has no
-/// array-distinct function (verified against 18.4), so it needs a
+/// to everything: equality, <c>Count</c>, grouping, ordering, <c>DISTINCT</c> and an
+/// <c>ExecuteUpdate</c> value all see the duplicates and the operand order — including through a
+/// wrapping <c>Remove</c>, which preserves the concatenation rather than canonicalizing it. EF
+/// emits several of those itself (the <c>=</c> of <c>Tags.Union(x) == y</c>, a <c>GROUP BY</c>
+/// key), so no translator can intercept them; <see cref="ValueSetSqlGuard"/> refuses them on the
+/// final SQL instead, and <c>ValueSetsMemberTranslator</c> declines <c>Count</c> so that a
+/// projection falls back to the client. Canonicalizing server-side is not an option: PostgreSQL
+/// has no array-distinct function (verified against 18.4), so it needs a
 /// <c>SELECT DISTINCT … ORDER BY</c> subquery, and the ordering could not match CLR canonical
 /// order anyway (<c>text</c> orders by database collation, not ordinal; <c>uuid</c> orders
 /// byte-wise where <see cref="Guid.CompareTo(Guid)"/> orders field-wise). Materialize the
@@ -124,9 +124,10 @@ internal sealed class ValueSetsMethodCallTranslator(
             case nameof(ValueSetExtensions.Union) when arguments.Count == 2:
                 // The server-side result is unsorted and undeduplicated — fine inside
                 // predicates (the operators above ignore both), and a materialized result
-                // re-canonicalizes on read.
+                // re-canonicalizes on read. Emitted under a placeholder name that only
+                // ValueSetSqlGuard renames to array_cat, so the guard cannot be skipped silently.
                 return sqlExpressionFactory.Function(
-                    "array_cat",
+                    ValueSetSqlGuard.UnguardedUnion,
                     [Set(0), Set(1)],
                     nullable: true,
                     argumentsPropagateNullability: [true, true],

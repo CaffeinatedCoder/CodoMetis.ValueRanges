@@ -47,17 +47,19 @@ internal static class SetTypeRegistry
             // The element format is null wherever the element's own default text form already
             // round-trips through the primitive. That is true of Guid and the integers, and of
             // decimal — and false of every temporal below, whose default form silently drops
-            // sub-seconds (and, for DateTime, the Kind).
+            // sub-seconds (and, for DateTime, the Kind). The numeric families read the element's text
+            // with their own element parser, so a group separator is refused here exactly as it is by
+            // DecimalSet.Parse: NumberStyles.Number read a culture-leaking "1,5" as fifteen.
             [typeof(GuidSet<>)] = Bridged<Guid>(
                 "uuid", null, static text => Guid.Parse(text, Invariant), Text),
             [typeof(Int16Set<>)] = Bridged<short>(
-                "smallint", null, static text => short.Parse(text, Invariant), Text),
+                "smallint", null, static text => Int16Set.ParseValue(text, Invariant), Text),
             [typeof(Int32Set<>)] = Bridged<int>(
-                "integer", null, static text => int.Parse(text, Invariant), Text),
+                "integer", null, static text => Int32Set.ParseValue(text, Invariant), Text),
             [typeof(Int64Set<>)] = Bridged<long>(
-                "bigint", null, static text => long.Parse(text, Invariant), Text),
+                "bigint", null, static text => Int64Set.ParseValue(text, Invariant), Text),
             [typeof(DecimalSet<>)] = Bridged<decimal>(
-                "numeric", null, static text => decimal.Parse(text, NumberStyles.Number, Invariant), Text),
+                "numeric", null, static text => DecimalSet.ParseValue(text, Invariant), Text),
 
             // ParseExact, not Parse: an element that ignores the format specifier and hands back
             // its own default form is a contract violation, and the strict parse turns it into
@@ -80,13 +82,10 @@ internal static class SetTypeRegistry
             // The same store-side normalization the closed siblings apply: PostgreSQL
             // `timestamp` has no time zone, so elements are written as wall-clock time with
             // DateTimeKind.Unspecified; `timestamptz` stores an instant, so they normalize to
-            // UTC. RoundtripKind is what makes the first one reproduce SpecifyKind on the
-            // original value instead of reinterpreting a UTC element as local.
+            // UTC. The wall clock is read as written (ParseRoundTripWallClock).
             [typeof(DateTimeSet<>)] = Bridged<DateTime>(
                 "timestamp without time zone", "O",
-                static text => DateTime.SpecifyKind(
-                    DateTime.ParseExact(text, "O", Invariant, DateTimeStyles.RoundtripKind),
-                    DateTimeKind.Unspecified),
+                ParseRoundTripWallClock,
                 static value => value.ToString("O", Invariant),
                 storeValue: StoreTemporal.Truncate, storeText: true),
             [typeof(DateTimeOffsetSet<>)] = Bridged<DateTimeOffset>(
@@ -99,6 +98,32 @@ internal static class SetTypeRegistry
         }.ToFrozenDictionary();
 
     private static CultureInfo Invariant => CultureInfo.InvariantCulture;
+
+    /// <summary>
+    /// The wall clock of a <c>"O"</c> text, as <see cref="DateTimeKind.Unspecified"/>: the fixed-width
+    /// date and time before its kind suffix — nothing, <c>Z</c> or <c>±HH:mm</c> — with the suffix
+    /// checked but never applied.
+    /// </summary>
+    /// <remarks>
+    /// <c>timestamp</c> stores no zone, and the core grammar keeps a local value's wall clock rather
+    /// than converting its offset (PostgreSQL's rule for <c>timestamp</c> input). Reading the text
+    /// with <see cref="DateTimeStyles.RoundtripKind"/> would convert it into this machine's zone,
+    /// which moves a wall clock the zone skips or repeats.
+    /// </remarks>
+    private static DateTime ParseRoundTripWallClock(string text)
+    {
+        const int wallClockLength = 27;   // yyyy-MM-ddTHH:mm:ss.fffffff
+        var suffix = text.Length >= wallClockLength ? text.AsSpan(wallClockLength) : default;
+        var validSuffix = suffix.IsEmpty
+                       || suffix is "Z"
+                       || suffix.Length == 6 && suffix[0] is '+' or '-' && suffix[3] == ':'
+                          && char.IsAsciiDigit(suffix[1]) && char.IsAsciiDigit(suffix[2])
+                          && char.IsAsciiDigit(suffix[4]) && char.IsAsciiDigit(suffix[5]);
+
+        return text.Length >= wallClockLength && validSuffix
+            ? DateTime.ParseExact(text.AsSpan(0, wallClockLength), "yyyy-MM-dd'T'HH:mm:ss.fffffff", Invariant, DateTimeStyles.None)
+            : throw new FormatException($"'{text}' is not a round-trip (\"O\") DateTime.");
+    }
 
     /// <summary>The invariant text form of a primitive whose default already round-trips.</summary>
     private static string Text<TPrimitive>(TPrimitive value) where TPrimitive : IFormattable
@@ -121,6 +146,10 @@ internal static class SetTypeRegistry
     /// <param name="storeValue">The primitive at the store's resolution — a temporal family's truncation.</param>
     /// <param name="storeText">Whether a JSON document holds the store primitives — the temporal families.</param>
     /// <param name="parseStoreText">The store primitives back from that text, where the set cannot parse it.</param>
+    /// <param name="requireRoundTrip">
+    /// Whether an element whose primitive does not read back as that element is refused — the
+    /// calendar-bearing NodaTime families, whose ISO pattern spells a non-ISO value's own fields.
+    /// </param>
     internal static Func<Type, ISetTypeDefinition> Bridged<TPrimitive>(
         string                                 elementStoreType,
         string?                                elementFormat,
@@ -129,7 +158,8 @@ internal static class SetTypeRegistry
         Func<TPrimitive, string>?              literalText    = null,
         Func<TPrimitive, TPrimitive>?          storeValue     = null,
         bool                                   storeText      = false,
-        Func<string, IEnumerable<TPrimitive>>? parseStoreText = null
+        Func<string, IEnumerable<TPrimitive>>? parseStoreText = null,
+        bool                                   requireRoundTrip = false
     )
         where TPrimitive : struct
         => closed =>
@@ -139,7 +169,8 @@ internal static class SetTypeRegistry
 
             return (ISetTypeDefinition)Activator.CreateInstance(
                 definitionType,
-                [elementStoreType, elementFormat, parsePrimitive, formatPrimitive, literalText, storeValue, storeText, parseStoreText])!;
+                [elementStoreType, elementFormat, parsePrimitive, formatPrimitive, literalText, storeValue, storeText, parseStoreText,
+                 requireRoundTrip])!;
         };
 
     private static volatile Snapshot Current = BuildSnapshot(

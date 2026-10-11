@@ -22,6 +22,25 @@ covers all four packages, which share one version number and release together.
   bounds and elements also read PostgreSQL's `infinity` / `-infinity`, as the extremes Npgsql maps
   them from (`MaxValue` / `MinValue`, `MaxIsoValue` / `MinIsoValue`).
 
+### Fixed
+
+- **⚠️ `AddNodaTimeRangeConverters()` no longer shadows `ConfigureForNodaTime`, and refuses bare
+  non-ISO values.** Registered first, its element converters won for all five types; now any other
+  converter registered for the type wins, in either order. A bare `LocalDate`, `LocalDateTime` or
+  `YearMonth` in a non-ISO calendar was written in that calendar's fields — a Julian 2024-01-01
+  read back as ISO 2024-01-01, thirteen days off — and is now refused with `ArgumentException`, as
+  NodaTime's converter does. Sets and ranges are unaffected.
+- **⚠️ `LocalDateSet<T>`, `LocalDateTimeSet<T>` and `YearMonthSet<T>` refuse an element backed by
+  a non-ISO value.** Its ISO text spelled the other calendar's fields — a Julian 2024-01-01 was
+  written, and read back, as ISO 2024-01-01 — silently. The element is refused with
+  `ArgumentException` in `From`, collection expressions and reads, and as the
+  `Contains`/`Add`/`Remove` probe.
+- **`HH:mm` is accepted** for `LocalTime`, the time part of `LocalDateTime`, and an `Instant` with
+  its offset or `Z`, as the core types accept it; it was a `FormatException`.
+- The core fixes to literal grammar (empty format string, quoted empty bounds, array escapes) and
+  to JSON precedence (union converters reaching variants, interface-declared properties) apply to
+  the NodaTime types too. See `CodoMetis.ValueRanges` 9.0.0.
+
 ### Added
 
 - **`Deconstruct` on every `Finite` variant, and on the unbounded variants of `LocalDateRange`,

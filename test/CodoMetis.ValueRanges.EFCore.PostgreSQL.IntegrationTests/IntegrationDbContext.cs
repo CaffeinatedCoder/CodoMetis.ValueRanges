@@ -182,6 +182,10 @@ public sealed class IntegrationDbContext : DbContext
 
     public DbSet<TemporalParityRow> TemporalParityRows => Set<TemporalParityRow>();
 
+    public DbSet<UpdateGuardRow> UpdateGuardRows => Set<UpdateGuardRow>();
+
+    public DbSet<UpdateGuardNote> UpdateGuardNotes => Set<UpdateGuardNote>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseNpgsql(
             ContainerLifecycle.ConnectionString!,
@@ -216,6 +220,21 @@ public sealed class IntegrationDbContext : DbContext
             row.ComplexProperty(r => r.Native);
             row.ComplexProperty(r => r.Doc, doc => doc.ToJson());
         });
+
+        // One complex CLR type used twice: inside a jsonb document and as table-split columns, so the
+        // ExecuteUpdate JSON refusal is shown to key off what is written, not off the CLR type
+        // (ExecuteUpdateJsonTests). The notes table exists to reach the row through a join.
+        modelBuilder.Entity<UpdateGuardRow>(row =>
+        {
+            row.Property(r => r.Id).ValueGeneratedNever();
+            row.ComplexProperty(r => r.Doc, doc =>
+            {
+                doc.ToJson();
+                doc.ComplexProperty(d => d.Inner);
+            });
+            row.ComplexProperty(r => r.Plain, plain => plain.ComplexProperty(d => d.Inner));
+        });
+        modelBuilder.Entity<UpdateGuardNote>().Property(n => n.Id).ValueGeneratedNever();
 
         // Generates CREATE TYPE timerange AS RANGE (SUBTYPE = time) ahead of the tables.
         modelBuilder.HasPostgresRange("timerange", "time");

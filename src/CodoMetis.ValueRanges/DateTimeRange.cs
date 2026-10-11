@@ -202,7 +202,7 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
     /// preserving full precision and <see cref="DateTimeKind"/>.
     /// </summary>
     public static string FormatValue(DateTime value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? "O", provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? "O" : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Parses a PostgreSQL range literal (e.g. <c>[2024-01-01T00:00:00,2024-12-31T23:59:59)</c>,

@@ -27,7 +27,7 @@ A range says *"every moment between these two"*; a set says *"exactly these mome
 | `LocalTimeSet`     | `LocalTime`     | `time[]`              |
 | `YearMonthSet`     | `YearMonth`     | `date[]` (month-aligned) |
 
-The whole core set algebra applies: `Contains`, `Overlaps`, `IsSubsetOf`/`IsSupersetOf` and their proper variants, `Union`, `Remove`, `Count`, `IsEmpty`, plus client-side `Intersect`/`Except`/`Add` — along with array-literal parsing/formatting, JSON ([one call to set up](#json)), and collection expressions.
+The whole core set algebra applies: `Contains`, `Overlaps`, `IsSubsetOf`/`IsSupersetOf` and their proper variants, `Union`, `Remove`, `Count`, `IsEmpty`, plus client-side `Intersect`/`Except`/`Add` — along with array-literal parsing/formatting, JSON ([no setup needed](#json)), and collection expressions.
 
 ```csharp
 using CodoMetis.ValueRanges;
@@ -88,7 +88,7 @@ JsonSerializer.Serialize(new { Day = new LocalDate(2025, 1, 1), Days = holidays 
 // {"Day":"2025-01-01","Days":["2025-01-01","2025-12-26"]}
 ```
 
-It registers the converter factory plus the same five element converters on the options, so a `LocalDate` property outside a set gets the ISO 8601 form too. Element types already claimed by a registered converter are left alone, which makes it idempotent and order-independent against NodaTime.Serialization.SystemTextJson:
+It registers the converter factory plus the same five element converters on the options, so a `LocalDate` property outside a set gets the ISO 8601 form too. The element converters are a fallback: any other converter on the same options that handles one of the five types is used instead, wherever it was registered. That makes the call idempotent, and NodaTime.Serialization.SystemTextJson stays authoritative in either order:
 
 ```csharp
 var options = new JsonSerializerOptions()
@@ -97,6 +97,10 @@ var options = new JsonSerializerOptions()
 ```
 
 Reach for that package when the payload carries NodaTime types beyond these five.
+
+A bare `LocalDate`, `LocalDateTime` or `YearMonth` in a calendar other than ISO is refused on write with an `ArgumentException`, as NodaTime's own converter refuses it. Its ISO 8601 text would spell the other calendar's fields, so a Julian `LocalDate(2024, 1, 1)` (ISO 2024-01-14) would read back as ISO 2024-01-01. Convert it with `WithCalendar(CalendarSystem.Iso)` first. Sets and ranges never get that far: they convert a non-ISO value to ISO at construction, or reject it (`YearMonth`).
+
+> Before 9.0 the element converters claimed a type by being registered first, so `AddNodaTimeRangeConverters().ConfigureForNodaTime(…)` shadowed NodaTime's converters, and a bare non-ISO value was written in its own calendar's fields with no error.
 
 ## Two documented caveats, dissolved
 
@@ -122,6 +126,7 @@ The core package restricts its element types to domains with a total order that 
 - **Defaults match the core conventions.** `LocalDateRange.CreateFinite` is closed `[start, end]` (discrete); `LocalDateTimeRange`/`InstantRange` default to half-open `[start, end)` (continuous timestamp convention). Discrete canonicalization applies: `(2025-01-01, 2025-01-31)` normalizes to `[2025-01-02, 2025-01-30]`.
 - **The ISO calendar is a construction rule.** `LocalDate.CompareTo` is only defined between dates of the same calendar system, and PostgreSQL `date`/`timestamp` are proleptic Gregorian. `LocalDateRange` and `LocalDateTimeRange` therefore normalize bounds to the ISO calendar at construction (`WithCalendar(CalendarSystem.Iso)` — same day on the timeline, ISO representation). Ranges never hold mixed-calendar bounds, so comparisons cannot throw. A date outside the ISO calendar's year range (far-future non-ISO dates) throws `ArgumentOutOfRangeException` at construction. `YearMonthRange` is stricter: a non-ISO year-month spans parts of two ISO months and has no lossless equivalent, so it **rejects** non-ISO bounds with `ArgumentException` instead of reinterpreting them.
 - **The same calendar rule covers the set types, at every entry point.** `LocalDateSet`/`LocalDateTimeSet` normalize to ISO and `YearMonthSet` rejects non-ISO — not only in `From`, but in `Contains`, `Add` and `Remove`, which take a bare element rather than a set. That matters because `LocalDate.Equals` is calendar-sensitive and `LocalDate.CompareTo` *throws* across calendars: without it, `holidays.Contains(copticDate)` would quietly answer `false` for a date the set actually holds. The EF Core package applies the same normalization to a bare probe bound as a query parameter.
+- **The wrapper arities refuse a non-ISO element instead.** `LocalDateSet<T>`, `LocalDateTimeSet<T>` and `YearMonthSet<T>` cannot convert an element to ISO — the only way to build a `T` from an ISO value is to parse it — so an element backed by a value in another calendar is refused with `ArgumentException`: in `From`, in a collection expression, when reading (JSON through a registered element converter), and as the probe of `Contains`/`Add`/`Remove`. The test is the round trip: the element's ISO text must read back as that element. Before 9.0 a wrapper over a Julian 2024-01-01 — ISO 2024-01-14 — was written as `2024-01-01` to the literal, JSON and the database, and read back thirteen days off. The EF Core package refuses one as a bare query operand too.
 - **`YearMonthRange` follows the discrete conventions.** Closed `[start, end]` by default, one-month step: `[2025-01, 2025-03]` and `[2025-04, 2025-06]` are adjacent and merge; `[2025-01, 2026-01)` canonicalizes to `[2025-01, 2025-12]`. Literals use the ISO `uuuu-MM` form: `[2025-01,2025-12]`.
 - **Formatting is culture-free.** Literals use NodaTime's ISO patterns: `[2025-01-01,2025-03-31]`, `[2024-06-01T08:00:00,2024-06-01T17:30:00)`, `[2024-06-01T00:00:00Z,2024-07-01T00:00:00Z)`. Subsecond digits appear only when present, up to nanosecond precision.
 - **Parsing accepts the PostgreSQL wire form too, and nothing looser.** Besides its own canonical output, `Parse` handles literals as `psql` prints them: space-separated timestamps (`"2024-06-01 00:00:00"`), numeric offsets (`"2024-06-01 14:30:00+02"` — converted to the instant they denote) and `infinity` / `-infinity` for an `Instant`, `LocalDate` or `LocalDateTime` bound, read as the extreme value Npgsql maps them from. The wrapper arities read the text with the same ISO patterns before their element sees it.
@@ -145,7 +150,9 @@ InstantRange range = interval.ToInstantRange();          // [start, end) Finite
 Interval back      = range.ToInterval();                 // round-trips
 
 if (LocalDateRange.Parse("[2025-01-01,2025-01-31]", null) is LocalDateRange.Finite finite)
+{
     DateInterval dates = finite.ToDateInterval();
+}
 ```
 
 What the range types add over `Interval`/`DateInterval`: the empty range, unbounded date ranges, all four bound-inclusiveness combinations, the full set algebra (`Union`/`Except`/`Intersect`/`Merge`/`Complement`), multiranges, PostgreSQL literals, and LINQ-to-SQL translation.

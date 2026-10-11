@@ -15,14 +15,14 @@ Shipping projects live under `src/`, test projects under `test/`.
 and [docs/testing.md](docs/testing.md) behind it — worth reading before changing a range type, a
 value set family, or the EF plugin.
 
-The integration suite spins up a real PostgreSQL container via Testcontainers. Without Docker it
-goes inconclusive locally, so skip it if you need to:
+The two integration projects (`test/*IntegrationTests/`) spin up a real PostgreSQL container via
+Testcontainers. Without Docker they go inconclusive locally, so skip them if you need to:
 
 ```bash
-dotnet test test/CodoMetis.ValueRanges.Tests
+dotnet test --filter "FullyQualifiedName!~IntegrationTests"
 ```
 
-On CI the same suite **fails** rather than skipping. An unreachable container must not quietly
+On CI they **fail** rather than skip. An unreachable container must not quietly
 retire the layer that is the authority on PostgreSQL semantics while the build reports green.
 
 ## The quality bar
