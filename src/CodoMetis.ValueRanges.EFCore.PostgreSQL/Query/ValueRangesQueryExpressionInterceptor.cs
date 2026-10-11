@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
-/// Pre-translation passes over the query: one rewrite and two refusals.
+/// Pre-translation passes over the query: two rewrites and two refusals.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,7 +16,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// <c>-</c>) into their <c>Union</c> / <c>Intersect</c> / <c>Except</c> method-call equivalents.
 /// EF Core translates user-defined operators as plain SQL binary operators without consulting
 /// method call translators; the rewrite routes them through
-/// <see cref="ValueRangesMethodCallTranslator"/> instead, producing valid multirange SQL.
+/// <see cref="ValueRangesMethodCallTranslator"/> instead, producing valid multirange SQL. A second
+/// rewrite gives a range constant EF Core inlined its union type — see
+/// <see cref="RangeVariantConstantRetyper"/>.
 /// </para>
 /// <para>
 /// The refusals reject comparing a server-computed value set <c>Union</c> for equality — see
@@ -31,7 +33,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     {
         UnionEqualityGuard.Instance.Visit(queryExpression);
         if (eventData.Context?.Model is { } model) new JsonValueSetUpdateGuard(model).Visit(queryExpression);
-        return RangeSetOperatorRewriter.Instance.Visit(queryExpression);
+        return RangeVariantConstantRetyper.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression));
     }
 
     /// <summary>
@@ -239,6 +241,40 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
 
                 _ => false
             };
+    }
+
+    /// <summary>
+    /// Retypes a range constant that EF Core inlined from the runtime type of its value — the sealed
+    /// variant — to the range type itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EF Core evaluates an expression that depends on nothing in the query — a range built inline,
+    /// <c>r.Period == DateRange.CreateFinite(new DateOnly(2026, 1, 1), new DateOnly(2026, 2, 1))</c>,
+    /// <c>Int32Range.Parse("[1,5]", null)</c> — on the client before translation, and inlines the
+    /// result as a constant typed by its value: <c>DateRange.Finite</c>, under a conversion back to
+    /// <c>DateRange</c>. No type mapping exists for a variant, and EF Core does not carry the column's
+    /// mapping across to an operand of another CLR type, so <c>==</c>, <c>!=</c>, <c>Equals</c> and a
+    /// conditional failed with "does not have a type mapping assigned". The method translators
+    /// (<c>Contains</c>, <c>Overlaps</c>, …) were unaffected — they type their operands themselves —
+    /// and so were a captured variable and <c>EF.Constant</c>, which EF types by the declared type.
+    /// </para>
+    /// <para>
+    /// A factory call that depends on a column never reaches here as a constant; the method call
+    /// translator turns it into the range constructor function.
+    /// </para>
+    /// </remarks>
+    private sealed class RangeVariantConstantRetyper : ExpressionVisitor
+    {
+        public static readonly RangeVariantConstantRetyper Instance = new();
+
+        protected override Expression VisitConstant(ConstantExpression node)
+            => node.Value is not null
+               && node.Type.IsSealed
+               && node.Type.BaseType is { IsAbstract: true } union
+               && RangeTypeRegistry.TryGetByClrType(union, out _, out var isSet) && !isSet
+                   ? Expression.Constant(node.Value, union)
+                   : node;
     }
 
     private sealed class RangeSetOperatorRewriter : ExpressionVisitor
