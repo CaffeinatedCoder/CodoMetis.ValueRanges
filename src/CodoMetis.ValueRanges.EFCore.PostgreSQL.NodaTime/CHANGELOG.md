@@ -5,8 +5,16 @@ covers all four packages, which share one version number and release together.
 
 ## [9.0.0] — 2026-10-11
 
-No source change in this package. See `CodoMetis.ValueRanges` 9.0.0: the range and value set types
-now carry their System.Text.Json converters, and ranges can be dictionary keys.
+### Fixed
+
+- **The NodaTime types inside an EF Core JSON column** could not be saved, as for the core types
+  (see `CodoMetis.ValueRanges.EFCore.PostgreSQL` 9.0.0). `YearMonthRange`, its multirange and
+  `YearMonthSet` are written in their store's month-aligned date form
+  (`[2026-01-01,2026-06-30]`, `{2026-01-01,2026-06-01}`) rather than their own `2026-01` literal,
+  because a query into the document casts the text to `daterange`/`date[]`, which only reads
+  dates. Reads validate month alignment. `YearMonthRangeJsonValueReaderWriter`,
+  `YearMonthRangeSetJsonValueReaderWriter` and `YearMonthSetJsonValueReaderWriter` are public for
+  compiled models.
 
 ## [8.0.0] — 2026-08-17
 

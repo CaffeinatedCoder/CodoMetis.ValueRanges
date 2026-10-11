@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using CodoMetis.ValueRanges.Core;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.Json;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 
@@ -34,7 +35,8 @@ internal sealed class ValueSetTypeMapping<TSet, TElement, TPrimitive> : Relation
         string                      storeType,
         Func<TElement, TPrimitive>  toPrimitive,
         Func<TPrimitive, TElement>  fromPrimitive,
-        Func<TPrimitive, string>?   literalText = null
+        Func<TPrimitive, string>?   literalText = null,
+        JsonValueReaderWriter?      jsonValueReaderWriter = null
     )
         : base(new RelationalTypeMappingParameters(
                    new CoreTypeMappingParameters(
@@ -43,7 +45,8 @@ internal sealed class ValueSetTypeMapping<TSet, TElement, TPrimitive> : Relation
                            model => ToProvider(model, toPrimitive),
                            provider => FromProvider(provider, fromPrimitive)),
                        new ImmutableValueComparer<TSet>(),
-                       new ImmutableValueComparer<TSet>()),
+                       new ImmutableValueComparer<TSet>(),
+                       jsonValueReaderWriter: jsonValueReaderWriter ?? LiteralJsonValueReaderWriter<TSet>.Instance),
                    storeType))
     {
         _toPrimitive   = toPrimitive;

@@ -219,6 +219,37 @@ The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is t
 
 Two boundary notes: plain `T[]`/`List<T>` properties keep their native Npgsql mapping — both can coexist in one model — and database scaffolding produces plain arrays, since opting into a set type is a model decision. The NodaTime satellite registers its five set types via the same `UseValueRangesNodaTime()` call; `YearMonthSet` persists first-of-month dates and reads validate alignment, exactly like `YearMonthRange`.
 
+## Inside a JSON column
+
+A range, multirange or value set can sit inside a complex or owned type mapped to a `jsonb` column:
+
+```csharp
+modelBuilder.Entity<Contract>().ComplexProperty(c => c.Terms, terms => terms.ToJson());
+```
+
+Each is stored as its PostgreSQL literal, so the document reads naturally and other clients can
+parse it:
+
+```json
+{ "Period": "[2026-01-01,2026-06-30]", "Blocks": "{[2026-02-01,2026-02-28]}", "Tags": "{a,b}" }
+```
+
+The literal is also what makes queries into the document work. EF extracts a property as text and
+casts it to the store type, so the operators translate exactly as on a plain column:
+
+```sql
+WHERE CAST(c."Terms" ->> 'Period' AS daterange) @> @day
+```
+
+The `YearMonth` types are the exception to "their own literal": they are written in their store's
+month-aligned date form (`[2026-01-01,2026-06-30]`, `{2026-01-01,2026-06-01}`), because the cast
+reads dates, not `2026-01`. A filter that casts out of the document does not use an index on the
+column; if such a query is hot, keep the value in a plain column of its own as well.
+
+> Before 9.0 a `ToJson()` type holding any of these could not be saved: `SaveChanges` threw a
+> `NullReferenceException` from inside EF, because the plugin's type mappings had no JSON
+> reader/writer.
+
 ## TimeRange and the custom timerange type
 
 `timerange` is not built into PostgreSQL, so using `TimeRange` columns takes two one-line opt-ins beyond `UseValueRanges()`:

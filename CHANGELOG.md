@@ -85,6 +85,15 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
   text through `Parse(s, culture)` deliberately, parse the elements yourself and build the range
   with the factories.**
 
+- **Ranges, multiranges and value sets inside an EF Core JSON column** (`ToJson()`) could not be
+  saved — the plugin's type mappings had no `JsonValueReaderWriter`, and `SaveChanges` threw a
+  bare `NullReferenceException` from inside EF. Each mapping now writes the store type's literal,
+  which also makes queries into the document translate:
+  `CAST(doc ->> 'Period' AS daterange) @> @day`. The `YearMonth` types write their month-aligned
+  date form, since that is what the cast reads. `JsonColumnTests` (integration) round-trips and
+  queries all 25 types inside one jsonb column; `MappingParityTests` now requires a reader/writer
+  on every mapping.
+
 ### Added
 
 - **A `TypeConverter` on every range, variant, multirange and value set.** None had one, so

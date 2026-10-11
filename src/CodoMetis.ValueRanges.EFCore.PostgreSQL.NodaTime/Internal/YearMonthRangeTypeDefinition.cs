@@ -1,6 +1,7 @@
 using System.Data.Common;
 using CodoMetis.ValueRanges;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Storage;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -99,7 +100,8 @@ internal sealed class YearMonthRangeTypeMapping : RelationalTypeMapping
                            model => YearMonthRangeConversion.ToProvider(model),
                            provider => YearMonthRangeConversion.FromProvider(provider)),
                        new ImmutableValueComparer<YearMonthRange>(),
-                       new ImmutableValueComparer<YearMonthRange>()),
+                       new ImmutableValueComparer<YearMonthRange>(),
+                       jsonValueReaderWriter: YearMonthRangeJsonValueReaderWriter.Instance),
                    "daterange"))
     {
     }
@@ -161,7 +163,8 @@ internal sealed class YearMonthRangeSetTypeMapping : RelationalTypeMapping
                            model => YearMonthRangeConversion.ToProvider(model),
                            provider => YearMonthRangeConversion.SetFromProvider(provider)),
                        new ImmutableValueComparer<RangeSet<YearMonthRange, YearMonth>>(),
-                       new ImmutableValueComparer<RangeSet<YearMonthRange, YearMonth>>()),
+                       new ImmutableValueComparer<RangeSet<YearMonthRange, YearMonth>>(),
+                       jsonValueReaderWriter: YearMonthRangeSetJsonValueReaderWriter.Instance),
                    "datemultirange"))
     {
     }

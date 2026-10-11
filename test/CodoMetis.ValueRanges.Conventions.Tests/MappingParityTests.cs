@@ -97,6 +97,14 @@ public sealed class MappingParityTests
         Assert.IsFalse(
             string.IsNullOrWhiteSpace(mapping.StoreType),
             $"{clrType.Name} maps to an empty store type.");
+
+        // Inside a JSON column (ToJson) EF writes every property through this. Without one,
+        // SaveChanges fails with a NullReferenceException from EF's own update pipeline (before
+        // 9.0.0, for every type here). JsonColumnTests proves the round trip and the query cast.
+        Assert.IsNotNull(
+            mapping.JsonValueReaderWriter,
+            $"{clrType.Name}'s mapping ({mapping.GetType().Name}) has no JsonValueReaderWriter, so the type "
+          + "cannot be stored inside an EF Core JSON column. Pass one through CoreTypeMappingParameters.");
     }
 
     /// <summary>

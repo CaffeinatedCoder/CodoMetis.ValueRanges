@@ -1,5 +1,6 @@
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Storage;
 using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
 
@@ -19,14 +20,14 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Internal
 /// </summary>
 internal sealed class YearMonthSetTypeDefinition : ISetTypeDefinition
 {
-    private static LocalDate ToPrimitive(YearMonth element)
+    internal static LocalDate ToPrimitive(YearMonth element)
         => element.Calendar == CalendarSystem.Iso
                ? element.OnDayOfMonth(1)
                : throw new ArgumentException(
                      $"YearMonthSet elements must be in the ISO calendar; got {element} ({element.Calendar}). "
                    + "A non-ISO year-month spans parts of two ISO months and has no lossless ISO equivalent.");
 
-    private static YearMonth FromPrimitive(LocalDate primitive)
+    internal static YearMonth FromPrimitive(LocalDate primitive)
         => primitive.Day == 1
                ? primitive.ToYearMonth()
                : throw new InvalidOperationException(
@@ -42,7 +43,8 @@ internal sealed class YearMonthSetTypeDefinition : ISetTypeDefinition
     public string ArrayStoreType => "date[]";
 
     public RelationalTypeMapping SetTypeMapping { get; } = new ValueSetTypeMapping<YearMonthSet, YearMonth, LocalDate>(
-        "date[]", ToPrimitive, FromPrimitive, global::NodaTime.Text.LocalDatePattern.Iso.Format);
+        "date[]", ToPrimitive, FromPrimitive, global::NodaTime.Text.LocalDatePattern.Iso.Format,
+        YearMonthSetJsonValueReaderWriter.Instance);
 
     /// <summary>
     /// The same converting element mapping the range definition uses: a bare

@@ -30,7 +30,8 @@ internal sealed class ValueRangeSetTypeMapping<TRange, T> : RelationalTypeMappin
                            model => RangeProviderConversion.ToProvider(model, normalizeValue),
                            provider => RangeProviderConversion.SetFromProvider<TRange, T>(provider)),
                        new ImmutableValueComparer<RangeSet<TRange, T>>(),
-                       new ImmutableValueComparer<RangeSet<TRange, T>>()),
+                       new ImmutableValueComparer<RangeSet<TRange, T>>(),
+                       jsonValueReaderWriter: LiteralJsonValueReaderWriter<RangeSet<TRange, T>>.Instance),
                    storeType))
         => _normalizeValue = normalizeValue;
 
@@ -67,8 +68,8 @@ internal sealed class ValueRangeSetTypeMapping<TRange, T> : RelationalTypeMappin
                                $"Cannot generate a '{StoreType}' SQL literal for a value of type '{value.GetType()}'.")
                   };
 
-        // ToString() formats with the invariant culture; string interpolation would route
-        // through IFormattable with the current culture instead.
+        // ToString() is the invariant literal (since 9.0.0 interpolation is too, but the explicit
+        // call keeps this independent of how IFormattable treats a null provider).
         return $"'{set.ToString()}'::{StoreType}";
     }
 }

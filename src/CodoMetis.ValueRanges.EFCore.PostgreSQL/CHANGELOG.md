@@ -5,8 +5,20 @@ covers all four packages, which share one version number and release together.
 
 ## [9.0.0] — 2026-10-11
 
-No source change in this package. See `CodoMetis.ValueRanges` 9.0.0: the range and value set types
-now carry their System.Text.Json converters, and ranges can be dictionary keys.
+### Fixed
+
+- **Ranges, multiranges and value sets inside an EF Core JSON column.** A complex or owned type
+  mapped with `ToJson()` that held one of these could not be saved: the plugin's type mappings had
+  no `JsonValueReaderWriter`, and `SaveChanges` failed with a bare `NullReferenceException` from
+  inside EF's update pipeline. Each mapping now has one, writing the type's PostgreSQL literal
+  (`"Period": "[2026-01-01,2026-06-30]"`, `"Tags": "{a,b}"`). That literal is also what a query
+  into the document needs — EF extracts the value as text and casts it,
+  `CAST(doc ->> 'Period' AS daterange) @> @day` — so the range and set operators translate inside
+  JSON columns as they do on plain columns. `LiteralJsonValueReaderWriter<TValue>` is public,
+  because a compiled model re-creates it.
+
+See also `CodoMetis.ValueRanges` 9.0.0: the types now carry their System.Text.Json converters and
+TypeConverters, and the literal no longer depends on a culture.
 
 ## [8.0.0] — 2026-08-17
 
