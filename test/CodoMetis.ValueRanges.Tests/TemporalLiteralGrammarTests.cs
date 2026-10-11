@@ -110,6 +110,21 @@ public class TemporalLiteralGrammarTests
         Assert.AreEqual(new DateTime(2026, 1, 1, 9, 30, 0), value.DateTime.AddTicks(-(value.DateTime.Ticks % TimeSpan.TicksPerSecond)));
     }
 
+    /// <summary>
+    /// PostgreSQL writes a historical local-mean-time offset with seconds; <c>DateTimeOffset</c> cannot
+    /// hold one, so the instant is kept at offset zero rather than refused.
+    /// </summary>
+    [TestMethod]
+    public void DateTimeOffset_Accepts_PostgresSecondsOffset_AsTheInstantAtUtc()
+    {
+        var value = DateTimeOffsetRange.ParseValue("1850-01-01 00:00:00+05:53:28", null);
+
+        Assert.AreEqual(TimeSpan.Zero, value.Offset);
+        Assert.AreEqual(new DateTime(1849, 12, 31, 18, 6, 32), value.UtcDateTime);
+        Assert.AreEqual(new DateTimeOffset(1850, 1, 1, 5, 53, 28, TimeSpan.Zero),
+                        DateTimeOffsetRange.ParseValue("1850-01-01T00:00:00-05:53:28", null));
+    }
+
     [TestMethod]
     public void DateTimeOffset_Accepts_Infinity()
     {
@@ -120,9 +135,10 @@ public class TemporalLiteralGrammarTests
     [TestMethod]
     [DataRow("2026-01-01T09:30:00")]                // no offset: used to take the machine's
     [DataRow("2026-01-01 09:30:00")]
-    [DataRow("2026-01-01T09:30:00+00:19:32")]       // seconds in the offset (LMT): unrepresentable
     [DataRow("01.01.2026 09:30:00 +01:00")]
     [DataRow("2026-01-01")]
+    [DataRow("2026-01-01T09:30:00+15:00:00")]       // no such offset
+    [DataRow("2026-01-01T09:30:00+05:30:60")]
     public void DateTimeOffset_Rejects(string text)
         => Assert.ThrowsExactly<FormatException>(() => DateTimeOffsetRange.ParseValue(text, null));
 

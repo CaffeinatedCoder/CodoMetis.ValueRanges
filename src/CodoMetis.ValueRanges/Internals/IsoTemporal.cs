@@ -18,7 +18,9 @@ namespace CodoMetis.ValueRanges.Internals;
 /// Accepted: a date <c>yyyy-MM-dd</c>; a time <c>HH:mm</c> or <c>HH:mm:ss</c> with up to seven
 /// fraction digits; date and time joined by <c>T</c> (this library) or a space (PostgreSQL); for a
 /// <c>DateTime</c> an optional <c>Z</c> or <c>±HH:mm</c> suffix, read with round-trip semantics; for a
-/// <c>DateTimeOffset</c> a required <c>Z</c>, <c>±HH</c> or <c>±HH:mm</c>; and PostgreSQL's
+/// <c>DateTimeOffset</c> a required <c>Z</c>, <c>±HH</c>, <c>±HH:mm</c> or <c>±HH:mm:ss</c> — the last is
+/// how PostgreSQL writes a historical local-mean-time offset (<c>Asia/Kolkata</c> before 1854 is
+/// <c>+05:53:28</c>), which <c>DateTimeOffset</c> cannot hold, so that instant is kept at offset zero; and PostgreSQL's
 /// <c>infinity</c> / <c>-infinity</c>, read as <c>MaxValue</c> / <c>MinValue</c> — what Npgsql
 /// materializes for them. <c>HH:mm</c> is not something either side writes, but it is valid ISO
 /// 8601, it cannot be misread, and it is what a hand-written <c>[09:00,17:00)</c> uses.
@@ -82,10 +84,41 @@ internal static class IsoTemporal
         if (TryParseInfinity(s, out var positive)) return positive ? DateTimeOffset.MaxValue : DateTimeOffset.MinValue;
 
         return DateTimeOffset.TryParseExact(s, DateTimeOffsetFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
+            || TryParseSecondsOffset(s, out value)
             ? value
             : throw new FormatException(
                 "Expected an ISO 8601 date and time with an offset, yyyy-MM-dd then T or a space then "
-              + "HH:mm[:ss[.fffffff]] then Z, ±HH or ±HH:mm, or infinity / -infinity.");
+              + "HH:mm[:ss[.fffffff]] then Z, ±HH, ±HH:mm or ±HH:mm:ss, or infinity / -infinity.");
+    }
+
+    // The date-time part of a value whose offset carries seconds, read as a wall clock.
+    private static readonly string[] WallClockFormats =
+    [
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF", "yyyy-MM-dd' 'HH:mm:ss.FFFFFFF",
+        "yyyy-MM-dd'T'HH:mm",            "yyyy-MM-dd' 'HH:mm"
+    ];
+
+    /// <summary>A trailing <c>±HH:mm:ss</c> offset, applied to the wall clock and kept as offset zero.</summary>
+    private static bool TryParseSecondsOffset(ReadOnlySpan<char> s, out DateTimeOffset value)
+    {
+        value = default;
+        if (s.Length < 10) return false;
+
+        var tail = s[^9..];
+        if (tail[0] is not ('+' or '-') || tail[3] != ':' || tail[6] != ':'
+            || !int.TryParse(tail[1..3], NumberStyles.None, CultureInfo.InvariantCulture, out var hours)
+            || !int.TryParse(tail[4..6], NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
+            || !int.TryParse(tail[7..9], NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
+            || hours > 14 || minutes > 59 || seconds > 59
+            || !DateTime.TryParseExact(s[..^9], WallClockFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var wall))
+            return false;
+
+        var offset = new TimeSpan(hours, minutes, seconds);
+        var utc    = tail[0] == '-' ? wall.Ticks + offset.Ticks : wall.Ticks - offset.Ticks;
+        if (utc < DateTime.MinValue.Ticks || utc > DateTime.MaxValue.Ticks) return false;
+
+        value = new DateTimeOffset(utc, TimeSpan.Zero);
+        return true;
     }
 
     private static bool TryParseInfinity(ReadOnlySpan<char> s, out bool positive)
