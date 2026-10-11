@@ -180,6 +180,12 @@ public sealed class InstantSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<InstantSet<TElement>, TElement>, IEquatable<InstantSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(InstantSet<TElement>),
+        static () => new ValueSetJsonConverter<InstantSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<InstantSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private InstantSet(ImmutableArray<TElement> elements) => _elements = elements;

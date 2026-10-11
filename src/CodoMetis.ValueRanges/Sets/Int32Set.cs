@@ -137,6 +137,12 @@ public sealed class Int32Set<TElement> :
     IValueSet<TElement>, IValueSetFactory<Int32Set<TElement>, TElement>, IEquatable<Int32Set<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(Int32Set<TElement>),
+        static () => new ValueSetJsonConverter<Int32Set<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<Int32Set<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private Int32Set(ImmutableArray<TElement> elements) => _elements = elements;

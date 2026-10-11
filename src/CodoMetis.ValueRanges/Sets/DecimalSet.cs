@@ -147,6 +147,12 @@ public sealed class DecimalSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<DecimalSet<TElement>, TElement>, IEquatable<DecimalSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(DecimalSet<TElement>),
+        static () => new ValueSetJsonConverter<DecimalSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<DecimalSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private DecimalSet(ImmutableArray<TElement> elements) => _elements = elements;

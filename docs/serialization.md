@@ -233,6 +233,27 @@ JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)));   // ["2
 
 The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
 
+## Native AOT
+
+Every type works under Native AOT and trimming with no registration beyond what source generation always needs. Both packages build with `IsAotCompatible`, raise no trim or AOT warnings in a consumer's publish, and are exercised by a NativeAOT consumer in this repository's smoke test.
+
+Use a source-generated context, as for any AOT JSON. List the types you serialize, and for a value set also its element type — the set converter resolves the element's contract through the options:
+
+```csharp
+[JsonSerializable(typeof(Booking))]                     // holds a DateRange and a RangeSet<DateRange, DateOnly>
+[JsonSerializable(typeof(StringSet<PermissionKey>))]
+[JsonSerializable(typeof(PermissionKey))]               // the set's element type
+internal partial class ApiJsonContext : JsonSerializerContext;
+```
+
+The generic types — `RangeSet<TRange, T>` and the validated-wrapper sets — get their converters from a registration each type makes for itself, never from `MakeGenericType`, so a type your program only ever deserializes works too. Should trimming ever remove that registration, the converter lookup throws a `NotSupportedException` naming the type; the remedy is to register its closed converter on the options:
+
+```csharp
+options.Converters.Add(new ValueSetJsonConverter<StringSet<PermissionKey>, PermissionKey>());
+```
+
+> Before 9.0, `RangeSet` and the wrapper sets failed under Native AOT with "missing native code" — their converters were built by reflection over instantiations the AOT compiler never generated.
+
 ## OpenAPI
 
 ASP.NET Core's OpenAPI generator (`Microsoft.AspNetCore.OpenApi`) builds schemas from System.Text.Json's contract, and it cannot see through a custom converter — there is no public API in .NET 10 for a converter to declare its schema. So a range, multirange or value set in a request or response body is described as `{}`, an unconstrained value. Query, route and header parameters are unaffected: they bind through `TryParse`, and ASP.NET Core describes those as `type: string` on its own.

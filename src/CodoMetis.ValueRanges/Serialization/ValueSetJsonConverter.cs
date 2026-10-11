@@ -36,7 +36,7 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
                 throw new JsonException($"{typeof(TSet).Name} cannot contain null elements.");
 
             var element = fallback is null
-                              ? JsonSerializer.Deserialize<T>(ref reader, options)
+                              ? JsonSerializer.Deserialize(ref reader, ElementTypeInfo(options))
                               : fallback.Read(ref reader, typeof(T), options);
 
             if (element is null)
@@ -59,18 +59,28 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     public override void Write(Utf8JsonWriter writer, TSet value, JsonSerializerOptions options)
     {
         var fallback = ResolveElementConverter(options);
+        var info     = fallback is null ? ElementTypeInfo(options) : null;
 
         writer.WriteStartArray();
         foreach (var element in ((IValueSet<T>)value).Values)
         {
             if (fallback is null)
-                JsonSerializer.Serialize(writer, element, options);
+                JsonSerializer.Serialize(writer, element, info!);
             else
                 fallback.Write(writer, element, options);
         }
 
         writer.WriteEndArray();
     }
+
+    /// <summary>
+    /// The element's contract, resolved through the options' own resolver — reflection-based or
+    /// source-generated alike. Going through the typed overloads rather than
+    /// <c>JsonSerializer.Serialize&lt;T&gt;(…, options)</c> is what keeps this converter free of the
+    /// trimming and AOT annotations those carry; the behaviour is the same lookup.
+    /// </summary>
+    private static JsonTypeInfo<T> ElementTypeInfo(JsonSerializerOptions options)
+        => (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
 
     /// <summary>
     /// Returns the family's element converter when — and only when — System.Text.Json has

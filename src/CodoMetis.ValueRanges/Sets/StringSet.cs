@@ -166,6 +166,12 @@ public sealed class StringSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<StringSet<TElement>, TElement>, IEquatable<StringSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(StringSet<TElement>),
+        static () => new ValueSetJsonConverter<StringSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<StringSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private StringSet(ImmutableArray<TElement> elements) => _elements = elements;

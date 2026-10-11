@@ -151,6 +151,12 @@ public sealed class TimeSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<TimeSet<TElement>, TElement>, IEquatable<TimeSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(TimeSet<TElement>),
+        static () => new ValueSetJsonConverter<TimeSet<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<TimeSet<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private TimeSet(ImmutableArray<TElement> elements) => _elements = elements;

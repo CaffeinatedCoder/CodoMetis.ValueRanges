@@ -142,6 +142,12 @@ public sealed class Int16Set<TElement> :
     IValueSet<TElement>, IValueSetFactory<Int16Set<TElement>, TElement>, IEquatable<Int16Set<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>
 {
+    // Hands the closed converters to the factory without reflection; see GenericConverters.
+    internal static readonly bool ConvertersRegistered = GenericConverters.Register(
+        typeof(Int16Set<TElement>),
+        static () => new ValueSetJsonConverter<Int16Set<TElement>, TElement>(),
+        static () => new ValueSetTypeConverter<Int16Set<TElement>, TElement>());
+
     private readonly ImmutableArray<TElement> _elements;
 
     private Int16Set(ImmutableArray<TElement> elements) => _elements = elements;

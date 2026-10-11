@@ -14,13 +14,19 @@
 # a consumer builds — compiles real code against them, runs it, and asserts on what it prints and on
 # the SQL the EF plugin translates. Never on the exit code alone.
 #
-# Two consumers: one installs only the core package, the most common shape; one installs the
+# Three consumers: one installs only the core package, the most common shape; one installs the
 # NodaTime EF satellite, which pulls in all four through the nuspec dependency chain — the chain is
-# what that consumer is testing.
+# what that consumer is testing; and one publishes with Native AOT and runs the native binary,
+# because whether a generic instantiation exists under AOT depends on the whole program, and a
+# probe inside the repository can turn green by accident.
 #
 # Usage: consumer-smoke-test.sh [feed-directory]
 #   With no argument the packages are packed fresh. Pass a directory of existing .nupkg files
 #   (the release workflow passes its pack output) to test exactly the artifacts being shipped.
+#
+#   SMOKE_AOT_LINKER_ARGS — extra native linker arguments for the AOT consumer, space-separated,
+#   for SDK builds whose link line needs library paths the toolchain does not find by itself
+#   (Homebrew's dotnet on macOS: "-L/opt/homebrew/opt/openssl@3/lib -L/opt/homebrew/opt/brotli/lib").
 
 set -euo pipefail
 
@@ -175,6 +181,112 @@ assert_contains 'json-unregistered={"[5,20]":"[1,10]"}' "$work/core.out" "JSON w
 assert_contains "roundtrip-unregistered=True" "$work/core.out" "JSON without registration round-trips"
 assert_contains "set={a,b}"       "$work/core.out" "value set is canonical: sorted, de-duplicated"
 assert_contains "contains=True"   "$work/core.out" "value set membership"
+
+# ── Native AOT: core + NodaTime, published and run as a native binary ────────────────────────────
+
+cat > "$work/aot.cs" <<'CSHARP'
+using System.ComponentModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CodoMetis.ValueRanges;
+using NodaTime;
+
+var ctx = SmokeJson.Default;
+
+void Case(string name, Func<string> run)
+{
+    try { Console.WriteLine($"{name}={run()}"); }
+    catch (Exception e) { Console.WriteLine($"{name}=FAILED {e.GetType().Name}: {e.Message.Split('\n')[0]}"); }
+}
+
+var h1 = DateRange.CreateFinite(new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30));
+
+// A union, its variant and a dictionary key: closed converters named by the types' attributes.
+Case("aot-range", () => JsonSerializer.Serialize(h1, ctx.DateRange));
+Case("aot-variant", () => JsonSerializer.Deserialize("\"[2026-01-01,2026-06-30]\"", ctx.Finite)!.ToString());
+Case("aot-key", () => JsonSerializer.Serialize(new Dictionary<DateRange, int> { [h1] = 181 }, ctx.DictionaryDateRangeInt32));
+
+// Generic types: before 9.0.0 these were built with MakeGenericType and failed under AOT.
+Case("aot-rangeset", () => JsonSerializer.Serialize(RangeSet<DateRange, DateOnly>.From([h1]), ctx.RangeSetDateRangeDateOnly));
+// Only ever deserialized — no code in this program constructs these types.
+Case("aot-rangeset-read", () => JsonSerializer.Deserialize("\"{[1,5],[7,10]}\"", ctx.RangeSetInt32RangeInt32)!.ToString());
+Case("aot-noda-rangeset-read", () => JsonSerializer.Deserialize("\"{[2026-01-01,2026-01-31]}\"", ctx.RangeSetLocalDateRangeLocalDate)!.ToString());
+Case("aot-wrapper", () =>
+{
+    var keys = StringSet<Key>.From(Key.Parse("users.read", null));
+    var json = JsonSerializer.Serialize(keys, ctx.StringSetKey);
+    return json + (JsonSerializer.Deserialize(json, ctx.StringSetKey) == keys ? " roundtrip" : " MISMATCH");
+});
+// A validated-wrapper set this program only ever deserializes.
+Case("aot-wrapper-read", () => JsonSerializer.Deserialize("[2,1]", ctx.Int32SetCode) is { } codes ? codes.ToString() : "null");
+#pragma warning disable IL2026 // TypeDescriptor is not trim-safe in general; the converter lookup is what is tested.
+Case("aot-typeconverter", () => TypeDescriptor.GetConverter(typeof(RangeSet<Int64Range, long>)).ConvertFromInvariantString("{[1,5]}")!.ToString()!);
+#pragma warning restore IL2026
+
+public readonly record struct Key(string Value) : IFormattable, IParsable<Key>
+{
+    public static Key Parse(string s, IFormatProvider? provider) => new(s);
+    public static bool TryParse(string? s, IFormatProvider? provider, out Key result) { result = new(s ?? ""); return s is not null; }
+    public string ToString(string? format, IFormatProvider? formatProvider) => Value;
+}
+
+[JsonSerializable(typeof(DateRange))]
+[JsonSerializable(typeof(DateRange.Finite))]
+[JsonSerializable(typeof(Dictionary<DateRange, int>))]
+[JsonSerializable(typeof(RangeSet<DateRange, DateOnly>))]
+[JsonSerializable(typeof(RangeSet<Int32Range, int>))]
+[JsonSerializable(typeof(RangeSet<LocalDateRange, LocalDate>))]
+[JsonSerializable(typeof(StringSet<Key>))]
+[JsonSerializable(typeof(Key))]
+[JsonSerializable(typeof(Int32Set<Code>))]
+[JsonSerializable(typeof(Code))]
+internal partial class SmokeJson : JsonSerializerContext;
+
+public readonly record struct Code(int Value) : IFormattable, IParsable<Code>, IComparable<Code>
+{
+    public static Code Parse(string s, IFormatProvider? provider) => new(int.Parse(s, System.Globalization.CultureInfo.InvariantCulture));
+    public static bool TryParse(string? s, IFormatProvider? provider, out Code result)
+    {
+        var ok = int.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var v);
+        result = new(v);
+        return ok;
+    }
+    public int CompareTo(Code other) => Value.CompareTo(other.Value);
+    public string ToString(string? format, IFormatProvider? formatProvider) => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
+CSHARP
+
+scaffold_consumer aot CodoMetis.ValueRanges.NodaTime
+
+echo "==> aot: publishing with Native AOT"
+rid="$(dotnet --info | awk '/^ *RID:/ { print $2; exit }')"
+{
+    echo '<Project><ItemGroup>'
+    for arg in ${SMOKE_AOT_LINKER_ARGS:-}; do echo "  <LinkerArg Include=\"$arg\" />"; done
+    echo '</ItemGroup></Project>'
+} > "$work/aot/Directory.Build.targets"
+run dotnet publish "$work/aot" -c Release -r "$rid" -p:PublishAot=true -p:TrimmerSingleWarn=false -o "$work/aot/native"
+echo "$output" > "$work/aot.publish"
+"$work/aot/native/aot" > "$work/aot.native.out" 2>&1 || true
+sed 's/^/      /' "$work/aot.native.out"
+
+echo "==> aot: asserting"
+if grep -E "warning IL[0-9]+" "$work/aot.publish" | grep -q "CodoMetis"; then
+    echo "  FAIL: the packages raise trim/AOT warnings in a consumer's publish"
+    grep -E "warning IL[0-9]+" "$work/aot.publish" | grep "CodoMetis" | sed 's/^/      /'
+    failed=1
+else
+    echo "  ok: no trim/AOT warnings from the packages"
+fi
+assert_contains 'aot-range="[2026-01-01,2026-06-30]"'          "$work/aot.native.out" "AOT: a range serializes through its attribute"
+assert_contains 'aot-variant=[2026-01-01,2026-06-30]'          "$work/aot.native.out" "AOT: a variant deserializes"
+assert_contains 'aot-key={"[2026-01-01,2026-06-30]":181}'      "$work/aot.native.out" "AOT: a range is a dictionary key"
+assert_contains 'aot-rangeset="{[2026-01-01,2026-06-30]}"'     "$work/aot.native.out" "AOT: a RangeSet serializes"
+assert_contains 'aot-rangeset-read={[1,5],[7,10]}'             "$work/aot.native.out" "AOT: a RangeSet the program never constructs deserializes"
+assert_contains 'aot-noda-rangeset-read={[2026-01-01,2026-01-31]}' "$work/aot.native.out" "AOT: a NodaTime RangeSet the program never constructs deserializes"
+assert_contains 'aot-wrapper=["users.read"] roundtrip'         "$work/aot.native.out" "AOT: a validated-wrapper set round-trips"
+assert_contains 'aot-wrapper-read={1,2}'                       "$work/aot.native.out" "AOT: a validated-wrapper set the program never constructs deserializes"
+assert_contains 'aot-typeconverter={[1,5]}'                    "$work/aot.native.out" "AOT: TypeConverter for a RangeSet the program never constructs"
 
 # ── EF Core + NodaTime satellite: the whole dependency chain ──────────────────────────────────────
 

@@ -7,11 +7,18 @@
 [![hashnode](https://img.shields.io/badge/hashnode.dev-Article-3B82F6)](https://codometis.hashnode.dev/stop-modeling-time-with-two-columns-codometis-valueranges-brings-interval-logic-to-your-net-domain?utm_source=hashnode&utm_medium=feed)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com)
+[![Native AOT: core + NodaTime](https://img.shields.io/badge/Native%20AOT-core%20%2B%20NodaTime-3B82F6)](docs/serialization.md#native-aot)
 
 Immutable **range types** (`[2025-06-01, 2025-06-08]`) and **value sets** (`{alpha, beta}`) for .NET,
 carrying the complete interval and membership algebra in process — no ORM, no database driver. A
 companion EF Core package translates the same calls to native PostgreSQL range, multirange and array
 columns, so one expression means the same thing in a unit test and in SQL.
+
+The core and NodaTime packages are **Native AOT and trimming compatible**: no trim or AOT warnings,
+and a NativeAOT consumer in CI publishes and runs a native binary against the packed packages
+([what it needs from you](docs/serialization.md#native-aot): a source-generated JSON context). The
+EF Core packages are not — they build on EF Core's own reflection, and EF's AOT support is
+experimental.
 
 ## Installation
 

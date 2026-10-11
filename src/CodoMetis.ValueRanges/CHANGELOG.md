@@ -37,6 +37,9 @@ covers all four packages, which share one version number and release together.
 - **A `TypeConverter` on every range, variant, `RangeSet` and value set.** Configuration binding of
   a range property from its literal produced `null` with no error; it now binds. Always invariant;
   an empty string is `null`; each variant refuses a literal of another shape.
+- **Native AOT and trimming.** `RangeSet` and the wrapper sets no longer fail under Native AOT:
+  each generic type registers its own closed converters instead of the factory building them with
+  `MakeGenericType`. The library builds with `IsAotCompatible` and raises no trim/AOT warnings.
 - **Ranges and multiranges as dictionary keys**, writing the same literal as the value form.
   `RangeJsonConverter`, `RangeVariantJsonConverter` and `RangeSetJsonConverter` override
   `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied.

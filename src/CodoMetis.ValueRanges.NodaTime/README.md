@@ -2,6 +2,8 @@
 
 NodaTime types for [CodoMetis.ValueRanges](https://www.nuget.org/packages/CodoMetis.ValueRanges): the full PostgreSQL interval algebra over NodaTime's temporal primitives — and, since v6, the value-set family over the same elements.
 
+**Native AOT and trimming compatible**, like the core package — verified by a NativeAOT consumer in CI ([details](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+
 ### Range types
 
 | Type                 | Element         | PostgreSQL equivalent | Discrete |
