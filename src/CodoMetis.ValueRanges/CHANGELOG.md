@@ -43,7 +43,9 @@ covers all four packages, which share one version number and release together.
   tagged `native-aot` and `trimming`.
 - **Ranges and multiranges as dictionary keys**, writing the same literal as the value form.
   `RangeJsonConverter`, `RangeVariantJsonConverter` and `RangeSetJsonConverter` override
-  `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied.
+  `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied. Two spellings
+  of one key (`"[1,5]"`, `"[1,6)"`) collide: the later value wins by default, and
+  `AllowDuplicateProperties = false` refuses it.
 - **`Deconstruct` on every `Finite` variant**, mirroring its constructor as the positional variants
   already did: `var (start, end) = finite` on a discrete type (both bounds inclusive), and
   `(start, end, startInclusive, endInclusive)` on a continuous one, which has no lossy two-value form.

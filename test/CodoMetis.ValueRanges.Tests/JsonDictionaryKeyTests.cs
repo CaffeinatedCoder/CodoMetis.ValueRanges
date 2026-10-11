@@ -75,6 +75,40 @@ public class JsonDictionaryKeyTests
     }
 
     /// <summary>
+    /// Canonicalization makes two different property names one key, and System.Text.Json treats
+    /// that as any duplicate key: by default the later value silently replaces the earlier one.
+    /// Pinned, not chosen — the converter only parses the name; what happens to a duplicate is the
+    /// dictionary converter's rule, the same as for <c>{"k":1,"k":2}</c>.
+    /// </summary>
+    [TestMethod]
+    public void TwoSpellingsOfOneKey_Collide_AndTheLaterValueWins()
+    {
+        var read = JsonSerializer.Deserialize<Dictionary<Int32Range, string>>("""{"[1,5]":"first","[1,6)":"second"}""")!;
+
+        Assert.AreEqual(1, read.Count);
+        Assert.AreEqual("second", read[Int32Range.CreateFinite(1, 5)]);
+    }
+
+    /// <summary>
+    /// <c>AllowDuplicateProperties = false</c> (.NET 10) refuses the collision, because the
+    /// duplicate check runs on the parsed key rather than on the property name's text — which is
+    /// what makes it the setting to use for configuration, permission or other keyed data where a
+    /// silently replaced entry matters.
+    /// </summary>
+    [TestMethod]
+    public void TwoSpellingsOfOneKey_AreRefused_WhenDuplicatePropertiesAreDisallowed()
+    {
+        var options = new JsonSerializerOptions { AllowDuplicateProperties = false };
+
+        Assert.ThrowsExactly<JsonException>(
+            () => JsonSerializer.Deserialize<Dictionary<DateRange, string>>(
+                """{"[2026-01-01,2026-01-31]":"a","[2026-01-01,2026-02-01)":"b"}""", options));
+        Assert.ThrowsExactly<JsonException>(
+            () => JsonSerializer.Deserialize<Dictionary<RangeSet<Int32Range, int>, string>>(
+                """{"{[1,5]}":"a","{[1,3],[4,5]}":"b"}""", options));
+    }
+
+    /// <summary>
     /// A naming policy would rewrite the literal into text that no longer parses, so it is not
     /// applied — System.Text.Json applies <c>DictionaryKeyPolicy</c> only to string keys, and the
     /// converter does not opt in.

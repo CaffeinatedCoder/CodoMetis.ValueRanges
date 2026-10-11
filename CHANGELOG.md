@@ -139,7 +139,10 @@ OpenAPI transformer to copy. The
   out `RangeSet`'s own registration fails exactly the range set cases there. The core and NodaTime
   READMEs now say so, and so do their NuGet tags (`native-aot`, `trimming`); `PackagingConventionTests`
   holds both claims to the project's `IsAotCompatible` in both directions. The EF Core packages make
-  no such claim.
+  no such claim. A source-generated context must list a value set's element type as well as the
+  set; leaving it out is a `NotSupportedException` naming the element, even for the families that
+  bring their own element converter (`SetSourceGenerationTests` pins both halves, and the NativeAOT
+  consumer runs the documented context for a primitive set and a range through `object`).
 - **Ranges and multiranges as dictionary keys.** `Dictionary<DateRange, int>` threw
   `NotSupportedException` in both directions, registered or not. `RangeJsonConverter`,
   `RangeVariantJsonConverter` and `RangeSetJsonConverter` now override
@@ -147,7 +150,10 @@ OpenAPI transformer to copy. The
   (`{"[2026-01-01,2026-06-30]":181}`). Keys canonicalize on read like values, and a malformed or
   wrong-shape key is the same `JsonException`. `DictionaryKeyPolicy` is not applied — a naming
   policy would rewrite the literal into text that does not parse. Value sets are not keys: their
-  value form is a JSON array, not a string.
+  value form is a JSON array, not a string. Because keys canonicalize, two spellings of one key —
+  `"[1,5]"` and `"[1,6)"` — collide: by default the later value silently wins, as for any duplicate
+  key, while .NET 10's `AllowDuplicateProperties = false` refuses the collision, since it checks the
+  parsed key. `docs/serialization.md` recommends the latter wherever a dropped entry matters.
 - **`Deconstruct` on every bounded variant.** The positional variants had one from the compiler, but
   every `Finite` is written by hand — its constructor is internal, so the factories stay the only
   way to build one — and so are the unbounded variants of `LocalDateRange`, `LocalDateTimeRange`
