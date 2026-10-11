@@ -261,7 +261,10 @@ whatever the invariant culture could, month first. These are now a `FormatExcept
 `HH:mm` without seconds, PostgreSQL's space-separated output, any number of fraction digits (truncated to 100 ns) and `infinity` / `-infinity` are accepted.
 The temporal wrapper arities read the text as their primitive first, so a lenient generated element
 `Parse` no longer sees non-ISO text, and an element that ignores the format specifier now fails on
-read instead of truncating silently. The NodaTime types were already strict.
+read instead of truncating silently. The NodaTime types were already strict; they now also accept
+`HH:mm` wherever the BCL types do — a `LocalTime`, the time part of a `LocalDateTime`, and an
+`Instant` written with its offset or `Z` — so `LocalTimeSet.Parse("{09:00}")` reads like
+`TimeRange.Parse("[09:00,17:00)")` instead of throwing.
 
 ### Temporal values reach the database as text at its resolution
 

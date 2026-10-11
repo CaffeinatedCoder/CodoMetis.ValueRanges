@@ -14,6 +14,13 @@ namespace CodoMetis.ValueRanges.Internals;
 /// — <see cref="NodaTime.Instant"/> (<c>MaxValue</c> / <c>MinValue</c>), <see cref="LocalDate"/> and
 /// <see cref="LocalDateTime"/> (<c>MaxIsoValue</c> / <c>MinIsoValue</c>) — so the text PostgreSQL writes
 /// for such a bound reads back as the value Npgsql would have materialized. Formatting is unchanged.
+/// <para>
+/// A time of day may also be written <c>HH:mm</c> — on its own, as the time part of a
+/// <see cref="LocalDateTime"/>, and before an instant's offset — exactly where the core's
+/// <c>IsoTemporal</c> accepts it. It is valid ISO 8601, cannot be misread, and is what a hand-written
+/// <c>[09:00,17:00)</c> uses; before 9.0.0 the BCL types read it and these threw. Nothing else is
+/// widened: the hour is still two digits, and an instant still needs its offset or <c>Z</c>.
+/// </para>
 /// </remarks>
 internal static class NodaPatterns
 {
@@ -34,6 +41,18 @@ internal static class NodaPatterns
     /// Also the PostgreSQL wire form.</summary>
     internal static readonly LocalTimePattern Time = LocalTimePattern.ExtendedIso;
 
+    /// <summary>ISO 8601 time of day without seconds: <c>12:30</c>. Parsing only.</summary>
+    private static readonly LocalTimePattern TimeHoursMinutes =
+        LocalTimePattern.CreateWithInvariantCulture("HH':'mm");
+
+    /// <summary>Date and time without seconds, <c>T</c>-separated: <c>2024-06-01T12:30</c>. Parsing only.</summary>
+    private static readonly LocalDateTimePattern DateTimeHoursMinutes =
+        LocalDateTimePattern.CreateWithInvariantCulture("uuuu'-'MM'-'dd'T'HH':'mm");
+
+    /// <summary>Date and time without seconds, space-separated: <c>2024-06-01 12:30</c>. Parsing only.</summary>
+    private static readonly LocalDateTimePattern DateTimeSpaceHoursMinutes =
+        LocalDateTimePattern.CreateWithInvariantCulture("uuuu'-'MM'-'dd' 'HH':'mm");
+
     /// <summary>ISO 8601 UTC instant: <c>2024-06-01T12:30:00.123456789Z</c>.</summary>
     internal static readonly InstantPattern Instant = InstantPattern.ExtendedIso;
 
@@ -45,6 +64,14 @@ internal static class NodaPatterns
     private static readonly OffsetDateTimePattern InstantOffsetSpace =
         OffsetDateTimePattern.CreateWithInvariantCulture("uuuu'-'MM'-'dd' 'HH':'mm':'ss;FFFFFFFFFo<G>");
 
+    /// <summary>Without seconds, with an offset or <c>Z</c>: <c>2024-06-01T14:30+02:00</c>. Parsing only.</summary>
+    private static readonly OffsetDateTimePattern InstantOffsetTHoursMinutes =
+        OffsetDateTimePattern.CreateWithInvariantCulture("uuuu'-'MM'-'dd'T'HH':'mmo<G>");
+
+    /// <summary>Without seconds, space-separated, with an offset or <c>Z</c>: <c>2024-06-01 14:30+02</c>. Parsing only.</summary>
+    private static readonly OffsetDateTimePattern InstantOffsetSpaceHoursMinutes =
+        OffsetDateTimePattern.CreateWithInvariantCulture("uuuu'-'MM'-'dd' 'HH':'mmo<G>");
+
     internal static LocalDate ParseDate(string text)
         => IsInfinity(text, out var positive)
             ? positive ? LocalDate.MaxIsoValue : LocalDate.MinIsoValue
@@ -54,7 +81,13 @@ internal static class NodaPatterns
         => YearMonth.Parse(text).GetValueOrThrow();
 
     internal static LocalTime ParseTime(string text)
-        => Time.Parse(text).GetValueOrThrow();
+    {
+        var iso = Time.Parse(text);
+        if (iso.Success) return iso.Value;
+
+        var hoursMinutes = TimeHoursMinutes.Parse(text);
+        return hoursMinutes.Success ? hoursMinutes.Value : iso.GetValueOrThrow();
+    }
 
     internal static LocalDateTime ParseDateTime(string text)
     {
@@ -63,8 +96,13 @@ internal static class NodaPatterns
         var iso = DateTime.Parse(text);
         if (iso.Success) return iso.Value;
 
-        var space = DateTimeSpace.Parse(text);
-        return space.Success ? space.Value : iso.GetValueOrThrow();
+        foreach (var pattern in (ReadOnlySpan<LocalDateTimePattern>)[DateTimeSpace, DateTimeHoursMinutes, DateTimeSpaceHoursMinutes])
+        {
+            var result = pattern.Parse(text);
+            if (result.Success) return result.Value;
+        }
+
+        return iso.GetValueOrThrow();
     }
 
     internal static Instant ParseInstant(string text)
@@ -74,11 +112,14 @@ internal static class NodaPatterns
         var iso = Instant.Parse(text);
         if (iso.Success) return iso.Value;
 
-        var offsetT = InstantOffsetT.Parse(text);
-        if (offsetT.Success) return offsetT.Value.ToInstant();
+        foreach (var pattern in (ReadOnlySpan<OffsetDateTimePattern>)
+                 [InstantOffsetT, InstantOffsetSpace, InstantOffsetTHoursMinutes, InstantOffsetSpaceHoursMinutes])
+        {
+            var result = pattern.Parse(text);
+            if (result.Success) return result.Value.ToInstant();
+        }
 
-        var offsetSpace = InstantOffsetSpace.Parse(text);
-        return offsetSpace.Success ? offsetSpace.Value.ToInstant() : iso.GetValueOrThrow();
+        return iso.GetValueOrThrow();
     }
 
     private static bool IsInfinity(string text, out bool positive)
