@@ -57,6 +57,20 @@ string Describe(Int32Range range) => range switch
 };
 ```
 
+Every variant that carries a bound also deconstructs into exactly what its constructor takes, so
+positional patterns and deconstruction work on all of them. A discrete type's `Finite` gives
+`(start, end)`, both inclusive — the canonical form; a continuous type's gives
+`(start, end, startInclusive, endInclusive)`:
+
+```csharp
+var (first, last) = (DateRange.Finite)period;   // pass straight back to DateRange.CreateFinite
+
+if (price is DecimalRange.Finite(var low, var high, var lowInclusive, var highInclusive)) { … }
+```
+
+A continuous type deliberately has no two-value form: passed back to `CreateFinite`, the bounds
+alone would pick up its half-open default, and `(1.5,2]` would come back as `[1.5,2)`.
+
 The five variants are the only ranges that can exist: the private constructor on the abstract base
 record prevents any subtype being declared outside the assembly. So the five arms are complete in
 fact, and the discard is genuinely unreachable.

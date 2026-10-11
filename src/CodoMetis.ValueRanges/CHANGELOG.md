@@ -39,10 +39,14 @@ covers all four packages, which share one version number and release together.
   an empty string is `null`; each variant refuses a literal of another shape.
 - **Native AOT and trimming.** `RangeSet` and the wrapper sets no longer fail under Native AOT:
   each generic type registers its own closed converters instead of the factory building them with
-  `MakeGenericType`. The library builds with `IsAotCompatible` and raises no trim/AOT warnings.
+  `MakeGenericType`. The library builds with `IsAotCompatible`, raises no trim/AOT warnings, and is
+  tagged `native-aot` and `trimming`.
 - **Ranges and multiranges as dictionary keys**, writing the same literal as the value form.
   `RangeJsonConverter`, `RangeVariantJsonConverter` and `RangeSetJsonConverter` override
   `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied.
+- **`Deconstruct` on every `Finite` variant**, mirroring its constructor as the positional variants
+  already did: `var (start, end) = finite` on a discrete type (both bounds inclusive), and
+  `(start, end, startInclusive, endInclusive)` on a continuous one, which has no lossy two-value form.
 
 ## [8.0.0] — 2026-08-17
 

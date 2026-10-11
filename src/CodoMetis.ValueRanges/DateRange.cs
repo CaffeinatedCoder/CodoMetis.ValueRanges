@@ -58,6 +58,17 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
 
         /// <inheritdoc/>
         public bool EndInclusive => true;
+
+        /// <summary>
+        /// Deconstructs the range into its bounds: <c>var (start, end) = finite;</c>.
+        /// </summary>
+        /// <remarks>
+        /// Both bounds are inclusive — the canonical form of a discrete range — so the pair passes
+        /// straight back to <see cref="DateRange.CreateFinite"/>, whose default is closed.
+        /// </remarks>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        public void Deconstruct(out DateOnly start, out DateOnly end) => (start, end) = (Start, End);
     }
 
     /// <summary>

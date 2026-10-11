@@ -89,6 +89,40 @@ public sealed class PackagingConventionTests
         }
     }
 
+    /// <summary>The NuGet tags that claim Native AOT and trimming compatibility.</summary>
+    private static readonly string[] AotTags = ["native-aot", "trimming"];
+
+    /// <summary>
+    /// A package's NuGet tags claim Native AOT and trimming exactly when its project builds with
+    /// <c>IsAotCompatible</c> — the same rule as the README claim above, for the field NuGet search
+    /// filters on.
+    /// </summary>
+    /// <remarks>
+    /// Package metadata is frozen per version, so a tag that is missing at release cannot be added
+    /// to that release afterwards. Tags are compared whole, split as NuGet splits them, so a tag
+    /// that merely contains <c>aot</c> does not count.
+    /// </remarks>
+    [TestMethod]
+    public void AotTags_MatchIsAotCompatible()
+    {
+        foreach (var project in RepoLayout.PackableProjects)
+        {
+            var tags = (project.Property("PackageTags") ?? "")
+                      .Split([';', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                      .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var isAotCompatible = string.Equals(project.Property("IsAotCompatible"), "true", StringComparison.OrdinalIgnoreCase);
+
+            foreach (var tag in AotTags)
+                Assert.AreEqual(
+                    isAotCompatible, tags.Contains(tag),
+                    isAotCompatible
+                        ? $"{project.PackageId} builds with IsAotCompatible but its PackageTags lack '{tag}'. "
+                        + "NuGet search filters on tags, and a published version's tags cannot be changed."
+                        : $"{project.PackageId}'s PackageTags claim '{tag}' but the project does not set "
+                        + "IsAotCompatible, so nothing checks the claim. Set the property, or remove the tag.");
+        }
+    }
+
     [TestMethod]
     public void EveryPackage_DescribesItself()
     {

@@ -70,6 +70,17 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
 
         /// <inheritdoc/>
         public bool EndInclusive => true;
+
+        /// <summary>
+        /// Deconstructs the range into its bounds: <c>var (start, end) = finite;</c>.
+        /// </summary>
+        /// <remarks>
+        /// Both bounds are inclusive — the canonical form of a discrete range — so the pair passes
+        /// straight back to <see cref="LocalDateRange.CreateFinite"/>, whose default is closed.
+        /// </remarks>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        public void Deconstruct(out LocalDate start, out LocalDate end) => (start, end) = (Start, End);
     }
 
     /// <summary>
@@ -92,6 +103,13 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
 
         /// <inheritdoc />
         public bool EndInclusive => true;
+
+        /// <summary>
+        /// Deconstructs the range into its upper bound, as the positional variants of the
+        /// other range types do: <c>range is LocalDateRange.UnboundedStart(var end)</c>.
+        /// </summary>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        public void Deconstruct(out LocalDate end) => end = End;
     }
 
     /// <summary>
@@ -114,6 +132,13 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
 
         /// <inheritdoc />
         public bool StartInclusive => true;
+
+        /// <summary>
+        /// Deconstructs the range into its lower bound, as the positional variants of the
+        /// other range types do: <c>range is LocalDateRange.UnboundedEnd(var start)</c>.
+        /// </summary>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        public void Deconstruct(out LocalDate start) => start = Start;
     }
 
     /// <summary>

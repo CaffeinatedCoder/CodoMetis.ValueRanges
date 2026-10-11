@@ -75,6 +75,21 @@ public abstract record LocalDateTimeRange : IRange<LocalDateTime>, IRangeFactory
 
         /// <inheritdoc/>
         public bool EndInclusive { get; }
+
+        /// <summary>
+        /// Deconstructs the range into its bounds and their inclusiveness:
+        /// <c>var (start, end, startInclusive, endInclusive) = finite;</c>.
+        /// </summary>
+        /// <remarks>
+        /// There is deliberately no form without the inclusiveness: passing only the bounds back to
+        /// <see cref="LocalDateTimeRange.CreateFinite"/> would silently apply its half-open default.
+        /// </remarks>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        /// <param name="startInclusive">Receives <see cref="StartInclusive"/>.</param>
+        /// <param name="endInclusive">Receives <see cref="EndInclusive"/>.</param>
+        public void Deconstruct(out LocalDateTime start, out LocalDateTime end, out bool startInclusive, out bool endInclusive) =>
+            (start, end, startInclusive, endInclusive) = (Start, End, StartInclusive, EndInclusive);
     }
 
     /// <summary>
@@ -102,6 +117,15 @@ public abstract record LocalDateTimeRange : IRange<LocalDateTime>, IRangeFactory
 
         /// <inheritdoc/>
         public bool EndInclusive { get; }
+
+        /// <summary>
+        /// Deconstructs the range into its upper bound and its inclusiveness, as the positional
+        /// variants of the other range types do: <c>range is LocalDateTimeRange.UnboundedStart(var end, var endInclusive)</c>.
+        /// </summary>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        /// <param name="endInclusive">Receives <see cref="EndInclusive"/>.</param>
+        public void Deconstruct(out LocalDateTime end, out bool endInclusive) =>
+            (end, endInclusive) = (End, EndInclusive);
     }
 
     /// <summary>
@@ -129,6 +153,15 @@ public abstract record LocalDateTimeRange : IRange<LocalDateTime>, IRangeFactory
 
         /// <inheritdoc/>
         public bool StartInclusive { get; }
+
+        /// <summary>
+        /// Deconstructs the range into its lower bound and its inclusiveness, as the positional
+        /// variants of the other range types do: <c>range is LocalDateTimeRange.UnboundedEnd(var start, var startInclusive)</c>.
+        /// </summary>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        /// <param name="startInclusive">Receives <see cref="StartInclusive"/>.</param>
+        public void Deconstruct(out LocalDateTime start, out bool startInclusive) =>
+            (start, startInclusive) = (Start, StartInclusive);
     }
 
     /// <summary>

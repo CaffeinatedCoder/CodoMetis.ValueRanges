@@ -79,6 +79,17 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
 
         /// <inheritdoc/>
         public bool EndInclusive => true;
+
+        /// <summary>
+        /// Deconstructs the range into its bounds: <c>var (start, end) = finite;</c>.
+        /// </summary>
+        /// <remarks>
+        /// Both bounds are inclusive — the canonical form of a discrete range — so the pair passes
+        /// straight back to <see cref="YearMonthRange.CreateFinite"/>, whose default is closed.
+        /// </remarks>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        public void Deconstruct(out YearMonth start, out YearMonth end) => (start, end) = (Start, End);
     }
 
     /// <summary>
@@ -101,6 +112,13 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
 
         /// <inheritdoc />
         public bool EndInclusive => true;
+
+        /// <summary>
+        /// Deconstructs the range into its upper bound, as the positional variants of the
+        /// other range types do: <c>range is YearMonthRange.UnboundedStart(var end)</c>.
+        /// </summary>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        public void Deconstruct(out YearMonth end) => end = End;
     }
 
     /// <summary>
@@ -123,6 +141,13 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
 
         /// <inheritdoc />
         public bool StartInclusive => true;
+
+        /// <summary>
+        /// Deconstructs the range into its lower bound, as the positional variants of the
+        /// other range types do: <c>range is YearMonthRange.UnboundedEnd(var start)</c>.
+        /// </summary>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        public void Deconstruct(out YearMonth start) => start = Start;
     }
 
     /// <summary>
