@@ -76,6 +76,32 @@ public sealed class ReleaseWiringConventionTests
           + "approval: nothing in it may be able to mint a token that can publish.");
     }
 
+    /// <summary>
+    /// A manual run from a branch must not publish: the tag-versus-version check runs on tag refs
+    /// only, and the GitHub release that gives the SBOMs a home is created for tags only.
+    /// </summary>
+    /// <remarks>
+    /// The <c>nuget</c> environment's deployment policy (v* tags) refuses such a run today, but that
+    /// is a repository setting — invisible here, and lost without a trace if the environment is
+    /// ever recreated. The condition on the job is the part this repository can hold.
+    /// </remarks>
+    [TestMethod]
+    public void ThePublishJob_RunsOnlyForAReleaseTag()
+    {
+        var publishJob = Regex.Match(ReleaseWorkflowText, @"(?ms)^  publish:.*?(?=^  \S)").Value;
+
+        Assert.AreNotEqual(0, publishJob.Length, "Could not find the publish job in the release workflow.");
+
+        // The job-level key, not a comment and not a step's own condition.
+        var condition = Regex.Match(publishJob, @"(?m)^    if:\s*(?<expression>.+)$").Groups["expression"].Value;
+
+        StringAssert.Contains(
+            condition, "startsWith(github.ref, 'refs/tags/v')",
+            $"The publish job's condition ({(condition.Length == 0 ? "none" : condition)}) does not require "
+          + "a v* tag ref, so a manual non-dry run from a branch would publish without the tag check and "
+          + "without a GitHub release for its SBOMs.");
+    }
+
     [TestMethod]
     public void TheReleaseWorkflow_ChecksTheTagAgainstTheVersionProperty()
     {

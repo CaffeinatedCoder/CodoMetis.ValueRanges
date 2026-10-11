@@ -25,6 +25,13 @@
 # Three names must agree with the nuget.org policy, or it silently stops matching: this file's
 # *name* (release.yml), the environment (`nuget`), and the repository owner/name.
 # ReleaseWiringConventionTests pins the first two.
+#
+# Only a v* tag publishes, and the tag is checked against the version first. Two repository
+# settings say the same outside this file: the `nuget` environment accepts deployments from v*
+# tags only, and a ruleset ("Release tags are immutable") forbids deleting or moving a v* tag. So a
+# version can only ever be built from one commit. A manual run from a branch is a dry run or
+# nothing; the condition on `publish` below states that here too, so the YAML does not depend on
+# settings it cannot show.
 
 name: Release
 
@@ -34,7 +41,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build, test and pack, but do not push to NuGet"
+        description: "Build, test and pack, but do not push to NuGet (a non-dry run publishes only from a v* tag)"
         type: boolean
         default: true
 
@@ -169,8 +176,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: verify
 
-    # Skipped entirely on a dry run, so no approval is requested and no token is minted.
-    if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+    # Skipped entirely on a dry run, so no approval is requested and no token is minted, and on
+    # any ref but a v* tag — the only refs whose version the verify job checked against the tag.
+    if: ${{ startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || !inputs.dry_run) }}
 
     # The approval gate. Must match the environment named in the nuget.org policy.
     environment: nuget
@@ -213,8 +221,11 @@ jobs:
       # automatically, so symbols need no separate step.
       #
       # --skip-duplicate makes a re-run after a partial failure safe: already-published packages
-      # are reported and skipped instead of failing the job. The temporary key expires an hour
-      # after login, so a much-delayed re-run needs a fresh workflow run.
+      # are reported and skipped instead of failing the job. Pushes are not atomic across packages,
+      # so retry with "Re-run failed jobs" on the same run: that logs in afresh (the temporary key
+      # expires an hour after login) and pushes the same verified artifact. A fresh run rebuilds —
+      # from the same commit, since release tags are immutable, but with whatever SDK 10.0.x is
+      # then, so the remaining packages would not be the ones verified with those already pushed.
       - name: Push to NuGet
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
@@ -260,7 +271,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ verify, publish ]
 
-    # Tag pushes only. A manual non-dry run from a branch has no tag to release against.
+    # v* tags only, as for `publish`; this job also needs `publish`, so a dry run skips it.
     if: startsWith(github.ref, 'refs/tags/v')
 
     permissions:
