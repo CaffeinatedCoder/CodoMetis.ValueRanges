@@ -324,4 +324,27 @@ public class RangeParseFormatTests
         Assert.AreEqual(1, finite.Start);
         Assert.AreEqual(10, finite.End);
     }
+
+    /// <summary>
+    /// Interpolation passes a null provider. Under de-DE that used to format the decimal bounds with
+    /// a comma, and <c>[1,5,2)</c> parses back as <c>[1,52)</c> — a different range, silently.
+    /// </summary>
+    [TestMethod]
+    public void Interpolation_IsTheInvariantLiteral_UnderACommaDecimalCulture()
+    {
+        var range    = DecimalRange.CreateFinite(1.5m, 2m, endInclusive: false);
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+        try
+        {
+            var text = $"{range}";
+
+            Assert.AreEqual("[1.5,2)", text);
+            Assert.AreEqual(range, DecimalRange.Parse(text, null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
 }

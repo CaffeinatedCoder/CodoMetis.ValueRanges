@@ -45,6 +45,19 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
   - **Payload change** for anyone who wrote the old form: a response or document that carried
     `{"Length":…}` now carries the literal.
 
+### Fixed
+
+- **⚠️ Interpolating a `DecimalRange` under a comma-decimal culture produced a different range.**
+  `Int32Range`, `Int64Range` and `DecimalRange` have no `FormatValue` override, and the default
+  formatted a `null` provider — what string interpolation, `string.Format` and logging renderers
+  pass — in the *current* culture. Under `de-DE`, `$"{DecimalRange [1.5,2)}"` was `[1,5,2)`, which
+  the parser reads back as **`[1,52)`**, silently; `[1.5,2.25)` came back as `[1,5225)`. Under
+  `sv-SE` a negative bound took U+2212 as its minus sign and no longer parsed. A `null` provider
+  now means the invariant culture in both default `FormatValue`s, as every override already did.
+  `ToString()`, JSON, the `TypeConverter` and the EF bridge were never affected — they pass the
+  invariant culture explicitly. `LiteralCultureContractTests` (conventions) formats every shape,
+  multirange and set family under `de-DE`, `sv-SE`, `fa-IR` and `th-TH`.
+
 ### Added
 
 - **A `TypeConverter` on every range, variant, multirange and value set.** None had one, so

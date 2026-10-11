@@ -16,6 +16,13 @@ covers all four packages, which share one version number and release together.
   old form. See the [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
   for source generation and why this is a major.
 
+### Fixed
+
+- **⚠️ `$"{range}"` under a comma-decimal culture produced a different range.** `Int32Range`,
+  `Int64Range` and `DecimalRange` formatted a `null` provider in the current culture: under `de-DE`
+  a `[1.5,2)` interpolated as `[1,5,2)` and parsed back as `[1,52)`. A `null` provider is now the
+  invariant culture.
+
 ### Added
 
 - **A `TypeConverter` on every range, variant, `RangeSet` and value set.** Configuration binding of

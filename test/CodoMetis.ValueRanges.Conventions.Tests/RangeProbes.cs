@@ -12,9 +12,11 @@ internal static class RangeProbes
     /// <summary>Two ordered values per element type, for the bounded shapes.</summary>
     internal static readonly Dictionary<Type, (object Low, object High)> Bounds = new()
     {
-        [typeof(int)]            = (1, 10),
-        [typeof(long)]           = (1L, 10L),
-        [typeof(decimal)]        = (1.5m, 9.25m),
+        // Negative lows and a fractional decimal: the minus sign (U+2212 in sv-SE) and the decimal
+        // separator are where a culture leaks into a literal.
+        [typeof(int)]            = (-5, 10),
+        [typeof(long)]           = (-5L, 10L),
+        [typeof(decimal)]        = (-1.5m, 9.25m),
         [typeof(DateOnly)]       = (new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)),
         [typeof(TimeOnly)]       = (new TimeOnly(9, 30), new TimeOnly(17, 0)),
         [typeof(DateTime)]       = (new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Unspecified),
