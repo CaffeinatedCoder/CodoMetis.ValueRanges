@@ -26,6 +26,13 @@ covers all four packages, which share one version number and release together.
   primitive first, so a lenient element `Parse` never sees non-ISO text. **A closed temporal set's
   JSON elements use the same grammar**: System.Text.Json's own converter read an offset-less
   `DateTimeOffset` in the machine's offset. A converter registered for the element type still wins.
+  **A `DateTime` with an offset keeps its wall clock** (`Local`), as PostgreSQL's `timestamp` input
+  does: `2026-01-01T09:30+05:30` was converted into the parsing machine's zone, a different value
+  on every server, and a local value inside a DST gap came back an hour off.
+
+- **The range interfaces are declared not to be an extension point.** Implementing `IRange<T>`,
+  the shape interfaces or `IRangeFactory<TRange, T>` outside the library is unsupported, and they
+  may gain members in a minor version. Consuming them is unaffected.
 
 ### Fixed
 
@@ -37,6 +44,32 @@ covers all four packages, which share one version number and release together.
 - **⚠️ Decimal bounds and elements parse with PostgreSQL's numeric grammar** (`NumberStyles.Float`
   instead of `Any`): `"1,000"`, `"(5)"` and currency symbols are a `FormatException` rather than
   1000, −5 and 5, and `DecimalRange.Parse("[1.5,2.5)", de-DE)` fails instead of returning `[15,25)`.
+  The wrapper arities read element text with the same grammar before the element's own `Parse`
+  sees it: `DecimalSet<Price>.Parse("{\"1,5\"}")` was `{15}` through a generated
+  `NumberStyles.Number` `Parse`; the integer arities likewise.
+
+- **⚠️ `ToString("", provider)` wrote a culture-formatted literal** (`[1,5,2)` under `de-DE`,
+  Buddhist-era dates under `th-TH`): `""` is the general format, as `null` is, and now writes the
+  invariant literal.
+
+- **⚠️ A quoted empty range bound read as unbounded** — `["",5)` was `(,4]`, `("","")` was `(,)`,
+  and `[ ,5)` the same. Bounds follow PostgreSQL's `range_in`: only an absent bound is infinite,
+  and a backslash escapes the next character outside quotes too.
+
+- **⚠️ Array literals follow PostgreSQL's `array_in`**: `{a\,b}` is the one element `a,b` (was `a\`
+  and `b`), and `{{a,b}}`, `{a}b}` and `{a"b}` are a `FormatException` (`{{a,b}}` was
+  `{"{a","b}"}`). Only ASCII whitespace is skipped around elements.
+
+- **⚠️ A union converter on the options now reaches the union's variants.** A range serialized
+  through `object`, an `object` collection or a variant-typed declaration wrote the literal while a
+  union-typed declaration used the registered converter. The variant converter now delegates to the
+  converter System.Text.Json would choose for the union, narrowing on read. **Payload change** for
+  anyone relying on the mixed form.
+
+- **⚠️ Interface-declared ranges and sets no longer write a property dump.** `IRange<int>` wrote
+  `{}` and `IValueSet<string>` `{"Values":["a"]}`. The interfaces carry the new
+  `InterfaceDeclaredJsonConverter`: writes go through the runtime type's converter, reads throw
+  `NotSupportedException` — declare the concrete type.
 
 - **⚠️ A culture provider no longer changes the literal.** `Parse(s, th-TH)` read
   `2026-01-01` as a Buddhist-era date (Gregorian 1483) and `ToString(null, th-TH)` wrote `2569`;
