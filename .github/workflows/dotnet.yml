@@ -69,7 +69,7 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
-      # Everything except the integration project, which is the next job.
+      # Everything except the integration projects, which are the next job.
       - name: Unit and convention tests
         run: |
           for project in test/*/; do
@@ -111,14 +111,19 @@ jobs:
       # CI=true turns an unavailable container into a failure instead of an inconclusive skip.
       # Without it a broken Docker setup would retire the layer that is the authority on
       # PostgreSQL semantics, and the build would still report green.
+      #
+      # More than one project because some configuration is per process: the InfinityDisabled
+      # project runs with an AppContext switch that Npgsql and the plugin read once.
       - name: Integration tests
         env:
           CI: true
-        run: >
-          dotnet test test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests
-          -c Release --no-build
-          --logger "trx;LogFileName=integration.trx"
-          --results-directory TestResults
+        run: |
+          for project in test/*IntegrationTests/; do
+            echo "==> $project"
+            dotnet test "$project" -c Release --no-build \
+              --logger "trx;LogFileName=$(basename "$project").trx" \
+              --results-directory TestResults
+          done
 
       - name: Upload test results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
