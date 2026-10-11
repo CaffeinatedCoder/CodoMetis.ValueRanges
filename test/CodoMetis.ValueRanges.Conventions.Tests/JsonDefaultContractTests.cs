@@ -99,6 +99,20 @@ public sealed class JsonDefaultContractTests
             Assert.AreEqual(range, JsonSerializer.Deserialize(expected, variant, Unregistered),
                 $"{label}: did not read back through its variant.");
 
+            // Declared as an interface — IRange<T> and the shape interface — the write goes through
+            // the runtime type's converter, and a read is refused rather than property-dumped.
+            var interfaces = DeclarableInterfacesOf(variant);
+            Assert.IsTrue(interfaces.Count >= 2,
+                $"{label}: found {interfaces.Count} declarable interfaces, expected IRange<T> and a shape interface.");
+            foreach (var declared in interfaces)
+            {
+                Assert.AreEqual(expected, JsonSerializer.Serialize(range, declared, Unregistered),
+                    $"{label}: declared as {declared.Name}, the wire form differs. Is the interface missing "
+                  + "[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]?");
+                Assert.ThrowsExactly<NotSupportedException>(() => JsonSerializer.Deserialize(expected, declared, Unregistered),
+                    $"{label}: declared as {declared.Name}, a read was not refused.");
+            }
+
             var set         = RangeSet<TRange, T>.From([range]);
             var expectedSet = JsonSerializer.Serialize(set, Registered);
             Assert.AreEqual(expectedSet, JsonSerializer.Serialize(set, Unregistered),
@@ -187,6 +201,16 @@ public sealed class JsonDefaultContractTests
     }
 
     /// <summary>
+    /// The package's interfaces a value can be declared as: those in the core namespace a variant
+    /// implements, minus the factory interfaces, whose static abstract members rule them out as a
+    /// declared type. Discovered, so a new shape interface is checked with no edit here.
+    /// </summary>
+    private static List<Type> DeclarableInterfacesOf(Type variant)
+        => [.. variant.GetInterfaces()
+                      .Where(i => i.Namespace == typeof(IRange<>).Namespace
+                               && !i.GetMethods().Any(m => m is { IsStatic: true, IsAbstract: true }))];
+
+    /// <summary>
     /// As a dictionary key the value is the same literal as its value form, and reads back.
     /// </summary>
     private static void AssertKey<TKey>(string label, TKey key, string expectedValueJson)
@@ -224,6 +248,11 @@ public sealed class JsonDefaultContractTests
                 $"{label}: the unregistered wire form differs. Is the set type missing its [JsonConverter]?");
             Assert.AreEqual(set, JsonSerializer.Deserialize<TSet>(expected, Unregistered),
                 $"{label}: did not read back.");
+
+            Assert.AreEqual(expected, JsonSerializer.Serialize<IValueSet<T>>(set, Unregistered),
+                $"{label}: declared as IValueSet<T>, the wire form differs.");
+            Assert.ThrowsExactly<NotSupportedException>(() => JsonSerializer.Deserialize<IValueSet<T>>(expected, Unregistered),
+                $"{label}: declared as IValueSet<T>, a read was not refused.");
         }
     }
 }

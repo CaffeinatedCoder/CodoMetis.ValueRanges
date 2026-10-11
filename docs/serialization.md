@@ -207,7 +207,19 @@ JsonSerializer.Serialize<object>(Int32Range.CreateFinite(1, 5));   // "\"[1,5]\"
 JsonSerializer.Serialize(new List<object> { range, dateRange });   // ["[1,5]","[2024-01-01,2024-03-01]"]
 ```
 
-Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `"empty"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening. A property declared as the `IRange<T>` interface is *not* covered — the interface carries no factory to parse back through; declare it as the union type.
+Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `"empty"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening.
+
+A value declared as one of the package's interfaces — `IRange<T>`, a shape interface such as `IFiniteRange<T>`, or `IValueSet<T>` — is written through its runtime type's converter, so it is the same literal or array as when it is declared as that type (and a converter you registered for that type applies). Reading into such a declaration throws `NotSupportedException`: the interface does not say which type to construct, and the remedy is to declare the concrete type, which reads the same JSON. `null` round-trips as for any reference type. Under a source-generated context the runtime type must be listed, or the write fails naming it.
+
+```csharp
+record Booking(IRange<int> Seats, IValueSet<string> Tags);
+
+JsonSerializer.Serialize(new Booking(Int32Range.CreateFinite(1, 4), StringSet.From("a")));
+// {"Seats":"[1,4]","Tags":["a"]}
+JsonSerializer.Deserialize<Booking>(json);   // NotSupportedException: declare the concrete type
+```
+
+> Before 9.0 the interfaces carried no converter, so System.Text.Json dumped the interface's members: `IRange<int>` wrote `{}` and `IValueSet<string>` wrote `{"Values":["a"]}`, with no error, and neither read back.
 
 ### Dictionary keys
 

@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges.Core;
 
@@ -12,6 +14,7 @@ namespace CodoMetis.ValueRanges.Core;
 /// closed-world guarantee the same way the private range constructors do.
 /// </remarks>
 /// <typeparam name="T">The element type of the set.</typeparam>
+[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]
 public interface IValueSet<T> where T : IEquatable<T>
 {
     /// <summary>The canonical elements: deduplicated, sorted, never containing <see langword="null"/>.</summary>

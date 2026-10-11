@@ -259,8 +259,17 @@ attribute (whose `ConverterType` is annotated for its constructor, so this is tr
 type names the factory itself, and the closed converter comes from `GenericConverters` (below).
 `CanConvert` is "names a converter of this package", so the factory no longer walks interfaces.
 
-A property declared as the `IRange<T>`/`IValueSet<T>` *interface* is not handled — the interface
-carries no factory to parse back through, so it falls to System.Text.Json's default handling.
+A value declared as one of the *interfaces* — `IRange<T>`, the five shape interfaces, `IValueSet<T>` —
+resolves the interface, whose attribute is not inherited from anything and would otherwise be absent
+(System.Text.Json then dumps the interface's members). Each carries
+`[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]`, one non-generic `JsonConverter<object>`
+that System.Text.Json casts to the declared interface: it writes through
+`options.GetTypeInfo(value.GetType())` — the runtime type's own resolution, reflection-based or
+source-generated, so no generic converter is closed at runtime — and refuses a read with
+`NotSupportedException`, since an interface does not say which type to construct.
+`JsonDefaultContractTests` discovers the core-namespace interfaces each variant implements and checks
+both legs for every shape. The factory interfaces are excluded: their static abstract members rule
+them out as a declared type.
 
 ### Native AOT and `GenericConverters`
 
