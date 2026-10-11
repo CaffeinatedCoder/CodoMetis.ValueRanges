@@ -113,8 +113,9 @@ tabulates both halves together.
   `HasPostgresRange` to create the type and `EnableUnmappedTypes` on the data source.
 - **`Union` is the one set operation whose SQL result is not canonical** — it translates to
   `array_cat`, which concatenates without deduplicating. Harmless inside the duplicate-insensitive
-  operators and on materialization (reads re-canonicalize), but `Count` over a union is refused
-  rather than counting duplicates.
+  operators and on materialization (reads re-canonicalize); anything sensitive to order or
+  duplicates — equality, `Count`, `GroupBy`, `Distinct`, `OrderBy`, an `ExecuteUpdate` value — is
+  refused rather than answering differently from memory, checked on the translated SQL.
 - **Inside a `ToJson()` column** a range, multirange or value set is stored as its store type's
   text, and queries into the document translate through a cast
   (`CAST(doc ->> 'Period' AS daterange) @> @day`). That is a database representation, not the API
