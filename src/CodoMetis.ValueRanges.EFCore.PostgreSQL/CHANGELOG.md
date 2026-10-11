@@ -33,6 +33,10 @@ covers all four packages, which share one version number and release together.
   `-infinity`; a constant could miss the row a parameter matched. Constants now carry the value
   Npgsql would bind. A temporal set whose elements truncate to one microsecond is deduplicated on
   every path, so the stored array's `cardinality` is the set's `Count`.
+- **A range's element operand used the provider's mapping.** `DateTimeOffsetRange.Contains(dto)`
+  threw for any non-UTC offset ("only offset 0 (UTC) is supported"), `DateTimeRange.Contains` for a
+  UTC-kinded `DateTime`, and an element constant was Npgsql's literal. Temporal ranges now give
+  their element operand the range's own normalization and store text.
 
 See also `CodoMetis.ValueRanges` 9.0.0: the types now carry their System.Text.Json converters and
 TypeConverters, and the literal no longer depends on a culture.

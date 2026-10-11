@@ -173,8 +173,11 @@ OpenAPI transformer to copy. The
   own nine-digit literal, so `set.Contains(EF.Constant(x))` missed the element `x` was stored as.
   And a temporal set whose elements truncate to one microsecond was bound with both,
   so the stored array's `cardinality` disagreed with the set's `Count`; it is now deduplicated on
-  every path. Npgsql's own literal for a range's *element* operand (`range.Contains(constant)`)
-  is unchanged — it differs from its parameter only before 2000, and in nanoseconds for NodaTime.
+  every path. A range's *element* operand (`range.Contains(x)`, a constructor argument) has the
+  range's own mapping now too: a constant is the stored value rather than Npgsql's literal, and a
+  parameter is normalized like the bounds — `DateTimeOffsetRange.Contains(dto)` threw "only offset
+  0 (UTC) is supported" for any non-UTC offset, and `DateTimeRange.Contains` likewise for a
+  UTC-kinded `DateTime`.
 
 - **A range built inline in a query failed to translate.** `r.Period == DateRange.CreateFinite(new
   DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31))` — or `Int32Range.Parse("[1,5]", null)`, or any

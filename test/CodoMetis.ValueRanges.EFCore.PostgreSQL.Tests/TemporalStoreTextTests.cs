@@ -1,5 +1,6 @@
 using System.Globalization;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -117,6 +118,33 @@ public sealed class TemporalStoreTextTests
         Assert.AreEqual(
             "\"{2026-03-15T10:20:30.1234560}\"",
             LiteralJsonValueReaderWriter<DateTimeSet<NeverMappedStamp>>.Instance.ToJsonString(set));
+    }
+
+    private static string Where(Func<TestDbContext, IQueryable<Booking>> query)
+    {
+        using var db = new TestDbContext();
+        var sql = query(db).ToQueryString();
+        return sql[sql.IndexOf("WHERE", StringComparison.Ordinal)..].Trim();
+    }
+
+    /// <summary>
+    /// A range's element constant is the range's own: normalized (UTC for <c>timestamptz</c>, no Kind for
+    /// <c>timestamp</c>), truncated, the extremes as infinity — and still self-describing.
+    /// </summary>
+    [TestMethod]
+    public void ARangesElementConstant_IsNormalizedAndTruncated()
+    {
+        var offset = new DateTimeOffset(After2000, TimeSpan.FromMinutes(330));
+
+        Assert.AreEqual(
+            "WHERE b.\"InstantTime\" @> TIMESTAMPTZ '2026-03-15T04:50:30.1234560+00:00'",
+            Where(db => db.Bookings.Where(b => b.InstantTime.Contains(EF.Constant(offset)))));
+        Assert.AreEqual(
+            "WHERE b.\"LocalTime\" @> TIMESTAMP '2026-03-15T10:20:30.1234560'",
+            Where(db => db.Bookings.Where(b => b.LocalTime.Contains(EF.Constant(DateTime.SpecifyKind(After2000, DateTimeKind.Utc))))));
+        Assert.AreEqual(
+            "WHERE b.\"LocalTime\" @> TIMESTAMP '-infinity'",
+            Where(db => db.Bookings.Where(b => b.LocalTime.Contains(EF.Constant(DateTime.MinValue)))));
     }
 
     /// <summary>A wrapper element no model in this project maps — see the test above.</summary>

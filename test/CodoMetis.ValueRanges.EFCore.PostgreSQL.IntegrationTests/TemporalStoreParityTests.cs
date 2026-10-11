@@ -275,6 +275,7 @@ public sealed class TemporalStoreParityTests
 
             failures.AddRange(await ContainsDisagreements(id, probe, loaded));
             failures.AddRange(await ElementConstantDisagreements(id, probe, values));
+            failures.AddRange(await RangeElementDisagreements(id, probe, values));
         }
 
         Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
@@ -414,6 +415,53 @@ public sealed class TemporalStoreParityTests
         await Check("TimeSet", v.TimeSet.Values, e => r => r.Native.TimeSet.Contains(e), e => r => r.Native.TimeSet.Contains(EF.Constant(e)));
         await Check("WallSet", v.WallSet.Values, e => r => r.Native.WallSet.Contains(e), e => r => r.Native.WallSet.Contains(EF.Constant(e)));
         await Check("StzSet", v.StzSet.Values, e => r => r.Native.StzSet.Contains(e), e => r => r.Native.StzSet.Contains(EF.Constant(e)));
+
+        return failures;
+    }
+
+    /// <summary>
+    /// A range's element operand — <c>range @&gt; x</c> — probed with the original, sub-microsecond
+    /// bounds, as a parameter and as a constant, must give one answer. It used to take the provider's
+    /// element mapping: a <c>DateTimeOffset</c> with a non-zero offset (every <c>Stz</c> probe here)
+    /// threw as a parameter, and a constant was Npgsql's own literal — nine digits for NodaTime, which
+    /// the server rounds.
+    /// </summary>
+    private static async Task<IEnumerable<string>> RangeElementDisagreements(int id, string probe, TemporalParityValues v)
+    {
+        var failures = new List<string>();
+
+        async Task Check<T>(string name, IEnumerable<T> points,
+                            Func<T, Expression<Func<TemporalParityRow, bool>>> asParameter,
+                            Func<T, Expression<Func<TemporalParityRow, bool>>> asConstant)
+        {
+            foreach (var point in points)
+            {
+                try
+                {
+                    var parameter = await Count(id, asParameter(point));
+                    var constant  = await Count(id, asConstant(point));
+                    if (parameter != constant)
+                        failures.Add($"[{probe}] {name}.Contains({Text(point)}): as a parameter {parameter == 1}, as a constant {constant == 1}.");
+                }
+                catch (Exception e)
+                {
+                    failures.Add($"[{probe}] {name}.Contains({Text(point)}): {e.GetType().Name}: {(e.InnerException ?? e).Message.Split('\n')[0]}");
+                }
+            }
+        }
+
+        if (v.Wall is DateTimeRange.Finite wall)
+            await Check("Wall", [wall.Start, wall.End], p => r => r.Native.Wall.Contains(p), p => r => r.Native.Wall.Contains(EF.Constant(p)));
+        if (v.Stz is DateTimeOffsetRange.Finite stz)
+            await Check("Stz", [stz.Start, stz.End], p => r => r.Native.Stz.Contains(p), p => r => r.Native.Stz.Contains(EF.Constant(p)));
+        if (v.Time is TimeRange.Finite time)
+            await Check("Time", [time.Start, time.End], p => r => r.Native.Time.Contains(p), p => r => r.Native.Time.Contains(EF.Constant(p)));
+        if (v.NWall is LocalDateTimeRange.Finite nwall)
+            await Check("NWall", [nwall.Start, nwall.End], p => r => r.Native.NWall.Contains(p), p => r => r.Native.NWall.Contains(EF.Constant(p)));
+        if (v.NInst is InstantRange.Finite ninst)
+            await Check("NInst", [ninst.Start, ninst.End], p => r => r.Native.NInst.Contains(p), p => r => r.Native.NInst.Contains(EF.Constant(p)));
+        if (v.NInst is InstantRange.Finite ninstDoc)
+            await Check("NInst (document)", [ninstDoc.Start, ninstDoc.End], p => r => r.Doc.NInst.Contains(p), p => r => r.Doc.NInst.Contains(EF.Constant(p)));
 
         return failures;
     }

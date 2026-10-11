@@ -53,6 +53,15 @@ internal sealed class RangeTypeDefinition<TRange, T> : IRangeTypeDefinition
 
         RangeTypeMapping    = new ValueRangeTypeMapping<TRange, T>(rangeStoreType, toStore, infinityText);
         RangeSetTypeMapping = new ValueRangeSetTypeMapping<TRange, T>(multirangeStoreType, toStore, infinityText);
+
+        // A bound or element operand — range @> x, a constructor argument — has to reach the store as
+        // the range's own bounds do: normalized (a non-UTC DateTimeOffset otherwise throws on the way to
+        // a timestamptz parameter) and at the store's resolution (a constant was Npgsql's literal).
+        // Ranges without either keep the provider's element mapping.
+        ElementTypeMapping = toStore is null && infinityText is null
+                                 ? null
+                                 : new RangeElementTypeMapping<TRange, T>(
+                                     elementStoreType, toStore ?? (static value => value), infinityText ?? (static _ => null));
     }
 
     public Type RangeClrType => typeof(TRange);
@@ -73,6 +82,8 @@ internal sealed class RangeTypeDefinition<TRange, T> : IRangeTypeDefinition
     public RelationalTypeMapping RangeTypeMapping { get; }
 
     public RelationalTypeMapping RangeSetTypeMapping { get; }
+
+    public RelationalTypeMapping? ElementTypeMapping { get; }
 
     public object EmptyRange => TRange.Empty;
 
