@@ -125,7 +125,7 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
     /// </summary>
     static JsonConverter<YearMonth>? IValueSetFactory<YearMonthSet, YearMonth>.ElementJsonConverter
-        => ValueSetTextElementJsonConverter<YearMonthSet, YearMonth>.Instance;
+        => NodaElementJson.YearMonth;
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{2024-01,2024-06}</c>, <c>{}</c>) into a

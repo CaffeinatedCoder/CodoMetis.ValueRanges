@@ -103,7 +103,7 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
     /// </summary>
     static JsonConverter<LocalTime>? IValueSetFactory<LocalTimeSet, LocalTime>.ElementJsonConverter
-        => ValueSetTextElementJsonConverter<LocalTimeSet, LocalTime>.Instance;
+        => NodaElementJson.LocalTime;
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{09:00:00,17:30:00}</c>, <c>{}</c>) into a

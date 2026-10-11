@@ -88,7 +88,7 @@ JsonSerializer.Serialize(new { Day = new LocalDate(2025, 1, 1), Days = holidays 
 // {"Day":"2025-01-01","Days":["2025-01-01","2025-12-26"]}
 ```
 
-It registers the converter factory plus the same five element converters on the options, so a `LocalDate` property outside a set gets the ISO 8601 form too. Element types already claimed by a registered converter are left alone, which makes it idempotent and order-independent against NodaTime.Serialization.SystemTextJson:
+It registers the converter factory plus the same five element converters on the options, so a `LocalDate` property outside a set gets the ISO 8601 form too. The element converters are a fallback: any other converter on the same options that handles one of the five types is used instead, wherever it was registered. That makes the call idempotent, and NodaTime.Serialization.SystemTextJson stays authoritative in either order:
 
 ```csharp
 var options = new JsonSerializerOptions()
@@ -97,6 +97,10 @@ var options = new JsonSerializerOptions()
 ```
 
 Reach for that package when the payload carries NodaTime types beyond these five.
+
+A bare `LocalDate`, `LocalDateTime` or `YearMonth` in a calendar other than ISO is refused on write with an `ArgumentException`, as NodaTime's own converter refuses it. Its ISO 8601 text would spell the other calendar's fields, so a Julian `LocalDate(2024, 1, 1)` (ISO 2024-01-14) would read back as ISO 2024-01-01. Convert it with `WithCalendar(CalendarSystem.Iso)` first. Sets and ranges never get that far: they convert a non-ISO value to ISO at construction, or reject it (`YearMonth`).
+
+> Before 9.0 the element converters claimed a type by being registered first, so `AddNodaTimeRangeConverters().ConfigureForNodaTime(…)` shadowed NodaTime's converters, and a bare non-ISO value was written in its own calendar's fields with no error.
 
 ## Two documented caveats, dissolved
 

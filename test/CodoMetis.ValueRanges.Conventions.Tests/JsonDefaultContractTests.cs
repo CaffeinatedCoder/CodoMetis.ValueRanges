@@ -99,6 +99,20 @@ public sealed class JsonDefaultContractTests
             Assert.AreEqual(range, JsonSerializer.Deserialize(expected, variant, Unregistered),
                 $"{label}: did not read back through its variant.");
 
+            // Declared as an interface — IRange<T> and the shape interface — the write goes through
+            // the runtime type's converter, and a read is refused rather than property-dumped.
+            var interfaces = DeclarableInterfacesOf(variant);
+            Assert.IsTrue(interfaces.Count >= 2,
+                $"{label}: found {interfaces.Count} declarable interfaces, expected IRange<T> and a shape interface.");
+            foreach (var declared in interfaces)
+            {
+                Assert.AreEqual(expected, JsonSerializer.Serialize(range, declared, Unregistered),
+                    $"{label}: declared as {declared.Name}, the wire form differs. Is the interface missing "
+                  + "[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]?");
+                Assert.ThrowsExactly<NotSupportedException>(() => JsonSerializer.Deserialize(expected, declared, Unregistered),
+                    $"{label}: declared as {declared.Name}, a read was not refused.");
+            }
+
             var set         = RangeSet<TRange, T>.From([range]);
             var expectedSet = JsonSerializer.Serialize(set, Registered);
             Assert.AreEqual(expectedSet, JsonSerializer.Serialize(set, Unregistered),
@@ -118,6 +132,83 @@ public sealed class JsonDefaultContractTests
             Assert.AreEqual(range, variantBack.Keys.Cast<object>().Single(), $"{label}: as a variant-typed key, did not read back.");
         }
     }
+
+    /// <summary>
+    /// A converter registered on the options for a union reaches every one of its shapes, however
+    /// the value is declared — the union, its variant, <see langword="object"/>, an
+    /// <c>object</c> collection, a dictionary value or a variant-typed key. Before 9.0.0 it reached
+    /// only union-typed declarations: the rest resolved to the variant's own attribute and wrote the
+    /// literal, so one payload mixed two wire forms.
+    /// </summary>
+    [TestMethod]
+    public void EveryRangeShape_HonoursAUnionConverterOnTheOptions()
+    {
+        foreach (var (rangeType, elementType) in RangeProbes.AllRangeTypes())
+            Reflect.InvokeGeneric(typeof(JsonDefaultContractTests), nameof(AssertUnionConverterReachesShapes), rangeType, elementType);
+    }
+
+    private static void AssertUnionConverterReachesShapes<TRange, T>()
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var options = new JsonSerializerOptions { Converters = { new TaggedRangeConverter<TRange, T>() } };
+
+        foreach (var range in RangeProbes.Shapes<TRange, T>())
+        {
+            var variant  = range.GetType();
+            var label    = $"{typeof(TRange).Name}.{variant.Name} {range}";
+            var expected = JsonSerializer.Serialize(range, options);
+
+            Assert.StartsWith("\"tag:", expected, $"{label}: declared as the union, the registered converter was not used.");
+            Assert.AreEqual(expected, JsonSerializer.Serialize(range, variant, options), $"{label}: declared as its variant.");
+            Assert.AreEqual(expected, JsonSerializer.Serialize<object>(range, options), $"{label}: through object.");
+            Assert.AreEqual($"[{expected}]", JsonSerializer.Serialize(new List<object> { range }, options), $"{label}: in a List<object>.");
+            Assert.AreEqual($"{{\"v\":{expected}}}",
+                JsonSerializer.Serialize(new Dictionary<string, object> { ["v"] = range }, options), $"{label}: as a dictionary value.");
+
+            Assert.AreEqual(range, JsonSerializer.Deserialize(expected, variant, options), $"{label}: did not read back through its variant.");
+
+            var byVariant = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(variant, typeof(int)))!;
+            byVariant.Add(range, 1);
+            var variantJson = JsonSerializer.Serialize(byVariant, byVariant.GetType(), options);
+            Assert.AreEqual($"{{{expected}:1}}", variantJson, $"{label}: as a variant-typed key.");
+            Assert.AreEqual(range, ((IDictionary)JsonSerializer.Deserialize(variantJson, byVariant.GetType(), options)!).Keys.Cast<object>().Single(),
+                $"{label}: as a variant-typed key, did not read back.");
+        }
+    }
+
+    /// <summary>A custom wire form for any range type: its literal behind a prefix, keys included.</summary>
+    private sealed class TaggedRangeConverter<TRange, T> : System.Text.Json.Serialization.JsonConverter<TRange>
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        public override TRange Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => Parse(reader.GetString()!);
+
+        public override void Write(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
+            => writer.WriteStringValue($"tag:{value}");
+
+        public override TRange ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => Parse(reader.GetString()!);
+
+        public override void WriteAsPropertyName(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
+            => writer.WritePropertyName($"tag:{value}");
+
+        private static TRange Parse(string s)
+            => s.StartsWith("tag:", StringComparison.Ordinal)
+                   ? TRange.Parse(s.AsSpan("tag:".Length), null)
+                   : throw new JsonException($"Expected a tagged literal, got '{s}'.");
+    }
+
+    /// <summary>
+    /// The package's interfaces a value can be declared as: those in the core namespace a variant
+    /// implements, minus the factory interfaces, whose static abstract members rule them out as a
+    /// declared type. Discovered, so a new shape interface is checked with no edit here.
+    /// </summary>
+    private static List<Type> DeclarableInterfacesOf(Type variant)
+        => [.. variant.GetInterfaces()
+                      .Where(i => i.Namespace == typeof(IRange<>).Namespace
+                               && !i.GetMethods().Any(m => m is { IsStatic: true, IsAbstract: true }))];
 
     /// <summary>
     /// As a dictionary key the value is the same literal as its value form, and reads back.
@@ -157,6 +248,11 @@ public sealed class JsonDefaultContractTests
                 $"{label}: the unregistered wire form differs. Is the set type missing its [JsonConverter]?");
             Assert.AreEqual(set, JsonSerializer.Deserialize<TSet>(expected, Unregistered),
                 $"{label}: did not read back.");
+
+            Assert.AreEqual(expected, JsonSerializer.Serialize<IValueSet<T>>(set, Unregistered),
+                $"{label}: declared as IValueSet<T>, the wire form differs.");
+            Assert.ThrowsExactly<NotSupportedException>(() => JsonSerializer.Deserialize<IValueSet<T>>(expected, Unregistered),
+                $"{label}: declared as IValueSet<T>, a read was not refused.");
         }
     }
 }

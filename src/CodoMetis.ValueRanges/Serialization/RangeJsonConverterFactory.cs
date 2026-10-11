@@ -7,7 +7,8 @@ using CodoMetis.ValueRanges.Core;
 namespace CodoMetis.ValueRanges.Serialization;
 
 /// <summary>
-/// A <see cref="JsonConverterFactory"/> for every range, range set and value set type. Since 9.0.0
+/// A <see cref="JsonConverterFactory"/> for every range, range set and value set type, and the range and set
+/// interfaces (see <see cref="InterfaceDeclaredJsonConverter"/>). Since 9.0.0
 /// each of those types carries its converter as a <c>[JsonConverter]</c> attribute, so registering
 /// this factory is no longer needed; it remains valid and produces the same converters.
 /// </summary>

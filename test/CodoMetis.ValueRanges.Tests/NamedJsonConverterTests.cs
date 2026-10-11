@@ -15,11 +15,16 @@ namespace CodoMetis.ValueRanges.Tests;
 [TestClass]
 public class NamedJsonConverterTests
 {
-    /// <summary>Every exported converter whose name ends in <c>JsonConverter</c>.</summary>
+    /// <summary>
+    /// Every exported converter whose name ends in <c>JsonConverter</c>, except
+    /// <see cref="InterfaceDeclaredJsonConverter"/>: it is bound to no family — it serves the
+    /// interfaces every family shares, through the runtime type — and has its own tests.
+    /// </summary>
     private static IEnumerable<Type> DeclaredConverters =>
         typeof(RangeJsonConverterFactory).Assembly
             .GetExportedTypes()
             .Where(t => t is { IsAbstract: false, IsGenericTypeDefinition: false }
+                     && t != typeof(InterfaceDeclaredJsonConverter)
                      && t.Name.EndsWith("JsonConverter", StringComparison.Ordinal))
             .OrderBy(t => t.Name, StringComparer.Ordinal);
 

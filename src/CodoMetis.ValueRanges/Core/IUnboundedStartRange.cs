@@ -1,4 +1,6 @@
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges.Core;
 
@@ -6,6 +8,7 @@ namespace CodoMetis.ValueRanges.Core;
 /// Represents a range that is unbounded on the left: <c>(-∞, End]</c> or <c>(-∞, End)</c>.
 /// </summary>
 /// <typeparam name="T">The element type of the range.</typeparam>
+[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]
 public interface IUnboundedStartRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
 {
     /// <summary>Gets the upper (right) bound of the range.</summary>

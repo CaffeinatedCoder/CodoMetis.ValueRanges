@@ -152,7 +152,13 @@ JsonSerializer.Serialize(DateRange.CreateFinite(new DateOnly(2026, 1, 1),
 
 > Before 9.0 the converters were opt-in. Without the registration System.Text.Json fell back to dumping public properties — `DateRange` wrote `{"Length":181}` — and could not read any of it back.
 
-The attribute is the lowest-precedence way System.Text.Json picks a converter, so one you register on the options or put on a property still wins. `AddRangeConverters()` and `RangeJsonConverterFactory` remain and produce the same output; registering them is harmless and now redundant:
+The attribute is the lowest-precedence way System.Text.Json picks a converter, so one you register on the options or put on a property still wins.
+
+A converter registered on the options for a range union also reaches the union's variants. System.Text.Json resolves a converter by the exact type it is handed, and a range reached through `object` — a boxed value, an `object` collection, a dictionary of `object` — or declared as a variant (`Int32Range.Finite`) is handed over as its variant, whose own attribute would answer with the literal. So the variant converter looks for the converter System.Text.Json would choose for the union from `Converters` (the first that handles it, a `JsonConverter<Int32Range>` or a factory producing one) and, unless that is this package's own, hands the value to it: values and dictionary keys, on write and on read. A read goes through the union and narrows, so a variant-typed declaration still refuses a value of another shape with `JsonException`. One payload therefore has one wire form per type, however its values are declared. A converter on a *property* stays scoped to that property, and one registered for a variant type itself wins for that variant, as for any type.
+
+> Before 9.0 a converter on the options for `Int32Range` reached union-typed declarations only: `Serialize(range)` used it, while `Serialize<object>(range)`, a `List<object>` and a variant-typed property wrote the literal.
+
+`AddRangeConverters()` and `RangeJsonConverterFactory` remain and produce the same output; registering them is harmless and now redundant:
 
 ```csharp
 using CodoMetis.ValueRanges.Serialization;
@@ -201,7 +207,19 @@ JsonSerializer.Serialize<object>(Int32Range.CreateFinite(1, 5));   // "\"[1,5]\"
 JsonSerializer.Serialize(new List<object> { range, dateRange });   // ["[1,5]","[2024-01-01,2024-03-01]"]
 ```
 
-Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `"empty"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening. A property declared as the `IRange<T>` interface is *not* covered — the interface carries no factory to parse back through; declare it as the union type.
+Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `"empty"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening.
+
+A value declared as one of the package's interfaces — `IRange<T>`, a shape interface such as `IFiniteRange<T>`, or `IValueSet<T>` — is written through its runtime type's converter, so it is the same literal or array as when it is declared as that type (and a converter you registered for that type applies). Reading into such a declaration throws `NotSupportedException`: the interface does not say which type to construct, and the remedy is to declare the concrete type, which reads the same JSON. `null` round-trips as for any reference type. Under a source-generated context the runtime type must be listed, or the write fails naming it.
+
+```csharp
+record Booking(IRange<int> Seats, IValueSet<string> Tags);
+
+JsonSerializer.Serialize(new Booking(Int32Range.CreateFinite(1, 4), StringSet.From("a")));
+// {"Seats":"[1,4]","Tags":["a"]}
+JsonSerializer.Deserialize<Booking>(json);   // NotSupportedException: declare the concrete type
+```
+
+> Before 9.0 the interfaces carried no converter, so System.Text.Json dumped the interface's members: `IRange<int>` wrote `{}` and `IValueSet<string>` wrote `{"Values":["a"]}`, with no error, and neither read back.
 
 ### Dictionary keys
 
@@ -242,7 +260,7 @@ It is consulted last — only when System.Text.Json has no scalar converter for 
 JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)));   // ["2024-01-01"]
 ```
 
-The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
+The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach. Those converters are a fallback too — any other converter on the options for the same type wins, in either registration order, so NodaTime.Serialization.SystemTextJson stays authoritative — and a bare `LocalDate`, `LocalDateTime` or `YearMonth` in a calendar other than ISO is refused on write with an `ArgumentException`, as NodaTime's converter refuses it. See the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
 
 ## Native AOT
 

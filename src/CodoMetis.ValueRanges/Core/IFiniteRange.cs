@@ -1,4 +1,6 @@
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges.Core;
 
@@ -6,6 +8,7 @@ namespace CodoMetis.ValueRanges.Core;
 /// Represents a range that is bounded on both sides.
 /// </summary>
 /// <typeparam name="T">The element type of the range.</typeparam>
+[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]
 public interface IFiniteRange<T> : IRange<T> where T : struct, IComparable<T>, IEquatable<T>
 {
     /// <summary>Gets the lower (left) bound of the range.</summary>

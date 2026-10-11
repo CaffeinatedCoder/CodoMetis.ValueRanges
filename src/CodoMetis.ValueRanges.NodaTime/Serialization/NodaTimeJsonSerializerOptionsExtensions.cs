@@ -1,5 +1,4 @@
 using System.Text.Json;
-using CodoMetis.ValueRanges.Core;
 using NodaTime;
 
 namespace CodoMetis.ValueRanges.Serialization;
@@ -26,11 +25,20 @@ public static class NodaTimeRangeJsonSerializerOptionsExtensions
     /// The range types are unaffected either way; they format themselves.
     /// </para>
     /// <para>
-    /// Composes with NodaTime.Serialization.SystemTextJson in either registration order: an
-    /// element type already handled by a registered converter is left alone, so
-    /// <c>ConfigureForNodaTime</c> stays authoritative where it is used. Reach for that package
-    /// when the payload also carries NodaTime types beyond these five
-    /// (<c>Duration</c>, <c>Period</c>, <c>ZonedDateTime</c>, …).
+    /// The element converters are a fallback. Any other converter on the same options that handles
+    /// one of the five types is used instead, wherever it sits in
+    /// <see cref="JsonSerializerOptions.Converters"/> — so this composes with
+    /// NodaTime.Serialization.SystemTextJson in either registration order, and <c>ConfigureForNodaTime</c>
+    /// stays authoritative for the types it covers. Reach for that package when the payload also
+    /// carries NodaTime types beyond these five (<c>Duration</c>, <c>Period</c>, <c>ZonedDateTime</c>, …).
+    /// </para>
+    /// <para>
+    /// A bare <see cref="LocalDate"/>, <see cref="LocalDateTime"/> or <see cref="YearMonth"/> in a
+    /// calendar other than ISO is refused on write with an <see cref="ArgumentException"/>, as
+    /// NodaTime's own converter refuses it: its ISO 8601 text would spell the other calendar's fields
+    /// and read back as a different value (a Julian 2024-01-01 is ISO 2024-01-14). Convert it with
+    /// <c>WithCalendar(CalendarSystem.Iso)</c> first. Sets and ranges are unaffected — they convert a
+    /// non-ISO value to ISO at construction, or reject it.
     /// </para>
     /// </remarks>
     /// <example>
@@ -48,24 +56,9 @@ public static class NodaTimeRangeJsonSerializerOptionsExtensions
         if (!options.Converters.Any(static c => c is RangeJsonConverterFactory))
             options.Converters.Add(new RangeJsonConverterFactory());
 
-        AddElementConverter<LocalDateSet, LocalDate>(options);
-        AddElementConverter<LocalDateTimeSet, LocalDateTime>(options);
-        AddElementConverter<LocalTimeSet, LocalTime>(options);
-        AddElementConverter<InstantSet, Instant>(options);
-        AddElementConverter<YearMonthSet, YearMonth>(options);
+        if (!options.Converters.Any(static c => c is NodaElementJsonConverterFactory))
+            options.Converters.Add(new NodaElementJsonConverterFactory());
 
         return options;
-    }
-
-    private static void AddElementConverter<TSet, T>(JsonSerializerOptions options)
-        where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
-        where T : IEquatable<T>
-    {
-        // Whoever claimed the element type first wins — this is what makes the method
-        // idempotent and order-independent against ConfigureForNodaTime.
-        if (options.Converters.Any(static c => c.CanConvert(typeof(T))))
-            return;
-
-        options.Converters.Add(ValueSetTextElementJsonConverter<TSet, T>.Instance);
     }
 }

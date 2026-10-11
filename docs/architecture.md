@@ -224,9 +224,8 @@ what each attribute names:
   directly with no reflection.
 - **`RangeSet<TRange, T>` and the wrapper arities name `RangeJsonConverterFactory`.** An attribute
   cannot name an open generic converter (`typeof(RangeSetJsonConverter<,>)` fails at runtime with
-  `ContainsGenericParameters`), so these go through the factory, which looks the closed converter up
-  in `GenericConverters`: each generic type registers its own from a static field, never through
-  `MakeGenericType`, so the converter exists under Native AOT.
+  `ContainsGenericParameters`), so these name the factory, which takes the closed converter from the
+  type's own `GenericConverters` registration (see *Native AOT* below) — never from `MakeGenericType`.
 
 `[TypeConverter]` follows the same three rules with `RangeTypeConverter`, `RangeVariantTypeConverter`,
 `ValueSetTypeConverter` and, for the generic types, `LiteralTypeConverter` — which `TypeDescriptor`
@@ -245,14 +244,32 @@ System.Text.Json resolves converters by the type it is handed, so `Serialize<obj
 always a variant. That is why every variant carries its own `[JsonConverter]` naming
 `RangeVariantJsonConverter` (see *Type-level attributes* above).
 
+The same rule means a converter a consumer registers on the options for the *union* never matches a
+variant on its own — `JsonConverter<Int32Range>.CanConvert(typeof(Int32Range.Finite))` is false — so
+the variant's attribute would answer with the literal while union-typed declarations got the custom
+form. `RangeVariantJsonConverter` therefore looks up what System.Text.Json would choose for the union
+from `Converters` (first match, a factory expanded through its own `CreateConverter`) and delegates to
+it, values and keys, unless that is a converter from this package. The lookup is cached per options
+instance once the options are read-only. Reads go through the union and narrow, as the literal path
+does. Nothing is built by reflection.
+
 Since 9.0.0 `RangeJsonConverterFactory` builds nothing at runtime. It reads the type's own
 `[JsonConverter]`: a non-generic type names a closed converter, which the factory creates from the
 attribute (whose `ConverterType` is annotated for its constructor, so this is trim-safe); a generic
 type names the factory itself, and the closed converter comes from `GenericConverters` (below).
 `CanConvert` is "names a converter of this package", so the factory no longer walks interfaces.
 
-A property declared as the `IRange<T>`/`IValueSet<T>` *interface* is not handled — the interface
-carries no factory to parse back through, so it falls to System.Text.Json's default handling.
+A value declared as one of the *interfaces* — `IRange<T>`, the five shape interfaces, `IValueSet<T>` —
+resolves the interface, whose attribute is not inherited from anything and would otherwise be absent
+(System.Text.Json then dumps the interface's members). Each carries
+`[JsonConverter(typeof(InterfaceDeclaredJsonConverter))]`, one non-generic `JsonConverter<object>`
+that System.Text.Json casts to the declared interface: it writes through
+`options.GetTypeInfo(value.GetType())` — the runtime type's own resolution, reflection-based or
+source-generated, so no generic converter is closed at runtime — and refuses a read with
+`NotSupportedException`, since an interface does not say which type to construct.
+`JsonDefaultContractTests` discovers the core-namespace interfaces each variant implements and checks
+both legs for every shape. The factory interfaces are excluded: their static abstract members rule
+them out as a declared type.
 
 ### Native AOT and `GenericConverters`
 
@@ -302,14 +319,17 @@ asserted rather than fixed (`SetJsonConverterTests`) — matching the native wri
 would mean reproducing System.Text.Json's temporal formatting for an element known only through
 `IFormattable`, and the round-trip form is the one the array literal and the EF bridge share.
 The NodaTime satellite defines
-one per set (`Serialization/NodaTimeElementJsonConverter.cs`, namespace
+one per element type (`Serialization/NodaElementJsonConverters.cs`, namespace
 `CodoMetis.ValueRanges.Serialization`), each reusing the family's own `ParseValue`/`FormatValue` so
-JSON, array literals and the wire form share one text form. The satellite additionally exposes
-`AddNodaTimeRangeConverters()`, which puts those same converters on the options — the hook only
-reaches set elements, so this is what covers bare NodaTime properties alongside a set. It skips
-element types an existing converter already claims, which makes it idempotent and
-order-independent against `ConfigureForNodaTime`. Range types are unaffected throughout — they
-format themselves.
+JSON, array literals and the wire form share one text form; the three calendar-bearing ones refuse a
+non-ISO value on write, as NodaTime's own converter does (a set has already normalized it). The
+satellite additionally exposes `AddNodaTimeRangeConverters()`, which puts those same converters on
+the options behind a factory — the hook only reaches set elements, so this is what covers bare
+NodaTime properties alongside a set. The factory is resolved only once the options are in use, so it
+looks past itself and hands over any other converter registered for the type, wherever it sits in
+`Converters`: that is what keeps `ConfigureForNodaTime` authoritative in either call order (a plain
+converter list is first-match, which made the order decide). Range types are unaffected throughout —
+they format themselves.
 
 ## EF Core PostgreSQL (`src/CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
 
