@@ -12,7 +12,7 @@ covers all four packages, which share one version number and release together.
   now do — previously a property dump that did not read back. The four ranges are also dictionary
   keys now, and every type carries a `TypeConverter`, so configuration binding works. The five wrapper sets
   register their own closed converters, so they work under Native AOT; the package builds with
-  `IsAotCompatible`. Parsing ignores the
+  `IsAotCompatible` and is tagged `native-aot` and `trimming`. Parsing ignores the
   provider, as for the core types (the NodaTime element parsers already used fixed ISO patterns). See
   `CodoMetis.ValueRanges` 9.0.0.
 
