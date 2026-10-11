@@ -90,6 +90,13 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
   wrong-shape key is the same `JsonException`. `DictionaryKeyPolicy` is not applied — a naming
   policy would rewrite the literal into text that does not parse. Value sets are not keys: their
   value form is a JSON array, not a string.
+- **Docs: an OpenAPI schema transformer.** ASP.NET Core's generator describes a range, multirange
+  or value set body as `{}` — it cannot see through a custom converter, and .NET 10 has no public
+  hook for a converter to declare its schema. `docs/serialization.md#openapi` carries a
+  `IOpenApiSchemaTransformer` to copy into an API project: ranges and multiranges as `type: string`
+  with a literal pattern, value sets as arrays of unique elements. It ships in no package; the
+  repository compiles and tests it against `Microsoft.AspNetCore.OpenApi` 10 and holds the doc to
+  the tested copy verbatim. Query and route parameters were already `type: string`.
 - **Tests:** `TypeConverterContractTests` (conventions) converts every shape through the union's and
   the variant's converter under `de-DE`, and every set family. A new
   `CodoMetis.ValueRanges.AspNetCore.Tests` project runs configuration binding and a real ASP.NET

@@ -221,3 +221,77 @@ JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)));   // ["2
 
 The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
 
+## OpenAPI
+
+ASP.NET Core's OpenAPI generator (`Microsoft.AspNetCore.OpenApi`) builds schemas from System.Text.Json's contract, and it cannot see through a custom converter — there is no public API in .NET 10 for a converter to declare its schema. So a range, multirange or value set in a request or response body is described as `{}`, an unconstrained value. Query, route and header parameters are unaffected: they bind through `TryParse`, and ASP.NET Core describes those as `type: string` on its own.
+
+The package ships no OpenAPI dependency. Copy this schema transformer into your API project instead — it is compiled and tested in this repository against `Microsoft.AspNetCore.OpenApi` 10, verbatim:
+
+```csharp
+using CodoMetis.ValueRanges;
+using CodoMetis.ValueRanges.Core;
+using Microsoft.AspNetCore.OpenApi;
+using Microsoft.OpenApi;
+
+/// <summary>
+/// Describes CodoMetis.ValueRanges types in ASP.NET Core's OpenAPI document as they appear on the
+/// wire. Without it a range, multirange or value set is described as <c>{}</c>: the generator
+/// cannot see through a custom JSON converter. Register it with
+/// <c>builder.Services.AddOpenApi(o => o.AddSchemaTransformer&lt;ValueRangesSchemaTransformer&gt;());</c>
+/// </summary>
+public sealed class ValueRangesSchemaTransformer : IOpenApiSchemaTransformer
+{
+    // Mirrors what the parsers accept: surrounding whitespace, "empty" in any case, quoted bounds.
+    private const string RangePattern      = @"^\s*([Ee][Mm][Pp][Tt][Yy]|[\[(][\s\S]*,[\s\S]*[\])])\s*$";
+    private const string MultirangePattern = @"^\s*\{[\s\S]*\}\s*$";
+
+    public async Task TransformAsync(
+        OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken cancellationToken)
+    {
+        var type = context.JsonTypeInfo.Type;
+
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(RangeSet<,>))
+        {
+            var element = type.GetGenericArguments()[1];
+            schema.Type        = JsonSchemaType.String;
+            schema.Pattern     = MultirangePattern;
+            schema.Description = $"A PostgreSQL multirange literal over {element.Name}: ranges in braces, "
+                               + "e.g. {[1,5],[7,10]}, or {} for none.";
+        }
+        else if (FactoryElement(type, typeof(IRangeFactory<,>)) is { } rangeElement)
+        {
+            schema.Type        = JsonSchemaType.String;
+            schema.Pattern     = RangePattern;
+            schema.Description = $"A PostgreSQL range literal over {rangeElement.Name}: [ ] include a bound, "
+                               + "( ) exclude it, an omitted bound is unbounded, e.g. [1,10) or [5,); "
+                               + "or 'empty'.";
+        }
+        else if (FactoryElement(type, typeof(IValueSetFactory<,>)) is { } setElement)
+        {
+            schema.Type        = JsonSchemaType.Array;
+            schema.UniqueItems = true;
+            schema.Items       = await context.GetOrCreateSchemaAsync(setElement, cancellationToken: cancellationToken);
+            schema.Description = $"A set of distinct {setElement.Name} values.";
+        }
+    }
+
+    // A range variant (DateRange.Finite, …) inherits its union's IRangeFactory, so it is described too.
+    private static Type? FactoryElement(Type type, Type openFactory)
+        => Array.Find(type.GetInterfaces(), i => i.IsGenericType && i.GetGenericTypeDefinition() == openFactory)
+               ?.GetGenericArguments()[1];
+}
+```
+
+```csharp
+builder.Services.AddOpenApi(o => o.AddSchemaTransformer<ValueRangesSchemaTransformer>());
+```
+
+What it produces:
+
+| Type | Schema |
+|---|---|
+| a range type or variant (`DateRange`, `DateRange.Finite`, …) | `type: string`, a `pattern` for the range literal, a description naming the element type |
+| `RangeSet<TRange, T>` | `type: string`, a `pattern` for the multirange literal |
+| a value set (`StringSet`, `Int32Set<OrderId>`, …) | `type: array`, `uniqueItems: true`, `items` from the element type's own schema |
+
+The patterns are deliberately loose — they accept whatever the parsers accept (surrounding whitespace, `empty` in any case, quoted bounds containing commas), since a pattern that rejected a valid literal would make a validating client refuse good input. They tell a reader the shape; the server's parser remains the authority. A wrapper element with its own `[JsonConverter]` is described by whatever that element's schema is, which is again `{}` unless you describe it too.
