@@ -23,6 +23,10 @@ covers all four packages, which share one version number and release together.
   a `[1.5,2)` interpolated as `[1,5,2)` and parsed back as `[1,52)`. A `null` provider is now the
   invariant culture.
 
+- **⚠️ Decimal bounds and elements parse with PostgreSQL's numeric grammar** (`NumberStyles.Float`
+  instead of `Any`): `"1,000"`, `"(5)"` and currency symbols are a `FormatException` rather than
+  1000, −5 and 5, and `DecimalRange.Parse("[1.5,2.5)", de-DE)` fails instead of returning `[15,25)`.
+
 ### Added
 
 - **A `TypeConverter` on every range, variant, `RangeSet` and value set.** Configuration binding of

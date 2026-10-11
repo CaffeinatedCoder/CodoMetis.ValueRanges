@@ -72,7 +72,7 @@ public sealed class DecimalSet : IValueSet<decimal>, IValueSetFactory<DecimalSet
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
     public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => decimal.Parse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture);
+        => decimal.Parse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{1.5,2.25}</c>, <c>{}</c>) into a

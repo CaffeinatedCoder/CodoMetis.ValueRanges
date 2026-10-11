@@ -58,6 +58,15 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
   invariant culture explicitly. `LiteralCultureContractTests` (conventions) formats every shape,
   multirange and set family under `de-DE`, `sv-SE`, `fa-IR` and `th-TH`.
 
+- **⚠️ Decimal bounds and elements parse with PostgreSQL's numeric grammar.** `DecimalRange` and
+  `DecimalSet` parsed with `NumberStyles.Any`, which also accepts group separators, currency
+  symbols and parenthesised negatives: `["1,000",2000]` read as `[1000,2000]`, `"(5)"` as −5 —
+  literals PostgreSQL rejects. It is also what let `5,2` read as 52 above, and what made an
+  explicit comma-decimal provider misread silently: `DecimalRange.Parse("[1.5,2.5)", de-DE)` was
+  `[15,25)`. They now parse with `NumberStyles.Float` — sign, digits, point, exponent — and those
+  inputs are a `FormatException`. Integer types already used `NumberStyles.Integer`. **If you
+  relied on the lenient forms, they now fail.**
+
 ### Added
 
 - **A `TypeConverter` on every range, variant, multirange and value set.** None had one, so

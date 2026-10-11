@@ -347,4 +347,28 @@ public class RangeParseFormatTests
             CultureInfo.CurrentCulture = original;
         }
     }
+
+    /// <summary>
+    /// Decimal bounds parse with PostgreSQL's numeric grammar — sign, digits, point, exponent. They
+    /// used <c>NumberStyles.Any</c>, which also accepted group separators, currency symbols and
+    /// parenthesised negatives that PostgreSQL rejects, and that is what let <c>"5,2"</c> read as 52.
+    /// </summary>
+    [TestMethod]
+    [DataRow("[\"1,000\",2000]")]
+    [DataRow("[\"(5)\",10]")]
+    [DataRow("[\"¤5\",10]")]
+    public void DecimalBound_OutsidePostgresNumericGrammar_IsRejected(string literal)
+        => Assert.ThrowsExactly<FormatException>(() => DecimalRange.Parse(literal, null));
+
+    [TestMethod]
+    public void DecimalBound_ExponentStillParses()
+        => Assert.AreEqual(DecimalRange.CreateFinite(100m, 2000m, endInclusive: true), DecimalRange.Parse("[1e2,2E3]", null));
+
+    /// <summary>
+    /// An explicit comma-decimal provider used to read <c>1.5</c> as fifteen, silently: <c>.</c> is
+    /// de-DE's group separator. It is now a format error.
+    /// </summary>
+    [TestMethod]
+    public void DecimalBound_UnderACommaDecimalProvider_FailsInsteadOfMisreading()
+        => Assert.ThrowsExactly<FormatException>(() => DecimalRange.Parse("[1.5,2.5)", CultureInfo.GetCultureInfo("de-DE")));
 }

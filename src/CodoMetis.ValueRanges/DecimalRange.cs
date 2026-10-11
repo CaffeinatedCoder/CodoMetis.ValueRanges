@@ -196,7 +196,7 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
 
     /// <inheritdoc />
     public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => decimal.Parse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture);
+        => decimal.Parse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Parses a PostgreSQL range literal (e.g. <c>[1.5,9.9)</c>, <c>empty</c>, <c>(,)</c>)
