@@ -8,8 +8,10 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 
 /// <summary>
 /// Reads and writes a range, multirange or value set inside an EF Core JSON column (a complex or
-/// owned type mapped with <c>ToJson()</c>) as its PostgreSQL literal string — the same text the
-/// type's <c>ToString()</c> produces and its <c>Parse</c> reads, always invariant.
+/// owned type mapped with <c>ToJson()</c>) as a string holding the literal of its store type, always
+/// invariant. That is the type's own <c>ToString()</c> literal except where the store differs: a
+/// temporal value is written at the store's resolution (see remarks), and the <c>YearMonth</c> types
+/// as the month-aligned dates their column holds.
 /// </summary>
 /// <remarks>
 /// <para>
