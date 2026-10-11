@@ -1,7 +1,10 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges;
 
@@ -15,6 +18,8 @@ namespace CodoMetis.ValueRanges;
 /// The default boundary convention for <see cref="CreateFinite"/> is a fully closed interval <c>[start, end]</c>.
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
+[JsonConverter(typeof(RangeJsonConverter<Int64Range, long>))]
+[TypeConverter(typeof(RangeTypeConverter<Int64Range, long>))]
 public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long>
 {
     private Int64Range()
@@ -24,11 +29,15 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// <summary>
     /// Represents an empty <see cref="Int64Range"/> that contains no values.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, Int64Range, long>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, Int64Range, long>))]
     public sealed record EmptyRange : Int64Range, IEmptyRange<long>;
 
     /// <summary>
     /// Represents an <see cref="Int64Range"/> bounded on both sides.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Finite, Int64Range, long>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Finite, Int64Range, long>))]
     public sealed record Finite : Int64Range, IFiniteRange<long>
     {
         internal Finite(long start, long end)
@@ -55,6 +64,8 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// <c>(-∞, End]</c> or <c>(-∞, End)</c>.
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, Int64Range, long>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, Int64Range, long>))]
     public sealed record UnboundedStart(long End) : Int64Range, IUnboundedStartRange<long>
     {
         /// <inheritdoc />
@@ -66,6 +77,8 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// <c>[Start, +∞)</c> or <c>(Start, +∞)</c>.
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, Int64Range, long>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, Int64Range, long>))]
     public sealed record UnboundedEnd(long Start) : Int64Range, IUnboundedEndRange<long>
     {
         /// <inheritdoc />
@@ -75,6 +88,8 @@ public abstract record Int64Range : IRange<long>, IRangeFactory<Int64Range, long
     /// <summary>
     /// Represents an <see cref="Int64Range"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, Int64Range, long>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, Int64Range, long>))]
     public sealed record Infinity : Int64Range, IInfinityRange<long>;
 
     /// <summary>

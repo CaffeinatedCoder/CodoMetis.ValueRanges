@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using CodoMetis.ValueRanges.Core;
 
@@ -5,6 +6,8 @@ namespace CodoMetis.ValueRanges.Internals;
 
 internal static class RangeFormat
 {
+    // `provider` arrives through the IParsable signatures and is deliberately unused: the literal is
+    // invariant (see ParseBound). Do not thread it back to the element parser.
     internal static TRange Parse<TRange, T>(ReadOnlySpan<char> s, IFormatProvider? provider)
         where TRange : IRangeFactory<TRange, T>
         where T : struct, IComparable<T>, IEquatable<T>
@@ -43,11 +46,11 @@ internal static class RangeFormat
         return (hasStart, hasEnd) switch
         {
             (false, false) => TRange.Infinite,
-            (false, true)  => TRange.CreateUnboundedStart(ParseBound<TRange, T>(endPart,   s, provider), endInclusive),
-            (true,  false) => TRange.CreateUnboundedEnd  (ParseBound<TRange, T>(startPart, s, provider), startInclusive),
+            (false, true)  => TRange.CreateUnboundedStart(ParseBound<TRange, T>(endPart,   s), endInclusive),
+            (true,  false) => TRange.CreateUnboundedEnd  (ParseBound<TRange, T>(startPart, s), startInclusive),
             (true,  true)  => TRange.CreateFinite(
-                ParseBound<TRange, T>(startPart, s, provider),
-                ParseBound<TRange, T>(endPart,   s, provider),
+                ParseBound<TRange, T>(startPart, s),
+                ParseBound<TRange, T>(endPart,   s),
                 startInclusive,
                 endInclusive)
         };
@@ -60,13 +63,19 @@ internal static class RangeFormat
     /// Its reason survives as an excerpt. Overflow is left alone — the BCL message names the type,
     /// not the input.
     /// </summary>
-    private static T ParseBound<TRange, T>(ReadOnlySpan<char> part, ReadOnlySpan<char> literal, IFormatProvider? provider)
+    /// <remarks>
+    /// Always the invariant culture, whatever provider the caller handed <c>Parse</c>: the literal is
+    /// a wire format. Before 9.0.0 the provider reached the element parser, so <c>th-TH</c> read
+    /// <c>2026-01-01</c> as a Buddhist-era date (Gregorian 1483) and <c>de-DE</c> read <c>1.5</c>
+    /// as fifteen — silently.
+    /// </remarks>
+    private static T ParseBound<TRange, T>(ReadOnlySpan<char> part, ReadOnlySpan<char> literal)
         where TRange : IRangeFactory<TRange, T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
         try
         {
-            return TRange.ParseValue(part, provider);
+            return TRange.ParseValue(part, CultureInfo.InvariantCulture);
         }
         catch (FormatException ex)
         {

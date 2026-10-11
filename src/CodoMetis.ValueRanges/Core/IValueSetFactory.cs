@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Internals;
 
@@ -60,8 +61,14 @@ public interface IValueSetFactory<TSet, T> : ISpanParsable<TSet>, IFormattable
     /// and falls back to <see cref="object.ToString"/>. Override for types that require a
     /// specific canonical format (e.g. ISO 8601 for date types).
     /// </summary>
+    /// <remarks>
+    /// A <see langword="null"/> provider means the invariant culture, never the current one — it is
+    /// what string interpolation and <c>string.Format</c> pass, and the result is a array literal.
+    /// Before 9.0.0 it fell through to the element's own <c>ToString</c>, so under <c>de-DE</c> a
+    /// decimal range interpolated as <c>[1,5,2)</c>, which parses back as <c>[1,52)</c>.
+    /// </remarks>
     virtual static string FormatValue(T value, string? format, IFormatProvider? provider)
-        => value is IFormattable f ? f.ToString(format, provider) : value.ToString()!;
+        => value is IFormattable f ? f.ToString(format, provider ?? CultureInfo.InvariantCulture) : value.ToString()!;
 
     /// <summary>
     /// A last-resort element converter for JSON, used only when

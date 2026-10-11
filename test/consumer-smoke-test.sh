@@ -151,6 +151,11 @@ var text = JsonSerializer.Serialize(a, json);
 Console.WriteLine($"json={text}");
 Console.WriteLine($"roundtrip={JsonSerializer.Deserialize<Int32Range>(text, json) == a}");
 
+// JSON with nothing registered: the types carry their converters, so the literal is the default.
+var bare = JsonSerializer.Serialize(new Dictionary<Int32Range, Int32Range> { [b] = a });
+Console.WriteLine($"json-unregistered={bare}");
+Console.WriteLine($"roundtrip-unregistered={JsonSerializer.Deserialize<Dictionary<Int32Range, Int32Range>>(bare)![b] == a}");
+
 // A value set: canonical order on construction, membership.
 StringSet tags = ["b", "a", "b"];
 Console.WriteLine($"set={tags}");
@@ -166,6 +171,8 @@ assert_contains "intersect=[5,10]" "$work/core.out" "intersection is computed an
 assert_contains "overlaps=True"   "$work/core.out" "overlap predicate"
 assert_contains 'json="[1,10]"'   "$work/core.out" "JSON converter writes the literal form"
 assert_contains "roundtrip=True"  "$work/core.out" "JSON round trip is lossless"
+assert_contains 'json-unregistered={"[5,20]":"[1,10]"}' "$work/core.out" "JSON without registration writes the literal, as value and as dictionary key"
+assert_contains "roundtrip-unregistered=True" "$work/core.out" "JSON without registration round-trips"
 assert_contains "set={a,b}"       "$work/core.out" "value set is canonical: sorted, de-duplicated"
 assert_contains "contains=True"   "$work/core.out" "value set membership"
 

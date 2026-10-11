@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -23,6 +24,8 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(DateTimeSet), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<DateTimeSet, DateTime>))]
+[TypeConverter(typeof(ValueSetTypeConverter<DateTimeSet, DateTime>))]
 public sealed class DateTimeSet : IValueSet<DateTime>, IValueSetFactory<DateTimeSet, DateTime>, IEquatable<DateTimeSet>
 {
     private readonly ImmutableArray<DateTime> _elements;
@@ -146,6 +149,8 @@ public sealed class DateTimeSet : IValueSet<DateTime>, IValueSetFactory<DateTime
 /// <typeparam name="TElement">The validated element type backed by a <see cref="DateTime"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(DateTimeSet), nameof(DateTimeSet.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class DateTimeSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<DateTimeSet<TElement>, TElement>, IEquatable<DateTimeSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

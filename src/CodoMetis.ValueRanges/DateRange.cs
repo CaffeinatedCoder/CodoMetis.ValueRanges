@@ -1,7 +1,10 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges;
 
@@ -16,6 +19,8 @@ namespace CodoMetis.ValueRanges;
 /// As a discrete type, two ranges whose boundaries are exactly one day apart are considered adjacent.
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
+[JsonConverter(typeof(RangeJsonConverter<DateRange, DateOnly>))]
+[TypeConverter(typeof(RangeTypeConverter<DateRange, DateOnly>))]
 public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, DateOnly>
 {
     private DateRange()
@@ -25,11 +30,15 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// <summary>
     /// Represents an empty <see cref="DateRange"/> that contains no values.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, DateRange, DateOnly>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, DateRange, DateOnly>))]
     public sealed record EmptyRange : DateRange, IEmptyRange<DateOnly>;
 
     /// <summary>
     /// Represents a <see cref="DateRange"/> bounded on both sides.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Finite, DateRange, DateOnly>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Finite, DateRange, DateOnly>))]
     public sealed record Finite : DateRange, IFiniteRange<DateOnly>
     {
         internal Finite(DateOnly start, DateOnly end)
@@ -56,6 +65,8 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// <c>(-∞, End]</c> or <c>(-∞, End)</c>.
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, DateRange, DateOnly>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, DateRange, DateOnly>))]
     public sealed record UnboundedStart(DateOnly End) : DateRange, IUnboundedStartRange<DateOnly>
     {
         /// <inheritdoc />
@@ -67,6 +78,8 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// <c>[Start, +∞)</c> or <c>(Start, +∞)</c>.
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, DateRange, DateOnly>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, DateRange, DateOnly>))]
     public sealed record UnboundedEnd(DateOnly Start) : DateRange, IUnboundedEndRange<DateOnly>
     {
         /// <inheritdoc />
@@ -76,6 +89,8 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
     /// <summary>
     /// Represents a <see cref="DateRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, DateRange, DateOnly>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, DateRange, DateOnly>))]
     public sealed record Infinity : DateRange, IInfinityRange<DateOnly>;
 
     /// <summary>

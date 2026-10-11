@@ -9,6 +9,130 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [9.0.0] — 2026-10-11
+
+Two wire-format defects in the System.Text.Json support, found by wrapping a `DateRange` in a
+downstream value object and putting it on an ASP.NET Core API. **Nothing was removed or
+resignatured** — package validation passes against the 8.0.0 baseline.
+
+This is a major for the reason 7.0.0 and 8.0.0 were: `JsonSerializer.Serialize(range)` with
+default options now *answers* differently, and a caller cannot discover that from a compile error.
+The old answer was a defect — it could not be read back by anything, this package included — but a
+consumer that only ever wrote it, into a response or a log, sees its shape change, and a floating
+`8.*` reference must not pick that up silently.
+
+### Changed
+
+- **⚠️ Every range, variant, multirange and value set serializes as its literal with nothing
+  registered.** The converters were opt-in (`AddRangeConverters()`), and System.Text.Json's fallback
+  for a type with no converter is a property dump: `DateRange` wrote `{"Length":181}`, a `RangeSet`
+  `[{"Length":5}]`, a `StringSet` `{"Values":["a","b"],"Count":2,"IsEmpty":false}`, and an
+  `object`-typed range every public property of its variant. None of them read back — the abstract
+  union threw `NotSupportedException`, the rest `JsonException` — and nothing threw on the way
+  out, so an ASP.NET Core host that forgot the registration wrote wrong responses and refused every
+  request body with a 400. Each type now carries `[JsonConverter]`, so `"[2026-01-01,2026-06-30]"`,
+  `"{[1,5],[7,10]}"` and `["a","b"]` are the wire form by default.
+  - System.Text.Json does not inherit `[JsonConverter]`, so each sealed variant carries its own —
+    a value reached through `object` is a variant, and an attribute on the union alone would have
+    left it on the property dump.
+  - The attribute is the lowest-precedence route: a converter registered on the options or on a
+    property still wins. `AddRangeConverters()` stays valid and is now redundant.
+  - Source-generated `JsonSerializerContext`s honour it too. Unions, variants and the non-generic
+    sets name a closed converter type, which the generator instantiates directly; `RangeSet` and the
+    wrapper arities name `RangeJsonConverterFactory`, since an attribute cannot name an open generic
+    converter. A context serializing a value set must also list the element type — the set
+    converter resolves the element's contract through the options.
+  - **Payload change** for anyone who wrote the old form: a response or document that carried
+    `{"Length":…}` now carries the literal.
+
+### Fixed
+
+- **⚠️ Interpolating a `DecimalRange` under a comma-decimal culture produced a different range.**
+  `Int32Range`, `Int64Range` and `DecimalRange` have no `FormatValue` override, and the default
+  formatted a `null` provider — what string interpolation, `string.Format` and logging renderers
+  pass — in the *current* culture. Under `de-DE`, `$"{DecimalRange [1.5,2)}"` was `[1,5,2)`, which
+  the parser reads back as **`[1,52)`**, silently; `[1.5,2.25)` came back as `[1,5225)`. Under
+  `sv-SE` a negative bound took U+2212 as its minus sign and no longer parsed. A `null` provider
+  now means the invariant culture in both default `FormatValue`s, as every override already did.
+  `ToString()`, JSON, the `TypeConverter` and the EF bridge were never affected — they pass the
+  invariant culture explicitly. `LiteralCultureContractTests` (conventions) formats every shape,
+  multirange and set family under `de-DE`, `sv-SE`, `fa-IR` and `th-TH`.
+
+- **⚠️ Decimal bounds and elements parse with PostgreSQL's numeric grammar.** `DecimalRange` and
+  `DecimalSet` parsed with `NumberStyles.Any`, which also accepts group separators, currency
+  symbols and parenthesised negatives: `["1,000",2000]` read as `[1000,2000]`, `"(5)"` as −5 —
+  literals PostgreSQL rejects. It is also what let `5,2` read as 52 above, and what made an
+  explicit comma-decimal provider misread silently: `DecimalRange.Parse("[1.5,2.5)", de-DE)` was
+  `[15,25)`. They now parse with `NumberStyles.Float` — sign, digits, point, exponent — and those
+  inputs are a `FormatException`. Integer types already used `NumberStyles.Integer`. **If you
+  relied on the lenient forms, they now fail.**
+
+- **⚠️ A culture provider no longer changes the literal.** `Parse(s, provider)` handed the provider
+  to the element parser, and `ToString(null, provider)` to the element formatter. `th-TH` uses the
+  Buddhist calendar, so `DateRange.Parse("[2026-01-01,2026-06-30]", th-TH)` returned
+  **`[1483-01-01,1483-06-30]`** and `ToString(null, th-TH)` wrote `2569`; `ar-SA` read dates as
+  Hijri; `de-DE` read the decimal `1.5` as fifteen. Nothing threw. The literal is PostgreSQL's
+  text and has no culture, so:
+  - `Parse`/`TryParse` (string and span, every range, `RangeSet` and value set) read the invariant
+    literal and ignore the provider, as `Guid.Parse` does.
+  - Without a format string, formatting writes the invariant literal whatever the provider. A
+    provider still applies alongside an explicit format (`ToString("yyyy-MM-dd", th-TH)`), which
+    asks for display text.
+  - The library's own paths — JSON, the `TypeConverter`, EF Core — always passed the invariant
+    culture and are unaffected, as is ASP.NET Core model binding, which passes it too.
+  `LiteralProviderContractTests` (conventions) parses and formats every shape, multirange and set
+  family under `de-DE`, `sv-SE`, `fa-IR`, `th-TH` and `ar-SA`. **If you parsed culture-formatted
+  text through `Parse(s, culture)` deliberately, parse the elements yourself and build the range
+  with the factories.**
+
+- **Ranges, multiranges and value sets inside an EF Core JSON column** (`ToJson()`) could not be
+  saved — the plugin's type mappings had no `JsonValueReaderWriter`, and `SaveChanges` threw a
+  bare `NullReferenceException` from inside EF. Each mapping now writes the store type's literal,
+  which also makes queries into the document translate:
+  `CAST(doc ->> 'Period' AS daterange) @> @day`. The `YearMonth` types write their month-aligned
+  date form, since that is what the cast reads. `JsonColumnTests` (integration) round-trips and
+  queries all 25 types inside one jsonb column; `MappingParityTests` now requires a reader/writer
+  on every mapping.
+
+### Added
+
+- **A `TypeConverter` on every range, variant, multirange and value set.** None had one, so
+  `TypeDescriptor` could not convert them from a string, and `Microsoft.Extensions.Configuration`
+  binding of `"Period": "[2026-01-01,2026-06-30]"` into a `DateRange` property produced **`null`
+  with no error**. Each type now converts to and from its literal (`RangeTypeConverter`,
+  `RangeVariantTypeConverter`, `RangeSetTypeConverter`, `ValueSetTypeConverter`, and
+  `LiteralTypeConverter` for the generic types).
+  - Always invariant: the culture argument is ignored, since the literal is a wire format.
+  - An empty string converts to `null` (absent), never to the empty range, which is `empty`.
+  - Unlike `[JsonConverter]`, `[TypeConverter]` *is* inherited, so without their own a variant
+    would have silently used the union's and returned whatever shape the literal had. Each variant
+    carries a narrowing converter that refuses another shape.
+  - ASP.NET Core model binding is unaffected — minimal APIs and MVC bind through the static
+    `TryParse` these types already have.
+- **Ranges and multiranges as dictionary keys.** `Dictionary<DateRange, int>` threw
+  `NotSupportedException` in both directions, registered or not. `RangeJsonConverter`,
+  `RangeVariantJsonConverter` and `RangeSetJsonConverter` now override
+  `ReadAsPropertyName`/`WriteAsPropertyName`, writing the same literal as the value form
+  (`{"[2026-01-01,2026-06-30]":181}`). Keys canonicalize on read like values, and a malformed or
+  wrong-shape key is the same `JsonException`. `DictionaryKeyPolicy` is not applied — a naming
+  policy would rewrite the literal into text that does not parse. Value sets are not keys: their
+  value form is a JSON array, not a string.
+- **Docs: an OpenAPI schema transformer.** ASP.NET Core's generator describes a range, multirange
+  or value set body as `{}` — it cannot see through a custom converter, and .NET 10 has no public
+  hook for a converter to declare its schema. `docs/serialization.md#openapi` carries a
+  `IOpenApiSchemaTransformer` to copy into an API project: ranges and multiranges as `type: string`
+  with a literal pattern, value sets as arrays of unique elements. It ships in no package; the
+  repository compiles and tests it against `Microsoft.AspNetCore.OpenApi` 10 and holds the doc to
+  the tested copy verbatim. Query and route parameters were already `type: string`.
+- **Tests:** `TypeConverterContractTests` (conventions) converts every shape through the union's and
+  the variant's converter under `de-DE`, and every set family. A new
+  `CodoMetis.ValueRanges.AspNetCore.Tests` project runs configuration binding and a real ASP.NET
+  Core host (MVC and minimal APIs) with no ValueRanges registration. `JsonDefaultContractTests` (conventions) serializes every shape of every discovered
+  range type — through the union, through `object`, inside a `RangeSet`, and as a dictionary key by
+  union, variant and multirange — and every value set family in both arities, with nothing
+  registered, against the registered output. The consumer smoke test asserts the unregistered wire
+  form against the packed package.
+
 ## [8.0.0] — 2026-08-17
 
 Six corrections and the machinery that found them. **Nothing was removed or resignatured** —

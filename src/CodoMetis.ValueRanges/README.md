@@ -156,14 +156,14 @@ difference or sorted insert.
 
 ## Literals, parsing and JSON
 
-Every type implements `IParsable<T>` and `IFormattable` using PostgreSQL literal syntax, and ships
-System.Text.Json converters for direct use in ASP.NET Core APIs:
+Every type implements `IParsable<T>` and `IFormattable` using PostgreSQL literal syntax, and carries
+its System.Text.Json converter, so it works in ASP.NET Core APIs with no registration:
 
 ```csharp
 Int32Range.Parse("[1,10)", null).ToString();   // [1,9] — discrete ranges canonicalize
 StringSet.Parse("{alpha,beta}", null);         // {alpha,beta}
 
-options.AddRangeConverters();                  // registers both families
+JsonSerializer.Serialize(Int32Range.CreateFinite(1, 10));   // "[1,10]"
 ```
 
 ## Documentation

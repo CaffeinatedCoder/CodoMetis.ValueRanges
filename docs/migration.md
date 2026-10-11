@@ -134,6 +134,54 @@ contract](value-sets.md#the-text-form-contract).
 (`42883: operator does not exist: int8range @> integer`). Constant element operands now carry an
 explicit cast. No edit needed — queries that threw now execute.
 
+## Migration from v8.x
+
+v9.0.0 changes what default-options `System.Text.Json` serialization writes. No signature changed.
+
+### Ranges, multiranges and value sets serialize as literals without registration
+
+Every range type, its variants, `RangeSet<TRange, T>` and every value set now carries its
+converter. If you already called `AddRangeConverters()` (or registered `RangeJsonConverterFactory`),
+nothing changes on the wire and the call can stay.
+
+If you did not, your payloads change shape, from a property dump to the literal:
+
+| Type | 8.x without registration | 9.0 |
+|---|---|---|
+| `DateRange` | `{"Length":181}` | `"[2026-01-01,2026-06-30]"` |
+| range through `object` | `{"Start":…,"End":…,"StartInclusive":true,…}` | the literal |
+| `RangeSet<Int32Range, int>` | `[{"Length":5}]` | `"{[1,5]}"` |
+| `StringSet` | `{"Values":["a","b"],"Count":2,"IsEmpty":false}` | `["a","b"]` |
+
+None of the old forms could be read back, so only write-only consumers — a client reading `Length`
+from a response, a stored document nobody deserializes — can depend on them. To keep an old shape
+for a property, put your own `[JsonConverter]` on it or register one on the options; both outrank the
+type's attribute.
+
+### The literal ignores the culture
+
+`Parse(s, provider)` and `TryParse(s, provider, …)` now read the invariant literal and ignore the
+provider, and `ToString(null, provider)` — or interpolation, or `string.Format` — always writes the
+invariant literal. A provider still applies with an explicit format string.
+
+Before, the provider reached each bound: `DateRange.Parse(s, th-TH)` was 543 years early,
+`DecimalRange.Parse("[1.5,2.5)", de-DE)` was `[15,25)`, and `$"{decimalRange}"` under `de-DE` wrote
+`[1,5,2)`, which parsed back as `[1,52)`. If you relied on culture-specific parsing — reading
+`[01.01.2025,31.03.2025]` with `de-DE`, say — parse the bounds yourself and use the factories:
+
+```csharp
+var de    = CultureInfo.GetCultureInfo("de-DE");
+var range = DateRange.CreateFinite(DateOnly.Parse("01.01.2025", de), DateOnly.Parse("31.03.2025", de));
+```
+
+Decimal bounds also parse with PostgreSQL's `numeric` grammar now: `"1,000"`, `"(5)"` and currency
+symbols are a `FormatException` rather than 1000, −5 and 5.
+
+### Ranges can be dictionary keys
+
+`Dictionary<DateRange, …>` used to throw `NotSupportedException`; it now writes the literal as the
+property name. Nothing to migrate unless you caught that exception.
+
 ## Migration from v7.x
 
 v8.0.0 is a major for the same reason: several corrections change what existing calls answer, and one

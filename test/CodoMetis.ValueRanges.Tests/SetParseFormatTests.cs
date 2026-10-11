@@ -177,4 +177,9 @@ public class SetParseFormatTests
         var instants = DateTimeOffsetSet.From(new DateTimeOffset(2024, 1, 1, 8, 0, 0, TimeSpan.FromHours(2)));
         Assert.AreEqual(instants, DateTimeOffsetSet.Parse(instants.ToString(), null));
     }
+
+    /// <summary>Decimal elements parse with PostgreSQL's numeric grammar; a group separator is not part of it.</summary>
+    [TestMethod]
+    public void DecimalElement_WithAGroupSeparator_IsRejected()
+        => Assert.ThrowsExactly<FormatException>(() => DecimalSet.Parse("{\"1,000\"}", null));
 }

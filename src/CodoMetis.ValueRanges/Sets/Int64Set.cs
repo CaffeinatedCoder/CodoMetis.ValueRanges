@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -20,6 +21,8 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(Int64Set), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<Int64Set, long>))]
+[TypeConverter(typeof(ValueSetTypeConverter<Int64Set, long>))]
 public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>, IEquatable<Int64Set>
 {
     private readonly ImmutableArray<long> _elements;
@@ -128,6 +131,8 @@ public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>
 /// <typeparam name="TElement">The validated element type backed by a <see cref="long"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(Int64Set), nameof(Int64Set.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class Int64Set<TElement> :
     IValueSet<TElement>, IValueSetFactory<Int64Set<TElement>, TElement>, IEquatable<Int64Set<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

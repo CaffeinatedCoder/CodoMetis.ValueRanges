@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -20,6 +21,8 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(Int32Set), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<Int32Set, int>))]
+[TypeConverter(typeof(ValueSetTypeConverter<Int32Set, int>))]
 public sealed class Int32Set : IValueSet<int>, IValueSetFactory<Int32Set, int>, IEquatable<Int32Set>
 {
     private readonly ImmutableArray<int> _elements;
@@ -128,6 +131,8 @@ public sealed class Int32Set : IValueSet<int>, IValueSetFactory<Int32Set, int>, 
 /// <typeparam name="TElement">The validated element type backed by an <see cref="int"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(Int32Set), nameof(Int32Set.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class Int32Set<TElement> :
     IValueSet<TElement>, IValueSetFactory<Int32Set<TElement>, TElement>, IEquatable<Int32Set<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

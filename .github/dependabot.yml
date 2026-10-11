@@ -36,3 +36,6 @@ updates:
     ignore:
       - dependency-name: "Microsoft.EntityFrameworkCore*"
       - dependency-name: "Npgsql*"
+      # The ASP.NET Core packages version with the shared framework: 11.x needs net11.0.
+      - dependency-name: "Microsoft.AspNetCore*"
+        update-types: [ "version-update:semver-major" ]

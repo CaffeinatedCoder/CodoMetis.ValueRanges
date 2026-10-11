@@ -324,4 +324,66 @@ public class RangeParseFormatTests
         Assert.AreEqual(1, finite.Start);
         Assert.AreEqual(10, finite.End);
     }
+
+    /// <summary>
+    /// Interpolation passes a null provider. Under de-DE that used to format the decimal bounds with
+    /// a comma, and <c>[1,5,2)</c> parses back as <c>[1,52)</c> — a different range, silently.
+    /// </summary>
+    [TestMethod]
+    public void Interpolation_IsTheInvariantLiteral_UnderACommaDecimalCulture()
+    {
+        var range    = DecimalRange.CreateFinite(1.5m, 2m, endInclusive: false);
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+        try
+        {
+            var text = $"{range}";
+
+            Assert.AreEqual("[1.5,2)", text);
+            Assert.AreEqual(range, DecimalRange.Parse(text, null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    /// <summary>
+    /// Decimal bounds parse with PostgreSQL's numeric grammar — sign, digits, point, exponent. They
+    /// used <c>NumberStyles.Any</c>, which also accepted group separators, currency symbols and
+    /// parenthesised negatives that PostgreSQL rejects, and that is what let <c>"5,2"</c> read as 52.
+    /// </summary>
+    [TestMethod]
+    [DataRow("[\"1,000\",2000]")]
+    [DataRow("[\"(5)\",10]")]
+    [DataRow("[\"¤5\",10]")]
+    public void DecimalBound_OutsidePostgresNumericGrammar_IsRejected(string literal)
+        => Assert.ThrowsExactly<FormatException>(() => DecimalRange.Parse(literal, null));
+
+    [TestMethod]
+    public void DecimalBound_ExponentStillParses()
+        => Assert.AreEqual(DecimalRange.CreateFinite(100m, 2000m, endInclusive: true), DecimalRange.Parse("[1e2,2E3]", null));
+
+    /// <summary>
+    /// An explicit comma-decimal provider used to read <c>1.5</c> as fifteen, silently: <c>.</c> is
+    /// de-DE's group separator. The literal is invariant, so the provider no longer reaches it.
+    /// </summary>
+    [TestMethod]
+    public void DecimalBound_UnderACommaDecimalProvider_ReadsTheInvariantLiteral()
+        => Assert.AreEqual(DecimalRange.CreateFinite(1.5m, 2.5m, endInclusive: false),
+                           DecimalRange.Parse("[1.5,2.5)", CultureInfo.GetCultureInfo("de-DE")));
+
+    /// <summary>
+    /// A provider still applies alongside an explicit format, which asks for display text, not a
+    /// literal — and only there.
+    /// </summary>
+    [TestMethod]
+    public void Provider_AppliesOnlyWithAnExplicitFormat()
+    {
+        var range = DateRange.CreateFinite(new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30));
+        var thai  = CultureInfo.GetCultureInfo("th-TH");
+
+        Assert.AreEqual("[2026-01-01,2026-06-30]", ((IFormattable)range).ToString(null, thai));
+        Assert.AreEqual("[2569-01-01,2569-06-30]", ((IFormattable)range).ToString("yyyy-MM-dd", thai));
+    }
 }

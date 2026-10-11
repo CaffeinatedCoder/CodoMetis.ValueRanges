@@ -3,6 +3,44 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [9.0.0] — 2026-10-11
+
+### Changed
+
+- **⚠️ Every range, variant, `RangeSet` and value set serializes as its literal with nothing
+  registered.** Without `AddRangeConverters()`, System.Text.Json fell back to a property dump —
+  `DateRange` wrote `{"Length":181}`, `StringSet` `{"Values":[…],"Count":2,"IsEmpty":false}` — and
+  none of it read back. Each type, and each sealed variant (the attribute is not inherited), now
+  carries `[JsonConverter]`. A converter registered on the options or a property still wins;
+  `AddRangeConverters()` stays valid and is redundant. **Payload change** for anyone who wrote the
+  old form. See the [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
+  for source generation and why this is a major.
+
+### Fixed
+
+- **⚠️ `$"{range}"` under a comma-decimal culture produced a different range.** `Int32Range`,
+  `Int64Range` and `DecimalRange` formatted a `null` provider in the current culture: under `de-DE`
+  a `[1.5,2)` interpolated as `[1,5,2)` and parsed back as `[1,52)`. A `null` provider is now the
+  invariant culture.
+
+- **⚠️ Decimal bounds and elements parse with PostgreSQL's numeric grammar** (`NumberStyles.Float`
+  instead of `Any`): `"1,000"`, `"(5)"` and currency symbols are a `FormatException` rather than
+  1000, −5 and 5, and `DecimalRange.Parse("[1.5,2.5)", de-DE)` fails instead of returning `[15,25)`.
+
+- **⚠️ A culture provider no longer changes the literal.** `Parse(s, th-TH)` read
+  `2026-01-01` as a Buddhist-era date (Gregorian 1483) and `ToString(null, th-TH)` wrote `2569`;
+  `de-DE` read `1.5` as fifteen. `Parse`/`TryParse` now ignore the provider, and formatting without
+  a format string is always the invariant literal; a provider applies only with an explicit format.
+
+### Added
+
+- **A `TypeConverter` on every range, variant, `RangeSet` and value set.** Configuration binding of
+  a range property from its literal produced `null` with no error; it now binds. Always invariant;
+  an empty string is `null`; each variant refuses a literal of another shape.
+- **Ranges and multiranges as dictionary keys**, writing the same literal as the value form.
+  `RangeJsonConverter`, `RangeVariantJsonConverter` and `RangeSetJsonConverter` override
+  `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied.
+
 ## [8.0.0] — 2026-08-17
 
 ### Fixed

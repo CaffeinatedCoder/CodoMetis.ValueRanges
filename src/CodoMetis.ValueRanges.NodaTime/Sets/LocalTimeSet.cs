@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -6,8 +7,8 @@ using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 using CodoMetis.ValueRanges.Serialization;
-using NodaTime.Text;
 using NodaTime;
+using NodaTime.Text;
 
 namespace CodoMetis.ValueRanges;
 
@@ -37,6 +38,8 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(LocalTimeSet), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<LocalTimeSet, LocalTime>))]
+[TypeConverter(typeof(ValueSetTypeConverter<LocalTimeSet, LocalTime>))]
 public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalTimeSet, LocalTime>, IEquatable<LocalTimeSet>
 {
     private readonly ImmutableArray<LocalTime> _elements;
@@ -171,6 +174,8 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
 /// <typeparam name="TElement">The validated element type backed by a <see cref="LocalTime"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(LocalTimeSet), nameof(LocalTimeSet.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class LocalTimeSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<LocalTimeSet<TElement>, TElement>, IEquatable<LocalTimeSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

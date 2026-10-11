@@ -176,6 +176,8 @@ public sealed class IntegrationDbContext : DbContext
 {
     public DbSet<Reservation> Reservations => Set<Reservation>();
 
+    public DbSet<JsonDocumentRow> JsonDocuments => Set<JsonDocumentRow>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseNpgsql(
             ContainerLifecycle.ConnectionString!,
@@ -188,6 +190,13 @@ public sealed class IntegrationDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Reservation>().Property(r => r.Id).ValueGeneratedNever();
+
+        // Every range, multirange and set family inside one jsonb column (JsonColumnTests).
+        modelBuilder.Entity<JsonDocumentRow>(row =>
+        {
+            row.Property(r => r.Id).ValueGeneratedNever();
+            row.ComplexProperty(r => r.Doc, doc => doc.ToJson());
+        });
 
         // Generates CREATE TYPE timerange AS RANGE (SUBTYPE = time) ahead of the tables.
         modelBuilder.HasPostgresRange("timerange", "time");

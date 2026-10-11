@@ -1,11 +1,14 @@
 using System.Collections;
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges;
 
@@ -67,6 +70,8 @@ public static class RangeSet
 /// <typeparam name="T">The element type of the ranges.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(RangeSet), nameof(RangeSet.Create))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class RangeSet<TRange, T>
     : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IFormattable, ISpanParsable<RangeSet<TRange, T>>
     where TRange : IRangeFactory<TRange, T>, IRange<T>

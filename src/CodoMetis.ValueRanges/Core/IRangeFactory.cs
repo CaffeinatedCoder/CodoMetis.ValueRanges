@@ -1,3 +1,4 @@
+using System.Globalization;
 using CodoMetis.ValueRanges.Internals;
 
 namespace CodoMetis.ValueRanges.Core;
@@ -90,8 +91,14 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
     /// and falls back to <see cref="object.ToString"/>. Override for types that require a
     /// specific canonical format (e.g. ISO 8601 for date types).
     /// </summary>
+    /// <remarks>
+    /// A <see langword="null"/> provider means the invariant culture, never the current one — it is
+    /// what string interpolation and <c>string.Format</c> pass, and the result is a range literal.
+    /// Before 9.0.0 it fell through to the element's own <c>ToString</c>, so under <c>de-DE</c> a
+    /// decimal range interpolated as <c>[1,5,2)</c>, which parses back as <c>[1,52)</c>.
+    /// </remarks>
     virtual static string FormatValue(T value, string? format, IFormatProvider? provider)
-        => value is IFormattable f ? f.ToString(format, provider) : value.ToString()!;
+        => value is IFormattable f ? f.ToString(format, provider ?? CultureInfo.InvariantCulture) : value.ToString()!;
 
     // -----------------------------------------------------------------------
     // ISpanParsable<TRange> / IParsable<TRange> — default implementations
@@ -127,14 +134,18 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
     /// </summary>
     /// <param name="format">
     /// A format string forwarded to the bound value formatter, or <see langword="null"/>
-    /// to use the type-specific default (ISO 8601 for date/time types).
+    /// for the literal — the type-specific default (ISO 8601 for date/time types).
     /// </param>
     /// <param name="provider">
-    /// An <see cref="IFormatProvider"/> forwarded to the bound value formatter.
+    /// An <see cref="IFormatProvider"/> forwarded to the bound value formatter alongside an explicit
+    /// <paramref name="format"/>. Without one it is ignored: the literal is a wire format and is
+    /// always invariant — a <c>th-TH</c> provider would otherwise write Buddhist-era years, and a
+    /// <c>de-DE</c> one a decimal comma that collides with the bound separator.
     /// </param>
     string IFormattable.ToString(string? format, IFormatProvider? provider)
     {
-        string Fmt(T v) => TRange.FormatValue(v, format, provider);
+        var effective = format is null ? CultureInfo.InvariantCulture : provider;
+        string Fmt(T v) => TRange.FormatValue(v, format, effective);
         return this switch
         {
             IEmptyRange<T>          => "empty",

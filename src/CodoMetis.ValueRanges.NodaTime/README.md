@@ -68,15 +68,11 @@ dotnet add package CodoMetis.ValueRanges.NodaTime
 
 ## JSON
 
-Ranges and value sets both work under the core package's `AddRangeConverters()`, with no NodaTime-specific setup:
+Ranges and value sets carry their converters, as the core types do, so they need no setup at all:
 
 ```csharp
-using CodoMetis.ValueRanges.Serialization;
-
-var options = new JsonSerializerOptions().AddRangeConverters();
-
-JsonSerializer.Serialize(sprint, options);      // "[2025-01-06,2025-01-17]"
-JsonSerializer.Serialize(holidays, options);    // ["2025-01-01","2025-12-26"]
+JsonSerializer.Serialize(sprint);      // "[2025-01-06,2025-01-17]"
+JsonSerializer.Serialize(holidays);    // ["2025-01-01","2025-12-26"]
 ```
 
 The range types format themselves. The set types get there differently: they delegate elements to System.Text.Json, which has no built-in converter for NodaTime types, so each family supplies an ISO 8601 fallback through `IValueSetFactory<TSet, T>.ElementJsonConverter` — the same text form its array literals use. The fallback is consulted last, so any converter you register for the element type still wins.

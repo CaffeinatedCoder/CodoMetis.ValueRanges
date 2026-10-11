@@ -25,6 +25,12 @@ namespace CodoMetis.ValueRanges.Serialization;
 /// to accept. The message was not worth that, and it guarded against a confusion the obvious
 /// behaviour does not create — reading null yields null, never the empty range.
 /// </para>
+/// <para>
+/// A range can also be a dictionary key: <c>Dictionary&lt;DateRange, int&gt;</c> writes
+/// <c>{"[2026-01-01,2026-06-30]":1}</c>, the same literal as the value form.
+/// <see cref="JsonSerializerOptions.DictionaryKeyPolicy"/> is not applied to it — a naming policy
+/// would rewrite the literal into text that no longer parses, or parses to a different range.
+/// </para>
 /// </remarks>
 /// <typeparam name="TRange">The concrete range type.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
@@ -38,11 +44,21 @@ public class RangeJsonConverter<TRange, T> : JsonConverter<TRange>
         var s = reader.GetString()
              ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TRange).Name} value.");
 
-        if (!TRange.TryParse(s, CultureInfo.InvariantCulture, out var result))
-            throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(s)}' as {typeof(TRange).Name}.");
-
-        return result;
+        return Parse(s);
     }
+
+    /// <inheritdoc />
+    public override TRange ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => Parse(reader.GetString()!);
+
+    /// <inheritdoc />
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
+        => writer.WritePropertyName(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+
+    private static TRange Parse(string s)
+        => TRange.TryParse(s, CultureInfo.InvariantCulture, out var result)
+               ? result
+               : throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(s)}' as {typeof(TRange).Name}.");
 
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, TRange value, JsonSerializerOptions options)
@@ -91,6 +107,19 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
         var s = reader.GetString()
              ?? throw new JsonException($"Expected a non-null JSON string for a {typeof(TVariant).Name} value.");
 
+        return Parse(s);
+    }
+
+    /// <inheritdoc />
+    public override TVariant ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => Parse(reader.GetString()!);
+
+    /// <inheritdoc />
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, TVariant value, JsonSerializerOptions options)
+        => writer.WritePropertyName(((IFormattable)value).ToString(null, CultureInfo.InvariantCulture));
+
+    private static TVariant Parse(string s)
+    {
         if (!TRange.TryParse(s, CultureInfo.InvariantCulture, out var parsed))
             throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(s)}' as {typeof(TRange).Name}.");
 
@@ -117,7 +146,8 @@ public class RangeVariantJsonConverter<TVariant, TRange, T> : JsonConverter<TVar
 
 /// <summary>
 /// Serializes a <see cref="RangeSet{TRange,T}"/> as a PostgreSQL multirange literal JSON string,
-/// e.g. <c>"{[1,5],[7,10]}"</c> or <c>"{}"</c> for the empty set.
+/// e.g. <c>"{[1,5],[7,10]}"</c> or <c>"{}"</c> for the empty set. As a dictionary key it writes
+/// the same literal, with no <see cref="JsonSerializerOptions.DictionaryKeyPolicy"/> applied.
 /// </summary>
 /// <typeparam name="TRange">The concrete range type.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
@@ -131,6 +161,19 @@ public class RangeSetJsonConverter<TRange, T> : JsonConverter<RangeSet<TRange, T
         var s = reader.GetString()
              ?? throw new JsonException($"Expected a non-null JSON string for a RangeSet value.");
 
+        return Parse(s);
+    }
+
+    /// <inheritdoc />
+    public override RangeSet<TRange, T> ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => Parse(reader.GetString()!);
+
+    /// <inheritdoc />
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, RangeSet<TRange, T> value, JsonSerializerOptions options)
+        => writer.WritePropertyName(value.ToString(null, CultureInfo.InvariantCulture));
+
+    private static RangeSet<TRange, T> Parse(string s)
+    {
         try
         {
             var literals = RangeFormat.SplitSetLiterals(s.AsSpan());
