@@ -16,6 +16,14 @@ covers all four packages, which share one version number and release together.
   provider, as for the core types (the NodaTime element parsers already used fixed ISO patterns). See
   `CodoMetis.ValueRanges` 9.0.0.
 
+### Added
+
+- **`Deconstruct` on every `Finite` variant, and on the unbounded variants of `LocalDateRange`,
+  `LocalDateTimeRange` and `YearMonthRange`** — the ones whose constructors normalize the calendar
+  and so are not positional records. Each mirrors its constructor, as for the core types:
+  `var (start, end) = finite` on the discrete `LocalDateRange` and `YearMonthRange`, and
+  `(start, end, startInclusive, endInclusive)` on `LocalDateTimeRange` and `InstantRange`.
+
 ## [8.0.0] — 2026-08-17
 
 ### Fixed

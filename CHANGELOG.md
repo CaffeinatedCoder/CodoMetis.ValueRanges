@@ -35,7 +35,8 @@ must not pick any of these up silently.
    depended on `[1,5,2)` — which parsed back as a different range — is affected.
 
 Everything else is additive: a `TypeConverter` on every type, ranges as dictionary keys, ranges
-and sets inside EF Core JSON columns, Native AOT, and an OpenAPI transformer to copy. The
+and sets inside EF Core JSON columns, Native AOT, `Deconstruct` on every bounded variant, and an
+OpenAPI transformer to copy. The
 [migration guide](docs/migration.md#migration-from-v8x) has the call-site edits.
 
 ### Changed
@@ -147,6 +148,21 @@ and sets inside EF Core JSON columns, Native AOT, and an OpenAPI transformer to 
   wrong-shape key is the same `JsonException`. `DictionaryKeyPolicy` is not applied — a naming
   policy would rewrite the literal into text that does not parse. Value sets are not keys: their
   value form is a JSON array, not a string.
+- **`Deconstruct` on every bounded variant.** The positional variants had one from the compiler, but
+  every `Finite` is written by hand — its constructor is internal, so the factories stay the only
+  way to build one — and so are the unbounded variants of `LocalDateRange`, `LocalDateTimeRange`
+  and `YearMonthRange`, whose constructors normalize the calendar. `var (start, end) = finite`
+  compiled on no range type. Each now deconstructs into exactly what its constructor takes, as a
+  positional record would:
+  - `(start, end)` on a discrete type. Both bounds are inclusive — the canonical form — so they pass
+    straight back to `CreateFinite`, whose default there is closed.
+  - `(start, end, startInclusive, endInclusive)` on a continuous type, deliberately with no
+    two-value form: passed back to `CreateFinite`, `(1.5,2]` would come out as its half-open
+    default `[1.5,2)`.
+
+  `VariantDeconstructContractTests` (conventions) holds every bounded variant of every discovered
+  range type to its constructor's parameters, and checks the values written against the properties
+  under both inclusiveness settings.
 - **Docs: an OpenAPI schema transformer.** ASP.NET Core's generator describes a range, multirange
   or value set body as `{}` — it cannot see through a custom converter, and .NET 10 has no public
   hook for a converter to declare its schema. `docs/serialization.md#openapi` carries a

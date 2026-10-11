@@ -61,6 +61,21 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
 
         /// <inheritdoc/>
         public bool EndInclusive { get; }
+
+        /// <summary>
+        /// Deconstructs the range into its bounds and their inclusiveness:
+        /// <c>var (start, end, startInclusive, endInclusive) = finite;</c>.
+        /// </summary>
+        /// <remarks>
+        /// There is deliberately no form without the inclusiveness: passing only the bounds back to
+        /// <see cref="DateTimeRange.CreateFinite"/> would silently apply its half-open default.
+        /// </remarks>
+        /// <param name="start">Receives <see cref="Start"/>.</param>
+        /// <param name="end">Receives <see cref="End"/>.</param>
+        /// <param name="startInclusive">Receives <see cref="StartInclusive"/>.</param>
+        /// <param name="endInclusive">Receives <see cref="EndInclusive"/>.</param>
+        public void Deconstruct(out DateTime start, out DateTime end, out bool startInclusive, out bool endInclusive) =>
+            (start, end, startInclusive, endInclusive) = (Start, End, StartInclusive, EndInclusive);
     }
 
     /// <summary>

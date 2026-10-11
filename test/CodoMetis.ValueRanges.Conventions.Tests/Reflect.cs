@@ -15,17 +15,21 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// </remarks>
 internal static class Reflect
 {
-    internal static void InvokeGeneric(Type host, string method, params Type[] typeArguments)
+    internal static void InvokeGeneric(Type host, string method, params Type[] typeArguments) =>
+        InvokeGeneric<object?>(host, method, typeArguments);
+
+    internal static TResult InvokeGeneric<TResult>(Type host, string method, params Type[] typeArguments)
     {
         try
         {
-            host.GetMethod(method, BindingFlags.NonPublic | BindingFlags.Static)!
-                .MakeGenericMethod(typeArguments)
-                .Invoke(null, null);
+            return (TResult)host.GetMethod(method, BindingFlags.NonPublic | BindingFlags.Static)!
+                                .MakeGenericMethod(typeArguments)
+                                .Invoke(null, null)!;
         }
         catch (TargetInvocationException wrapped) when (wrapped.InnerException is { } actual)
         {
             ExceptionDispatchInfo.Capture(actual).Throw();
+            throw;
         }
     }
 }

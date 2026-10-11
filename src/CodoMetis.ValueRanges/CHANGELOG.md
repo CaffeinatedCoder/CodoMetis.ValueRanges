@@ -44,6 +44,9 @@ covers all four packages, which share one version number and release together.
 - **Ranges and multiranges as dictionary keys**, writing the same literal as the value form.
   `RangeJsonConverter`, `RangeVariantJsonConverter` and `RangeSetJsonConverter` override
   `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied.
+- **`Deconstruct` on every `Finite` variant**, mirroring its constructor as the positional variants
+  already did: `var (start, end) = finite` on a discrete type (both bounds inclusive), and
+  `(start, end, startInclusive, endInclusive)` on a continuous one, which has no lossy two-value form.
 
 ## [8.0.0] — 2026-08-17
 
