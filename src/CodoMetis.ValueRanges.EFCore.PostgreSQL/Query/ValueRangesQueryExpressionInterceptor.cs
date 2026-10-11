@@ -1,10 +1,14 @@
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
-/// Two pre-translation passes over the query: one rewrite and one refusal.
+/// Pre-translation passes over the query: one rewrite and two refusals.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,8 +19,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// <see cref="ValueRangesMethodCallTranslator"/> instead, producing valid multirange SQL.
 /// </para>
 /// <para>
-/// The refusal rejects comparing a server-computed value set <c>Union</c> for equality — see
-/// <see cref="UnionEqualityGuard"/>.
+/// The refusals reject comparing a server-computed value set <c>Union</c> for equality — see
+/// <see cref="UnionEqualityGuard"/> — and <c>ExecuteUpdate</c> setting a value set inside a JSON
+/// column — see <see cref="JsonValueSetUpdateGuard"/>.
 /// </para>
 /// </remarks>
 public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInterceptor
@@ -25,7 +30,83 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
     {
         UnionEqualityGuard.Instance.Visit(queryExpression);
+        if (eventData.Context?.Model is { } model) new JsonValueSetUpdateGuard(model).Visit(queryExpression);
         return RangeSetOperatorRewriter.Instance.Visit(queryExpression);
+    }
+
+    /// <summary>
+    /// Refuses <c>ExecuteUpdate</c> setting a value set that sits inside a JSON-mapped complex type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EF Core translates such a setter to <c>jsonb_set(doc, '{Tags}', to_jsonb(@p))</c>, binding the
+    /// set's provider value — a PostgreSQL array. <c>to_jsonb</c> of an array is a JSON array, while
+    /// the document holds the set as its literal string, which is what the reader expects and what a
+    /// query casts to the array type. The update reports success; afterwards the entity no longer
+    /// loads (<c>Cannot get the value of a token type 'StartArray' as a string</c>) and every query
+    /// on the property fails. Nothing goes wrong at write time, which is why it is refused here rather
+    /// than left to surface on the next read.
+    /// </para>
+    /// <para>
+    /// Ranges and multiranges are not refused: <c>to_jsonb</c> of a range is a JSON string holding
+    /// PostgreSQL's own range output, which the strict literal parser reads. Setting the whole JSON
+    /// property is not refused either — EF writes that through the plugin's own writer.
+    /// </para>
+    /// <para>
+    /// EF Core's <c>ExecuteUpdate</c> lowers to a private
+    /// <c>ExecuteUpdate&lt;TSource&gt;(IQueryable&lt;TSource&gt;, IReadOnlyList&lt;ITuple&gt;)</c> whose setters are
+    /// <c>new Tuple&lt;Delegate, object&gt;(propertyLambda, value)</c>. It is matched by name, declaring type
+    /// and parameter shape rather than through EF's internal <c>ExecuteUpdateMethodInfo</c>, which
+    /// would draw EF1001; <c>ExecuteUpdateShapeTests</c> fails if an EF upgrade changes that shape.
+    /// </para>
+    /// </remarks>
+    private sealed class JsonValueSetUpdateGuard(IModel model) : ExpressionVisitor
+    {
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+        {
+            if (node.Method is { Name: "ExecuteUpdate", IsGenericMethod: true } method
+                && method.DeclaringType == typeof(EntityFrameworkQueryableExtensions)
+                && method.GetParameters() is [_, { ParameterType: var settersType }]
+                && settersType == typeof(IReadOnlyList<ITuple>)
+                && node.Arguments[1] is NewArrayExpression setters)
+            {
+                foreach (var setter in setters.Expressions)
+                    if (setter is NewExpression { Arguments: [var property, _] } && Unwrap(property) is LambdaExpression lambda)
+                        Check(lambda);
+            }
+
+            return base.VisitMethodCall(node);
+        }
+
+        private void Check(LambdaExpression lambda)
+        {
+            var path = new List<string>();
+            for (var current = Unwrap(lambda.Body); current is MemberExpression member; current = Unwrap(member.Expression))
+                path.Insert(0, member.Member.Name);
+
+            if (path.Count < 2 || model.FindEntityType(lambda.Parameters[0].Type) is not { } entityType) return;
+
+            ITypeBase declaring = entityType;
+            foreach (var name in path[..^1])
+            {
+                if (declaring.FindComplexProperty(name) is not { } complex) return;
+                declaring = complex.ComplexType;
+            }
+
+            var target = Unwrap(lambda.Body)!.Type;
+            if (!declaring.IsMappedToJson() || !SetTypeRegistry.TryGetByClrType(target, out _)) return;
+
+            throw new InvalidOperationException(
+                $"'ExecuteUpdate' cannot set the value set '{string.Join('.', path)}' inside a JSON column. "
+              + "EF Core writes it with PostgreSQL's to_jsonb, which stores a JSON array where the document holds "
+              + "the set's literal string, so the row would no longer load and queries on the property would fail. "
+              + $"Load the entity and save it with SaveChanges, or set the whole JSON property (SetProperty(e => e.{path[0]}, …)).");
+        }
+
+        private static Expression? Unwrap(Expression? expression)
+            => expression is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.Quote } unary
+                   ? Unwrap(unary.Operand)
+                   : expression;
     }
 
     /// <summary>
