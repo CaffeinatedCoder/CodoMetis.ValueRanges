@@ -118,7 +118,9 @@ PostgreSQL allows quoting individual bounds to embed commas, brackets, or other 
 Int32Range.Parse("[\"1\",\"10\"]", null);   // [1, 10]
 ```
 
-Inside quotes, `\"` is unescaped to `"` and `\\` to `\`, matching PostgreSQL's quoted-bound syntax. The no-quote fast path stays allocation-free; unescaping only runs when a backslash is actually present inside the quotes.
+A bound is read as PostgreSQL's `range_in` reads it. A double quote opens or closes a quoted section anywhere in a bound (`"1"2` is `12`), a doubled quote inside one is a literal `"`, and a backslash takes the next character literally, inside quotes or out (`[\1,5)` is `[1,5)`). Whitespace around the unquoted part of a bound is dropped.
+
+**Only an absent bound is infinite.** `(,5)` is unbounded below; `["",5)` and `[ ,5)` are not — their lower bound is present and empty, which no element type reads, so they are a `FormatException`, as PostgreSQL answers `invalid input syntax for type integer: ""`. Before 9.0, `["",5)` read as `(,4]` and `("","")` as `(,)`.
 
 ### TypeConverter and configuration binding
 

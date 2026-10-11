@@ -258,6 +258,10 @@ whatever the invariant culture could, month first. These are now a `FormatExcept
 | `9:30 AM`, `9:30` | 09:30 | `09:30` |
 | the same forms as JSON elements of a `DateTimeOffsetSet`, `DateTimeSet` or `TimeSet` | as above — System.Text.Json's converter read the offset-less ones in the machine's offset | as above, or register a converter for the element type |
 
+A range bound that is a quoted `""` or only whitespace — `["",5)`, `( , )` — is now a `FormatException`
+rather than an infinite bound, as in PostgreSQL; only an absent bound (`(,5)`) is infinite. A backslash
+outside quotes now escapes the next character in a range bound, as it does in PostgreSQL.
+
 `HH:mm` without seconds, PostgreSQL's space-separated output, any number of fraction digits (truncated to 100 ns) and `infinity` / `-infinity` are accepted.
 The temporal wrapper arities read the text as their primitive first, so a lenient generated element
 `Parse` no longer sees non-ISO text, and an element that ignores the format specifier now fails on
