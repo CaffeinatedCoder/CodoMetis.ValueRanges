@@ -212,6 +212,12 @@ JsonSerializer.Serialize(days);   // {"[2026-01-01,2026-06-30]":181}
 
 `JsonSerializerOptions.DictionaryKeyPolicy` is not applied to these keys: System.Text.Json applies it to string keys only, and a naming policy would rewrite a literal into text that no longer parses. Value sets cannot be keys — their value form is a JSON array, not a string.
 
+**Two spellings can be one key.** Because keys canonicalize, `{"[1,5]":"a","[1,6)":"b"}` names the key `[1,5]` twice, and so does `{"{[1,5]}":…,"{[1,3],[4,5]}":…}` for a `RangeSet`. System.Text.Json treats that as any duplicate key: by default the later value silently replaces the earlier one, as it would for `{"k":1,"k":2}`. Where a dropped entry matters — configuration, permissions, anything keyed by a period a client chose — set `AllowDuplicateProperties = false` (.NET 10). It checks duplicates on the parsed key, so a canonical collision is a `JsonException` like a literal duplicate:
+
+```csharp
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.AllowDuplicateProperties = false);
+```
+
 ### Rejections
 
 A literal that does not parse is a `JsonException` naming the target type and quoting the input — at most 64 characters of it, plus its length when longer: `Cannot parse '[2026-13-01,2026-14-01]' as DateRange.` The excerpt is deliberate. It is what makes a 400 diagnosable — System.Text.Json's own messages name only the JSON path — and it is bounded, so a hostile payload cannot become an equally large exception message in every log sink (`ParserResilienceTests` holds that bound). It is the BCL's convention too: `int.Parse` quotes its input. If your host returns exception messages to clients (MVC does by default, through `JsonOptions.AllowInputFormatterExceptionMessages`), the client sees an excerpt of what it sent itself.
@@ -245,6 +251,10 @@ Use a source-generated context, as for any AOT JSON. List the types you serializ
 [JsonSerializable(typeof(PermissionKey))]               // the set's element type
 internal partial class ApiJsonContext : JsonSerializerContext;
 ```
+
+Leaving the element type out fails loudly on first use, in both directions, with System.Text.Json's `NotSupportedException` naming it: `JsonTypeInfo metadata for type 'PermissionKey' was not provided by TypeInfoResolver …`. That holds even for the families that bring their own element converter — the wrapper arities and the NodaTime sets — because the set converter asks the options for the element's contract first and uses its own only for an element the options know but cannot write as a scalar.
+
+Under Native AOT, System.Text.Json also disables reflection-based serialization, so `JsonSerializer.Serialize(value)` with default options throws `InvalidOperationException` for every type, these included — typed or through `object`. The attributes take effect through the context: pass its options or its type info.
 
 The generic types — `RangeSet<TRange, T>` and the validated-wrapper sets — get their converters from a registration each type makes for itself, never from `MakeGenericType`, so a type your program only ever deserializes works too. Should trimming ever remove that registration, the converter lookup throws a `NotSupportedException` naming the type; the remedy is to register its closed converter on the options:
 

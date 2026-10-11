@@ -219,6 +219,15 @@ Case("aot-wrapper", () =>
 });
 // A validated-wrapper set this program only ever deserializes.
 Case("aot-wrapper-read", () => JsonSerializer.Deserialize("[2,1]", ctx.Int32SetCode) is { } codes ? codes.ToString() : "null");
+// The documented minimal context for a primitive set: the set and its element type, even string.
+Case("aot-stringset", () =>
+{
+    var tags = StringSet.From("beta", "alpha");
+    var json = JsonSerializer.Serialize(tags, ctx.StringSet);
+    return json + (JsonSerializer.Deserialize(json, ctx.StringSet) == tags ? " roundtrip" : " MISMATCH");
+});
+// Through object: the serializer resolves the runtime type (the variant) from the context.
+Case("aot-object", () => JsonSerializer.Serialize<object>(h1, ctx.Object));
 #pragma warning disable IL2026 // TypeDescriptor is not trim-safe in general; the converter lookup is what is tested.
 Case("aot-typeconverter", () => TypeDescriptor.GetConverter(typeof(RangeSet<Int64Range, long>)).ConvertFromInvariantString("{[1,5]}")!.ToString()!);
 #pragma warning restore IL2026
@@ -240,6 +249,9 @@ public readonly record struct Key(string Value) : IFormattable, IParsable<Key>
 [JsonSerializable(typeof(Key))]
 [JsonSerializable(typeof(Int32Set<Code>))]
 [JsonSerializable(typeof(Code))]
+[JsonSerializable(typeof(StringSet))]
+[JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(object))]
 internal partial class SmokeJson : JsonSerializerContext;
 
 public readonly record struct Code(int Value) : IFormattable, IParsable<Code>, IComparable<Code>
@@ -286,6 +298,8 @@ assert_contains 'aot-rangeset-read={[1,5],[7,10]}'             "$work/aot.native
 assert_contains 'aot-noda-rangeset-read={[2026-01-01,2026-01-31]}' "$work/aot.native.out" "AOT: a NodaTime RangeSet the program never constructs deserializes"
 assert_contains 'aot-wrapper=["users.read"] roundtrip'         "$work/aot.native.out" "AOT: a validated-wrapper set round-trips"
 assert_contains 'aot-wrapper-read={1,2}'                       "$work/aot.native.out" "AOT: a validated-wrapper set the program never constructs deserializes"
+assert_contains 'aot-stringset=["alpha","beta"] roundtrip'     "$work/aot.native.out" "AOT: a primitive set round-trips through the documented minimal context"
+assert_contains 'aot-object="[2026-01-01,2026-06-30]"'         "$work/aot.native.out" "AOT: a range serializes through object"
 assert_contains 'aot-typeconverter={[1,5]}'                    "$work/aot.native.out" "AOT: TypeConverter for a RangeSet the program never constructs"
 
 # ── EF Core + NodaTime satellite: the whole dependency chain ──────────────────────────────────────
