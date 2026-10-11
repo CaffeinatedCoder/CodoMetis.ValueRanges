@@ -118,7 +118,9 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
   interfaces, `ValueSetJsonConverter` resolves elements through `JsonTypeInfo<T>`, and both
   libraries build with `IsAotCompatible` — no trim or AOT warnings in a consumer's publish. The
   consumer smoke test gained a NativeAOT consumer that publishes and runs a native binary; seeding
-  out `RangeSet`'s own registration fails exactly the range set cases there.
+  out `RangeSet`'s own registration fails exactly the range set cases there. The core and NodaTime
+  READMEs now say so, and `PackagingConventionTests` holds a package README's AOT claim to its
+  project's `IsAotCompatible` in both directions. The EF Core packages make no such claim.
 - **Ranges and multiranges as dictionary keys.** `Dictionary<DateRange, int>` threw
   `NotSupportedException` in both directions, registered or not. `RangeJsonConverter`,
   `RangeVariantJsonConverter` and `RangeSetJsonConverter` now override

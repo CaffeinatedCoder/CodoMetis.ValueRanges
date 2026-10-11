@@ -22,6 +22,10 @@ dotnet add package CodoMetis.ValueRanges
 
 > Requires .NET 10 or later.
 
+**Native AOT and trimming compatible** — no trim or AOT warnings in your publish, verified by a
+NativeAOT consumer in CI. JSON under AOT needs a source-generated context
+([details](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+
 ## Why not `NpgsqlRange<T>`?
 
 Because it cannot live in a domain model. `NpgsqlRange<T>` is declared in `NpgsqlTypes`, in

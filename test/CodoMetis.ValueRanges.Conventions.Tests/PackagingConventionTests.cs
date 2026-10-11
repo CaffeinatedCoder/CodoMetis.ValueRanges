@@ -54,6 +54,41 @@ public sealed class PackagingConventionTests
         }
     }
 
+    /// <summary>The phrase a package README uses to claim Native AOT compatibility.</summary>
+    private const string AotClaim = "Native AOT and trimming compatible";
+
+    /// <summary>
+    /// A package README claims Native AOT compatibility exactly when its project builds with
+    /// <c>IsAotCompatible</c> — the property that runs the trim and AOT analyzers on every build.
+    /// </summary>
+    /// <remarks>
+    /// A README is what a consumer reads on NuGet, and nothing else ties it to the build. A claim
+    /// without the property would be unchecked marketing — the analyzers would never run, and a
+    /// reflection path could ship unannotated under a page that promises otherwise. The property
+    /// without the claim hides a feature consumers choose packages by. The EF Core packages make
+    /// neither: they build on EF Core's reflection, whose own AOT support is experimental.
+    /// </remarks>
+    [TestMethod]
+    public void AotClaim_InAPackageReadme_MatchesIsAotCompatible()
+    {
+        foreach (var project in RepoLayout.PackableProjects)
+        {
+            var readme = project.PackedFiles.Single(include => include.EndsWith("README.md", StringComparison.OrdinalIgnoreCase));
+            var claims = File.ReadAllText(Path.Combine(project.Directory.FullName, readme))
+                             .Contains(AotClaim, StringComparison.Ordinal);
+            var isAotCompatible = string.Equals(project.Property("IsAotCompatible"), "true", StringComparison.OrdinalIgnoreCase);
+
+            Assert.AreEqual(
+                isAotCompatible, claims,
+                isAotCompatible
+                    ? $"{project.PackageId} builds with IsAotCompatible but its README does not say "
+                    + $"\"{AotClaim}\". Consumers choose packages by this; say it."
+                    : $"{project.PackageId}'s README claims \"{AotClaim}\" but the project does not set "
+                    + "IsAotCompatible, so the trim and AOT analyzers never run on it. Set the property, "
+                    + "or remove the claim.");
+        }
+    }
+
     [TestMethod]
     public void EveryPackage_DescribesItself()
     {
