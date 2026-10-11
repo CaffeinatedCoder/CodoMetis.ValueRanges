@@ -206,13 +206,15 @@ public class SetElementBridgeTests
 
     /// <summary>
     /// The counterexample. A wrapper that swallows the format argument answers with its own
-    /// default form, and the array literal it produces is a truncated value that still parses —
-    /// so the loss is silent here, in the pure model. It is the EF Core bridge that refuses it,
-    /// because that is where a truncated value would reach a column
-    /// (<c>SqlLiteralTests</c> covers the rejection).
+    /// default form — here the invariant culture's, which drops the sub-seconds. Until 9.0.0 that
+    /// literal still parsed, through the element's own lenient <c>Parse</c>, into a truncated value:
+    /// a silent loss in the pure model. The family now reads the text strictly as ISO 8601 before
+    /// the element sees it, so the culture form is refused, as the NodaTime twin already was
+    /// (<c>WrapperLocalDateSet_ElementIgnoringTheFormat_LeaksTheCultureForm</c>). The EF Core bridge
+    /// refuses it too, before a truncated value could reach a column (<c>SqlLiteralTests</c>).
     /// </summary>
     [TestMethod]
-    public void WrapperDateTimeSet_ElementIgnoringTheFormat_LosesPrecisionInTheLiteral()
+    public void WrapperDateTimeSet_ElementIgnoringTheFormat_IsRefusedOnParse()
     {
         var precise = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified).AddTicks(1_234_567);
         var set     = DateTimeSet<TestLossyStamp>.From(new TestLossyStamp(precise));
@@ -221,9 +223,8 @@ public class SetElementBridgeTests
         // not answering with anything the store would recognize.
         Assert.AreEqual("{\"06/15/2024 10:30:00\"}", set.ToString());
 
-        var reparsed = DateTimeSet<TestLossyStamp>.Parse(set.ToString(), CultureInfo.InvariantCulture);
-
-        Assert.AreNotEqual(set, reparsed, "The truncation is what the contract exists to prevent.");
+        Assert.ThrowsExactly<FormatException>(
+            () => DateTimeSet<TestLossyStamp>.Parse(set.ToString(), CultureInfo.InvariantCulture));
     }
 
     // -----------------------------------------------------------------------

@@ -192,8 +192,10 @@ public abstract record DateTimeRange : IRange<DateTime>, IRangeFactory<DateTimeR
         };
 
     /// <inheritdoc />
+    /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
+    /// <c>infinity</c> / <c>-infinity</c> as the maximum / minimum value; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static DateTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        => IsoTemporal.ParseDateTime(s);
 
     /// <summary>
     /// Formats a <see cref="DateTime"/> value using the round-trip format specifier (<c>O</c>) by default,

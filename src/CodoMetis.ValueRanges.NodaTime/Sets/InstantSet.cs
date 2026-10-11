@@ -232,11 +232,13 @@ public sealed class InstantSet<TElement> :
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <summary>
-    /// Parses an element via <see cref="IParsable{TSelf}"/>, which re-runs the element's
-    /// validation — corrupt data throws rather than materializing.
+    /// Parses an element strictly as an instant first — the grammar of <see cref="InstantSet"/> — then hands
+    /// the element its own round-trip form through <see cref="IParsable{TSelf}"/>, which re-runs the
+    /// element's validation. A lenient element parser cannot misread non-ISO text that way, and
+    /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(s.ToString(), provider ?? CultureInfo.InvariantCulture);
+        => TElement.Parse(NodaPatterns.Instant.Format(NodaPatterns.ParseInstant(s.ToString())), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using extended ISO 8601
     /// (<c>uuuu-MM-ddTHH:mm:ss.FFFFFFFFFZ</c>) by default — see the class remarks.</summary>

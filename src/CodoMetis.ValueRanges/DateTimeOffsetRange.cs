@@ -193,8 +193,10 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
         };
 
     /// <inheritdoc />
+    /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
+    /// <c>infinity</c> / <c>-infinity</c> as the maximum / minimum value; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static DateTimeOffset ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => DateTimeOffset.Parse(s, provider ?? CultureInfo.InvariantCulture);
+        => IsoTemporal.ParseDateTimeOffset(s);
 
     /// <summary>
     /// Formats a <see cref="DateTimeOffset"/> value using the round-trip format specifier (<c>O</c>) by default,
