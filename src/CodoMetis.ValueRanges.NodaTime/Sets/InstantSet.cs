@@ -37,6 +37,7 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(InstantSet), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<InstantSet, Instant>))]
 public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet, Instant>, IEquatable<InstantSet>
 {
     private readonly ImmutableArray<Instant> _elements;
@@ -171,6 +172,7 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
 /// <typeparam name="TElement">The validated element type backed by an <see cref="Instant"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(InstantSet), nameof(InstantSet.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
 public sealed class InstantSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<InstantSet<TElement>, TElement>, IEquatable<InstantSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

@@ -38,6 +38,7 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(LocalDateSet), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<LocalDateSet, LocalDate>))]
 public sealed class LocalDateSet : IValueSet<LocalDate>, IValueSetFactory<LocalDateSet, LocalDate>, IEquatable<LocalDateSet>
 {
     private readonly ImmutableArray<LocalDate> _elements;
@@ -187,6 +188,7 @@ public sealed class LocalDateSet : IValueSet<LocalDate>, IValueSetFactory<LocalD
 /// <typeparam name="TElement">The validated element type backed by a <see cref="LocalDate"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(LocalDateSet), nameof(LocalDateSet.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
 public sealed class LocalDateSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<LocalDateSet<TElement>, TElement>, IEquatable<LocalDateSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

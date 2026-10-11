@@ -40,6 +40,7 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(YearMonthSet), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<YearMonthSet, YearMonth>))]
 public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMonthSet, YearMonth>, IEquatable<YearMonthSet>
 {
     private readonly ImmutableArray<YearMonth> _elements;
@@ -198,6 +199,7 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
 /// <typeparam name="TElement">The validated element type backed by a <see cref="YearMonth"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(YearMonthSet), nameof(YearMonthSet.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
 public sealed class YearMonthSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<YearMonthSet<TElement>, TElement>, IEquatable<YearMonthSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

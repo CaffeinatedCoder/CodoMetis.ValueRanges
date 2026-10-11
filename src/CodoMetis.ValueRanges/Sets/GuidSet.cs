@@ -20,6 +20,7 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(GuidSet), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<GuidSet, Guid>))]
 public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, IEquatable<GuidSet>
 {
     private readonly ImmutableArray<Guid> _elements;
@@ -128,6 +129,7 @@ public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, 
 /// <typeparam name="TElement">The validated element type backed by a <see cref="Guid"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(GuidSet), nameof(GuidSet.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
 public sealed class GuidSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<GuidSet<TElement>, TElement>, IEquatable<GuidSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges;
 
@@ -17,6 +19,7 @@ namespace CodoMetis.ValueRanges;
 /// which is conventional for timestamp ranges.
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
+[JsonConverter(typeof(RangeJsonConverter<DateTimeOffsetRange, DateTimeOffset>))]
 public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFactory<DateTimeOffsetRange, DateTimeOffset>
 {
     private DateTimeOffsetRange()
@@ -26,11 +29,13 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <summary>
     /// Represents an empty <see cref="DateTimeOffsetRange"/> that contains no values.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, DateTimeOffsetRange, DateTimeOffset>))]
     public sealed record EmptyRange : DateTimeOffsetRange, IEmptyRange<DateTimeOffset>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeOffsetRange"/> bounded on both sides.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Finite, DateTimeOffsetRange, DateTimeOffset>))]
     public sealed record Finite : DateTimeOffsetRange, IFiniteRange<DateTimeOffset>
     {
         internal Finite(DateTimeOffset start, DateTimeOffset end, bool startInclusive, bool endInclusive)
@@ -60,6 +65,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, DateTimeOffsetRange, DateTimeOffset>))]
     public sealed record UnboundedStart(DateTimeOffset End, bool EndInclusive)
         : DateTimeOffsetRange, IUnboundedStartRange<DateTimeOffset>;
 
@@ -69,12 +75,14 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, DateTimeOffsetRange, DateTimeOffset>))]
     public sealed record UnboundedEnd(DateTimeOffset Start, bool StartInclusive)
         : DateTimeOffsetRange, IUnboundedEndRange<DateTimeOffset>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeOffsetRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, DateTimeOffsetRange, DateTimeOffset>))]
     public sealed record Infinity : DateTimeOffsetRange, IInfinityRange<DateTimeOffset>;
 
     /// <summary>

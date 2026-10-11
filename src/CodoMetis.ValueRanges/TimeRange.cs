@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
+using CodoMetis.ValueRanges.Serialization;
 
 namespace CodoMetis.ValueRanges;
 
@@ -27,6 +29,7 @@ namespace CodoMetis.ValueRanges;
 /// </para>
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
+[JsonConverter(typeof(RangeJsonConverter<TimeRange, TimeOnly>))]
 public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, TimeOnly>
 {
     private TimeRange()
@@ -36,11 +39,13 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
     /// <summary>
     /// Represents an empty <see cref="TimeRange"/> that contains no values.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, TimeRange, TimeOnly>))]
     public sealed record EmptyRange : TimeRange, IEmptyRange<TimeOnly>;
 
     /// <summary>
     /// Represents a <see cref="TimeRange"/> bounded on both sides.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Finite, TimeRange, TimeOnly>))]
     public sealed record Finite : TimeRange, IFiniteRange<TimeOnly>
     {
         internal Finite(TimeOnly start, TimeOnly end, bool startInclusive, bool endInclusive)
@@ -70,6 +75,7 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
     /// </summary>
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, TimeRange, TimeOnly>))]
     public sealed record UnboundedStart(TimeOnly End, bool EndInclusive) : TimeRange, IUnboundedStartRange<TimeOnly>;
 
     /// <summary>
@@ -78,11 +84,13 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
     /// </summary>
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
+    [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, TimeRange, TimeOnly>))]
     public sealed record UnboundedEnd(TimeOnly Start, bool StartInclusive) : TimeRange, IUnboundedEndRange<TimeOnly>;
 
     /// <summary>
     /// Represents a <see cref="TimeRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
+    [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, TimeRange, TimeOnly>))]
     public sealed record Infinity : TimeRange, IInfinityRange<TimeOnly>;
 
     /// <summary>

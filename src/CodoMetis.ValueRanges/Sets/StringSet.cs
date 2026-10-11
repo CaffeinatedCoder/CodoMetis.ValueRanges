@@ -21,6 +21,7 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(StringSet), nameof(From))]
+[JsonConverter(typeof(ValueSetJsonConverter<StringSet, string>))]
 public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, string>, IEquatable<StringSet>
 {
     private readonly ImmutableArray<string> _elements;
@@ -157,6 +158,7 @@ public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, s
 /// <typeparam name="TElement">The validated element type backed by a string.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(StringSet), nameof(StringSet.From))]
+[JsonConverter(typeof(RangeJsonConverterFactory))]
 public sealed class StringSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<StringSet<TElement>, TElement>, IEquatable<StringSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IFormattable, IParsable<TElement>
