@@ -25,13 +25,20 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
     private static readonly IRangeTypeDefinition[] Definitions =
         [
             // No Kind or offset reinterpretation: a LocalDateTime is wall-clock time by construction
-            // and an Instant is an instant. What remains is the store's resolution — nanoseconds
-            // truncated to microseconds and the extremes written as infinity, exactly as Npgsql
-            // sends them, so a JSON document and a SQL literal carry the value a parameter would.
+            // and an Instant is an instant. The calendar-bearing types normalize to ISO, as their
+            // factories do with the bounds — a no-op for a bound, but it backs the element mapping
+            // of a bare operand (`range @> @p`), where a non-ISO value would otherwise bind its own
+            // calendar's year/month/day as if they were ISO. What remains is the store's
+            // resolution — nanoseconds truncated to microseconds and the extremes written as
+            // infinity, exactly as Npgsql sends them, so a JSON document and a SQL literal carry
+            // the value a parameter would.
             new RangeTypeDefinition<LocalDateRange, LocalDate>(
-                "daterange", "datemultirange", "date", infinityText: NodaStoreTemporal.InfinityText),
+                "daterange", "datemultirange", "date",
+                normalizeValue: static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
+                infinityText: NodaStoreTemporal.InfinityText),
             new RangeTypeDefinition<LocalDateTimeRange, LocalDateTime>(
                 "tsrange", "tsmultirange", "timestamp without time zone",
+                normalizeValue: static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
                 storeValue: NodaStoreTemporal.Truncate, infinityText: NodaStoreTemporal.InfinityText),
             new RangeTypeDefinition<InstantRange, Instant>(
                 "tstzrange", "tstzmultirange", "timestamp with time zone",

@@ -266,6 +266,34 @@ public class NodaTimeIntegrationTests
         Assert.AreEqual(set.Union(operand), serverUnion);
     }
 
+    [TestMethod]
+    public async Task ElementOperand_InAnotherCalendar_IsComparedAsItsIsoDate()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        // Julian 2026-01-10 is ISO 2026-01-23, inside both stored ranges. A non-ISO element must
+        // reach the server as its ISO date, as the range bounds do — not as its own calendar's
+        // year/month/day written as if they were ISO, which is 2026-01-10 and outside.
+        await Seed(new Reservation
+        {
+            Id            = 6041,
+            NodaPeriod    = LocalDateRange.CreateFinite(D(2026, 1, 20), D(2026, 1, 25)),
+            NodaWallClock = LocalDateTimeRange.CreateFinite(
+                new LocalDateTime(2026, 1, 20, 0, 0), new LocalDateTime(2026, 1, 25, 0, 0))
+        });
+
+        var day   = new LocalDate(2026, 1, 10, CalendarSystem.Julian);
+        var clock = new LocalDateTime(2026, 1, 10, 12, 0, CalendarSystem.Julian);
+
+        await using var context = new IntegrationDbContext();
+        var rows = context.Reservations.Where(r => r.Id == 6041);
+
+        Assert.AreEqual(1, await rows.CountAsync(r => r.NodaPeriod.Contains(day)), "LocalDate parameter");
+        Assert.AreEqual(1, await rows.CountAsync(r => r.NodaPeriod.Contains(EF.Constant(day))), "LocalDate constant");
+        Assert.AreEqual(1, await rows.CountAsync(r => r.NodaWallClock.Contains(clock)), "LocalDateTime parameter");
+        Assert.AreEqual(1, await rows.CountAsync(r => r.NodaWallClock.Contains(EF.Constant(clock))), "LocalDateTime constant");
+    }
+
     private static async Task Seed(params Reservation[] rows)
     {
         await using var context = new IntegrationDbContext();
