@@ -45,7 +45,11 @@ public sealed class LiteralGrammarParityTests
     private static readonly string[] DateRangeLiterals =
     [
         "[2024-01-01,2024-02-01)", "[\"2024-01-01\",\"2024-02-01\")", "[\"\",2024-02-01)", "[ ,2024-02-01)",
-        @"[2024\-01\-01,2024-02-01)", "(,infinity)", "[-infinity,2024-01-01)"
+        @"[2024\-01\-01,2024-02-01)", "(,infinity)", "[-infinity,2024-01-01)",
+        // Whitespace around an unquoted bound is the range grammar's to skip. Inside quotes it reaches
+        // the element, where PostgreSQL's date_in trims it and the strict ISO grammar refuses it —
+        // deliberately, and loudly (TemporalLiteralGrammarTests.Date_Rejects), so it is not listed.
+        "[ 2024-01-01 , 2024-02-01 )", " [2024-01-01,2024-02-01) "
     ];
 
     private static readonly string[] Int4MultirangeLiterals =
