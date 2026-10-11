@@ -9,6 +9,58 @@ filtered to the entries that affect it.
 
 Versions follow [Semantic Versioning](https://semver.org/). Entries are newest-first.
 
+## [9.0.0] — 2026-10-11
+
+Two wire-format defects in the System.Text.Json support, found by wrapping a `DateRange` in a
+downstream value object and putting it on an ASP.NET Core API. **Nothing was removed or
+resignatured** — package validation passes against the 8.0.0 baseline.
+
+This is a major for the reason 7.0.0 and 8.0.0 were: `JsonSerializer.Serialize(range)` with
+default options now *answers* differently, and a caller cannot discover that from a compile error.
+The old answer was a defect — it could not be read back by anything, this package included — but a
+consumer that only ever wrote it, into a response or a log, sees its shape change, and a floating
+`8.*` reference must not pick that up silently.
+
+### Changed
+
+- **⚠️ Every range, variant, multirange and value set serializes as its literal with nothing
+  registered.** The converters were opt-in (`AddRangeConverters()`), and System.Text.Json's fallback
+  for a type with no converter is a property dump: `DateRange` wrote `{"Length":181}`, a `RangeSet`
+  `[{"Length":5}]`, a `StringSet` `{"Values":["a","b"],"Count":2,"IsEmpty":false}`, and an
+  `object`-typed range every public property of its variant. None of them read back — the abstract
+  union threw `NotSupportedException`, the rest `JsonException` — and nothing threw on the way
+  out, so an ASP.NET Core host that forgot the registration wrote wrong responses and refused every
+  request body with a 400. Each type now carries `[JsonConverter]`, so `"[2026-01-01,2026-06-30]"`,
+  `"{[1,5],[7,10]}"` and `["a","b"]` are the wire form by default.
+  - System.Text.Json does not inherit `[JsonConverter]`, so each sealed variant carries its own —
+    a value reached through `object` is a variant, and an attribute on the union alone would have
+    left it on the property dump.
+  - The attribute is the lowest-precedence route: a converter registered on the options or on a
+    property still wins. `AddRangeConverters()` stays valid and is now redundant.
+  - Source-generated `JsonSerializerContext`s honour it too. Unions, variants and the non-generic
+    sets name a closed converter type, which the generator instantiates directly; `RangeSet` and the
+    wrapper arities name `RangeJsonConverterFactory`, since an attribute cannot name an open generic
+    converter. A context serializing a value set must also list the element type — the set
+    converter resolves the element's contract through the options.
+  - **Payload change** for anyone who wrote the old form: a response or document that carried
+    `{"Length":…}` now carries the literal.
+
+### Added
+
+- **Ranges and multiranges as dictionary keys.** `Dictionary<DateRange, int>` threw
+  `NotSupportedException` in both directions, registered or not. `RangeJsonConverter`,
+  `RangeVariantJsonConverter` and `RangeSetJsonConverter` now override
+  `ReadAsPropertyName`/`WriteAsPropertyName`, writing the same literal as the value form
+  (`{"[2026-01-01,2026-06-30]":181}`). Keys canonicalize on read like values, and a malformed or
+  wrong-shape key is the same `JsonException`. `DictionaryKeyPolicy` is not applied — a naming
+  policy would rewrite the literal into text that does not parse. Value sets are not keys: their
+  value form is a JSON array, not a string.
+- **Tests:** `JsonDefaultContractTests` (conventions) serializes every shape of every discovered
+  range type — through the union, through `object`, inside a `RangeSet`, and as a dictionary key by
+  union, variant and multirange — and every value set family in both arities, with nothing
+  registered, against the registered output. The consumer smoke test asserts the unregistered wire
+  form against the packed package.
+
 ## [8.0.0] — 2026-08-17
 
 Six corrections and the machinery that found them. **Nothing was removed or resignatured** —

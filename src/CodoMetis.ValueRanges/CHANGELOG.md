@@ -3,6 +3,25 @@
 Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [9.0.0] — 2026-10-11
+
+### Changed
+
+- **⚠️ Every range, variant, `RangeSet` and value set serializes as its literal with nothing
+  registered.** Without `AddRangeConverters()`, System.Text.Json fell back to a property dump —
+  `DateRange` wrote `{"Length":181}`, `StringSet` `{"Values":[…],"Count":2,"IsEmpty":false}` — and
+  none of it read back. Each type, and each sealed variant (the attribute is not inherited), now
+  carries `[JsonConverter]`. A converter registered on the options or a property still wins;
+  `AddRangeConverters()` stays valid and is redundant. **Payload change** for anyone who wrote the
+  old form. See the [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
+  for source generation and why this is a major.
+
+### Added
+
+- **Ranges and multiranges as dictionary keys**, writing the same literal as the value form.
+  `RangeJsonConverter`, `RangeVariantJsonConverter` and `RangeSetJsonConverter` override
+  `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied.
+
 ## [8.0.0] — 2026-08-17
 
 ### Fixed

@@ -188,10 +188,10 @@ of them; one that swallows it is rejected at the persistence boundary.
 
 ## JSON Serialization (`Serialization/`)
 
-- `RangeJsonConverter<TRange, T>` — serializes to/from PostgreSQL range literal strings.
-  `HandleNull` is `true` so reads can reject a null token with a directed message (`"empty"` is
-  the empty range); that also routes nulls into `Write`, which must emit `null` rather than
-  dereference
+- `RangeJsonConverter<TRange, T>` — serializes to/from PostgreSQL range literal strings, as a
+  value and as a dictionary key (`ReadAsPropertyName`/`WriteAsPropertyName`, same literal, no
+  `DictionaryKeyPolicy`). `null` is left to System.Text.Json in both directions; `HandleNull` was
+  dropped in 6.2 because it made a written null unreadable
 - `ValueSetJsonConverter<TSet, T>` — serializes value sets as plain JSON arrays, delegating
   element serialization to System.Text.Json (element converters apply); reads normalize and
   reject null elements
@@ -200,7 +200,28 @@ of them; one that swallows it is rejected at the persistence boundary.
   different shape
 - `RangeJsonConverterFactory` — auto-registers for any type implementing `IRangeFactory<TRange, T>`
   or `IValueSetFactory<TSet, T>`, or `RangeSet<TRange, T>`
-- Extension: `AddRangeConverters()` registers all at once
+- Extension: `AddRangeConverters()` registers all at once — redundant since 9.0.0, see below
+
+### Type-level attributes
+
+Since 9.0.0 every type carries its converter, so nothing has to be registered. Three rules decide
+what each attribute names:
+
+- **The union names `RangeJsonConverter<TRange, T>`, and every sealed variant names
+  `RangeVariantJsonConverter<TVariant, TRange, T>` itself.** System.Text.Json looks the attribute up
+  on the exact type it is handed and does not inherit it, and a value reached through `object` is
+  handed over as its variant. An attribute on the union alone leaves every `object`-typed range on
+  the property dump.
+- **Non-generic types name a closed converter**, so a source-generated context instantiates it
+  directly with no reflection.
+- **`RangeSet<TRange, T>` and the wrapper arities name `RangeJsonConverterFactory`.** An attribute
+  cannot name an open generic converter (`typeof(RangeSetJsonConverter<,>)` fails at runtime with
+  `ContainsGenericParameters`), so these go through the factory's `MakeGenericType`, as a registered
+  factory always did.
+
+The attribute ranks below a converter on the options or on the property, so it never overrides one.
+A new range type, variant or set family must carry its attribute; `JsonDefaultContractTests` in the
+conventions project discovers every type and fails on one that serializes differently unregistered.
 
 ### Variants and the factory
 

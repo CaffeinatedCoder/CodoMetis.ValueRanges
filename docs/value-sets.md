@@ -143,7 +143,7 @@ Int32Set.Parse("{2,1,2}", null);             // {1,2} — normalizes on parse
 StringSet.Parse("{a,NULL}", null);           // FormatException — sets never contain null
 ```
 
-JSON serialization goes through the same converter factory as the ranges (`options.AddRangeConverters()`) and produces plain JSON arrays (`["alpha","beta"]`), delegating element serialization to System.Text.Json — element converters apply. Reads normalize and reject null elements. Element types the serializer does not know natively are covered by the family's own [element converter](serialization.md#element-converters).
+JSON serialization needs no registration — every set type carries its converter, as the ranges do — and produces plain JSON arrays (`["alpha","beta"]`), delegating element serialization to System.Text.Json — element converters apply. Reads normalize and reject null elements. Element types the serializer does not know natively are covered by the family's own [element converter](serialization.md#element-converters).
 
 ## Converting between sets and ranges
 

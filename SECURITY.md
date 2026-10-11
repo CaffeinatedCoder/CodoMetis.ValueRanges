@@ -51,8 +51,8 @@ remedy for those is to upgrade.
 
 | Version | Supported |
 |---|---|
-| 8.0.x | ✅ |
-| < 8.0 | ❌ |
+| 9.0.x | ✅ |
+| < 9.0 | ❌ |
 
 ### For how long
 

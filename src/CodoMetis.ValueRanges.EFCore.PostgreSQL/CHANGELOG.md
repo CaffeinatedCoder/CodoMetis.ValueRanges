@@ -3,6 +3,11 @@
 Entries affecting the EF Core (Npgsql) plugin. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [9.0.0] — 2026-10-11
+
+No source change in this package. See `CodoMetis.ValueRanges` 9.0.0: the range and value set types
+now carry their System.Text.Json converters, and ranges can be dictionary keys.
+
 ## [8.0.0] — 2026-08-17
 
 ### Fixed
