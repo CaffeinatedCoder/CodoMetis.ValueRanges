@@ -1,12 +1,14 @@
 using System.Globalization;
 using System.Linq.Expressions;
+using CodoMetis.ValueRanges.Conventions.Tests;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NodaTime;
+using NodaTime.Text;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
-/// <summary>Every temporal range, multirange and set type, once as a column and once in a JSON document.</summary>
+/// <summary>The temporal values of <see cref="TemporalParityValues"/>, once as columns and once in a JSON document.</summary>
 public sealed class TemporalParityRow
 {
     public int Id { get; set; }
@@ -14,6 +16,16 @@ public sealed class TemporalParityRow
     public TemporalParityValues Doc { get; set; } = new();
 }
 
+/// <summary>
+/// One property per registered store conversion: every temporal range type, closed set and wrapper
+/// set family, except the three over <see cref="YearMonth"/> — month-aligned dates, with nothing
+/// below a day to truncate — plus two of the multiranges.
+/// </summary>
+/// <remarks>
+/// A multirange has no registration of its own; it takes its range type's definition, so
+/// <c>WallMulti</c> and <c>NInstMulti</c> stand for the other five. Every wrapper family is here
+/// because each is a separate registration that has to pass its own truncation.
+/// </remarks>
 public sealed class TemporalParityValues
 {
     public DateTimeRange                        Wall       { get; set; } = DateTimeRange.Empty;
@@ -34,6 +46,13 @@ public sealed class TemporalParityValues
     public LocalTimeSet                         NTimeSet   { get; set; } = LocalTimeSet.Empty;
     public LocalDateSet                         NDaySet    { get; set; } = LocalDateSet.Empty;
     public DateTimeSet<AuditStamp>              Audits     { get; set; } = DateTimeSet<AuditStamp>.Empty;
+    public TimeSet<ShiftTime>                   Shifts     { get; set; } = TimeSet<ShiftTime>.Empty;
+    public DateTimeOffsetSet<EventStamp>        Events     { get; set; } = DateTimeOffsetSet<EventStamp>.Empty;
+    public DateSet<BusinessDate>                BizDays    { get; set; } = DateSet<BusinessDate>.Empty;
+    public LocalDateTimeSet<WallClockStamp>     NWallMarks { get; set; } = LocalDateTimeSet<WallClockStamp>.Empty;
+    public InstantSet<EventInstant>             NInstMarks { get; set; } = InstantSet<EventInstant>.Empty;
+    public LocalTimeSet<OpeningTime>            NOpenings  { get; set; } = LocalTimeSet<OpeningTime>.Empty;
+    public LocalDateSet<CalendarDay>            NCalDays   { get; set; } = LocalDateSet<CalendarDay>.Empty;
 }
 
 /// <summary>
@@ -56,6 +75,11 @@ public sealed class TemporalParityValues
 /// between the materialized value in memory and the server, on points one microsecond either side of
 /// every bound. Points are whole microseconds, so the comparison is between stored values rather than
 /// a test of how a probe point itself is truncated.
+/// </para>
+/// <para>
+/// That last question — a sub-microsecond element operand, as a parameter and as a constant — is
+/// asked separately, against an expected answer rather than only between the two paths:
+/// <see cref="StoredElementMisses"/> and <see cref="RangeElementDisagreements"/>.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -108,9 +132,28 @@ public sealed class TemporalStoreParityTests
             NWallSet   = LocalDateTimeSet.From(nwall, nwall.PlusHours(5)),
             NTimeSet   = LocalTimeSet.From(ntime, ntime.PlusHours(5)),
             NDaySet    = LocalDateSet.From(LocalDate.FromDateTime(wall)),
-            Audits     = DateTimeSet<AuditStamp>.From(new AuditStamp(wall), new AuditStamp(wall.AddHours(5)))
+            Audits     = DateTimeSet<AuditStamp>.From(new AuditStamp(wall), new AuditStamp(wall.AddHours(5))),
+
+            // Every other wrapper family has its own registration, so each is here — and the sub-day
+            // ones with two elements that truncate to one store value, like WallSet above.
+            Shifts     = TimeSet<ShiftTime>.From(Shift(time), Shift(time.Add(TimeSpan.FromTicks(1))), Shift(time.AddHours(5))),
+            Events     = DateTimeOffsetSet<EventStamp>.From(Event(new DateTimeOffset(wall, offset)), Event(new DateTimeOffset(wall.AddTicks(1), offset))),
+            BizDays    = DateSet<BusinessDate>.From(BizDay(DateOnly.FromDateTime(wall))),
+            NWallMarks = LocalDateTimeSet<WallClockStamp>.From(NWallMark(nwall), NWallMark(nwall.PlusNanoseconds(1))),
+            NInstMarks = InstantSet<EventInstant>.From(NInstMark(noda), NInstMark(noda.PlusNanoseconds(1)), NInstMark(noda.Plus(Duration.FromHours(5)))),
+            NOpenings  = LocalTimeSet<OpeningTime>.From(NOpening(ntime), NOpening(ntime.PlusNanoseconds(1))),
+            NCalDays   = LocalDateSet<CalendarDay>.From(NCalDay(LocalDate.FromDateTime(wall)))
         };
     }
+
+    // The wrapper elements' constructors are private: they are built from text, as a consumer's are.
+    private static ShiftTime Shift(TimeOnly value) => ShiftTime.Parse(value.ToString("O", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    private static EventStamp Event(DateTimeOffset value) => EventStamp.Parse(value.ToString("O", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    private static BusinessDate BizDay(DateOnly value) => BusinessDate.Parse(value.ToString("O", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    private static WallClockStamp NWallMark(LocalDateTime value) => WallClockStamp.Parse(LocalDateTimePattern.ExtendedIso.Format(value), null);
+    private static EventInstant NInstMark(Instant value) => EventInstant.Parse(InstantPattern.ExtendedIso.Format(value), null);
+    private static OpeningTime NOpening(LocalTime value) => OpeningTime.Parse(LocalTimePattern.ExtendedIso.Format(value), null);
+    private static CalendarDay NCalDay(LocalDate value) => CalendarDay.Parse(LocalDatePattern.Iso.Format(value), null);
 
     /// <summary>The extremes Npgsql maps to infinity, as bounds and as elements.</summary>
     private static TemporalParityValues BuildExtremes()
@@ -138,7 +181,14 @@ public sealed class TemporalStoreParityTests
             NWallSet   = LocalDateTimeSet.From(LocalDateTime.MinIsoValue, LocalDateTime.MaxIsoValue),
             NTimeSet   = LocalTimeSet.From(LocalTime.MinValue, LocalTime.MaxValue),
             NDaySet    = LocalDateSet.From(LocalDate.MinIsoValue, LocalDate.MaxIsoValue),
-            Audits     = DateTimeSet<AuditStamp>.From(new AuditStamp(DateTime.MinValue), new AuditStamp(DateTime.MaxValue))
+            Audits     = DateTimeSet<AuditStamp>.From(new AuditStamp(DateTime.MinValue), new AuditStamp(DateTime.MaxValue)),
+            Shifts     = TimeSet<ShiftTime>.From(Shift(TimeOnly.MinValue), Shift(TimeOnly.MaxValue)),
+            Events     = DateTimeOffsetSet<EventStamp>.From(Event(DateTimeOffset.MinValue), Event(DateTimeOffset.MaxValue)),
+            BizDays    = DateSet<BusinessDate>.From(BizDay(DateOnly.MinValue), BizDay(DateOnly.MaxValue)),
+            NWallMarks = LocalDateTimeSet<WallClockStamp>.From(NWallMark(LocalDateTime.MinIsoValue), NWallMark(LocalDateTime.MaxIsoValue)),
+            NInstMarks = InstantSet<EventInstant>.From(NInstMark(Instant.MinValue), NInstMark(Instant.MaxValue)),
+            NOpenings  = LocalTimeSet<OpeningTime>.From(NOpening(LocalTime.MinValue), NOpening(LocalTime.MaxValue)),
+            NCalDays   = LocalDateSet<CalendarDay>.From(NCalDay(LocalDate.MinIsoValue), NCalDay(LocalDate.MaxIsoValue))
         };
     }
 
@@ -194,6 +244,13 @@ public sealed class TemporalStoreParityTests
         yield return ("NTimeSet", "time[]", v => v.NTimeSet, v => r => r.Native.NTimeSet == v.NTimeSet, v => r => r.Doc.NTimeSet == v.NTimeSet);
         yield return ("NDaySet", "date[]", v => v.NDaySet, v => r => r.Native.NDaySet == v.NDaySet, v => r => r.Doc.NDaySet == v.NDaySet);
         yield return ("Audits", "timestamp[]", v => v.Audits, v => r => r.Native.Audits == v.Audits, v => r => r.Doc.Audits == v.Audits);
+        yield return ("Shifts", "time[]", v => v.Shifts, v => r => r.Native.Shifts == v.Shifts, v => r => r.Doc.Shifts == v.Shifts);
+        yield return ("Events", "timestamptz[]", v => v.Events, v => r => r.Native.Events == v.Events, v => r => r.Doc.Events == v.Events);
+        yield return ("BizDays", "date[]", v => v.BizDays, v => r => r.Native.BizDays == v.BizDays, v => r => r.Doc.BizDays == v.BizDays);
+        yield return ("NWallMarks", "timestamp[]", v => v.NWallMarks, v => r => r.Native.NWallMarks == v.NWallMarks, v => r => r.Doc.NWallMarks == v.NWallMarks);
+        yield return ("NInstMarks", "timestamptz[]", v => v.NInstMarks, v => r => r.Native.NInstMarks == v.NInstMarks, v => r => r.Doc.NInstMarks == v.NInstMarks);
+        yield return ("NOpenings", "time[]", v => v.NOpenings, v => r => r.Native.NOpenings == v.NOpenings, v => r => r.Doc.NOpenings == v.NOpenings);
+        yield return ("NCalDays", "date[]", v => v.NCalDays, v => r => r.Native.NCalDays == v.NCalDays, v => r => r.Doc.NCalDays == v.NCalDays);
     }
 
     private static async Task<TemporalParityRow> Insert(int id, TemporalParityValues values)
@@ -274,8 +331,8 @@ public sealed class TemporalStoreParityTests
             }
 
             failures.AddRange(await ContainsDisagreements(id, probe, loaded));
-            failures.AddRange(await ElementConstantDisagreements(id, probe, values));
-            failures.AddRange(await RangeElementDisagreements(id, probe, values));
+            failures.AddRange(await StoredElementMisses(id, probe, values));
+            failures.AddRange(await RangeElementDisagreements(id, probe, values, loaded));
         }
 
         Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
@@ -307,6 +364,13 @@ public sealed class TemporalStoreParityTests
             "NTimeSet"   => [r => r.Native.NTimeSet == EF.Constant(v.NTimeSet), r => r.Doc.NTimeSet == EF.Constant(v.NTimeSet)],
             "NDaySet"    => [r => r.Native.NDaySet == EF.Constant(v.NDaySet), r => r.Doc.NDaySet == EF.Constant(v.NDaySet)],
             "Audits"     => [r => r.Native.Audits == EF.Constant(v.Audits), r => r.Doc.Audits == EF.Constant(v.Audits)],
+            "Shifts"     => [r => r.Native.Shifts == EF.Constant(v.Shifts), r => r.Doc.Shifts == EF.Constant(v.Shifts)],
+            "Events"     => [r => r.Native.Events == EF.Constant(v.Events), r => r.Doc.Events == EF.Constant(v.Events)],
+            "BizDays"    => [r => r.Native.BizDays == EF.Constant(v.BizDays), r => r.Doc.BizDays == EF.Constant(v.BizDays)],
+            "NWallMarks" => [r => r.Native.NWallMarks == EF.Constant(v.NWallMarks), r => r.Doc.NWallMarks == EF.Constant(v.NWallMarks)],
+            "NInstMarks" => [r => r.Native.NInstMarks == EF.Constant(v.NInstMarks), r => r.Doc.NInstMarks == EF.Constant(v.NInstMarks)],
+            "NOpenings"  => [r => r.Native.NOpenings == EF.Constant(v.NOpenings), r => r.Doc.NOpenings == EF.Constant(v.NOpenings)],
+            "NCalDays"   => [r => r.Native.NCalDays == EF.Constant(v.NCalDays), r => r.Doc.NCalDays == EF.Constant(v.NCalDays)],
             _ => throw new InvalidOperationException(name)
         };
 
@@ -375,6 +439,11 @@ public sealed class TemporalStoreParityTests
                  {
                      ("WallSet", n.WallSet.Count, r => r.Native.WallSet.Count),
                      ("Audits", n.Audits.Count, r => r.Native.Audits.Count),
+                     ("Shifts", n.Shifts.Count, r => r.Native.Shifts.Count),
+                     ("Events", n.Events.Count, r => r.Native.Events.Count),
+                     ("NWallMarks", n.NWallMarks.Count, r => r.Native.NWallMarks.Count),
+                     ("NInstMarks", n.NInstMarks.Count, r => r.Native.NInstMarks.Count),
+                     ("NOpenings", n.NOpenings.Count, r => r.Native.NOpenings.Count),
                  })
         {
             await using var ctx = new IntegrationDbContext();
@@ -386,12 +455,15 @@ public sealed class TemporalStoreParityTests
     }
 
     /// <summary>
-    /// A set element probed as a constant matches exactly as it does as a parameter. The NodaTime
-    /// sets have no element normalization, so their probe used to fall back to Npgsql's own element
-    /// literal — nine fraction digits, which the server rounds — and
-    /// <c>InstantSet.Contains(EF.Constant(x))</c> missed the element <c>x</c> was stored as.
+    /// Every element the set was built from matches its own row, as a parameter and as a constant, in
+    /// the column and in the document. Each one is stored — possibly as the same store value as a
+    /// neighbour a few hundred nanoseconds away — so the expected answer is always a match; comparing
+    /// the two paths only with each other would also pass if both missed. The NodaTime sets have no
+    /// element normalization, so their probe used to fall back to Npgsql's own element literal — nine
+    /// fraction digits, which the server rounds — and <c>InstantSet.Contains(EF.Constant(x))</c> missed
+    /// the element <c>x</c> was stored as.
     /// </summary>
-    private static async Task<IEnumerable<string>> ElementConstantDisagreements(int id, string probe, TemporalParityValues v)
+    private static async Task<IEnumerable<string>> StoredElementMisses(int id, string probe, TemporalParityValues v)
     {
         var failures = new List<string>();
 
@@ -401,36 +473,77 @@ public sealed class TemporalStoreParityTests
         {
             foreach (var element in elements)
             {
-                var parameter = await Count(id, asParameter(element));
-                var constant  = await Count(id, asConstant(element));
-                if (parameter != constant)
-                    failures.Add($"[{probe}] {name}.Contains({Text(element)}): as a parameter {parameter == 1}, as a constant {constant == 1}.");
+                try
+                {
+                    var parameter = await Count(id, asParameter(element));
+                    var constant  = await Count(id, asConstant(element));
+                    if (parameter != 1 || constant != 1)
+                        failures.Add($"[{probe}] {name}.Contains({Text(element)}) of a stored element: "
+                                   + $"as a parameter {parameter == 1}, as a constant {constant == 1}.");
+                }
+                catch (Exception e)
+                {
+                    failures.Add($"[{probe}] {name}.Contains({Text(element)}): {e.GetType().Name}: {(e.InnerException ?? e).Message.Split('\n')[0]}");
+                }
             }
         }
 
+        await Check("WallSet", v.WallSet.Values, e => r => r.Native.WallSet.Contains(e), e => r => r.Native.WallSet.Contains(EF.Constant(e)));
+        await Check("WallSet (document)", v.WallSet.Values, e => r => r.Doc.WallSet.Contains(e), e => r => r.Doc.WallSet.Contains(EF.Constant(e)));
+        await Check("StzSet", v.StzSet.Values, e => r => r.Native.StzSet.Contains(e), e => r => r.Native.StzSet.Contains(EF.Constant(e)));
+        await Check("StzSet (document)", v.StzSet.Values, e => r => r.Doc.StzSet.Contains(e), e => r => r.Doc.StzSet.Contains(EF.Constant(e)));
+        await Check("TimeSet", v.TimeSet.Values, e => r => r.Native.TimeSet.Contains(e), e => r => r.Native.TimeSet.Contains(EF.Constant(e)));
+        await Check("TimeSet (document)", v.TimeSet.Values, e => r => r.Doc.TimeSet.Contains(e), e => r => r.Doc.TimeSet.Contains(EF.Constant(e)));
+        await Check("DaySet", v.DaySet.Values, e => r => r.Native.DaySet.Contains(e), e => r => r.Native.DaySet.Contains(EF.Constant(e)));
+        await Check("DaySet (document)", v.DaySet.Values, e => r => r.Doc.DaySet.Contains(e), e => r => r.Doc.DaySet.Contains(EF.Constant(e)));
         await Check("NInstSet", v.NInstSet.Values, e => r => r.Native.NInstSet.Contains(e), e => r => r.Native.NInstSet.Contains(EF.Constant(e)));
         await Check("NInstSet (document)", v.NInstSet.Values, e => r => r.Doc.NInstSet.Contains(e), e => r => r.Doc.NInstSet.Contains(EF.Constant(e)));
-        await Check("NTimeSet", v.NTimeSet.Values, e => r => r.Native.NTimeSet.Contains(e), e => r => r.Native.NTimeSet.Contains(EF.Constant(e)));
         await Check("NWallSet", v.NWallSet.Values, e => r => r.Native.NWallSet.Contains(e), e => r => r.Native.NWallSet.Contains(EF.Constant(e)));
-        await Check("TimeSet", v.TimeSet.Values, e => r => r.Native.TimeSet.Contains(e), e => r => r.Native.TimeSet.Contains(EF.Constant(e)));
-        await Check("WallSet", v.WallSet.Values, e => r => r.Native.WallSet.Contains(e), e => r => r.Native.WallSet.Contains(EF.Constant(e)));
-        await Check("StzSet", v.StzSet.Values, e => r => r.Native.StzSet.Contains(e), e => r => r.Native.StzSet.Contains(EF.Constant(e)));
+        await Check("NWallSet (document)", v.NWallSet.Values, e => r => r.Doc.NWallSet.Contains(e), e => r => r.Doc.NWallSet.Contains(EF.Constant(e)));
+        await Check("NTimeSet", v.NTimeSet.Values, e => r => r.Native.NTimeSet.Contains(e), e => r => r.Native.NTimeSet.Contains(EF.Constant(e)));
+        await Check("NTimeSet (document)", v.NTimeSet.Values, e => r => r.Doc.NTimeSet.Contains(e), e => r => r.Doc.NTimeSet.Contains(EF.Constant(e)));
+        await Check("NDaySet", v.NDaySet.Values, e => r => r.Native.NDaySet.Contains(e), e => r => r.Native.NDaySet.Contains(EF.Constant(e)));
+        await Check("NDaySet (document)", v.NDaySet.Values, e => r => r.Doc.NDaySet.Contains(e), e => r => r.Doc.NDaySet.Contains(EF.Constant(e)));
+        await Check("Audits", v.Audits.Values, e => r => r.Native.Audits.Contains(e), e => r => r.Native.Audits.Contains(EF.Constant(e)));
+        await Check("Audits (document)", v.Audits.Values, e => r => r.Doc.Audits.Contains(e), e => r => r.Doc.Audits.Contains(EF.Constant(e)));
+        await Check("Shifts", v.Shifts.Values, e => r => r.Native.Shifts.Contains(e), e => r => r.Native.Shifts.Contains(EF.Constant(e)));
+        await Check("Shifts (document)", v.Shifts.Values, e => r => r.Doc.Shifts.Contains(e), e => r => r.Doc.Shifts.Contains(EF.Constant(e)));
+        await Check("Events", v.Events.Values, e => r => r.Native.Events.Contains(e), e => r => r.Native.Events.Contains(EF.Constant(e)));
+        await Check("Events (document)", v.Events.Values, e => r => r.Doc.Events.Contains(e), e => r => r.Doc.Events.Contains(EF.Constant(e)));
+        await Check("BizDays", v.BizDays.Values, e => r => r.Native.BizDays.Contains(e), e => r => r.Native.BizDays.Contains(EF.Constant(e)));
+        await Check("BizDays (document)", v.BizDays.Values, e => r => r.Doc.BizDays.Contains(e), e => r => r.Doc.BizDays.Contains(EF.Constant(e)));
+        await Check("NWallMarks", v.NWallMarks.Values, e => r => r.Native.NWallMarks.Contains(e), e => r => r.Native.NWallMarks.Contains(EF.Constant(e)));
+        await Check("NWallMarks (document)", v.NWallMarks.Values, e => r => r.Doc.NWallMarks.Contains(e), e => r => r.Doc.NWallMarks.Contains(EF.Constant(e)));
+        await Check("NInstMarks", v.NInstMarks.Values, e => r => r.Native.NInstMarks.Contains(e), e => r => r.Native.NInstMarks.Contains(EF.Constant(e)));
+        await Check("NInstMarks (document)", v.NInstMarks.Values, e => r => r.Doc.NInstMarks.Contains(e), e => r => r.Doc.NInstMarks.Contains(EF.Constant(e)));
+        await Check("NOpenings", v.NOpenings.Values, e => r => r.Native.NOpenings.Contains(e), e => r => r.Native.NOpenings.Contains(EF.Constant(e)));
+        await Check("NOpenings (document)", v.NOpenings.Values, e => r => r.Doc.NOpenings.Contains(e), e => r => r.Doc.NOpenings.Contains(EF.Constant(e)));
+        await Check("NCalDays", v.NCalDays.Values, e => r => r.Native.NCalDays.Contains(e), e => r => r.Native.NCalDays.Contains(EF.Constant(e)));
+        await Check("NCalDays (document)", v.NCalDays.Values, e => r => r.Doc.NCalDays.Contains(e), e => r => r.Doc.NCalDays.Contains(EF.Constant(e)));
 
         return failures;
     }
 
     /// <summary>
     /// A range's element operand — <c>range @&gt; x</c> — probed with the original, sub-microsecond
-    /// bounds, as a parameter and as a constant, must give one answer. It used to take the provider's
-    /// element mapping: a <c>DateTimeOffset</c> with a non-zero offset (every <c>Stz</c> probe here)
-    /// threw as a parameter, and a constant was Npgsql's own literal — nine digits for NodaTime, which
-    /// the server rounds.
+    /// bounds as a parameter and as a constant. It used to take the provider's element mapping: a
+    /// <c>DateTimeOffset</c> with a non-zero offset (every <c>Stz</c> probe here) threw as a
+    /// parameter, and a constant was Npgsql's own literal — nine digits for NodaTime, which the server
+    /// rounds.
     /// </summary>
-    private static async Task<IEnumerable<string>> RangeElementDisagreements(int id, string probe, TemporalParityValues v)
+    /// <remarks>
+    /// The expected answer is the materialized range's <c>Contains</c> of the probe <em>as stored</em>
+    /// (<see cref="Stored(DateTime)"/>), not the original range's: a range narrower than a microsecond
+    /// is legitimately empty once stored. Both paths must give that answer — agreeing with each other
+    /// is not enough, since both missing would agree. In the ordinary probes a start bound is inside
+    /// and an exclusive end outside, so each of them asserts a match and a miss.
+    /// </remarks>
+    private static async Task<IEnumerable<string>> RangeElementDisagreements(int id, string probe, TemporalParityValues v,
+                                                                              TemporalParityRow loaded)
     {
         var failures = new List<string>();
 
-        async Task Check<T>(string name, IEnumerable<T> points,
+        async Task Check<T>(string name, IEnumerable<T> points, Func<T, bool> expected,
                             Func<T, Expression<Func<TemporalParityRow, bool>>> asParameter,
                             Func<T, Expression<Func<TemporalParityRow, bool>>> asConstant)
         {
@@ -438,10 +551,12 @@ public sealed class TemporalStoreParityTests
             {
                 try
                 {
+                    var answer    = expected(point) ? 1 : 0;
                     var parameter = await Count(id, asParameter(point));
                     var constant  = await Count(id, asConstant(point));
-                    if (parameter != constant)
-                        failures.Add($"[{probe}] {name}.Contains({Text(point)}): as a parameter {parameter == 1}, as a constant {constant == 1}.");
+                    if (parameter != answer || constant != answer)
+                        failures.Add($"[{probe}] {name}.Contains({Text(point)}): the stored range holds it: {answer == 1}; "
+                                   + $"as a parameter {parameter == 1}, as a constant {constant == 1}.");
                 }
                 catch (Exception e)
                 {
@@ -450,21 +565,112 @@ public sealed class TemporalStoreParityTests
             }
         }
 
+        var n = loaded.Native;
+        var d = loaded.Doc;
+
         if (v.Wall is DateTimeRange.Finite wall)
-            await Check("Wall", [wall.Start, wall.End], p => r => r.Native.Wall.Contains(p), p => r => r.Native.Wall.Contains(EF.Constant(p)));
+        {
+            await Check("Wall", [wall.Start, wall.End], p => n.Wall.Contains(Stored(p)),
+                        p => r => r.Native.Wall.Contains(p), p => r => r.Native.Wall.Contains(EF.Constant(p)));
+            await Check("Wall (document)", [wall.Start, wall.End], p => d.Wall.Contains(Stored(p)),
+                        p => r => r.Doc.Wall.Contains(p), p => r => r.Doc.Wall.Contains(EF.Constant(p)));
+        }
+
         if (v.Stz is DateTimeOffsetRange.Finite stz)
-            await Check("Stz", [stz.Start, stz.End], p => r => r.Native.Stz.Contains(p), p => r => r.Native.Stz.Contains(EF.Constant(p)));
+        {
+            await Check("Stz", [stz.Start, stz.End], p => n.Stz.Contains(Stored(p)),
+                        p => r => r.Native.Stz.Contains(p), p => r => r.Native.Stz.Contains(EF.Constant(p)));
+            await Check("Stz (document)", [stz.Start, stz.End], p => d.Stz.Contains(Stored(p)),
+                        p => r => r.Doc.Stz.Contains(p), p => r => r.Doc.Stz.Contains(EF.Constant(p)));
+        }
+
         if (v.Time is TimeRange.Finite time)
-            await Check("Time", [time.Start, time.End], p => r => r.Native.Time.Contains(p), p => r => r.Native.Time.Contains(EF.Constant(p)));
+        {
+            await Check("Time", [time.Start, time.End], p => n.Time.Contains(Stored(p)),
+                        p => r => r.Native.Time.Contains(p), p => r => r.Native.Time.Contains(EF.Constant(p)));
+            await Check("Time (document)", [time.Start, time.End], p => d.Time.Contains(Stored(p)),
+                        p => r => r.Doc.Time.Contains(p), p => r => r.Doc.Time.Contains(EF.Constant(p)));
+        }
+
+        if (v.Day is DateRange.Finite day)
+        {
+            await Check("Day", [day.Start, day.End], p => n.Day.Contains(p),
+                        p => r => r.Native.Day.Contains(p), p => r => r.Native.Day.Contains(EF.Constant(p)));
+            await Check("Day (document)", [day.Start, day.End], p => d.Day.Contains(p),
+                        p => r => r.Doc.Day.Contains(p), p => r => r.Doc.Day.Contains(EF.Constant(p)));
+        }
+
         if (v.NWall is LocalDateTimeRange.Finite nwall)
-            await Check("NWall", [nwall.Start, nwall.End], p => r => r.Native.NWall.Contains(p), p => r => r.Native.NWall.Contains(EF.Constant(p)));
+        {
+            await Check("NWall", [nwall.Start, nwall.End], p => n.NWall.Contains(Stored(p)),
+                        p => r => r.Native.NWall.Contains(p), p => r => r.Native.NWall.Contains(EF.Constant(p)));
+            await Check("NWall (document)", [nwall.Start, nwall.End], p => d.NWall.Contains(Stored(p)),
+                        p => r => r.Doc.NWall.Contains(p), p => r => r.Doc.NWall.Contains(EF.Constant(p)));
+        }
+
         if (v.NInst is InstantRange.Finite ninst)
-            await Check("NInst", [ninst.Start, ninst.End], p => r => r.Native.NInst.Contains(p), p => r => r.Native.NInst.Contains(EF.Constant(p)));
-        if (v.NInst is InstantRange.Finite ninstDoc)
-            await Check("NInst (document)", [ninstDoc.Start, ninstDoc.End], p => r => r.Doc.NInst.Contains(p), p => r => r.Doc.NInst.Contains(EF.Constant(p)));
+        {
+            await Check("NInst", [ninst.Start, ninst.End], p => n.NInst.Contains(Stored(p)),
+                        p => r => r.Native.NInst.Contains(p), p => r => r.Native.NInst.Contains(EF.Constant(p)));
+            await Check("NInst (document)", [ninst.Start, ninst.End], p => d.NInst.Contains(Stored(p)),
+                        p => r => r.Doc.NInst.Contains(p), p => r => r.Doc.NInst.Contains(EF.Constant(p)));
+        }
+
+        if (v.NDay is LocalDateRange.Finite nday)
+        {
+            await Check("NDay", [nday.Start, nday.End], p => n.NDay.Contains(p),
+                        p => r => r.Native.NDay.Contains(p), p => r => r.Native.NDay.Contains(EF.Constant(p)));
+            await Check("NDay (document)", [nday.Start, nday.End], p => d.NDay.Contains(p),
+                        p => r => r.Doc.NDay.Contains(p), p => r => r.Doc.NDay.Contains(EF.Constant(p)));
+        }
+
+        // A multirange's element operand, probed at the bounds of the ranges it was built from.
+        var wallPoints = v.WallMulti.OfType<DateTimeRange.Finite>().SelectMany(f => new[] { f.Start, f.End }).ToList();
+        await Check("WallMulti", wallPoints, p => n.WallMulti.Contains(Stored(p)),
+                    p => r => r.Native.WallMulti.Contains(p), p => r => r.Native.WallMulti.Contains(EF.Constant(p)));
+        await Check("WallMulti (document)", wallPoints, p => d.WallMulti.Contains(Stored(p)),
+                    p => r => r.Doc.WallMulti.Contains(p), p => r => r.Doc.WallMulti.Contains(EF.Constant(p)));
+
+        var instPoints = v.NInstMulti.OfType<InstantRange.Finite>().SelectMany(f => new[] { f.Start, f.End }).ToList();
+        await Check("NInstMulti", instPoints, p => n.NInstMulti.Contains(Stored(p)),
+                    p => r => r.Native.NInstMulti.Contains(p), p => r => r.Native.NInstMulti.Contains(EF.Constant(p)));
+        await Check("NInstMulti (document)", instPoints, p => d.NInstMulti.Contains(Stored(p)),
+                    p => r => r.Doc.NInstMulti.Contains(p), p => r => r.Doc.NInstMulti.Contains(EF.Constant(p)));
 
         return failures;
     }
+
+    // -- A probe as the server compares it --
+    //
+    // Whole microseconds, cut toward 2000-01-01 as Npgsql binds a parameter, with the extremes
+    // Npgsql sends as infinity left alone. Written out here rather than borrowed from the plugin's
+    // StoreTemporal, so an error there cannot cancel out of the expected answer.
+
+    private static readonly long PostgresEpochTicks = new DateTime(2000, 1, 1).Ticks;
+
+    private static readonly Instant PostgresEpoch = Instant.FromUtc(2000, 1, 1, 0, 0);
+
+    private static long StoredTicks(long ticks) => PostgresEpochTicks + (ticks - PostgresEpochTicks) / 10 * 10;
+
+    private static DateTime Stored(DateTime point)
+        => point == DateTime.MinValue || point == DateTime.MaxValue ? point : new DateTime(StoredTicks(point.Ticks), point.Kind);
+
+    private static DateTimeOffset Stored(DateTimeOffset point)
+        => point == DateTimeOffset.MinValue || point == DateTimeOffset.MaxValue
+               ? point
+               : new DateTimeOffset(StoredTicks(point.UtcTicks), TimeSpan.Zero);
+
+    private static TimeOnly Stored(TimeOnly point) => new(point.Ticks / 10 * 10);
+
+    private static Instant Stored(Instant point)
+        => point == Instant.MinValue || point == Instant.MaxValue
+               ? point
+               : PostgresEpoch + Duration.FromNanoseconds((point - PostgresEpoch).ToBigIntegerNanoseconds() / 1000 * 1000);
+
+    private static LocalDateTime Stored(LocalDateTime point)
+        => point == LocalDateTime.MinIsoValue || point == LocalDateTime.MaxIsoValue
+               ? point
+               : Stored(point.InUtc().ToInstant()).InUtc().LocalDateTime;
 
     private static TemporalParityValues Clone(TemporalParityValues values, string name, object stored)
     {
@@ -474,10 +680,14 @@ public sealed class TemporalStoreParityTests
         return clone;
     }
 
+    // Every fraction digit: the general format drops them, and they are what these failures are about.
     private static string Text(object? value) => value switch
     {
-        null           => "null",
-        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        null             => "null",
+        DateTime t       => t.ToString("O", CultureInfo.InvariantCulture),
+        DateTimeOffset t => t.ToString("O", CultureInfo.InvariantCulture),
+        TimeOnly t       => t.ToString("O", CultureInfo.InvariantCulture),
+        IFormattable f   => f.ToString(null, CultureInfo.InvariantCulture),
         _              => value.ToString() ?? "?"
     };
 }
