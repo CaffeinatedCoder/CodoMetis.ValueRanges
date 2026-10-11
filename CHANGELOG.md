@@ -79,8 +79,12 @@ OpenAPI transformer to copy. The
   09:30, and a `DateTimeOffset` without an offset took whichever machine parsed it — all silently.
   They now accept exactly what this library writes and what PostgreSQL prints in its ISO
   `DateStyle`: `yyyy-MM-dd`; `HH:mm` or `HH:mm:ss` with any number of fraction digits, truncated to
-  100 ns; `T` or a space between them; for a `DateTime` an optional `Z`, `±HH` or `±HH:mm`
-  (round-trip semantics), for a
+  100 ns; `T` or a space between them; for a `DateTime` an optional `Z` (`Utc`) or `±HH`,
+  `±HH:mm` or `±HH:mm:ss` (`Local`) with the wall clock kept as written — **the offset is no longer
+  applied**: it was converted into the parsing machine's zone, so `2026-01-01T09:30+05:30` was
+  05:00 in Berlin and 04:00 on a UTC server, and a `tsrange` stores the wall clock; PostgreSQL's own
+  `timestamp` input drops the offset the same way, and a local value now round-trips exactly, even
+  across a DST gap — for a
   `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (a historical local-mean-time
   offset, kept as the instant at offset zero); and `infinity` / `-infinity` as `MaxValue` /
   `MinValue`, what Npgsql materializes for them. Everything else is a `FormatException` through

@@ -18,8 +18,9 @@ namespace CodoMetis.ValueRanges.Internals;
 /// Accepted: a date <c>yyyy-MM-dd</c>; a time <c>HH:mm</c> or <c>HH:mm:ss</c> with any number of
 /// fraction digits, truncated to the 100 ns the BCL types hold (Go and Java write nine, and
 /// System.Text.Json truncates them the same way); date and time joined by <c>T</c> (this library) or a
-/// space (PostgreSQL); for a <c>DateTime</c> an optional <c>Z</c>, <c>±HH</c> or <c>±HH:mm</c> suffix,
-/// read with round-trip semantics; for a
+/// space (PostgreSQL); for a <c>DateTime</c> an optional <c>Z</c> (<see cref="DateTimeKind.Utc"/>) or
+/// <c>±HH</c>, <c>±HH:mm</c> or <c>±HH:mm:ss</c> (<see cref="DateTimeKind.Local"/>) suffix, with the wall
+/// clock kept as written and the offset not applied; for a
 /// <c>DateTimeOffset</c> a required <c>Z</c>, <c>±HH</c>, <c>±HH:mm</c> or <c>±HH:mm:ss</c> — the last is
 /// how PostgreSQL writes a historical local-mean-time offset (<c>Asia/Kolkata</c> before 1854 is
 /// <c>+05:53:28</c>), which <c>DateTimeOffset</c> cannot hold, so that instant is kept at offset zero; and PostgreSQL's
@@ -37,16 +38,6 @@ internal static class IsoTemporal
     private static readonly string[] DateFormats = ["yyyy-MM-dd"];
 
     private static readonly string[] TimeFormats = ["HH:mm:ss.FFFFFFF", "HH:mm"];
-
-    // K: nothing (Unspecified), Z (Utc) or ±HH:mm (Local) under RoundtripKind — what "O" writes;
-    // zz: the short ±HH, also read as Local.
-    private static readonly string[] DateTimeFormats =
-    [
-        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK", "yyyy-MM-dd' 'HH:mm:ss.FFFFFFFK",
-        "yyyy-MM-dd'T'HH:mmK",            "yyyy-MM-dd' 'HH:mmK",
-        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzz", "yyyy-MM-dd' 'HH:mm:ss.FFFFFFFzz",
-        "yyyy-MM-dd'T'HH:mmzz",            "yyyy-MM-dd' 'HH:mmzz"
-    ];
 
     // Every form carries an offset, so AssumeUniversal only ever gives the literal Z its meaning.
     private static readonly string[] DateTimeOffsetFormats =
@@ -73,16 +64,64 @@ internal static class IsoTemporal
             ? value
             : throw new FormatException("Expected an ISO 8601 time of day, HH:mm or HH:mm:ss with up to seven fraction digits.");
 
+    /// <remarks>
+    /// The offset is not applied. A <c>DateTime</c> range is a <c>tsrange</c>, which stores a wall
+    /// clock and no zone, and PostgreSQL's own <c>timestamp</c> input keeps the wall clock and drops
+    /// the offset (<c>'2026-01-01 09:30+05:30'::timestamp</c> is 09:30). Until 9.0.0 the offset was
+    /// converted into the parsing machine's zone, so one literal stored a different wall clock on
+    /// every server. A value with an offset is <see cref="DateTimeKind.Local"/>, so a local value —
+    /// which <c>"O"</c> writes with its offset — round-trips with its kind, and no zone rule is ever
+    /// consulted, not even for a wall clock the machine's zone skips or repeats.
+    /// </remarks>
     internal static DateTime ParseDateTime(ReadOnlySpan<char> s)
     {
         if (TryParseInfinity(s, out var positive)) return positive ? DateTime.MaxValue : DateTime.MinValue;
 
-        return DateTime.TryParseExact(TruncateFraction(s), DateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value)
-            ? value
+        var text = TruncateFraction(s);
+        var kind = DateTimeKind.Unspecified;
+        if (text.Length > 0 && text[^1] == 'Z')
+        {
+            kind = DateTimeKind.Utc;
+            text = text[..^1];
+        }
+        else if (OffsetLength(text) is > 0 and var length)
+        {
+            kind = DateTimeKind.Local;
+            text = text[..^length];
+        }
+
+        return DateTime.TryParseExact(text, WallClockFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
+            ? DateTime.SpecifyKind(value, kind)
             : throw new FormatException(
                 "Expected an ISO 8601 date and time, yyyy-MM-dd then T or a space then HH:mm[:ss[.fffffff]], "
-              + "optionally followed by Z or ±HH:mm, or infinity / -infinity.");
+              + "optionally followed by Z or ±HH[:mm[:ss]], or infinity / -infinity.");
     }
+
+    /// <summary>
+    /// The length of a trailing <c>±HH</c>, <c>±HH:mm</c> or <c>±HH:mm:ss</c> offset of at most 14 hours,
+    /// or 0 — only after the time, so the date's own hyphens are never mistaken for one.
+    /// </summary>
+    private static int OffsetLength(ReadOnlySpan<char> s)
+    {
+        foreach (var length in (ReadOnlySpan<int>) [3, 6, 9])
+        {
+            if (s.Length < 16 + length) continue;
+
+            var tail = s[^length..];
+            if (tail[0] is not ('+' or '-')
+                || !TryTwoDigits(tail[1..3], 14, out _)
+                || length >= 6 && (tail[3] != ':' || !TryTwoDigits(tail[4..6], 59, out _))
+                || length == 9 && (tail[6] != ':' || !TryTwoDigits(tail[7..9], 59, out _)))
+                continue;
+
+            return length;
+        }
+
+        return 0;
+    }
+
+    private static bool TryTwoDigits(ReadOnlySpan<char> s, int max, out int value)
+        => int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out value) && value <= max;
 
     internal static DateTimeOffset ParseDateTimeOffset(ReadOnlySpan<char> s)
     {

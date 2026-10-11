@@ -80,13 +80,10 @@ internal static class SetTypeRegistry
             // The same store-side normalization the closed siblings apply: PostgreSQL
             // `timestamp` has no time zone, so elements are written as wall-clock time with
             // DateTimeKind.Unspecified; `timestamptz` stores an instant, so they normalize to
-            // UTC. RoundtripKind is what makes the first one reproduce SpecifyKind on the
-            // original value instead of reinterpreting a UTC element as local.
+            // UTC. The wall clock is read as written (ParseRoundTripWallClock).
             [typeof(DateTimeSet<>)] = Bridged<DateTime>(
                 "timestamp without time zone", "O",
-                static text => DateTime.SpecifyKind(
-                    DateTime.ParseExact(text, "O", Invariant, DateTimeStyles.RoundtripKind),
-                    DateTimeKind.Unspecified),
+                ParseRoundTripWallClock,
                 static value => value.ToString("O", Invariant),
                 storeValue: StoreTemporal.Truncate, storeText: true),
             [typeof(DateTimeOffsetSet<>)] = Bridged<DateTimeOffset>(
@@ -99,6 +96,32 @@ internal static class SetTypeRegistry
         }.ToFrozenDictionary();
 
     private static CultureInfo Invariant => CultureInfo.InvariantCulture;
+
+    /// <summary>
+    /// The wall clock of a <c>"O"</c> text, as <see cref="DateTimeKind.Unspecified"/>: the fixed-width
+    /// date and time before its kind suffix — nothing, <c>Z</c> or <c>±HH:mm</c> — with the suffix
+    /// checked but never applied.
+    /// </summary>
+    /// <remarks>
+    /// <c>timestamp</c> stores no zone, and the core grammar keeps a local value's wall clock rather
+    /// than converting its offset (PostgreSQL's rule for <c>timestamp</c> input). Reading the text
+    /// with <see cref="DateTimeStyles.RoundtripKind"/> would convert it into this machine's zone,
+    /// which moves a wall clock the zone skips or repeats.
+    /// </remarks>
+    private static DateTime ParseRoundTripWallClock(string text)
+    {
+        const int wallClockLength = 27;   // yyyy-MM-ddTHH:mm:ss.fffffff
+        var suffix = text.Length >= wallClockLength ? text.AsSpan(wallClockLength) : default;
+        var validSuffix = suffix.IsEmpty
+                       || suffix is "Z"
+                       || suffix.Length == 6 && suffix[0] is '+' or '-' && suffix[3] == ':'
+                          && char.IsAsciiDigit(suffix[1]) && char.IsAsciiDigit(suffix[2])
+                          && char.IsAsciiDigit(suffix[4]) && char.IsAsciiDigit(suffix[5]);
+
+        return text.Length >= wallClockLength && validSuffix
+            ? DateTime.ParseExact(text.AsSpan(0, wallClockLength), "yyyy-MM-dd'T'HH:mm:ss.fffffff", Invariant, DateTimeStyles.None)
+            : throw new FormatException($"'{text}' is not a round-trip (\"O\") DateTime.");
+    }
 
     /// <summary>The invariant text form of a primitive whose default already round-trips.</summary>
     private static string Text<TPrimitive>(TPrimitive value) where TPrimitive : IFormattable

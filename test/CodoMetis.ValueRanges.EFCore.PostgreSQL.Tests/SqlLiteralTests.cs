@@ -76,6 +76,24 @@ public sealed class SqlLiteralTests
             LiteralOf(DateTimeSet<TestStamp>.From(
                 TestStamp.Parse("2024-06-15T10:30:00.1234567Z", CultureInfo.InvariantCulture))));
 
+    /// <summary>
+    /// A local element keeps its wall clock, even one this machine's zone skips: the bridge drops
+    /// the offset its <c>"O"</c> text carries instead of converting it back through the zone, which
+    /// would move a skipped wall clock by the length of the gap. Inconclusive in a zone without one.
+    /// </summary>
+    [TestMethod]
+    public void WrapperTimestampSet_LocalElement_KeepsAWallClockTheZoneSkips()
+    {
+        var skipped = Enumerable.Range(0, 366 * 24)
+            .Select(hour => new DateTime(2026, 1, 1, 0, 30, 0, DateTimeKind.Local).AddHours(hour))
+            .FirstOrDefault(TimeZoneInfo.Local.IsInvalidTime);
+        if (skipped == default) Assert.Inconclusive($"{TimeZoneInfo.Local.Id} skips no wall clock in 2026.");
+
+        Assert.AreEqual(
+            $"ARRAY['{skipped:yyyy-MM-dd'T'HH:mm:ss}.0000000']::timestamp without time zone[]",
+            LiteralOf(DateTimeSet<TestStamp>.From(TestStamp.From(skipped))));
+    }
+
     [TestMethod]
     public void WrapperDecimalSet_KeepsScale() =>
         Assert.AreEqual(

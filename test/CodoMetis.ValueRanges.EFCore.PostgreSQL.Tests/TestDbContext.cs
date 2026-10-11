@@ -137,6 +137,9 @@ public readonly record struct TestStamp : IFormattable, IParsable<TestStamp>, IC
 
     private TestStamp(DateTime value) => _value = value;
 
+    /// <summary>Wraps a value as is, the way a generator's <c>From</c> does — any kind, any wall clock.</summary>
+    public static TestStamp From(DateTime value) => new(value);
+
     public static TestStamp Parse(string s, IFormatProvider? provider)
         => new(DateTime.Parse(s, provider ?? CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
 

@@ -60,15 +60,63 @@ public class TemporalLiteralGrammarTests
     }
 
     [TestMethod]
-    public void DateTime_Accepts_Utc_AndLocal_WithRoundTripKind()
+    public void DateTime_Accepts_Utc()
     {
-        var utc   = DateTimeRange.ParseValue("2026-01-01T09:30:00.0000000Z", null);
-        var local = DateTimeRange.ParseValue("2026-01-01T09:30:00.0000000+01:00", null);
+        var utc = DateTimeRange.ParseValue("2026-01-01T09:30:00.0000000Z", null);
 
         Assert.AreEqual(DateTimeKind.Utc, utc.Kind);
         Assert.AreEqual(DateTime.SpecifyKind(Wall, DateTimeKind.Utc), utc);
-        Assert.AreEqual(DateTimeKind.Local, local.Kind);
-        Assert.AreEqual(DateTime.SpecifyKind(Wall.AddHours(-1), DateTimeKind.Utc), local.ToUniversalTime());
+    }
+
+    /// <summary>
+    /// An offset is accepted and not applied: the wall clock is kept as written, which is what
+    /// PostgreSQL's <c>timestamp</c> input does (<c>'2026-01-01 09:30+05:30'::timestamp</c> is
+    /// 09:30). Before 9.0.0 the offset was converted into the parsing machine's zone, so one literal
+    /// held a different wall clock — the thing <c>tsrange</c> stores — on every server. Two offsets
+    /// no machine shares at once make the old behaviour fail wherever this runs.
+    /// </summary>
+    [TestMethod]
+    [DataRow("2026-01-01T09:30:00.0000000+14:00")]   // this library ("O", Local)
+    [DataRow("2026-01-01T09:30:00.0000000-12:00")]
+    [DataRow("2026-01-01T09:30:00+05:30")]
+    [DataRow("2026-01-01 09:30:00+14")]              // PostgreSQL's short form
+    [DataRow("2026-01-01 09:30:00-12")]
+    [DataRow("2026-01-01 09:30:00+05:53:28")]        // tstzrange output, local mean time
+    [DataRow("2026-01-01T09:30+14:00")]
+    public void DateTime_Accepts_AnOffset_KeepingTheWallClock(string text)
+    {
+        var value = DateTimeRange.ParseValue(text, null);
+
+        Assert.AreEqual(Wall.Ticks, value.Ticks);
+        Assert.AreEqual(DateTimeKind.Local, value.Kind);
+    }
+
+    /// <summary>
+    /// A local value round-trips exactly, <see cref="DateTimeKind"/> included: it formats with an
+    /// offset and the offset is not applied on the way back, so no zone rule is consulted — not even
+    /// for a wall clock the machine's zone skips or repeats.
+    /// </summary>
+    [TestMethod]
+    public void LocalValue_RoundTrips_WithItsKind()
+    {
+        foreach (var local in new[]
+                 {
+                     new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Local).AddTicks(1_234_567),
+                     new DateTime(2026, 3, 29, 2, 30, 0, DateTimeKind.Local),
+                     new DateTime(2026, 10, 25, 2, 30, 0, DateTimeKind.Local),
+                     DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Local),
+                     DateTime.SpecifyKind(DateTime.MaxValue.AddDays(-1), DateTimeKind.Local)
+                 })
+        {
+            var range = DateTimeRange.CreateFinite(local, local.AddHours(1));
+            var back  = DateTimeRange.Parse(range.ToString(), CultureInfo.InvariantCulture);
+
+            Assert.AreEqual(range, back, range.ToString());
+            Assert.AreEqual(DateTimeKind.Local, ((DateTimeRange.Finite) back).Start.Kind);
+
+            var set = DateTimeSet.From(local);
+            Assert.AreEqual(local.Ticks, DateTimeSet.Parse(set.ToString(), CultureInfo.InvariantCulture)[0].Ticks, set.ToString());
+        }
     }
 
     /// <summary>
@@ -80,12 +128,6 @@ public class TemporalLiteralGrammarTests
     [DataRow("2026-01-01T09:30:00.1234567890123456")]
     public void DateTime_Accepts_MoreThanSevenFractionDigits_Truncated(string text)
         => Assert.AreEqual(Wall.AddTicks(1_234_567), DateTimeRange.ParseValue(text, null));
-
-    [TestMethod]
-    public void DateTime_Accepts_AShortOffset_AsLocal()
-        => Assert.AreEqual(
-            DateTime.SpecifyKind(Wall.AddHours(-1), DateTimeKind.Utc),
-            DateTimeRange.ParseValue("2026-01-01T09:30:00+01", null).ToUniversalTime());
 
     [TestMethod]
     public void DateTime_Accepts_Infinity()
@@ -103,6 +145,10 @@ public class TemporalLiteralGrammarTests
     [DataRow("2027-02-01T09:30:00,5")]              // comma fraction
     [DataRow("2027-02-01T25:00:00")]
     [DataRow("2027-02-01T09:30:00 BC")]
+    [DataRow("2027-02-01T09:30:00+0530")]           // offsets are ±HH, ±HH:mm or ±HH:mm:ss
+    [DataRow("2027-02-01T09:30:00+5:30")]
+    [DataRow("2027-02-01T09:30:00+15:00")]          // no such offset
+    [DataRow("2027-02-01T09:30:00z")]
     public void DateTime_Rejects(string text)
         => Assert.ThrowsExactly<FormatException>(() => DateTimeRange.ParseValue(text, null));
 
