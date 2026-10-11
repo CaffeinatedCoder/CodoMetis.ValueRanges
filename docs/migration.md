@@ -196,8 +196,22 @@ throws.
 
 ## Migration from v8.x
 
-v9.0.0 changes what default-options `System.Text.Json` serialization writes, and takes the culture
-out of the literal. No signature changed.
+No signature changed. What changed is what existing calls write, accept and translate — check these,
+in order of how likely they are to reach you:
+
+- **Your JSON payloads change shape** if you never registered `AddRangeConverters()`: every type now
+  writes its literal by default ([details](#ranges-multiranges-and-value-sets-serialize-as-literals-without-registration)).
+- **Input that parsed now throws `FormatException`**: non-ISO temporal text, an offset-less
+  `DateTimeOffset`, culture-formatted numbers, and literals PostgreSQL itself refuses
+  ([culture](#the-literal-ignores-the-culture), [ISO 8601](#temporal-literals-are-strict-iso-8601)).
+- **Queries that ran now throw `InvalidOperationException`**: anything over a server-computed value set
+  `Union` other than projecting it or testing containment and overlap — those queries were already
+  returning wrong rows ([details](#a-server-computed-value-set-union-is-refused-wherever-it-would-answer-wrongly)).
+- **A `DateTime` with an offset keeps its wall clock** instead of converting into the machine's zone,
+  and NodaTime values in a non-ISO calendar are refused on write ([ISO 8601](#temporal-literals-are-strict-iso-8601),
+  [JSON](#three-json-precedence-and-coverage-changes)).
+- **Temporal constants and JSON-column values reach the database truncated to the microsecond**, as a
+  parameter always did ([details](#temporal-values-reach-the-database-as-text-at-its-resolution)).
 
 ### Ranges, multiranges and value sets serialize as literals without registration
 
