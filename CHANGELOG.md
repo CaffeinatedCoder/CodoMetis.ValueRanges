@@ -167,7 +167,9 @@ OpenAPI transformer to copy. The
   toward 2000-01-01 — so a constant could disagree with a parameter for the same value, and EF 10
   inlines evaluatable expressions as constants without `EF.Constant`. `DateTime.MinValue` rendered
   as a finite date where a parameter carries `-infinity`. Constants now carry the value Npgsql
-  would bind. And a temporal set whose elements truncate to one microsecond was bound with both,
+  would bind — a set's element constant too, which for `InstantSet` and `LocalTimeSet` was Npgsql's
+  own nine-digit literal, so `set.Contains(EF.Constant(x))` missed the element `x` was stored as.
+  And a temporal set whose elements truncate to one microsecond was bound with both,
   so the stored array's `cardinality` disagreed with the set's `Count`; it is now deduplicated on
   every path. Npgsql's own literal for a range's *element* operand (`range.Contains(constant)`)
   is unchanged — it differs from its parameter only before 2000, and in nanoseconds for NodaTime.

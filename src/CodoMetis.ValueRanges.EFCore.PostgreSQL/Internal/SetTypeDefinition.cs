@@ -59,9 +59,11 @@ internal sealed class SetTypeDefinition<TSet, T> : ISetTypeDefinition
         // normalized binds raw — a non-ISO NodaTime date silently queries for its own
         // calendar's field values read as ISO.
         //
-        // Keyed on normalizeValue, not on the store resolution: a family without a normalization
-        // keeps the provider's element mapping, which Npgsql already truncates on the wire.
-        ElementTypeMapping = normalizeValue is null
+        // The store resolution has to reach it too. A parameter would be fine on the provider's
+        // element mapping — Npgsql truncates on the wire — but a constant would not: Npgsql renders
+        // a NodaTime Instant or LocalTime constant with nine fraction digits, which the server
+        // rounds, so `InstantSet.Contains(EF.Constant(x))` missed the element it was stored from.
+        ElementTypeMapping = normalizeValue is null && storeValue is null
                                  ? null
                                  : new BridgedElementTypeMapping<T, T>(
                                      elementStoreType, toStore, static value => value, literalText);

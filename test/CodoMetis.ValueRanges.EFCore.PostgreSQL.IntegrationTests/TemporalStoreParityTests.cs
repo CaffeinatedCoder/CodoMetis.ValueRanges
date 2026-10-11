@@ -274,6 +274,7 @@ public sealed class TemporalStoreParityTests
             }
 
             failures.AddRange(await ContainsDisagreements(id, probe, loaded));
+            failures.AddRange(await ElementConstantDisagreements(id, probe, values));
         }
 
         Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
@@ -379,6 +380,40 @@ public sealed class TemporalStoreParityTests
             var onServer = await ctx.TemporalParityRows.Where(r => r.Id == id).Select(filter).SingleAsync();
             if (onServer != count) failures.Add($"[{probe}] {name}: cardinality {onServer} on the server, Count {count} in memory.");
         }
+
+        return failures;
+    }
+
+    /// <summary>
+    /// A set element probed as a constant matches exactly as it does as a parameter. The NodaTime
+    /// sets have no element normalization, so their probe used to fall back to Npgsql's own element
+    /// literal — nine fraction digits, which the server rounds — and
+    /// <c>InstantSet.Contains(EF.Constant(x))</c> missed the element <c>x</c> was stored as.
+    /// </summary>
+    private static async Task<IEnumerable<string>> ElementConstantDisagreements(int id, string probe, TemporalParityValues v)
+    {
+        var failures = new List<string>();
+
+        async Task Check<T>(string name, IEnumerable<T> elements,
+                            Func<T, Expression<Func<TemporalParityRow, bool>>> asParameter,
+                            Func<T, Expression<Func<TemporalParityRow, bool>>> asConstant)
+        {
+            foreach (var element in elements)
+            {
+                var parameter = await Count(id, asParameter(element));
+                var constant  = await Count(id, asConstant(element));
+                if (parameter != constant)
+                    failures.Add($"[{probe}] {name}.Contains({Text(element)}): as a parameter {parameter == 1}, as a constant {constant == 1}.");
+            }
+        }
+
+        await Check("NInstSet", v.NInstSet.Values, e => r => r.Native.NInstSet.Contains(e), e => r => r.Native.NInstSet.Contains(EF.Constant(e)));
+        await Check("NInstSet (document)", v.NInstSet.Values, e => r => r.Doc.NInstSet.Contains(e), e => r => r.Doc.NInstSet.Contains(EF.Constant(e)));
+        await Check("NTimeSet", v.NTimeSet.Values, e => r => r.Native.NTimeSet.Contains(e), e => r => r.Native.NTimeSet.Contains(EF.Constant(e)));
+        await Check("NWallSet", v.NWallSet.Values, e => r => r.Native.NWallSet.Contains(e), e => r => r.Native.NWallSet.Contains(EF.Constant(e)));
+        await Check("TimeSet", v.TimeSet.Values, e => r => r.Native.TimeSet.Contains(e), e => r => r.Native.TimeSet.Contains(EF.Constant(e)));
+        await Check("WallSet", v.WallSet.Values, e => r => r.Native.WallSet.Contains(e), e => r => r.Native.WallSet.Contains(EF.Constant(e)));
+        await Check("StzSet", v.StzSet.Values, e => r => r.Native.StzSet.Contains(e), e => r => r.Native.StzSet.Contains(EF.Constant(e)));
 
         return failures;
     }

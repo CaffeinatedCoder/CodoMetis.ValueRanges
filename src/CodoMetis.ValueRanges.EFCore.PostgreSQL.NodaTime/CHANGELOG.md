@@ -21,7 +21,8 @@ covers all four packages, which share one version number and release together.
   server rounds while Npgsql truncates a parameter toward 2000-01-01; and `Instant.MinValue` /
   `MaxValue`, `LocalDate` and `LocalDateTime` `MinIsoValue` / `MaxIsoValue` stayed finite where a
   parameter carries `-infinity` / `infinity` — `-9998-01-01` is not even valid SQL. Both now carry
-  the value Npgsql would bind, including a `YearMonthRange` that ends in 9999-12. See
+  the value Npgsql would bind, including a `YearMonthRange` that ends in 9999-12 and the element
+  constant of an `InstantSet` or `LocalTimeSet` probe, which was Npgsql's nine-digit literal. See
   `CodoMetis.ValueRanges.EFCore.PostgreSQL` 9.0.0.
 
 ## [8.0.0] — 2026-08-17
