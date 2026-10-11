@@ -36,6 +36,9 @@ updates:
     ignore:
       - dependency-name: "Microsoft.EntityFrameworkCore*"
       - dependency-name: "Npgsql*"
+      # The test projects reach NodaTime only through their reference to the shipping satellite,
+      # so an update here is an edit to src/: 9.0.0 nearly shipped a raised floor that way.
+      - dependency-name: "NodaTime"
       # The ASP.NET Core packages version with the shared framework: 11.x needs net11.0.
       - dependency-name: "Microsoft.AspNetCore*"
         update-types: [ "version-update:semver-major" ]
