@@ -146,6 +146,10 @@ internal static class SetTypeRegistry
     /// <param name="storeValue">The primitive at the store's resolution — a temporal family's truncation.</param>
     /// <param name="storeText">Whether a JSON document holds the store primitives — the temporal families.</param>
     /// <param name="parseStoreText">The store primitives back from that text, where the set cannot parse it.</param>
+    /// <param name="requireRoundTrip">
+    /// Whether an element whose primitive does not read back as that element is refused — the
+    /// calendar-bearing NodaTime families, whose ISO pattern spells a non-ISO value's own fields.
+    /// </param>
     internal static Func<Type, ISetTypeDefinition> Bridged<TPrimitive>(
         string                                 elementStoreType,
         string?                                elementFormat,
@@ -154,7 +158,8 @@ internal static class SetTypeRegistry
         Func<TPrimitive, string>?              literalText    = null,
         Func<TPrimitive, TPrimitive>?          storeValue     = null,
         bool                                   storeText      = false,
-        Func<string, IEnumerable<TPrimitive>>? parseStoreText = null
+        Func<string, IEnumerable<TPrimitive>>? parseStoreText = null,
+        bool                                   requireRoundTrip = false
     )
         where TPrimitive : struct
         => closed =>
@@ -164,7 +169,8 @@ internal static class SetTypeRegistry
 
             return (ISetTypeDefinition)Activator.CreateInstance(
                 definitionType,
-                [elementStoreType, elementFormat, parsePrimitive, formatPrimitive, literalText, storeValue, storeText, parseStoreText])!;
+                [elementStoreType, elementFormat, parsePrimitive, formatPrimitive, literalText, storeValue, storeText, parseStoreText,
+                 requireRoundTrip])!;
         };
 
     private static volatile Snapshot Current = BuildSnapshot(

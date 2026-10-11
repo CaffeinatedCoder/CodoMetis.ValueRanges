@@ -155,6 +155,7 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
     private readonly Func<string, TPrimitive> _parsePrimitive;
     private readonly Func<TPrimitive, string> _formatPrimitive;
     private readonly Func<TPrimitive, TPrimitive>? _storeValue;
+    private readonly bool _requireRoundTrip;
 
     /// <param name="elementStoreType">The PostgreSQL type of one element, e.g. <c>integer</c>.</param>
     /// <param name="elementFormat">
@@ -179,6 +180,14 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
     /// The store primitives back from that text, where the set's own <c>Parse</c> cannot read it:
     /// <c>YearMonthSet&lt;T&gt;</c> stores <c>2024-06-01</c> and its element speaks <c>2024-06</c>.
     /// </param>
+    /// <param name="requireRoundTrip">
+    /// Whether an element whose primitive does not read back as that element is refused, rather than
+    /// bound, written or inlined as the value its text happens to spell. The NodaTime satellite sets
+    /// it for <c>LocalDateSet&lt;T&gt;</c>, <c>LocalDateTimeSet&lt;T&gt;</c> and
+    /// <c>YearMonthSet&lt;T&gt;</c>: the ISO pattern formats a non-ISO value in its own calendar's
+    /// fields, so a Julian 2024-01-01 — ISO 2024-01-14 — would query for ISO 2024-01-01. The sets
+    /// refuse such an element at construction; this is the same rule for a bare element operand.
+    /// </param>
     public BridgedSetTypeDefinition(
         string                                      elementStoreType,
         string?                                     elementFormat,
@@ -187,9 +196,11 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
         Func<TPrimitive, string>?                   literalText    = null,
         Func<TPrimitive, TPrimitive>?               storeValue     = null,
         bool                                        storeText      = false,
-        Func<string, IEnumerable<TPrimitive>>?      parseStoreText = null
+        Func<string, IEnumerable<TPrimitive>>?      parseStoreText = null,
+        bool                                        requireRoundTrip = false
     )
     {
+        _requireRoundTrip = requireRoundTrip;
         _elementFormat   = elementFormat;
         _parsePrimitive  = parsePrimitive;
         _formatPrimitive = formatPrimitive;
@@ -223,6 +234,15 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
               + $"'{typeof(TPrimitive)}' value. Value set elements must format to exactly the "
               + "backing primitive's text form.", ex);
         }
+
+        // Compared before the store's truncation, which is a documented, deliberate loss.
+        if (_requireRoundTrip && !FromPrimitive(primitive).Equals(element))
+            throw new ArgumentException(
+                $"The '{typeof(TElement)}' element formats as '{text}', which reads back as a different value "
+              + $"through '{typeof(TPrimitive)}' — what a NodaTime value in a calendar other than ISO does, since "
+              + "its own fields are written as if they were ISO. Convert the wrapped value with "
+              + "WithCalendar(CalendarSystem.Iso) before wrapping it.",
+                nameof(element));
 
         return _storeValue is null ? primitive : _storeValue(primitive);
     }

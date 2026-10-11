@@ -1,5 +1,6 @@
 using CodoMetis.ValueRanges.Conventions.Tests;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 using Npgsql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
@@ -345,6 +346,46 @@ public class WrapperArityIntegrationTests
                 $"Expected the read to be refused by either the set's own null guard or the "
               + $"driver's, got: {exception}");
         }
+    }
+
+    /// <summary>
+    /// A wrapper over a <c>YearMonth</c> in a calendar other than ISO, as a query parameter. The
+    /// bridge formats it with the ISO pattern, which spells the Julian fields, so Julian January
+    /// 2024 — which begins on ISO 2024-01-14 — bound as ISO <c>2024-01-01</c> and matched a row
+    /// holding ISO January, silently. It is refused now, as the in-memory set refuses it.
+    /// </summary>
+    [TestMethod]
+    public async Task WrapperArity_NonIsoParameter_IsRefused()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await Seed(new Reservation
+        {
+            Id = 8108, WrappedMonths = YearMonthSet<BillingMonth>.From(new BillingMonth(new YearMonth(2024, 1)))
+        });
+
+        var julian = new BillingMonth(new YearMonth(2024, 1, CalendarSystem.Julian));
+
+        await using var context = new IntegrationDbContext();
+
+        int? matched = null;
+        try
+        {
+            matched = await context.Reservations
+                .Where(r => r.Id == 8108 && r.WrappedMonths.Contains(julian))
+                .CountAsync();
+        }
+        catch (Exception exception)
+        {
+            var refused = false;
+            for (var current = exception; current is not null; current = current.InnerException)
+                refused |= current is ArgumentException && current.Message.Contains("ISO", StringComparison.Ordinal);
+
+            Assert.IsTrue(refused, $"Expected the non-ISO parameter to be refused, got: {exception}");
+            return;
+        }
+
+        Assert.Fail($"A Julian parameter was bound as another month and matched {matched} row(s).");
     }
 }
 

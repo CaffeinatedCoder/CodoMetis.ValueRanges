@@ -197,6 +197,14 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
 /// Canonical order is the element's own <see cref="IComparable{T}"/>, which for generated
 /// wrappers delegates to the backing <see cref="YearMonth"/>.
 /// </para>
+/// <para>
+/// The element must be backed by a value in the ISO calendar. The closed <see cref="YearMonthSet"/>
+/// converts a non-ISO value; this arity cannot build its element from an ISO value except by parsing
+/// it, so an element whose ISO text reads back as a different element — what a non-ISO value does,
+/// since the pattern spells its own calendar's fields — is refused with
+/// <see cref="ArgumentException"/> in <c>From</c>, in a collection expression, on read, and as the
+/// probe of <c>Contains</c>, <c>Add</c> and <c>Remove</c>.
+/// </para>
 /// </remarks>
 /// <typeparam name="TElement">The validated element type backed by a <see cref="YearMonth"/>.</typeparam>
 [DebuggerDisplay("{ToString(),nq}")]
@@ -227,13 +235,29 @@ public sealed class YearMonthSet<TElement> :
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.Empty"/>
     public static YearMonthSet<TElement> Empty { get; } = new([]);
 
-    /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
-    public static YearMonthSet<TElement> From(IEnumerable<TElement> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, Comparer<TElement>.Default));
+    // An element backed by a calendar other than ISO is refused rather than stored as the ISO value
+    // its fields spell; the closed set converts one, which a wrapper cannot. See IsoWrapperElement.
+    private static TElement RequireIso(TElement value) => IsoWrapperElement.Require<YearMonthSet<TElement>, TElement>(value);
+
+    // Contains, Add and Remove refuse the probe From would refuse: against the empty set nothing is
+    // compared, so a non-ISO probe answered false and Add stored it.
+    TElement IValueSet<TElement>.NormalizeElement(TElement value) => RequireIso(value);
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element is backed by a value in a calendar other than ISO.</exception>
+    public static YearMonthSet<TElement> From(IEnumerable<TElement> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return FromTrusted(ValueSetCore.Canonicalize(values.Select(RequireIso), Comparer<TElement>.Default));
+    }
+
+    /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element is backed by a value in a calendar other than ISO.</exception>
     public static YearMonthSet<TElement> From(params ReadOnlySpan<TElement> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, Comparer<TElement>.Default));
+    {
+        foreach (var value in values) RequireIso(value);
+        return FromTrusted(ValueSetCore.Canonicalize(values, Comparer<TElement>.Default));
+    }
 
     internal static YearMonthSet<TElement> FromTrusted(ImmutableArray<TElement> elements)
         => elements.IsEmpty ? Empty : new(elements);
