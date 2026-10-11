@@ -37,11 +37,137 @@ public sealed class TemporalLiteralStrictnessContractTests
         [typeof(DateTimeOffset)] = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01"],
         [typeof(TimeOnly)]       = ["9:30 AM", "9:30"],
         [typeof(LocalDate)]      = ["01.02.2027"],
-        [typeof(LocalDateTime)]  = ["01.02.2027 09:30:00", "2027-02-01"],
-        [typeof(Instant)]        = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01"],
-        [typeof(LocalTime)]      = ["9:30 AM"],
+        [typeof(LocalDateTime)]  = ["01.02.2027 09:30:00", "2027-02-01", "2027-02-01T9:30"],
+        [typeof(Instant)]        = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01",
+                                    "2027-02-01T09:30"],
+        [typeof(LocalTime)]      = ["9:30 AM", "9:30"],
         [typeof(YearMonth)]      = ["02.2027"]
     };
+
+    /// <summary>
+    /// <c>HH:mm</c> elements, paired with the full form each must read as. Valid ISO 8601, never
+    /// misread, and what a hand-written <c>[09:00,17:00)</c> uses — accepted uniformly wherever a
+    /// time of day appears. An instant still needs its offset or <c>Z</c> (see <see cref="NonIso"/>).
+    /// </summary>
+    /// <remarks>
+    /// Until 9.0.0 the BCL types accepted it and the NodaTime ones did not: <c>TimeRange.Parse("[09:00,17:00)")</c>
+    /// parsed while <c>LocalTimeSet.Parse("{09:00}")</c> threw.
+    /// </remarks>
+    private static readonly Dictionary<Type, (string Short, string Full)[]> HoursMinutes = new()
+    {
+        [typeof(TimeOnly)]       = [("09:30", "09:30:00")],
+        [typeof(DateTime)]       = [("2027-02-01T09:30", "2027-02-01T09:30:00"), ("2027-02-01 09:30", "2027-02-01T09:30:00")],
+        [typeof(DateTimeOffset)] = [("2027-02-01T09:30+01:00", "2027-02-01T09:30:00+01:00"),
+                                    ("2027-02-01 09:30+01", "2027-02-01T09:30:00+01:00"),
+                                    ("2027-02-01T09:30Z", "2027-02-01T09:30:00Z")],
+        [typeof(LocalTime)]      = [("09:30", "09:30:00")],
+        [typeof(LocalDateTime)]  = [("2027-02-01T09:30", "2027-02-01T09:30:00"), ("2027-02-01 09:30", "2027-02-01T09:30:00")],
+        [typeof(Instant)]        = [("2027-02-01T09:30+01:00", "2027-02-01T09:30:00+01:00"),
+                                    ("2027-02-01 09:30+01", "2027-02-01T09:30:00+01:00"),
+                                    ("2027-02-01T09:30Z", "2027-02-01T09:30:00Z")]
+    };
+
+    /// <summary>5 range types and 12 set types (6 closed, 6 wrapper arities) with a time of day, as of 9.0.0.</summary>
+    private const int KnownTimeOfDayTypes = 17;
+
+    [TestMethod]
+    public void EveryTimeOfDayRangeAndSet_AcceptsHoursAndMinutes_OnEveryEntryPoint()
+    {
+        var checkedTypes = new List<string>();
+        var failures     = new List<string>();
+
+        foreach (var (rangeType, elementType) in RangeProbes.AllRangeTypes())
+        {
+            if (!HoursMinutes.ContainsKey(elementType)) continue;
+
+            failures.AddRange(Reflect.InvokeGeneric<IEnumerable<string>>(
+                typeof(TemporalLiteralStrictnessContractTests), nameof(RangeHoursMinutesFailures), rangeType, elementType));
+            checkedTypes.Add(rangeType.Name);
+        }
+
+        var primitives = SetProbes.AllSetTypes()
+                                  .Where(pair => !pair.Set.IsGenericType)
+                                  .ToDictionary(pair => pair.Set.Name, pair => pair.Element);
+
+        foreach (var (setType, elementType) in SetProbes.AllSetTypes())
+        {
+            var primitive = primitives.GetValueOrDefault(setType.Name.Split('`')[0]) ?? elementType;
+            if (!HoursMinutes.ContainsKey(primitive)) continue;
+
+            failures.AddRange(Reflect.InvokeGeneric<IEnumerable<string>>(
+                typeof(TemporalLiteralStrictnessContractTests), nameof(SetHoursMinutesFailures), setType, elementType, primitive));
+            checkedTypes.Add(setType.IsGenericType ? $"{setType.Name.Split('`')[0]}<{elementType.Name}>" : setType.Name);
+        }
+
+        Assert.IsTrue(
+            checkedTypes.Count >= KnownTimeOfDayTypes,
+            $"Only {checkedTypes.Count} time-of-day range and set types were checked, fewer than the "
+          + $"{KnownTimeOfDayTypes} known to exist: {string.Join(", ", checkedTypes)}.");
+        Assert.IsEmpty(failures, "HH:mm is not accepted uniformly:\n" + string.Join("\n", failures));
+    }
+
+    private static IEnumerable<string> RangeHoursMinutesFailures<TRange, T>()
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var failures = new List<string>();
+
+        foreach (var (shortForm, fullForm) in HoursMinutes[typeof(T)])
+        {
+            var literal  = $"[\"{shortForm}\",\"{shortForm}\"]";
+            var expected = TRange.Parse($"[\"{fullForm}\",\"{fullForm}\"]", CultureInfo.InvariantCulture);
+            var label    = $"{typeof(TRange).Name} {literal}";
+
+            Check(failures, label, "Parse", expected, () => TRange.Parse(literal, CultureInfo.InvariantCulture));
+            Check(failures, label, "Parse(span)", expected, () => TRange.Parse(literal.AsSpan(), CultureInfo.InvariantCulture));
+            Check(failures, label, "TryParse", expected,
+                () => TRange.TryParse(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
+            Check(failures, label, "JSON", expected, () => JsonSerializer.Deserialize<TRange>(JsonSerializer.Serialize(literal))!);
+            Check(failures, label, "TypeConverter", expected,
+                () => (TRange)TypeDescriptor.GetConverter(typeof(TRange)).ConvertFromInvariantString(literal)!);
+            Check(failures, label, "RangeSet.Parse", RangeSet<TRange, T>.From([expected]),
+                () => RangeSet<TRange, T>.Parse($"{{{literal}}}", CultureInfo.InvariantCulture));
+        }
+
+        return failures;
+    }
+
+    private static IEnumerable<string> SetHoursMinutesFailures<TSet, T, TPrimitive>()
+        where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
+        where T : IEquatable<T>
+    {
+        var failures = new List<string>();
+
+        foreach (var (shortForm, fullForm) in HoursMinutes[typeof(TPrimitive)])
+        {
+            var literal  = $"{{\"{shortForm}\"}}";
+            var expected = TSet.Parse($"{{\"{fullForm}\"}}", CultureInfo.InvariantCulture);
+            var label    = $"{(typeof(TSet).IsGenericType ? $"{typeof(TSet).Name.Split('`')[0]}<{typeof(T).Name}>" : typeof(TSet).Name)} {literal}";
+
+            Check(failures, label, "Parse", expected, () => TSet.Parse(literal, CultureInfo.InvariantCulture));
+            Check(failures, label, "TryParse", expected,
+                () => TSet.TryParse(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
+            Check(failures, label, "JSON", expected, () => JsonSerializer.Deserialize<TSet>($"[{JsonSerializer.Serialize(shortForm)}]")!);
+            Check(failures, label, "TypeConverter", expected,
+                () => (TSet)TypeDescriptor.GetConverter(typeof(TSet)).ConvertFromInvariantString(literal)!);
+        }
+
+        return failures;
+    }
+
+    private static void Check<TValue>(List<string> failures, string label, string path, TValue expected, Func<TValue> read)
+    {
+        try
+        {
+            var actual = read();
+            if (!Equals(actual, expected))
+                failures.Add($"  {label}: {path} read {actual}, expected {expected}.");
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException or NotSupportedException or ArgumentException)
+        {
+            failures.Add($"  {label}: {path} refused it ({ex.GetType().Name}).");
+        }
+    }
 
     /// <summary>8 temporal range types and 18 temporal set types (9 closed, 9 wrapper arities), as of 9.0.0.</summary>
     private const int KnownTemporalTypes = 26;

@@ -270,7 +270,7 @@ public abstract record LocalDateTimeRange : IRange<LocalDateTime>, IRangeFactory
     /// (<c>uuuu-MM-ddTHH:mm:ss.FFFFFFFFF</c>, subsecond digits only when present) by default.
     /// </summary>
     public static string FormatValue(LocalDateTime value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.DateTime.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 

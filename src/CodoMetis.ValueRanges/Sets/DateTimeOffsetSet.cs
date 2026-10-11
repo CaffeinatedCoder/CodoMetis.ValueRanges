@@ -78,7 +78,7 @@ public sealed class DateTimeOffsetSet : IValueSet<DateTimeOffset>, IValueSetFact
 
     /// <summary>Formats a <see cref="DateTimeOffset"/> value using the round-trip format specifier (<c>O</c>) by default, preserving full precision and UTC offset.</summary>
     public static string FormatValue(DateTimeOffset value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? "O", provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? "O" : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{2024-01-01T08:00:00+00:00}</c>, <c>{}</c>) into a
@@ -218,7 +218,7 @@ public sealed class DateTimeOffsetSet<TElement> :
     /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
     /// — see the class remarks.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format ?? RoundTripFormat, provider ?? CultureInfo.InvariantCulture);
+        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string

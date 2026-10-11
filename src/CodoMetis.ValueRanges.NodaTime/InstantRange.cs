@@ -204,7 +204,7 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
     /// (<c>uuuu-MM-ddTHH:mm:ss.FFFFFFFFFZ</c>, subsecond digits only when present) by default.
     /// </summary>
     public static string FormatValue(Instant value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.Instant.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 

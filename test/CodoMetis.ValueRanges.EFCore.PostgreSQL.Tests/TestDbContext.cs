@@ -400,3 +400,33 @@ public readonly record struct TestLossyStamp
 
     public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
 }
+
+/// <summary>
+/// A deliberately non-conforming decimal element: it ignores the provider and formats in the
+/// <em>current</em> culture, so under <c>de-DE</c> 1.5 formats as <c>1,5</c>. A boundary that
+/// reads that text with <c>NumberStyles.Number</c> binds fifteen; the family grammar refuses it.
+/// </summary>
+public readonly record struct TestCultureLeakingRate : IFormattable, IParsable<TestCultureLeakingRate>, IComparable<TestCultureLeakingRate>
+{
+    private readonly decimal _value;
+
+    public TestCultureLeakingRate(decimal value) => _value = value;
+
+    public static TestCultureLeakingRate Parse(string s, IFormatProvider? provider)
+        => new(decimal.Parse(s, NumberStyles.Number, CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestCultureLeakingRate result)
+    {
+        var ok = decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out var value);
+        result = ok ? new TestCultureLeakingRate(value) : default;
+        return ok;
+    }
+
+    public int CompareTo(TestCultureLeakingRate other) => _value.CompareTo(other._value);
+
+    // The defect: the provider is ignored in favour of the current culture.
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, CultureInfo.CurrentCulture);
+
+    public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+}

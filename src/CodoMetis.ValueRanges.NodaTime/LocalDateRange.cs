@@ -279,7 +279,7 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
     /// Formats a <see cref="LocalDate"/> value using ISO 8601 (<c>uuuu-MM-dd</c>) by default.
     /// </summary>
     public static string FormatValue(LocalDate value, string? format, IFormatProvider? provider)
-        => format is null
+        => string.IsNullOrEmpty(format)
                ? NodaPatterns.Date.Format(value)
                : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 

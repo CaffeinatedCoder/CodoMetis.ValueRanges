@@ -47,17 +47,19 @@ internal static class SetTypeRegistry
             // The element format is null wherever the element's own default text form already
             // round-trips through the primitive. That is true of Guid and the integers, and of
             // decimal — and false of every temporal below, whose default form silently drops
-            // sub-seconds (and, for DateTime, the Kind).
+            // sub-seconds (and, for DateTime, the Kind). The numeric families read the element's text
+            // with their own element parser, so a group separator is refused here exactly as it is by
+            // DecimalSet.Parse: NumberStyles.Number read a culture-leaking "1,5" as fifteen.
             [typeof(GuidSet<>)] = Bridged<Guid>(
                 "uuid", null, static text => Guid.Parse(text, Invariant), Text),
             [typeof(Int16Set<>)] = Bridged<short>(
-                "smallint", null, static text => short.Parse(text, Invariant), Text),
+                "smallint", null, static text => Int16Set.ParseValue(text, Invariant), Text),
             [typeof(Int32Set<>)] = Bridged<int>(
-                "integer", null, static text => int.Parse(text, Invariant), Text),
+                "integer", null, static text => Int32Set.ParseValue(text, Invariant), Text),
             [typeof(Int64Set<>)] = Bridged<long>(
-                "bigint", null, static text => long.Parse(text, Invariant), Text),
+                "bigint", null, static text => Int64Set.ParseValue(text, Invariant), Text),
             [typeof(DecimalSet<>)] = Bridged<decimal>(
-                "numeric", null, static text => decimal.Parse(text, NumberStyles.Number, Invariant), Text),
+                "numeric", null, static text => DecimalSet.ParseValue(text, Invariant), Text),
 
             // ParseExact, not Parse: an element that ignores the format specifier and hands back
             // its own default form is a contract violation, and the strict parse turns it into

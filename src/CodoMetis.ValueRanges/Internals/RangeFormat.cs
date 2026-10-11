@@ -12,7 +12,7 @@ internal static class RangeFormat
         where TRange : IRangeFactory<TRange, T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
-        s = s.Trim();
+        s = LiteralWhiteSpace.Trim(s);
 
         if (s.Equals("empty", StringComparison.OrdinalIgnoreCase))
             return TRange.Empty;
@@ -32,28 +32,108 @@ internal static class RangeFormat
         var endInclusive   = endBracket   == ']';
 
         var inner    = s[1..^1];
-        var commaIdx = FindComma(inner);
+        var position = 0;
 
-        if (commaIdx < 0)
-            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range literal.");
+        var startPart = ScanBound(inner, ref position, s);
+        if (position == inner.Length || inner[position] != ',')
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range literal: missing comma after the lower bound.");
 
-        var startPart = UnquoteValue(inner[..commaIdx].Trim());
-        var endPart   = UnquoteValue(inner[(commaIdx + 1)..].Trim());
+        position++;
+        var endPart = ScanBound(inner, ref position, s);
+        if (position != inner.Length)
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range literal: unexpected '{inner[position]}' in the upper bound.");
 
-        var hasStart = startPart.Length > 0;
-        var hasEnd   = endPart.Length   > 0;
-
-        return (hasStart, hasEnd) switch
+        return (startPart, endPart) switch
         {
-            (false, false) => TRange.Infinite,
-            (false, true)  => TRange.CreateUnboundedStart(ParseBound<TRange, T>(endPart,   s), endInclusive),
-            (true,  false) => TRange.CreateUnboundedEnd  (ParseBound<TRange, T>(startPart, s), startInclusive),
-            (true,  true)  => TRange.CreateFinite(
+            (null, null) => TRange.Infinite,
+            (null, _)    => TRange.CreateUnboundedStart(ParseBound<TRange, T>(endPart,   s), endInclusive),
+            (_,    null) => TRange.CreateUnboundedEnd  (ParseBound<TRange, T>(startPart, s), startInclusive),
+            _            => TRange.CreateFinite(
                 ParseBound<TRange, T>(startPart, s),
                 ParseBound<TRange, T>(endPart,   s),
                 startInclusive,
                 endInclusive)
         };
+    }
+
+    /// <summary>
+    /// One bound, read as PostgreSQL's <c>range_in</c> reads it: <see langword="null"/> when the bound
+    /// is <em>absent</em> — the next character is the comma or the end — and its text otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only an absent bound is infinite. A quoted <c>""</c>, or a bound of only whitespace, is a
+    /// present bound whose text is empty, which the element parser refuses for every type here — as
+    /// PostgreSQL does (<c>invalid input syntax for type integer: ""</c>). Until 9.0.0 the bound was
+    /// unquoted first and then tested for emptiness, so <c>["",5)</c> read as <c>(,4]</c>, silently.
+    /// </para>
+    /// <para>
+    /// Within a bound, a double quote opens or closes a quoted section anywhere (<c>"1"2</c> is
+    /// <c>12</c>), a doubled quote inside one is a literal quote, and a backslash takes the next
+    /// character literally, inside quotes or out. An unquoted, unescaped comma, <c>)</c> or <c>]</c>
+    /// ends the bound. Whitespace around the unquoted part is dropped: PostgreSQL hands it to the
+    /// element's input function, and every input function behind these types ignores it. That is
+    /// ASCII whitespace only (<see cref="LiteralWhiteSpace"/>): a no-break space stays in the bound,
+    /// where the element parser refuses it as PostgreSQL's does.
+    /// </para>
+    /// </remarks>
+    private static string? ScanBound(ReadOnlySpan<char> inner, ref int position, ReadOnlySpan<char> literal)
+    {
+        var start = position;
+        var sb    = new StringBuilder();
+
+        // The length of the text up to its last character that is not unquoted whitespace.
+        var significant = 0;
+        var inQuotes    = false;
+
+        while (position < inner.Length && (inQuotes || inner[position] is not (',' or ')' or ']')))
+        {
+            var c = inner[position++];
+
+            if (c == '\\')
+            {
+                if (position == inner.Length)
+                    throw new FormatException($"The input string '{LiteralExcerpt.Of(literal)}' is not a valid range literal: unterminated escape.");
+
+                sb.Append(inner[position++]);
+                significant = sb.Length;
+            }
+            else if (c == '"')
+            {
+                if (!inQuotes)
+                {
+                    inQuotes    = true;
+                    significant = sb.Length;
+                }
+                else if (position < inner.Length && inner[position] == '"')
+                {
+                    sb.Append('"');
+                    significant = sb.Length;
+                    position++;
+                }
+                else
+                {
+                    inQuotes = false;
+                }
+            }
+            else if (inQuotes || !LiteralWhiteSpace.Is(c))
+            {
+                sb.Append(c);
+                significant = sb.Length;
+            }
+            else if (sb.Length > 0 || significant > 0)
+            {
+                sb.Append(c); // inner whitespace; dropped below if nothing significant follows
+            }
+        }
+
+        if (inQuotes)
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(literal)}' is not a valid range literal: unterminated quoted bound.");
+
+        if (position == start) return null;
+
+        sb.Length = significant;
+        return sb.ToString();
     }
 
     /// <summary>
@@ -110,91 +190,46 @@ internal static class RangeFormat
     /// </summary>
     internal static IReadOnlyList<string> SplitSetLiterals(ReadOnlySpan<char> s)
     {
-        s = s.Trim();
+        s = LiteralWhiteSpace.Trim(s);
 
         if (s.Length < 2 || s[0] != '{' || s[^1] != '}')
             throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid range set literal.");
 
-        var inner  = s[1..^1].Trim();
+        var inner  = LiteralWhiteSpace.Trim(s[1..^1]);
         var result = new List<string>();
 
         if (inner.IsEmpty)
             return result;
 
-        var depth = 0;
-        var start = 0;
+        var depth    = 0;
+        var start    = 0;
+        var inQuotes = false;
 
+        // Brackets and commas inside a quoted or escaped bound are bound text, not structure.
         for (var i = 0; i < inner.Length; i++)
         {
             switch (inner[i])
             {
-                case '[' or '(':
+                case '\\':
+                    i++;
+                    break;
+                case '"':
+                    inQuotes = !inQuotes;
+                    break;
+                case '[' or '(' when !inQuotes:
                     depth++;
                     break;
-                case ']' or ')':
+                case ']' or ')' when !inQuotes:
                     depth--;
                     break;
-                case ',' when depth == 0:
-                    result.Add(inner[start..i].Trim().ToString());
+                case ',' when depth == 0 && !inQuotes:
+                    result.Add(LiteralWhiteSpace.Trim(inner[start..i]).ToString());
                     start = i + 1;
                     break;
             }
         }
 
-        result.Add(inner[start..].Trim().ToString());
+        result.Add(LiteralWhiteSpace.Trim(inner[start..]).ToString());
         return result;
-    }
-
-    private static int FindComma(ReadOnlySpan<char> s)
-    {
-        var inQuotes = false;
-        for (var i = 0; i < s.Length; i++)
-        {
-            switch (s[i])
-            {
-                case '"':
-                    inQuotes = !inQuotes;
-                    break;
-                case '\\' when inQuotes:
-                    i++; // skip escaped char inside quotes
-                    break;
-                case ',' when !inQuotes:
-                    return i;
-            }
-        }
-        return -1;
-    }
-
-    private static ReadOnlySpan<char> UnquoteValue(ReadOnlySpan<char> s)
-    {
-        if (s.Length < 2 || s[0] != '"' || s[^1] != '"') return s;
-        var inner = s[1..^1];
-        // No backslash escapes inside the quotes — return a slice of the input directly.
-        if (!inner.Contains('\\')) return inner;
-        // PostgreSQL quoted bounds escape `\"` as `"` and `\\` as `\`. Unescape them so
-        // ParseValue receives the literal value the user intended. This path is rare for
-        // the built-in element types (int, decimal, DateOnly, …) but matters for custom
-        // range types whose bound stringification can contain quotes or backslashes.
-        return UnescapeQuoted(inner);
-    }
-
-    private static string UnescapeQuoted(ReadOnlySpan<char> s)
-    {
-        var sb = new StringBuilder(s.Length);
-        for (int i = 0; i < s.Length; i++)
-        {
-            if (s[i] == '\\' && i + 1 < s.Length)
-            {
-                char next = s[i + 1];
-                if (next == '"' || next == '\\')
-                {
-                    sb.Append(next);
-                    i++; // consume the escaped char
-                    continue;
-                }
-            }
-            sb.Append(s[i]);
-        }
-        return sb.ToString();
     }
 }

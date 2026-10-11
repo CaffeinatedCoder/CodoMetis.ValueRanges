@@ -222,8 +222,9 @@ type's attribute.
 ### The literal ignores the culture
 
 `Parse(s, provider)` and `TryParse(s, provider, …)` now read the invariant literal and ignore the
-provider, and `ToString(null, provider)` — or interpolation, or `string.Format` — always writes the
-invariant literal. A provider still applies with an explicit format string.
+provider, and `ToString(null, provider)` — or `ToString("", provider)`, interpolation, or
+`string.Format` — always writes the invariant literal. A provider still applies with an explicit,
+non-empty format string.
 
 Before, the provider reached each bound: `DateRange.Parse(s, th-TH)` was 543 years early,
 `DecimalRange.Parse("[1.5,2.5)", de-DE)` was `[15,25)`, and `$"{decimalRange}"` under `de-DE` wrote
@@ -236,7 +237,11 @@ var range = DateRange.CreateFinite(DateOnly.Parse("01.01.2025", de), DateOnly.Pa
 ```
 
 Decimal bounds also parse with PostgreSQL's `numeric` grammar now: `"1,000"`, `"(5)"` and currency
-symbols are a `FormatException` rather than 1000, −5 and 5.
+symbols are a `FormatException` rather than 1000, −5 and 5. That includes the wrapper arities:
+`DecimalSet<T>` and the integer ones read the element text with the primitive family's grammar before
+the element's own `Parse` sees it, so a generated `Parse` that accepts group separators no longer
+turns `{"1,5"}` into fifteen, and `DecimalSet<T>` now reads exponent notation (`{1e3}`, a JSON
+`1.5e1`) as `DecimalSet` does.
 
 ### Temporal literals are strict ISO 8601
 
@@ -252,10 +257,22 @@ whatever the invariant culture could, month first. These are now a `FormatExcept
 | `9:30 AM`, `9:30` | 09:30 | `09:30` |
 | the same forms as JSON elements of a `DateTimeOffsetSet`, `DateTimeSet` or `TimeSet` | as above — System.Text.Json's converter read the offset-less ones in the machine's offset | as above, or register a converter for the element type |
 
+A range bound that is a quoted `""` or only whitespace — `["",5)`, `( , )` — is now a `FormatException`
+rather than an infinite bound, as in PostgreSQL; only an absent bound (`(,5)`) is infinite. A backslash
+outside quotes now escapes the next character, in a range bound and in an array element alike, as
+it does in PostgreSQL: `StringSet.Parse(@"{a\,b}")` is the one element `a,b`, where it was the two
+elements `a\` and `b`. An array literal PostgreSQL refuses or reads as multi-dimensional — `{{a,b}}`,
+`{a}b}`, `{a"b}` — is a `FormatException`; `{{a,b}}` used to be the set `{"{a","b}"}`. Only ASCII
+whitespace is skipped around elements and bounds; a no-break space is now kept as element text (and
+refused inside a range bound), where it was trimmed.
+
 `HH:mm` without seconds, PostgreSQL's space-separated output, any number of fraction digits (truncated to 100 ns) and `infinity` / `-infinity` are accepted.
 The temporal wrapper arities read the text as their primitive first, so a lenient generated element
 `Parse` no longer sees non-ISO text, and an element that ignores the format specifier now fails on
-read instead of truncating silently. The NodaTime types were already strict.
+read instead of truncating silently. The NodaTime types were already strict; they now also accept
+`HH:mm` wherever the BCL types do — a `LocalTime`, the time part of a `LocalDateTime`, and an
+`Instant` written with its offset or `Z` — so `LocalTimeSet.Parse("{09:00}")` reads like
+`TimeRange.Parse("[09:00,17:00)")` instead of throwing.
 
 ### Temporal values reach the database as text at its resolution
 

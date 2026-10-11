@@ -182,4 +182,126 @@ public class SetParseFormatTests
     [TestMethod]
     public void DecimalElement_WithAGroupSeparator_IsRejected()
         => Assert.ThrowsExactly<FormatException>(() => DecimalSet.Parse("{\"1,000\"}", null));
+
+    // The wrapper arity reads the same grammar, whatever its element's Parse accepts. TestMoney is
+    // the generated shape — decimal.Parse with NumberStyles.Number — which allows group separators
+    // and no exponent: the opposite of PostgreSQL's numeric grammar on both counts.
+
+    /// <summary>
+    /// A group separator is refused by the wrapper arity too. Before 9.0.0 the raw text reached
+    /// <c>TestMoney.Parse</c>, and <c>{"1,5"}</c> was fifteen, silently.
+    /// </summary>
+    [TestMethod]
+    public void WrapperDecimalElement_WithAGroupSeparator_IsRejected()
+    {
+        Assert.ThrowsExactly<FormatException>(() => DecimalSet<TestMoney>.Parse("{\"1,5\"}", null));
+        Assert.ThrowsExactly<FormatException>(() => DecimalSet<TestMoney>.Parse("{\"1,000.5\"}", null));
+        Assert.IsFalse(DecimalSet<TestMoney>.TryParse("{\"1,000\"}", null, out _));
+    }
+
+    /// <summary>Exponent notation is numeric grammar, and reads as it does for the primitive family.</summary>
+    [TestMethod]
+    public void WrapperDecimalElement_InExponentNotation_ReadsLikeThePrimitive()
+    {
+        Assert.AreEqual(DecimalSet<TestMoney>.From(new TestMoney(1000m)), DecimalSet<TestMoney>.Parse("{1e3}", null));
+        Assert.AreEqual(DecimalSet.Parse("{1.5E-1}", null).ToString(), DecimalSet<TestMoney>.Parse("{1.5E-1}", null).ToString());
+    }
+
+    /// <summary>Parsing with the family grammar first must not cost the element its scale.</summary>
+    [TestMethod]
+    public void WrapperDecimalElement_KeepsItsScale()
+        => Assert.AreEqual("{1.50,12.500}", DecimalSet<TestMoney>.Parse("{12.500,1.50}", null).ToString());
+
+    // -----------------------------------------------------------------------
+    // The array_in grammar — every expectation below is what PostgreSQL 17 answers for the same
+    // text cast to text[] (LiteralGrammarParityTests in the integration project asks a live
+    // server). Before 9.0.0 the unquoted element ran to the next comma or quote with no escapes
+    // and no structural characters, so {a\,b} was two elements and {{a,b}} a one-dimensional set
+    // of "{a" and "b}" — both silently.
+    // -----------------------------------------------------------------------
+
+    /// <summary>A backslash escapes the next character in an unquoted element too.</summary>
+    [TestMethod]
+    [DataRow(@"{a\,b}", "a,b")]
+    [DataRow(@"{a\\b}", @"a\b")]
+    [DataRow("{\\\"a}", "\"a")]
+    [DataRow(@"{a\ }", "a ")]
+    [DataRow(@"{\ a}", " a")]
+    [DataRow(@"{a b\ }", "a b ")]
+    [DataRow(@"{a\}b}", "a}b")]
+    [DataRow(@"{\{a}", "{a")]
+    public void Parse_UnquotedElement_HonoursBackslashEscapes(string literal, string expected)
+        => Assert.AreEqual(StringSet.From(expected), StringSet.Parse(literal, null));
+
+    /// <summary>
+    /// An escaped <c>NULL</c> is the four-character string, as a quoted one is: only a bare,
+    /// unescaped <c>NULL</c> is the null marker.
+    /// </summary>
+    [TestMethod]
+    public void Parse_EscapedNullWord_IsAValue()
+        => Assert.AreEqual(StringSet.From("NULL"), StringSet.Parse(@"{N\ULL}", null));
+
+    /// <summary>Whitespace around an unquoted element is dropped; whitespace inside it is kept.</summary>
+    [TestMethod]
+    public void Parse_UnquotedElement_KeepsInnerWhitespace()
+    {
+        Assert.AreEqual(StringSet.From("a b"), StringSet.Parse("{ a b }", null));
+        Assert.AreEqual(StringSet.From("a", "b"), StringSet.Parse("{\"a\" , \"b\"}", null));
+
+        // Only ASCII whitespace surrounds an element; a no-break space is element text, as in PostgreSQL.
+        Assert.AreEqual(StringSet.From("\u00A0a"), StringSet.Parse("{\u00A0a}", null));
+    }
+
+    /// <summary>
+    /// Text PostgreSQL refuses, or reads as something a one-dimensional set cannot be. A nested
+    /// brace is a multi-dimensional array; an unescaped brace or quote inside an unquoted element,
+    /// text after a quoted one, a dangling escape and a missing element are malformed.
+    /// </summary>
+    [TestMethod]
+    [DataRow("{{a,b}}")]
+    [DataRow("{{a},{b}}")]
+    [DataRow("{a}b}")]
+    [DataRow("{a{b}")]
+    [DataRow("{a\"b}")]
+    [DataRow("{a\"}")]
+    [DataRow("{a\"b\"c}")]
+    [DataRow("{\"a\"b}")]
+    [DataRow("{\"x\" y}")]
+    [DataRow(@"{a\}")]
+    [DataRow("{a,}")]
+    [DataRow("{,a}")]
+    [DataRow("{a,,b}")]
+    [DataRow("{\"a\",}")]
+    public void Parse_MalformedArrayLiteral_IsRejected(string literal)
+    {
+        Assert.ThrowsExactly<FormatException>(() => StringSet.Parse(literal, null));
+        Assert.IsFalse(StringSet.TryParse(literal, null, out _));
+    }
+
+    /// <summary>
+    /// Whatever the grammar reads, the formatter must still quote everything that needs it:
+    /// <c>Parse(Format(x)) == x</c> for strings made of every character the grammar treats
+    /// specially, alone and in combination.
+    /// </summary>
+    [TestMethod]
+    public void RoundTrip_EveryStructuralCharacter()
+    {
+        string[] atoms = ["\\", "{", "}", "\"", ",", " ", "\t", "\n", "\u00A0", "NULL", "null", "a", ""];
+
+        var strings = new List<string>();
+        foreach (var first in atoms)
+        foreach (var second in atoms)
+        foreach (var third in atoms)
+            strings.Add(first + second + third);
+
+        Assert.IsGreaterThan(1000, strings.Count);
+
+        foreach (var chunk in strings.Chunk(50))
+        {
+            var original = StringSet.From(chunk);
+            var literal  = original.ToString();
+
+            Assert.AreEqual(original, StringSet.Parse(literal, null), $"Round trip changed {literal}");
+        }
+    }
 }
