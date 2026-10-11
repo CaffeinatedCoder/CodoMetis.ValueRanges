@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Serialization;
@@ -104,7 +105,8 @@ public sealed class JsonDefaultContractTests
     /// <summary>
     /// Every shape of every range type, unregistered, writes the literal — through the union,
     /// through <see langword="object"/> (the variant's own converter), and inside a multirange —
-    /// and reads back equal through each of the three declarations.
+    /// and reads back equal through each of the three declarations. Each is also a dictionary key,
+    /// keyed by the union, by its variant and as a multirange, writing the same literal.
     /// </summary>
     [TestMethod]
     public void EveryRangeShape_SerializesAsItsLiteral_WithoutRegistration()
@@ -154,7 +156,34 @@ public sealed class JsonDefaultContractTests
                 $"{label}: as a RangeSet, the unregistered wire form differs.");
             Assert.AreEqual(set, JsonSerializer.Deserialize<RangeSet<TRange, T>>(expectedSet, Unregistered),
                 $"{label}: as a RangeSet, did not read back.");
+
+            AssertKey(label, range, expected);
+            AssertKey(label, set, expectedSet);
+
+            // Keyed by the variant itself: the narrowing converter needs the overrides too.
+            var byVariant = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(variant, typeof(int)))!;
+            byVariant.Add(range, 1);
+            var variantJson = JsonSerializer.Serialize(byVariant, byVariant.GetType(), Unregistered);
+            Assert.AreEqual($"{{{expected}:1}}", variantJson, $"{label}: as a variant-typed key, the wire form differs.");
+            var variantBack = (IDictionary)JsonSerializer.Deserialize(variantJson, byVariant.GetType(), Unregistered)!;
+            Assert.AreEqual(range, variantBack.Keys.Cast<object>().Single(), $"{label}: as a variant-typed key, did not read back.");
         }
+    }
+
+    /// <summary>
+    /// As a dictionary key the value is the same literal as its value form, and reads back.
+    /// </summary>
+    private static void AssertKey<TKey>(string label, TKey key, string expectedValueJson)
+        where TKey : notnull
+    {
+        var keyed = new Dictionary<TKey, int> { [key] = 1 };
+
+        var json = JsonSerializer.Serialize(keyed, Unregistered);
+
+        Assert.AreEqual($"{{{expectedValueJson}:1}}", json,
+            $"{label}: as a {typeof(TKey).Name} dictionary key, the property name is not the value literal.");
+        Assert.AreEqual(key, JsonSerializer.Deserialize<Dictionary<TKey, int>>(json, Unregistered)!.Keys.Single(),
+            $"{label}: as a {typeof(TKey).Name} dictionary key, did not read back.");
     }
 
     /// <summary>Every value set type, both arities, unregistered, writes its JSON array and reads back.</summary>
