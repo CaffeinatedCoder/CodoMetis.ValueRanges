@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -21,6 +22,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(Int16Set), nameof(From))]
 [JsonConverter(typeof(ValueSetJsonConverter<Int16Set, short>))]
+[TypeConverter(typeof(ValueSetTypeConverter<Int16Set, short>))]
 public sealed class Int16Set : IValueSet<short>, IValueSetFactory<Int16Set, short>, IEquatable<Int16Set>
 {
     private readonly ImmutableArray<short> _elements;
@@ -135,6 +137,7 @@ public sealed class Int16Set : IValueSet<short>, IValueSetFactory<Int16Set, shor
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(Int16Set), nameof(Int16Set.From))]
 [JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class Int16Set<TElement> :
     IValueSet<TElement>, IValueSetFactory<Int16Set<TElement>, TElement>, IEquatable<Int16Set<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

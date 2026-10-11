@@ -103,6 +103,22 @@ Int32Range.Parse("[\"1\",\"10\"]", null);   // [1, 10]
 
 Inside quotes, `\"` is unescaped to `"` and `\\` to `\`, matching PostgreSQL's quoted-bound syntax. The no-quote fast path stays allocation-free; unescaping only runs when a backslash is actually present inside the quotes.
 
+### TypeConverter and configuration binding
+
+Every type also carries a `TypeConverter` to and from the same literal, so anything built on `TypeDescriptor` — `Microsoft.Extensions.Configuration` binding above all — reads it:
+
+```json
+{ "Billing": { "Period": "[2026-01-01,2026-06-30]", "Blocks": "{[1,5],[7,10]}", "Tags": "{alpha,beta}" } }
+```
+
+```csharp
+var billing = configuration.GetSection("Billing").Get<BillingOptions>();   // Period is a DateRange
+```
+
+The converter always parses and formats invariantly and ignores the culture it is handed: the literal is a wire format. An empty string converts to `null`, never to the empty range (that is `empty`), and a malformed literal fails the bind with a `FormatException` inside the binder's `InvalidOperationException`. A variant-typed property (`DateRange.Finite`) refuses a literal of another shape.
+
+> Before 9.0 there was no converter, and configuration binding of a range property produced `null` without an error. ASP.NET Core model binding was never affected: minimal APIs and MVC bind query, route and form values through the static `TryParse`.
+
 ## JSON Serialization
 
 The `CodoMetis.ValueRanges.Serialization` namespace provides `System.Text.Json` converters for all range types and their multirange counterparts. Ranges serialize as JSON strings in PostgreSQL literal format — compact and round-trippable.

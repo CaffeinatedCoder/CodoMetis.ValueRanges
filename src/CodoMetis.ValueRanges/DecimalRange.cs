@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Serialization;
@@ -19,6 +20,7 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [JsonConverter(typeof(RangeJsonConverter<DecimalRange, decimal>))]
+[TypeConverter(typeof(RangeTypeConverter<DecimalRange, decimal>))]
 public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRange, decimal>
 {
     private DecimalRange()
@@ -29,12 +31,14 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// Represents an empty <see cref="DecimalRange"/> that contains no values.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, DecimalRange, decimal>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, DecimalRange, decimal>))]
     public sealed record EmptyRange : DecimalRange, IEmptyRange<decimal>;
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> bounded on both sides.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Finite, DecimalRange, decimal>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Finite, DecimalRange, decimal>))]
     public sealed record Finite : DecimalRange, IFiniteRange<decimal>
     {
         internal Finite(decimal start, decimal end, bool startInclusive, bool endInclusive)
@@ -65,6 +69,7 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <param name="End">The upper (right) bound of the range.</param>
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, DecimalRange, decimal>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, DecimalRange, decimal>))]
     public sealed record UnboundedStart(decimal End, bool EndInclusive) : DecimalRange, IUnboundedStartRange<decimal>;
 
     /// <summary>
@@ -74,12 +79,14 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
     /// <param name="Start">The lower (left) bound of the range.</param>
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, DecimalRange, decimal>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, DecimalRange, decimal>))]
     public sealed record UnboundedEnd(decimal Start, bool StartInclusive) : DecimalRange, IUnboundedEndRange<decimal>;
 
     /// <summary>
     /// Represents a <see cref="DecimalRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, DecimalRange, decimal>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, DecimalRange, decimal>))]
     public sealed record Infinity : DecimalRange, IInfinityRange<decimal>;
 
     /// <summary>

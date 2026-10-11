@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -23,6 +24,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(TimeSet), nameof(From))]
 [JsonConverter(typeof(ValueSetJsonConverter<TimeSet, TimeOnly>))]
+[TypeConverter(typeof(ValueSetTypeConverter<TimeSet, TimeOnly>))]
 public sealed class TimeSet : IValueSet<TimeOnly>, IValueSetFactory<TimeSet, TimeOnly>, IEquatable<TimeSet>
 {
     private readonly ImmutableArray<TimeOnly> _elements;
@@ -144,6 +146,7 @@ public sealed class TimeSet : IValueSet<TimeOnly>, IValueSetFactory<TimeSet, Tim
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(TimeSet), nameof(TimeSet.From))]
 [JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class TimeSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<TimeSet<TElement>, TElement>, IEquatable<TimeSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

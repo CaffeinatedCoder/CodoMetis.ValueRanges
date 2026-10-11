@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -6,8 +7,8 @@ using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 using CodoMetis.ValueRanges.Serialization;
-using NodaTime.Text;
 using NodaTime;
+using NodaTime.Text;
 
 namespace CodoMetis.ValueRanges;
 
@@ -39,6 +40,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(LocalDateSet), nameof(From))]
 [JsonConverter(typeof(ValueSetJsonConverter<LocalDateSet, LocalDate>))]
+[TypeConverter(typeof(ValueSetTypeConverter<LocalDateSet, LocalDate>))]
 public sealed class LocalDateSet : IValueSet<LocalDate>, IValueSetFactory<LocalDateSet, LocalDate>, IEquatable<LocalDateSet>
 {
     private readonly ImmutableArray<LocalDate> _elements;
@@ -189,6 +191,7 @@ public sealed class LocalDateSet : IValueSet<LocalDate>, IValueSetFactory<LocalD
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(LocalDateSet), nameof(LocalDateSet.From))]
 [JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class LocalDateSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<LocalDateSet<TElement>, TElement>, IEquatable<LocalDateSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

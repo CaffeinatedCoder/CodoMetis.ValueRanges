@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -24,6 +25,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(DecimalSet), nameof(From))]
 [JsonConverter(typeof(ValueSetJsonConverter<DecimalSet, decimal>))]
+[TypeConverter(typeof(ValueSetTypeConverter<DecimalSet, decimal>))]
 public sealed class DecimalSet : IValueSet<decimal>, IValueSetFactory<DecimalSet, decimal>, IEquatable<DecimalSet>
 {
     private readonly ImmutableArray<decimal> _elements;
@@ -140,6 +142,7 @@ public sealed class DecimalSet : IValueSet<decimal>, IValueSetFactory<DecimalSet
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(DecimalSet), nameof(DecimalSet.From))]
 [JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class DecimalSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<DecimalSet<TElement>, TElement>, IEquatable<DecimalSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

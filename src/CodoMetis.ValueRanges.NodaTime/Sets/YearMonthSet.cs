@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -6,8 +7,8 @@ using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 using CodoMetis.ValueRanges.Serialization;
-using NodaTime.Text;
 using NodaTime;
+using NodaTime.Text;
 
 namespace CodoMetis.ValueRanges;
 
@@ -41,6 +42,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(YearMonthSet), nameof(From))]
 [JsonConverter(typeof(ValueSetJsonConverter<YearMonthSet, YearMonth>))]
+[TypeConverter(typeof(ValueSetTypeConverter<YearMonthSet, YearMonth>))]
 public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMonthSet, YearMonth>, IEquatable<YearMonthSet>
 {
     private readonly ImmutableArray<YearMonth> _elements;
@@ -200,6 +202,7 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(YearMonthSet), nameof(YearMonthSet.From))]
 [JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class YearMonthSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<YearMonthSet<TElement>, TElement>, IEquatable<YearMonthSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

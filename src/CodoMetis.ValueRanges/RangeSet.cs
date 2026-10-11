@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -70,6 +71,7 @@ public static class RangeSet
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(RangeSet), nameof(RangeSet.Create))]
 [JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class RangeSet<TRange, T>
     : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IFormattable, ISpanParsable<RangeSet<TRange, T>>
     where TRange : IRangeFactory<TRange, T>, IRange<T>

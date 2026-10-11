@@ -2,7 +2,6 @@ using System.Collections;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Serialization;
-using NodaTime;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
@@ -34,45 +33,6 @@ public sealed class JsonDefaultContractTests
     private static readonly JsonSerializerOptions Unregistered = new();
     private static readonly JsonSerializerOptions Registered   = new JsonSerializerOptions().AddRangeConverters();
 
-    /// <summary>Two ordered values per element type, for the bounded shapes.</summary>
-    private static readonly Dictionary<Type, (object Low, object High)> Bounds = new()
-    {
-        [typeof(int)]            = (1, 10),
-        [typeof(long)]           = (1L, 10L),
-        [typeof(decimal)]        = (1.5m, 9.25m),
-        [typeof(DateOnly)]       = (new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)),
-        [typeof(TimeOnly)]       = (new TimeOnly(9, 30), new TimeOnly(17, 0)),
-        [typeof(DateTime)]       = (new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Unspecified),
-                                    new DateTime(2026, 6, 30, 17, 0, 0, DateTimeKind.Unspecified)),
-        [typeof(DateTimeOffset)] = (new DateTimeOffset(2026, 1, 1, 9, 30, 0, TimeSpan.FromHours(1)),
-                                    new DateTimeOffset(2026, 6, 30, 17, 0, 0, TimeSpan.FromHours(2))),
-        [typeof(LocalDate)]      = (new LocalDate(2026, 1, 1), new LocalDate(2026, 6, 30)),
-        [typeof(LocalDateTime)]  = (new LocalDateTime(2026, 1, 1, 9, 30), new LocalDateTime(2026, 6, 30, 17, 0)),
-        [typeof(Instant)]        = (Instant.FromUtc(2026, 1, 1, 9, 30), Instant.FromUtc(2026, 6, 30, 17, 0)),
-        [typeof(YearMonth)]      = (new YearMonth(2026, 1), new YearMonth(2026, 6))
-    };
-
-    private static IEnumerable<(Type Range, Type Element)> AllRangeTypes()
-    {
-        Type[] assemblyMarkers = [typeof(Int32Range), typeof(LocalDateRange)];
-
-        foreach (var type in assemblyMarkers
-                            .Select(marker => marker.Assembly)
-                            .Distinct()
-                            .SelectMany(assembly => assembly.GetExportedTypes())
-                            .OrderBy(type => type.Name, StringComparer.Ordinal))
-        {
-            var factory = type.GetInterfaces().FirstOrDefault(
-                @interface => @interface.IsGenericType
-                           && @interface.GetGenericTypeDefinition() == typeof(IRangeFactory<,>));
-
-            // The union declares the factory over itself; its variants inherit that interface
-            // and are reached through the union below, so they are not listed separately.
-            if (factory is not null && factory.GetGenericArguments()[0] == type)
-                yield return (type, factory.GetGenericArguments()[1]);
-        }
-    }
-
     /// <summary>The floor that keeps the loops below from passing by finding nothing.</summary>
     [TestMethod]
     public void Discovery_FindsEveryRangeAndSetType()
@@ -81,7 +41,7 @@ public sealed class JsonDefaultContractTests
         const int knownRangeTypes = 11;
         const int knownSetTypes   = 30;
 
-        var ranges = AllRangeTypes().Count();
+        var ranges = RangeProbes.AllRangeTypes().Count();
         var sets   = SetProbes.AllSetTypes().Count();
 
         Assert.IsTrue(ranges >= knownRangeTypes, $"Range discovery found {ranges}, fewer than {knownRangeTypes}.");
@@ -91,14 +51,14 @@ public sealed class JsonDefaultContractTests
     [TestMethod]
     public void EveryRangeType_IsCoveredByBounds()
     {
-        var uncovered = AllRangeTypes()
-                       .Where(pair => !Bounds.ContainsKey(pair.Element))
+        var uncovered = RangeProbes.AllRangeTypes()
+                       .Where(pair => !RangeProbes.Bounds.ContainsKey(pair.Element))
                        .Select(pair => $"{pair.Range.Name} (element {pair.Element.Name})")
                        .ToList();
 
         Assert.AreEqual(
             0, uncovered.Count,
-            $"No bounds registered for: {string.Join(", ", uncovered)}. Add a pair to Bounds so the "
+            $"No bounds registered for: {string.Join(", ", uncovered)}. Add a pair to RangeProbes.Bounds so the "
           + "wire-form test below exercises the new type's bounded shapes.");
     }
 
@@ -111,7 +71,7 @@ public sealed class JsonDefaultContractTests
     [TestMethod]
     public void EveryRangeShape_SerializesAsItsLiteral_WithoutRegistration()
     {
-        foreach (var (rangeType, elementType) in AllRangeTypes())
+        foreach (var (rangeType, elementType) in RangeProbes.AllRangeTypes())
             Reflect.InvokeGeneric(typeof(JsonDefaultContractTests), nameof(AssertRangeShapes), rangeType, elementType);
     }
 
@@ -119,18 +79,7 @@ public sealed class JsonDefaultContractTests
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
-        var (low, high) = ((T)Bounds[typeof(T)].Low, (T)Bounds[typeof(T)].High);
-
-        TRange[] shapes =
-        [
-            TRange.Empty,
-            TRange.Infinite,
-            TRange.CreateFinite(low, high, startInclusive: true, endInclusive: false),
-            TRange.CreateUnboundedEnd(low, startInclusive: true),
-            TRange.CreateUnboundedStart(high, endInclusive: false)
-        ];
-
-        foreach (var range in shapes)
+        foreach (var range in RangeProbes.Shapes<TRange, T>())
         {
             var variant = range.GetType();
             var label   = $"{typeof(TRange).Name}.{variant.Name} {range}";

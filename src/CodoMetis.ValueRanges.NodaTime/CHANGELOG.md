@@ -10,7 +10,8 @@ covers all four packages, which share one version number and release together.
 - **⚠️ `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`, `YearMonthRange`, their variants and
   the five set families serialize as their literal with nothing registered**, as the core types
   now do — previously a property dump that did not read back. The four ranges are also dictionary
-  keys now. See `CodoMetis.ValueRanges` 9.0.0.
+  keys now, and every type carries a `TypeConverter`, so configuration binding works. See
+  `CodoMetis.ValueRanges` 9.0.0.
 
 ## [8.0.0] — 2026-08-17
 

@@ -219,7 +219,13 @@ what each attribute names:
   `ContainsGenericParameters`), so these go through the factory's `MakeGenericType`, as a registered
   factory always did.
 
-The attribute ranks below a converter on the options or on the property, so it never overrides one.
+`[TypeConverter]` follows the same three rules with `RangeTypeConverter`, `RangeVariantTypeConverter`,
+`ValueSetTypeConverter` and, for the generic types, `LiteralTypeConverter` — which `TypeDescriptor`
+constructs with the closed type (its `ctor(Type)`), the converter equivalent of the factory. The
+reason the variants need their own is the opposite of JSON's: `[TypeConverter]` *is* inherited, so
+a variant without one silently gets the union's, which returns whatever shape the literal has.
+
+The JSON attribute ranks below a converter on the options or on the property, so it never overrides one.
 A new range type, variant or set family must carry its attribute; `JsonDefaultContractTests` in the
 conventions project discovers every type and fails on one that serializes differently unregistered.
 

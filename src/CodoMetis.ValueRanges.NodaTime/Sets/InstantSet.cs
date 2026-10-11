@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -6,8 +7,8 @@ using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 using CodoMetis.ValueRanges.Serialization;
-using NodaTime.Text;
 using NodaTime;
+using NodaTime.Text;
 
 namespace CodoMetis.ValueRanges;
 
@@ -38,6 +39,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(InstantSet), nameof(From))]
 [JsonConverter(typeof(ValueSetJsonConverter<InstantSet, Instant>))]
+[TypeConverter(typeof(ValueSetTypeConverter<InstantSet, Instant>))]
 public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet, Instant>, IEquatable<InstantSet>
 {
     private readonly ImmutableArray<Instant> _elements;
@@ -173,6 +175,7 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
 [DebuggerDisplay("{ToString(),nq}")]
 [CollectionBuilder(typeof(InstantSet), nameof(InstantSet.From))]
 [JsonConverter(typeof(RangeJsonConverterFactory))]
+[TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class InstantSet<TElement> :
     IValueSet<TElement>, IValueSetFactory<InstantSet<TElement>, TElement>, IEquatable<InstantSet<TElement>>
     where TElement : struct, IEquatable<TElement>, IComparable<TElement>, IFormattable, IParsable<TElement>

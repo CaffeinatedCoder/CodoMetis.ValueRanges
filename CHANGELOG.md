@@ -47,6 +47,19 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
 
 ### Added
 
+- **A `TypeConverter` on every range, variant, multirange and value set.** None had one, so
+  `TypeDescriptor` could not convert them from a string, and `Microsoft.Extensions.Configuration`
+  binding of `"Period": "[2026-01-01,2026-06-30]"` into a `DateRange` property produced **`null`
+  with no error**. Each type now converts to and from its literal (`RangeTypeConverter`,
+  `RangeVariantTypeConverter`, `RangeSetTypeConverter`, `ValueSetTypeConverter`, and
+  `LiteralTypeConverter` for the generic types).
+  - Always invariant: the culture argument is ignored, since the literal is a wire format.
+  - An empty string converts to `null` (absent), never to the empty range, which is `empty`.
+  - Unlike `[JsonConverter]`, `[TypeConverter]` *is* inherited, so without their own a variant
+    would have silently used the union's and returned whatever shape the literal had. Each variant
+    carries a narrowing converter that refuses another shape.
+  - ASP.NET Core model binding is unaffected — minimal APIs and MVC bind through the static
+    `TryParse` these types already have.
 - **Ranges and multiranges as dictionary keys.** `Dictionary<DateRange, int>` threw
   `NotSupportedException` in both directions, registered or not. `RangeJsonConverter`,
   `RangeVariantJsonConverter` and `RangeSetJsonConverter` now override
@@ -55,7 +68,10 @@ consumer that only ever wrote it, into a response or a log, sees its shape chang
   wrong-shape key is the same `JsonException`. `DictionaryKeyPolicy` is not applied — a naming
   policy would rewrite the literal into text that does not parse. Value sets are not keys: their
   value form is a JSON array, not a string.
-- **Tests:** `JsonDefaultContractTests` (conventions) serializes every shape of every discovered
+- **Tests:** `TypeConverterContractTests` (conventions) converts every shape through the union's and
+  the variant's converter under `de-DE`, and every set family. A new
+  `CodoMetis.ValueRanges.AspNetCore.Tests` project runs configuration binding and a real ASP.NET
+  Core host (MVC and minimal APIs) with no ValueRanges registration. `JsonDefaultContractTests` (conventions) serializes every shape of every discovered
   range type — through the union, through `object`, inside a `RangeSet`, and as a dictionary key by
   union, variant and multirange — and every value set family in both arities, with nothing
   registered, against the registered output. The consumer smoke test asserts the unregistered wire

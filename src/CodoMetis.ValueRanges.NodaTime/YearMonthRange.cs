@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Serialization;
@@ -30,6 +31,7 @@ namespace CodoMetis.ValueRanges;
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 [JsonConverter(typeof(RangeJsonConverter<YearMonthRange, YearMonth>))]
+[TypeConverter(typeof(RangeTypeConverter<YearMonthRange, YearMonth>))]
 public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMonthRange, YearMonth>
 {
     private YearMonthRange()
@@ -50,12 +52,14 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
     /// Represents an empty <see cref="YearMonthRange"/> that contains no values.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, YearMonthRange, YearMonth>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, YearMonthRange, YearMonth>))]
     public sealed record EmptyRange : YearMonthRange, IEmptyRange<YearMonth>;
 
     /// <summary>
     /// Represents a <see cref="YearMonthRange"/> bounded on both sides.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Finite, YearMonthRange, YearMonth>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Finite, YearMonthRange, YearMonth>))]
     public sealed record Finite : YearMonthRange, IFiniteRange<YearMonth>
     {
         internal Finite(YearMonth start, YearMonth end)
@@ -82,6 +86,7 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
     /// <c>(-∞, End]</c> or <c>(-∞, End)</c>.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, YearMonthRange, YearMonth>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, YearMonthRange, YearMonth>))]
     public sealed record UnboundedStart : YearMonthRange, IUnboundedStartRange<YearMonth>
     {
         /// <summary>
@@ -103,6 +108,7 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
     /// <c>[Start, +∞)</c> or <c>(Start, +∞)</c>.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, YearMonthRange, YearMonth>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, YearMonthRange, YearMonth>))]
     public sealed record UnboundedEnd : YearMonthRange, IUnboundedEndRange<YearMonth>
     {
         /// <summary>
@@ -123,6 +129,7 @@ public abstract record YearMonthRange : IRange<YearMonth>, IRangeFactory<YearMon
     /// Represents a <see cref="YearMonthRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, YearMonthRange, YearMonth>))]
+    [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, YearMonthRange, YearMonth>))]
     public sealed record Infinity : YearMonthRange, IInfinityRange<YearMonth>;
 
     /// <summary>
