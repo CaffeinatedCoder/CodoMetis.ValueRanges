@@ -39,6 +39,9 @@ The optional `format` parameter is forwarded to the element type, so you can con
 // "[Jan 1 2025,Mar 31 2025]"
 ```
 
+That is display text, not a literal: it does not parse back, because temporal literals are ISO 8601
+only (see below).
+
 **The literal never depends on a culture.** Without a format string — `ToString()`, `ToString(null, provider)`, string interpolation, `string.Format`, a logging template — the result is the invariant literal, whatever provider is passed or current. A provider applies only alongside an explicit format, because that asks for display text rather than a literal:
 
 ```csharp
@@ -75,6 +78,8 @@ if (Int32Range.TryParse(userInput, null, out var range))
 ```
 
 `Parse` and `TryParse` read the invariant literal and **ignore the provider**, as `Guid.Parse` does: the text is PostgreSQL's, which has no culture. Before 9.0 the provider reached the element parser, so `DateRange.Parse("[2026-01-01,2026-06-30]", th-TH)` returned a range in 1483 and `DecimalRange.Parse("[1.5,2.5)", de-DE)` returned `[15,25)`, with no error. Decimal bounds follow PostgreSQL's `numeric` grammar — sign, digits, point, exponent — so a group separator or currency symbol is a `FormatException`.
+
+Temporal bounds and elements are **strict ISO 8601** — the forms this library writes and the forms PostgreSQL prints in its default ISO `DateStyle`, nothing else: a date `yyyy-MM-dd`; a time `HH:mm` or `HH:mm:ss` with up to seven fraction digits; date and time joined by `T` or a space; for a `DateTime` an optional `Z` or `±HH:mm`, read with round-trip semantics; for a `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (PostgreSQL's historical local-mean-time offsets, kept as the instant at offset zero). `infinity` / `-infinity` read as `MaxValue` / `MinValue`, which is what Npgsql materializes for them. Before 9.0 the lenient BCL parser read `[01.02.2027,05.03.2027)` month first, as January 2 to May 2, and a `DateTimeOffset` without an offset took the parsing machine's. A value set's JSON array is read by System.Text.Json's own converters, which are strict ISO 8601 too — with one difference: a `DateTimeOffset` element without an offset is read in the local offset, as it is for any `DateTimeOffset` property in the payload.
 
 Discrete types canonicalize on parse — `"[1,10)"` is equivalent to `"[1,9]"` and both parse to the same closed `[1, 9]` range:
 

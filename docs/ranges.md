@@ -240,7 +240,7 @@ set.UpperBound();  // 9
 
 ## Set Operations
 
-Set operations are extension methods on the concrete range types (any type that implements `IRangeFactory<TRange, T>`).
+Set operations are extension methods on the range types, written against `IRangeFactory<TRange, T>`, which every shipped range type implements.
 
 ### Intersection
 

@@ -29,10 +29,19 @@ must not pick any of these up silently.
 2. **A culture provider no longer reaches the literal.** `Parse(s, culture)` reads the invariant
    literal, and formatting without a format string writes it. Code that parsed culture-formatted
    text through `Parse(s, de-DE)` deliberately must parse the bounds itself.
-3. **Lenient decimal forms are refused.** `"1,000"`, `"(5)"` and currency symbols in a
+3. **Temporal literals are strict ISO 8601.** `[01.02.2027,05.03.2027)` used to parse — month
+   first, as January 2 to May 2 — and a `DateTimeOffset` without an offset took the parsing
+   machine's. Dotted, slashed and named-month dates, date-only text for a date-time and an
+   offset-less `DateTimeOffset` are now a `FormatException`; `HH:mm` and PostgreSQL's own output
+   still parse.
+4. **Lenient decimal forms are refused.** `"1,000"`, `"(5)"` and currency symbols in a
    `DecimalRange` or `DecimalSet` literal are a `FormatException`, as they are in PostgreSQL.
-4. **Interpolating an integer or decimal range is invariant under every culture.** Only code that
+5. **Interpolating an integer or decimal range is invariant under every culture.** Only code that
    depended on `[1,5,2)` — which parsed back as a different range — is affected.
+6. **The EF Core provider writes temporal values as text at the database's resolution.** A SQL
+   constant now carries the microsecond Npgsql would bind, so a query that compared a constant
+   against its own row and missed now matches; and a temporal set whose elements are less than a
+   microsecond apart is stored with one of them, as the database could only ever hold one.
 
 Everything else is additive: a `TypeConverter` on every type, ranges as dictionary keys, ranges
 and sets inside EF Core JSON columns, Native AOT, `Deconstruct` on every bounded variant, and an
@@ -62,6 +71,28 @@ OpenAPI transformer to copy. The
     converter resolves the element's contract through the options.
   - **Payload change** for anyone who wrote the old form: a response or document that carried
     `{"Length":…}` now carries the literal.
+
+- **⚠️ Temporal bounds and elements parse as strict ISO 8601.** `DateRange`, `DateTimeRange`,
+  `DateTimeOffsetRange`, `TimeRange`, `DateSet`, `DateTimeSet`, `DateTimeOffsetSet`, `TimeSet` and
+  the temporal wrapper arities read element text with the lenient BCL `Parse`, which reads the
+  invariant culture month first: `[01.02.2027,05.03.2027)` was January 2 to May 2, `9:30 AM` was
+  09:30, and a `DateTimeOffset` without an offset took whichever machine parsed it — all silently.
+  They now accept exactly what this library writes and what PostgreSQL prints in its ISO
+  `DateStyle`: `yyyy-MM-dd`; `HH:mm` or `HH:mm:ss` with up to seven fraction digits; `T` or a space
+  between them; for a `DateTime` an optional `Z` or `±HH:mm` (round-trip semantics), for a
+  `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (a historical local-mean-time
+  offset, kept as the instant at offset zero); and `infinity` / `-infinity` as `MaxValue` /
+  `MinValue`, what Npgsql materializes for them. Everything else is a `FormatException` through
+  `Parse`, `TryParse`, JSON, the `TypeConverter` and configuration binding. The wrapper arities —
+  BCL and NodaTime — read the text as their primitive first and hand the element its round-trip
+  form, so a lenient generated element `Parse` never sees non-ISO text, and an element that
+  ignores the format specifier fails on read instead of truncating silently. The NodaTime types
+  were already strict; they now also read `infinity` for `Instant`, `LocalDate` and
+  `LocalDateTime`, the types Npgsql maps it for. A closed `DateTimeOffsetSet` reads its JSON array
+  through System.Text.Json's own converter, which accepts an offset-less timestamp in the local
+  offset as it does for any `DateTimeOffset` property. `TemporalLiteralGrammarTests` pins the
+  grammar; `TemporalLiteralStrictnessContractTests` (conventions) refuses a non-ISO element through
+  every entry point of all 26 temporal range and set types.
 
 ### Fixed
 
@@ -105,12 +136,41 @@ OpenAPI transformer to copy. The
 
 - **Ranges, multiranges and value sets inside an EF Core JSON column** (`ToJson()`) could not be
   saved — the plugin's type mappings had no `JsonValueReaderWriter`, and `SaveChanges` threw a
-  bare `NullReferenceException` from inside EF. Each mapping now writes the store type's literal,
+  bare `NullReferenceException` from inside EF. Each mapping now writes the store type's text,
   which also makes queries into the document translate:
-  `CAST(doc ->> 'Period' AS daterange) @> @day`. The `YearMonth` types write their month-aligned
-  date form, since that is what the cast reads. `JsonColumnTests` (integration) round-trips and
-  queries all 25 types inside one jsonb column; `MappingParityTests` now requires a reader/writer
-  on every mapping.
+  `CAST(doc ->> 'Period' AS daterange) @> @day`.
+  - **The document holds the store's representation, not the API JSON**, and it is a persisted
+    format: a value set is `"{a,b}"` (an array in API JSON), the `YearMonth` types — wrapper
+    arity included — their month-aligned dates, since that is what the cast reads.
+  - **Temporal values are stored as a parameter would bind them**: truncated to the microsecond
+    toward 2000-01-01 as Npgsql truncates, the extremes Npgsql maps as `-infinity` / `infinity`.
+    Writing every digit and letting the server round them half-to-even made the document hold a
+    different value from the column, so `Doc.Period == period` could miss the row it was saved
+    from and `Contains` disagreed at the bounds. Materializing from the document now gives what
+    materializing from a native column gives.
+  - **`ExecuteUpdate` of a value set inside the document is refused** at query compilation: EF Core
+    writes it with `to_jsonb`, storing a JSON array the document cannot hold, after which the row no
+    longer loads. Ranges and multiranges can be set; the whole JSON property too.
+  - `SaveChanges` (complex and owned, nested, null and empty kept apart) and the operators inside
+    the document were checked against a live server, `ExecuteUpdate` to `null` fails in Npgsql for
+    any type, and EF Core refuses `ExecuteUpdate` on owned JSON types — `docs/efcore.md` has the
+    matrix.
+
+  `JsonColumnTests` (integration) round-trips and queries every type inside one jsonb column;
+  `TemporalStoreParityTests` holds the temporal rule for 18 types and seven probes (remainders
+  above, below and at 500 ns, before 2000, the extremes, sub-microsecond ranges);
+  `ExecuteUpdateJsonTests` the update paths. `MappingParityTests` requires a reader/writer on every
+  mapping.
+- **⚠️ Temporal SQL constants carried more precision than the database, and set arrays duplicates.**
+  The EF Core provider rendered a temporal range, multirange or set constant with seven fraction
+  digits (nine for NodaTime), which the server rounds half-to-even, while a parameter is truncated
+  toward 2000-01-01 — so a constant could disagree with a parameter for the same value, and EF 10
+  inlines evaluatable expressions as constants without `EF.Constant`. `DateTime.MinValue` rendered
+  as a finite date where a parameter carries `-infinity`. Constants now carry the value Npgsql
+  would bind. And a temporal set whose elements truncate to one microsecond was bound with both,
+  so the stored array's `cardinality` disagreed with the set's `Count`; it is now deduplicated on
+  every path. Npgsql's own literal for a range's *element* operand (`range.Contains(constant)`)
+  is unchanged — it differs from its parameter only before 2000, and in nanoseconds for NodaTime.
 
 ### Added
 

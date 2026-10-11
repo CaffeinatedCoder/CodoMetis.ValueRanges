@@ -14,7 +14,15 @@ covers all four packages, which share one version number and release together.
   because a query into the document casts the text to `daterange`/`date[]`, which only reads
   dates. Reads validate month alignment. `YearMonthRangeJsonValueReaderWriter`,
   `YearMonthRangeSetJsonValueReaderWriter` and `YearMonthSetJsonValueReaderWriter` are public for
-  compiled models.
+  compiled models. The wrapper `YearMonthSet<T>` is written in the date form too; its own
+  `{2026-02}` literal could not be cast, so every query into it failed.
+- **NodaTime values written as text at the database's resolution.** In a JSON document and in a SQL
+  constant, `Instant`, `LocalDateTime` and `LocalTime` carried all nine fraction digits, which the
+  server rounds while Npgsql truncates a parameter toward 2000-01-01; and `Instant.MinValue` /
+  `MaxValue`, `LocalDate` and `LocalDateTime` `MinIsoValue` / `MaxIsoValue` stayed finite where a
+  parameter carries `-infinity` / `infinity` — `-9998-01-01` is not even valid SQL. Both now carry
+  the value Npgsql would bind, including a `YearMonthRange` that ends in 9999-12. See
+  `CodoMetis.ValueRanges.EFCore.PostgreSQL` 9.0.0.
 
 ## [8.0.0] — 2026-08-17
 

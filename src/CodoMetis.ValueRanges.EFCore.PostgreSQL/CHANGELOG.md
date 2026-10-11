@@ -16,6 +16,19 @@ covers all four packages, which share one version number and release together.
   `CAST(doc ->> 'Period' AS daterange) @> @day` — so the range and set operators translate inside
   JSON columns as they do on plain columns. `LiteralJsonValueReaderWriter<TValue>` is public,
   because a compiled model re-creates it.
+  - The document holds the store's representation (a value set is `"{a,b}"`, not an array), and it
+    is a persisted format. Temporal values are stored as a parameter would bind them — truncated to
+    the microsecond toward 2000-01-01, the extremes as `-infinity` / `infinity` — so a query that
+    casts out of the document compares the value the column would hold.
+  - `ExecuteUpdate` of a value set inside a JSON column is refused at query compilation: EF Core
+    writes it with `to_jsonb`, a JSON array the document cannot hold. Ranges, multiranges and the
+    whole JSON property can be set. `docs/efcore.md` has the full matrix.
+- **⚠️ Temporal SQL constants carried more precision than the database.** A temporal range,
+  multirange or set constant was rendered with seven fraction digits, which the server rounds while
+  a parameter is truncated, and `DateTime.MinValue` as a finite date where a parameter carries
+  `-infinity`; a constant could miss the row a parameter matched. Constants now carry the value
+  Npgsql would bind. A temporal set whose elements truncate to one microsecond is deduplicated on
+  every path, so the stored array's `cardinality` is the set's `Count`.
 
 See also `CodoMetis.ValueRanges` 9.0.0: the types now carry their System.Text.Json converters and
 TypeConverters, and the literal no longer depends on a culture.

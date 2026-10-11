@@ -99,6 +99,14 @@ The private base constructor prevents external subtyping, so these five are the 
 
 All type parameters are constrained to `struct, IComparable<T>, IEquatable<T>`.
 
+**Not an extension point.** These interfaces are the shared vocabulary of the shipped range types:
+implementing them outside the library is unsupported, and they may gain members in a minor version.
+The engines, the EF Core provider — whose registries are internal — and the parity tests against
+PostgreSQL cover only the shipped types. The value sets are closed in the type system already
+(`IValueSetFactory`'s internal abstract `FromTrusted`); the range interfaces are closed by this policy
+rather than by the compiler, which outside implementations of `IRange<T>` meet as a refusal
+(`UnknownRangeVariantTests`).
+
 ## Extension Methods (`RangeExtensions.cs`)
 
 Uses the C# 14 `extension` keyword. Two `extension<T>` blocks:
