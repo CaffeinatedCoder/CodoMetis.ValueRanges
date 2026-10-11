@@ -301,14 +301,17 @@ asserted rather than fixed (`SetJsonConverterTests`) — matching the native wri
 would mean reproducing System.Text.Json's temporal formatting for an element known only through
 `IFormattable`, and the round-trip form is the one the array literal and the EF bridge share.
 The NodaTime satellite defines
-one per set (`Serialization/NodaTimeElementJsonConverter.cs`, namespace
+one per element type (`Serialization/NodaElementJsonConverters.cs`, namespace
 `CodoMetis.ValueRanges.Serialization`), each reusing the family's own `ParseValue`/`FormatValue` so
-JSON, array literals and the wire form share one text form. The satellite additionally exposes
-`AddNodaTimeRangeConverters()`, which puts those same converters on the options — the hook only
-reaches set elements, so this is what covers bare NodaTime properties alongside a set. It skips
-element types an existing converter already claims, which makes it idempotent and
-order-independent against `ConfigureForNodaTime`. Range types are unaffected throughout — they
-format themselves.
+JSON, array literals and the wire form share one text form; the three calendar-bearing ones refuse a
+non-ISO value on write, as NodaTime's own converter does (a set has already normalized it). The
+satellite additionally exposes `AddNodaTimeRangeConverters()`, which puts those same converters on
+the options behind a factory — the hook only reaches set elements, so this is what covers bare
+NodaTime properties alongside a set. The factory is resolved only once the options are in use, so it
+looks past itself and hands over any other converter registered for the type, wherever it sits in
+`Converters`: that is what keeps `ConfigureForNodaTime` authoritative in either call order (a plain
+converter list is first-match, which made the order decide). Range types are unaffected throughout —
+they format themselves.
 
 ## EF Core PostgreSQL (`src/CodoMetis.ValueRanges.EFCore.PostgreSQL/`)
 

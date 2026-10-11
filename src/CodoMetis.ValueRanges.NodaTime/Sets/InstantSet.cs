@@ -103,7 +103,7 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
     /// </summary>
     static JsonConverter<Instant>? IValueSetFactory<InstantSet, Instant>.ElementJsonConverter
-        => ValueSetTextElementJsonConverter<InstantSet, Instant>.Instance;
+        => NodaElementJson.Instant;
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{2024-06-01T08:00:00Z}</c>, <c>{}</c>) into a

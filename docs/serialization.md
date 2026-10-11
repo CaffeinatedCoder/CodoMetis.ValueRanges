@@ -242,7 +242,7 @@ It is consulted last — only when System.Text.Json has no scalar converter for 
 JsonSerializer.Serialize(LocalDateSet.From(new LocalDate(2024, 1, 1)));   // ["2024-01-01"]
 ```
 
-The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach — see the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
+The satellite also ships `AddNodaTimeRangeConverters()`, which registers the same element converters on the options. That extends the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the fallback does not reach. Those converters are a fallback too — any other converter on the options for the same type wins, in either registration order, so NodaTime.Serialization.SystemTextJson stays authoritative — and a bare `LocalDate`, `LocalDateTime` or `YearMonth` in a calendar other than ISO is refused on write with an `ArgumentException`, as NodaTime's converter refuses it. See the [satellite README](../src/CodoMetis.ValueRanges.NodaTime/README.md#json).
 
 ## Native AOT
 
