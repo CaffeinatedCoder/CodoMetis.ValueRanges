@@ -70,7 +70,9 @@ because that decides which release the fix goes in: a wrong answer without an ex
 in the next major even if it's old, and a loud failure can wait for a minor.
 
 Releases and longer themes are tracked as `epic` issues, with the work as sub-issues. The pinned
-[Roadmap](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/34) lists them all.
+[Roadmap](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/34) lists them all,
+along with what each label means. A maintainer sets the `package/*`, `area/*` and `severity/*`
+labels when triaging, and a pull request gets the same labels as the issue it closes.
 
 ## Pull requests
 
