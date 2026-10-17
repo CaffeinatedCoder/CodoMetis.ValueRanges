@@ -24,6 +24,20 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\CodoMetis.ValueRanges\CodoMetis.ValueRanges.csproj" />
+        <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.NodaTime\CodoMetis.ValueRanges.NodaTime.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+            HostCultureProbeTests sweeps every discovered type through a host, so it takes the type
+            discovery and probe values from the conventions project, linked rather than copied (a
+            second probe table would drift), and the candidate registry every oracle shares.
+        -->
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\RangeProbes.cs" Link="Probes\RangeProbes.cs" />
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\SetProbes.cs" Link="Probes\SetProbes.cs" />
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\WrapperElements.cs" Link="Probes\WrapperElements.cs" />
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\Reflect.cs" Link="Probes\Reflect.cs" />
+        <Compile Include="..\oracles\Candidates.cs" Link="Candidates.cs" />
     </ItemGroup>
 
 </Project>

@@ -214,6 +214,18 @@ The first is `JsonOptionsProbeTests`: every range, multirange and value set type
 variant, interface, `object`, record property, dictionary value} × {default, camelCase, snake_case,
 `ReferenceHandler.Preserve`, a source-generated context, `NumberHandling.AllowReadingFromString`}.
 
+The second (#124) is entry point × culture × type, in two classes because half the entry points need a host.
+`CultureEntryPointProbeTests` (conventions project) reads and writes every type through `Parse`, `TryParse`,
+`TypeDescriptor`, configuration binding, JSON and interpolation under four *current* cultures, against what the
+invariant culture reads and writes. `HostCultureProbeTests` (AspNetCore project) binds every type, as the union,
+each variant, nullable, the multirange and the set, from a query, a route value, a form field and a JSON body
+through MVC and a minimal API, under four *request* cultures set by `RequestLocalization`; a valid value answers
+200 with itself, an invalid one 400, never 200 with `null`. Its only disagreement is #116, measured wider than
+the issue first said: every variant of every range type, bound by a minimal API through `TryParse` from a
+query, nullable query, route value or form field, answers 200 with `null` for the right shape and for another
+shape alike. It is registered as one candidate per range type, scoped by the line's `variant minimal TryParse`
+prefix so the JSON-body and MVC cells of the same variants stay held.
+
 ## How to use it
 
 **Run the oracles.** They are ordinary tests; `dotnet test` runs them all. The registered classes are
