@@ -605,6 +605,13 @@ public sealed class LiteralCorpusProbeTests
         foreach (var (family, literal) in structural)
             yield return (family, literal, null);
 
+        // An infinite temporal bound next to a finite one: the form daterange(x, 'infinity') prints.
+        if (IsTemporal(kind) && kind != Kind.Time && grammar != Grammar.Array)
+        {
+            foreach (var range in new[] { $"[{a},infinity)", $"[{a},infinity]", $"(-infinity,{a}]", $"[-infinity,{a})", "[-infinity,infinity)" })
+                yield return ("infinity bound", grammar == Grammar.Range ? range : $"{{{range}}}", null);
+        }
+
         foreach (var (text, family) in elements.Elements)
         {
             switch (grammar)
@@ -658,7 +665,7 @@ public sealed class LiteralCorpusProbeTests
         // that PostgreSQL's datetime input skips punctuation it does not know.
         foreach (var literal in new[] { $"[\"{a}\"\"\",{b})", $"[\\\\{a},{b})", $"[[{a},{b})" })
             yield return ("stray punctuation", literal);
-        foreach (var literal in new[] { $" [{a},{b}) ", $"\t[{a},{b})\n", $"[ {a} , {b} )", $"\u00A0[{a},{b})", $"[{a},{b})\u2003", $"[\u00A0{a},{b})", $"\u3000[{a},{b})", $"[{a},{b})\u0085" })
+        foreach (var literal in new[] { $" [{a},{b}) ", $"\t[{a},{b})\n", $"[ {a} , {b} )", $"[\" {a}\",{b})", $"[{a},\"{b} \")", $"[\\ {a},{b})", $"\u00A0[{a},{b})", $"[{a},{b})\u2003", $"[\u00A0{a},{b})", $"\u3000[{a},{b})", $"[{a},{b})\u0085" })
             yield return ("whitespace", literal);
     }
 
@@ -678,7 +685,7 @@ public sealed class LiteralCorpusProbeTests
         foreach (var literal in new[] { $"{{[{a},{b})}}x", $"{{[{a},{b})", $"[{a},{b})", $"{{[{a},{b}),}}", $"{{,[{a},{b})}}", $"{{[{a},{b}) [{c},{d})}}",
                                         $"{{[{a},{b})}};", $"{{{{[{a},{b})}}}}", $"{{\"[{a},{b})\"}}", $"{{[{a},{b}),,[{c},{d})}}", $"x{{[{a},{b})}}" })
             yield return ("junk", literal);
-        foreach (var literal in new[] { $" {{[{a},{b})}} ", $"{{ [{a},{b}) , [{c},{d}) }}", $"\u00A0{{[{a},{b})}}", $"{{[{a},{b})}}\u2003", $"{{\u00A0[{a},{b})}}" })
+        foreach (var literal in new[] { $" {{[{a},{b})}} ", $"{{ [{a},{b}) , [{c},{d}) }}", $"{{[\" {a}\",{b})}}", $"\u00A0{{[{a},{b})}}", $"{{[{a},{b})}}\u2003", $"{{\u00A0[{a},{b})}}" })
             yield return ("whitespace", literal);
         foreach (var literal in new[] { $"{{[\"{a}\",\"{b}\")}}", $"{{[\"\",{b})}}", $"{{[\\{a},{b})}}" })
             yield return ("quoted bound", literal);
@@ -698,7 +705,7 @@ public sealed class LiteralCorpusProbeTests
             yield return ("dimension decoration", literal);
         foreach (var literal in new[] { $"{{{a}}}x", $"{{{a}", a, $"{{{a},}}", $"{{,{a}}}", $"{{{a},,{b}}}", $"{{{a}}}}}", $"{{{{{a}}}", $"{{{a}}};", $"x{{{a}}}", $"{{{a}}}{{{b}}}" })
             yield return ("junk", literal);
-        foreach (var literal in new[] { $" {{{a}}} ", $"{{ {a} }}", $"{{ {a} , {b} }}", $"\u00A0{{{a}}}", $"{{{a}}}\u2003", $"\t{{{a}}}\n", $"{{{a}\u00A0}}" })
+        foreach (var literal in new[] { $" {{{a}}} ", $"{{ {a} }}", $"{{ {a} , {b} }}", $"{{\" {a}\"}}", $"{{\"{a} \"}}", $"{{\\ {a}}}", $"\u00A0{{{a}}}", $"{{{a}}}\u2003", $"\t{{{a}}}\n", $"{{{a}\u00A0}}" })
             yield return ("whitespace", literal);
         foreach (var literal in new[] { "", " ", "empty" })
             yield return ("blank", literal);

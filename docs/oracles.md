@@ -232,7 +232,8 @@ families `axes.md` lists; the authority is `pg_input_is_valid($1, type)` and the
 for every literal of a type in one statement; the entry points are `Parse` and `TryParse` over a string
 and a span, JSON, the `TypeConverter` and the EF Core JSON document reader, plus the EF Core write-back
 as a SQL constant and a JSON document, compared on the server as typed values. Its first run turned the
-pair's two known cells (#114, #115) into 120 rows over 23 types and found eight more defects (#126–#133): a
+pair's two known cells (#114, #115) into 120 rows over 23 types, reached #117 on the literal path
+(`[x,infinity)` loses the last day), and found eight more defects (#126–#133): a
 sub-microsecond literal is a different value on each side, integer and array forms PostgreSQL 16 reads
 are refused, `GuidSet` follows `Guid.Parse` instead of `uuid_in`, `LocalDateTime` refuses an offset,
 `DateTimeOffset` refuses offsets beyond ±14:00, `(,max]` is an undocumented boundary row, and a NUL
