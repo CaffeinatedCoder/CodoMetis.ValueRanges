@@ -8,11 +8,13 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// The single source of truth for which set types exist and which elements to probe them with.
 /// </summary>
 /// <remarks>
-/// Shared by <see cref="ValueSetContractTests"/>, which checks the AGENTS.md contract rules, and
-/// <see cref="SmallModelSetOracleTests"/>, which checks every operation against set theory. Two
+/// Shared by <c>ValueSetContractTests</c>, which checks the AGENTS.md contract rules, and
+/// <c>SmallModelSetOracleTests</c>, which checks every operation against set theory. Two
 /// probe tables would drift, and a family that lost its probes in one of them would go
 /// unexercised there while the other stayed green — the failure mode a discovery-driven suite has
-/// to defend against hardest.
+/// to defend against hardest. For the same reason the AspNetCore test project links this file,
+/// <c>RangeProbes</c>, <c>WrapperElements</c> and <c>Reflect</c> rather than copying them, so its
+/// host sweep discovers exactly the types the conventions sweeps do.
 /// </remarks>
 internal static class SetProbes
 {

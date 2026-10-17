@@ -208,5 +208,17 @@
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "differential",
     "against": "the documented wire form, for every discovered range, multirange and set type × six declarations × six JsonSerializerOptions (test/oracles/axes.md)"
+  },
+  {
+    "class": "CultureEntryPointProbeTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the invariant culture's reading and writing, for every discovered range, multirange and set type × twelve read and five write entry points with no host (Parse, TryParse, TypeConverter, configuration binding, JSON, interpolation) × four current cultures (test/oracles/axes.md)"
+  },
+  {
+    "class": "HostCultureProbeTests",
+    "project": "CodoMetis.ValueRanges.AspNetCore.Tests",
+    "kind": "differential",
+    "against": "the invariant value, for every discovered range, variant, multirange and set type × query, nullable query, route value, form field and JSON body through MVC and a minimal API × four request cultures set by RequestLocalization: 200 with the value or 400, never 200 with null (test/oracles/axes.md)"
   }
 ]

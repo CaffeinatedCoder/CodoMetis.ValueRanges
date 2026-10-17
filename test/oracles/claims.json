@@ -764,7 +764,8 @@
     "heldBy": [
       "LiteralProviderContractTests",
       "LiteralCultureContractTests",
-      "RangeParseFormatTests"
+      "RangeParseFormatTests",
+      "CultureEntryPointProbeTests"
     ]
   },
   {
@@ -781,7 +782,8 @@
     ],
     "heldBy": [
       "LiteralProviderContractTests",
-      "RangeParseFormatTests"
+      "RangeParseFormatTests",
+      "CultureEntryPointProbeTests"
     ]
   },
   {
@@ -929,7 +931,8 @@
     ],
     "heldBy": [
       "TypeConverterContractTests",
-      "ConfigurationBindingTests"
+      "ConfigurationBindingTests",
+      "CultureEntryPointProbeTests"
     ]
   },
   {
@@ -958,7 +961,8 @@
       "*Set.TryParse"
     ],
     "heldBy": [
-      "HostBindingTests"
+      "HostBindingTests",
+      "HostCultureProbeTests"
     ]
   },
   {
@@ -992,7 +996,9 @@
       "HostBindingTests",
       "RangeJsonConverterTests",
       "NodaTimeConverterRegistrationTests",
-      "JsonOptionsProbeTests"
+      "JsonOptionsProbeTests",
+      "CultureEntryPointProbeTests",
+      "HostCultureProbeTests"
     ]
   },
   {
@@ -1257,7 +1263,8 @@
       "LiteralCultureContractTests",
       "LiteralProviderContractTests",
       "YearMonthRangeTests",
-      "TemporalLiteralStrictnessContractTests"
+      "TemporalLiteralStrictnessContractTests",
+      "CultureEntryPointProbeTests"
     ]
   },
   {

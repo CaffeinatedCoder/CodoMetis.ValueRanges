@@ -13,31 +13,31 @@ found by one such pair, as a one-off that was not kept.
 | Type | 11 range unions × 5 shapes, 11 `RangeSet<…>`, 30 value set types (15 families × closed, wrapper) | every conventions sweep, through `RangeProbes` and `SetProbes` |
 | Declared type | union, sealed variant, `IRange<T>` / shape interface / `IValueSet<T>`, `object`, `List<object>`, record property, dictionary value, dictionary key | `JsonDefaultContractTests` (union, variant, interface, `object`, `RangeSet`, key); `JsonOptionsProbeTests` (all but key, × options) |
 | `JsonSerializerOptions` | default, camelCase, snake_case, `ReferenceHandler.Preserve`, source-generated context, `NumberHandling.AllowReadingFromString`; `WriteAsString`; `AllowDuplicateProperties = false`; `DictionaryKeyPolicy`; a union converter on the options; a converter on a property | `JsonOptionsProbeTests` (the first six × declared type); `SetJsonConverterTests` (`WriteAsString`, closed vs wrapper); `JsonDictionaryKeyTests` (duplicates, key policy); `JsonConverterPrecedenceTests`, `JsonDefaultContractTests` (union converter × declared type); `SetSourceGenerationTests`, `InterfaceDeclaredJsonTests` (a context missing the element or runtime type) |
-| Current culture | invariant, de-DE, sv-SE, fa-IR, th-TH | `LiteralCultureContractTests` (`ToString` × type × shape) |
+| Current culture | invariant, de-DE, sv-SE, fa-IR, th-TH | `LiteralCultureContractTests` (`ToString` × type × shape); `CultureEntryPointProbeTests` (every entry point below and JSON × type × union and variant) |
 | Explicit provider | null, invariant, th-TH, de-DE, a custom provider | `LiteralProviderContractTests` (format and parse × type × shape) |
-| Entry point | `Parse(string)`, `Parse(span)`, `TryParse`, JSON value, JSON dictionary key, `TypeConverter` | `TemporalLiteralStrictnessContractTests` (a non-ISO element × every entry point × temporal type); `SpanParsingTests` (string vs span) |
+| Entry point | `Parse(string)`, `Parse(span)`, `TryParse`, JSON value, JSON dictionary key, `TypeConverter`, configuration binding, interpolation and `string.Format` | `TemporalLiteralStrictnessContractTests` (a non-ISO element × every entry point × temporal type); `SpanParsingTests` (string vs span); `CultureEntryPointProbeTests` (all of them, null and current-culture provider, × culture × type) |
 | Literal corpus | quoted, escaped and whitespace bounds; empty quoted bound; element whitespace; inverted bounds; `infinity` spellings; `24:00:00`; more than 28 digits | `RangeLiteralGrammarContractTests`, `SetElementWhiteSpaceContractTests`, `LiteralGrammarParityTests` (the first three, against PostgreSQL); the rest are #114 and #115, found once and not swept |
 | Element value | one pair per element type (`RangeProbes.Bounds`), one probe list per element type (`SetProbes`) | every conventions sweep; extremes only in `DifferentialFuzzParityTests` (EF) and `TemporalLiteralGrammarTests` |
 
-Pairs no test varies: current culture × JSON (the culture sweep stops at `ToString`); entry point × culture ×
-type (`th-TH` through `Parse`, `TypeConverter`, configuration, MVC and a minimal API, including a
-variant-typed parameter — #116 is one cell); literal corpus × entry point against `psql -At` on the same text
-(#114 and #115 are cells); a NodaTime element converter registered by `ConfigureForNodaTime` × declared type;
-options × dictionary key beyond default and `DictionaryKeyPolicy`.
+Pairs no test varies: literal corpus × entry point against `psql -At` on the same text (#114 and #115 are
+cells); a NodaTime element converter registered by `ConfigureForNodaTime` × declared type; options ×
+dictionary key beyond default and `DictionaryKeyPolicy`. (Current culture × JSON and entry point × culture ×
+type are varied by `CultureEntryPointProbeTests` and `HostCultureProbeTests` since #124.)
 
 ## TypeConverter, configuration and web binding (J13–J15, J31)
 
 | Axis | Values | Varied by |
 |---|---|---|
-| Entry point | `TypeDescriptor` to and from text, `IConfiguration` binding, MVC `[FromQuery]` / `[FromBody]`, minimal API parameter / body, OpenAPI schema | `TypeConverterContractTests` (every type × shape); `ConfigurationBindingTests` (one property per family); `HostBindingTests` (a `DateRange` and a `StringSet` query, a booking body, both hosts); `OpenApiSchemaTests` |
-| Declared type | union, sealed variant, nullable, `RangeSet`, set | `TypeConverterContractTests` (variant refuses another shape); `ConfigurationBindingTests` (variant property); `HostBindingTests` (union only — #116) |
-| Current culture | invariant, de-DE, th-TH | `ConfigurationBindingTests` (configuration only); `TypeConverterContractTests` (de-DE handed to the converter) |
-| Input | a valid literal, `""`, `empty`, malformed, another shape | `ConfigurationBindingTests`, `HostBindingTests` (malformed → 400) |
+| Entry point | `TypeDescriptor` to and from text, `IConfiguration` binding, MVC `[FromQuery]` / `[FromRoute]` / `[FromForm]` / `[FromBody]`, minimal API query / route / form parameter and body, OpenAPI schema | `TypeConverterContractTests` (every type × shape); `ConfigurationBindingTests` (one property per family); `CultureEntryPointProbeTests` (`TypeDescriptor` and configuration × every type × culture); `HostCultureProbeTests` (every host entry point × every type × request culture); `HostBindingTests` (a `DateRange` and a `StringSet` query, a booking body, both hosts); `OpenApiSchemaTests` |
+| Declared type | union, sealed variant, nullable, `RangeSet`, set | `TypeConverterContractTests` (variant refuses another shape); `ConfigurationBindingTests` (variant property); `CultureEntryPointProbeTests` (union and variant × configuration and `TypeDescriptor`); `HostCultureProbeTests` (all five × both hosts; the variant-typed minimal-API cells are #116, registered as candidates) |
+| Current culture | invariant, de-DE, sv-SE, fa-IR, th-TH; a host's request culture from `RequestLocalization` | `ConfigurationBindingTests` (configuration only); `TypeConverterContractTests` (de-DE handed to the converter); `CultureEntryPointProbeTests` (current culture × every entry point); `HostCultureProbeTests` (request culture invariant, de-DE, fa-IR, th-TH × every host entry point) |
+| Input | a valid literal, `""`, `empty`, malformed, another shape | `ConfigurationBindingTests`, `HostBindingTests` (malformed → 400); `HostCultureProbeTests` (valid, malformed and another shape × every host entry point) |
 | Host JSON options | ASP.NET Core defaults (camelCase, case-insensitive, `AllowReadingFromString`); `ConfigureHttpJsonOptions` with a context or `AllowDuplicateProperties = false` | `HostBindingTests` (defaults only) |
 
-Pairs no test varies: host × variant-typed parameter (#116; its fix adds the cell); host × request culture
-(`RequestLocalization`); configuration × every type (one per family today); host × a source-generated
-context in `ConfigureHttpJsonOptions`; MVC × `AllowInputFormatterExceptionMessages` (the excerpt a client sees, J26).
+Pairs no test varies: host × a source-generated context in `ConfigureHttpJsonOptions`; MVC ×
+`AllowInputFormatterExceptionMessages` (the excerpt a client sees, J26). (Host × variant-typed parameter, host ×
+request culture and configuration × every type are varied by `HostCultureProbeTests` and
+`CultureEntryPointProbeTests` since #124; #116's cells are registered candidates until its fix.)
 
 ## EF Core (E01–E38)
 
