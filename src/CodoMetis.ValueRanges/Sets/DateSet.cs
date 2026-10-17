@@ -71,7 +71,7 @@ public sealed class DateSet : IValueSet<DateOnly>, IValueSetFactory<DateSet, Dat
     /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
     /// <c>infinity</c> / <c>-infinity</c> as the maximum / minimum value; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static DateOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => IsoTemporal.ParseDate(s);
+        => IsoTemporal.ParseDate(LiteralWhiteSpace.TrimAsInputFunction(s));
 
     /// <summary>Formats a <see cref="DateOnly"/> value using ISO 8601 (<c>yyyy-MM-dd</c>) by default.</summary>
     public static string FormatValue(DateOnly value, string? format, IFormatProvider? provider)
@@ -209,7 +209,7 @@ public sealed class DateSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(IsoTemporal.ParseDate(s).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        => TElement.Parse(IsoTemporal.ParseDate(LiteralWhiteSpace.TrimAsInputFunction(s)).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using ISO 8601 (<c>yyyy-MM-dd</c>) by default — see the
     /// class remarks.</summary>

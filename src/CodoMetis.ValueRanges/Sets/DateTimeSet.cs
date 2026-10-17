@@ -74,7 +74,7 @@ public sealed class DateTimeSet : IValueSet<DateTime>, IValueSetFactory<DateTime
     /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
     /// <c>infinity</c> / <c>-infinity</c> as the maximum / minimum value; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static DateTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => IsoTemporal.ParseDateTime(s);
+        => IsoTemporal.ParseDateTime(LiteralWhiteSpace.TrimAsInputFunction(s));
 
     /// <summary>Formats a <see cref="DateTime"/> value using the round-trip format specifier (<c>O</c>) by default, preserving full precision and <see cref="DateTimeKind"/>.</summary>
     public static string FormatValue(DateTime value, string? format, IFormatProvider? provider)
@@ -214,7 +214,7 @@ public sealed class DateTimeSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(IsoTemporal.ParseDateTime(s).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        => TElement.Parse(IsoTemporal.ParseDateTime(LiteralWhiteSpace.TrimAsInputFunction(s)).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
     /// — see the class remarks.</summary>

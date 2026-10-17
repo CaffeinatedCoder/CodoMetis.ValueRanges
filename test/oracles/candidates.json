@@ -33,5 +33,24 @@
     "family": "wrapper arity does not check that the element's text form round-trips",
     "issue": "#53",
     "method": "StringArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip"
+  },
+  {
+    "oracle": "SetElementWhiteSpaceContractTests",
+    "row": "GuidSet: accepts whitespace uuid_in rejects",
+    "family": "Guid.Parse trims whitespace uuid_in rejects",
+    "issue": "#78"
+  },
+  {
+    "oracle": "SetElementWhiteSpaceContractTests",
+    "row": "GuidSet<TenantId>: accepts whitespace uuid_in rejects",
+    "family": "Guid.Parse trims whitespace uuid_in rejects",
+    "issue": "#78"
+  },
+  {
+    "oracle": "LiteralGrammarParityTests",
+    "row": "uuid[] GuidSet ",
+    "family": "Guid.Parse trims whitespace uuid_in rejects",
+    "issue": "#78",
+    "method": "ElementWhitespace_ReadsAsPostgresReadsIt"
   }
 ]

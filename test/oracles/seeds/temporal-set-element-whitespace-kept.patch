@@ -1,0 +1,17 @@
+Seed: a temporal value set keeps whitespace at either end of a quoted or escaped element, so {" 2026-01-01"} throws where PostgreSQL's date_in reads {2026-01-01}
+Oracles: SetElementWhiteSpaceContractTests, LiteralGrammarParityTests
+Fails: the strips rows of every temporal set family and arity, Parse, TryParse, TypeConverter and JSON; the element-whitespace parity sweep against PostgreSQL for date[], timestamp[], timestamptz[] and time[]
+History: shipped before 9.1.0 (#70)
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/LiteralWhiteSpace.cs b/src/CodoMetis.ValueRanges/Internals/LiteralWhiteSpace.cs
+--- a/src/CodoMetis.ValueRanges/Internals/LiteralWhiteSpace.cs
++++ b/src/CodoMetis.ValueRanges/Internals/LiteralWhiteSpace.cs
+@@ -25,7 +25,7 @@
+     /// trim exactly these characters through the BCL number parsers. Until 9.1.0 the temporal
+     /// families handed it to the strict ISO grammar, so <c>{" 2026-01-01"}</c> threw.
+     /// </remarks>
+-    internal static ReadOnlySpan<char> TrimAsInputFunction(ReadOnlySpan<char> s) => Trim(s);
++    internal static ReadOnlySpan<char> TrimAsInputFunction(ReadOnlySpan<char> s) => s;
+ 
+     internal static ReadOnlySpan<char> Trim(ReadOnlySpan<char> s)
+     {

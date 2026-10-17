@@ -263,4 +263,25 @@ public class NodaTimeSetTests
         Assert.AreEqual(2, set.Count);
         Assert.AreEqual(new YearMonth(2024, 12), set.Values[0]);
     }
+
+    /// <summary>
+    /// Whitespace at either end of a quoted or escaped element is stripped for every NodaTime set,
+    /// as PostgreSQL's input function for its column strips it (#70); a no-break space is not.
+    /// </summary>
+    [TestMethod]
+    public void Parse_QuotedElementWithSurroundingWhitespace_ReadsTheTrimmedElement()
+    {
+        Assert.AreEqual(LocalDateSet.From(new LocalDate(2026, 1, 1)), LocalDateSet.Parse("{\" 2026-01-01\t\"}", CultureInfo.InvariantCulture));
+        Assert.AreEqual(
+            LocalDateTimeSet.From(new LocalDateTime(2026, 1, 1, 10, 0)),
+            LocalDateTimeSet.Parse("{\" 2026-01-01 10:00:00\"}", CultureInfo.InvariantCulture));
+        Assert.AreEqual(
+            InstantSet.From(Instant.FromUtc(2026, 1, 1, 10, 0)),
+            InstantSet.Parse("{\\\n2026-01-01T10:00:00Z}", CultureInfo.InvariantCulture));
+        Assert.AreEqual(LocalTimeSet.From(new LocalTime(9, 0)), LocalTimeSet.Parse("{\"09:00 \"}", CultureInfo.InvariantCulture));
+        Assert.AreEqual(YearMonthSet.From(new YearMonth(2026, 1)), YearMonthSet.Parse("{\" 2026-01\"}", CultureInfo.InvariantCulture));
+
+        Assert.ThrowsExactly<FormatException>(() => LocalDateSet.Parse("{\"\u00A02026-01-01\"}", CultureInfo.InvariantCulture));
+        Assert.ThrowsExactly<FormatException>(() => InstantSet.Parse("{\" \"}", CultureInfo.InvariantCulture));
+    }
 }

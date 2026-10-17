@@ -74,7 +74,7 @@ public sealed class DateTimeOffsetSet : IValueSet<DateTimeOffset>, IValueSetFact
     /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
     /// <c>infinity</c> / <c>-infinity</c> as the maximum / minimum value; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static DateTimeOffset ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => IsoTemporal.ParseDateTimeOffset(s);
+        => IsoTemporal.ParseDateTimeOffset(LiteralWhiteSpace.TrimAsInputFunction(s));
 
     /// <summary>Formats a <see cref="DateTimeOffset"/> value using the round-trip format specifier (<c>O</c>) by default, preserving full precision and UTC offset.</summary>
     public static string FormatValue(DateTimeOffset value, string? format, IFormatProvider? provider)
@@ -213,7 +213,7 @@ public sealed class DateTimeOffsetSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(IsoTemporal.ParseDateTimeOffset(s).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        => TElement.Parse(IsoTemporal.ParseDateTimeOffset(LiteralWhiteSpace.TrimAsInputFunction(s)).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
     /// — see the class remarks.</summary>
