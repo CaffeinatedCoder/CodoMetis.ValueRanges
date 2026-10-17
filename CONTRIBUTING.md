@@ -110,7 +110,7 @@ Defect-Class: ALG
 ```
 
 - `Found-By:` — `OT` oracle test, `RV` code review, `IS` issue report, `US` user, `CA` analyst,
-  `SM` the consumer smoke test. An issue an oracle found carries the `found-by: oracle` label, so
+  `SM` the consumer smoke test. An issue an oracle found carries the `found-by/oracle` label, so
   the trailer and the label count the same finds from either side.
 - `Defect-Class:` — `ALG` range or set algebra answering wrongly, `CAN` canonical form, `LIT` literal
   parsing or formatting, `JSON` System.Text.Json or TypeConverter, `SQL` translation or type mapping,

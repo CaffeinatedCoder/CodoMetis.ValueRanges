@@ -159,8 +159,8 @@ dotnet run tools/oracles.cs seeds <defect>
 
 **Register a candidate.** When a sweep disagrees and the cause is not a harness mistake, add the row
 under a family label with an empty issue; it keeps failing with the label. Write up the repro, file
-the issue (labelled `bug`, `found-by: oracle` and an `area:` label, under the release epic it ships
-in), put the number in. Remove the entry in the PR that fixes it, and give that commit the
+the issue (labelled `bug` and `found-by/oracle`, plus `package/*`, `area/*` and `severity/*`, under
+the release epic it ships in), put the number in. Remove the entry in the PR that fixes it, and give that commit the
 `Found-By: OT` trailer ([CONTRIBUTING](../CONTRIBUTING.md#commit-trailers)).
 
 **Triage a disagreement, in this order.**
