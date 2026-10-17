@@ -114,5 +114,12 @@ dotnet test test/CodoMetis.ValueRanges.AspNetCore.Tests
   the new one has it too, perhaps moved into "Good to know". When unsure what a sentence means, read
   the code or the test it describes before rewriting it. A sentence about PostgreSQL behaviour is
   backed by the integration tests; keep its meaning even when its wording changes.
+- **Promises are quoted by the claim catalogue.** `test/oracles/claims.json` quotes, word for word,
+  the sentence that makes each promise, under its heading (`source`). `OracleCatalogueTests` fails
+  when a page no longer contains a quote or the heading is gone. When you reword or move one, point
+  the claim's `quote` and `source` at the sentence that now makes the same promise. If no sentence
+  makes it any more, the rewrite dropped a promise: put it back in the page, and never delete or
+  weaken the claim. `dotnet run tools/oracles.cs status` lists headings that no claim quotes, which
+  helps you spot a section that moved.
 - **The Documentation table** in the root README links every consumer page. Keep its rows in step
   with the pages' new opening sentences.
