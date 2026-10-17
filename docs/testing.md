@@ -75,6 +75,8 @@ EF Core translation tests live in `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.
 
 `ShapeMatrixParityTests.cs` generalizes that authority: it asks PostgreSQL for all eight binary predicates over every ordered pair of range shapes — and, in a second sweep, the four value-producing operations (`Intersect`, `Merge`, `Union`, `Except`) against `*`, `range_merge`, `+` and `-` — `int4range`, `numrange` and `daterange`, some 2,400 comparisons — and requires the in-memory answer to match. The per-predicate tests elsewhere pick the shapes a human thought to try, which is how `IsAdjacentTo` (6.2.1), `IsStrictlyLeftOf` and `Except` (both 7.0.0) all shipped answering wrongly for a whole family of receivers: each was a switch on the receiver's shape whose inner switch handled the operand's, so the two directions drifted apart without any one test noticing. The matrix has no such blind spot. Since 7.0.0 the model agrees with the server on every pair, the empty-subset rule included, so the matrix carries no exclusions.
 
+`DifferentialFuzzParityTests.cs` (with `Fuzzing/`) does what the matrix cannot: it picks the rows. A seeded generator draws 200 rows per type (`VALUERANGES_FUZZ_ROWS` raises it, `VALUERANGES_FUZZ_SEED` moves it) for every range, multirange and value set type it discovers by reflection, BCL and NodaTime. The bounds are drawn next to the element type's extremes and next to each other, and every operation EF Core translates is answered three ways: in memory, by EF Core against its own fuzz database, and by PostgreSQL's operator on the literals EF writes. See [The Differential Fuzzing Sweep](#the-differential-fuzzing-sweep).
+
 `MultirangeCoverageTests.cs` (Id block 91xx) closes the two coverage holes the 7.0.0 audit found. Five of the eleven `RangeSet<,>` instantiations — over `Int64Range`, `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange` and `LocalDateTimeRange` — had never been mapped to a column, so their store type, literal form and normalization on read were untested; they now round-trip with the stored column text pinned beside CLR equality, because a bridge that coarsens consistently on both legs round-trips perfectly and stores the wrong thing. The file also executes the two operand positions that carry no type of their own: a **constant element** against a polymorphic range operator (`anyrange @> anyelement` resolves without implicit coercion, which is why a bare `25` failed against `int8range`), and the **server-side range constructors**, whose bounds string `'[]'` and bare `NULL` bound are resolved by PostgreSQL's function-overload resolution — every previous use of `CreateFinite` in this suite had constant arguments and was folded client-side, so the generated SQL was a claim about the server that nothing ran.
 
 Three further parity sweeps close the gaps the 8.0.0 audit left, each the structural analogue of a check that had already earned its keep elsewhere:
@@ -165,6 +167,47 @@ invoke them.
 The model has one axiom — that `Contains(T)` is correct — since results are read back through it.
 That is pinned by its own test per domain rather than assumed, and `Contains(T)` is itself verified
 against PostgreSQL's element `@>` in the integration suite.
+
+### The Differential Fuzzing Sweep
+
+`DifferentialFuzzParityTests` (integration, needs Docker) is the third way to check range algebra,
+next to the shape matrix and the small model. Those two choose their operands: about ten hand-picked
+representatives per domain, or every range over a tiny universe. Each past value-level defect between
+memory and the database hid until someone chose the row that showed it. This sweep draws the rows.
+
+- **What it draws.** A seeded `System.Random` per type, so CI draws the same rows on every run and the
+  first rows of a seed never change when the budget grows. Bounds are drawn near an extreme, near a
+  shared edge, near the centre or near another bound of the same row, then stepped a few units, so
+  equal, adjacent, touching and off-by-one bounds come up constantly. It draws all five shapes,
+  empties, `RangeSet`s of 0 to 5 members, and value sets from a small pool per row, so duplicates and
+  shared elements are the norm. Strings come from a list built to disagree under some rule: case and
+  culture folds, composed and decomposed forms, whitespace, and everything an array literal quotes or
+  escapes. The types are discovered like `MappingParityTests` discovers them. An element type with no
+  domain in `FuzzDomains` fails loudly.
+- **Three legs.** Each operation is one expression. Compiled, it is the memory leg. Spliced into a
+  query, it is the EF leg: once with the right operand as a column (written through Npgsql's binary
+  parameters), and once per probe as an inlined constant and as a parameter, against every row. The
+  literal leg sends PostgreSQL's own operator over the literals the mapping writes (`@>`, `-|-`,
+  `range_merge`, `array_cat`, …). A boolean is compared on the server. A range, multirange or set
+  result is read back through the mapping's converter, as EF Core reads a column. A bound is compared
+  as `lower([v,))` / `upper((,v])`, so the discrete step lands on both sides.
+- **What it leaves out on purpose.** Temporal values below the store's microsecond, which
+  `TemporalStoreParityTests` owns. Literals PostgreSQL refuses with a data exception (`22003`,
+  `22008`, `22009`), such as `[x, int.MaxValue]` or a year PostgreSQL cannot hold. That is the
+  documented domain boundary, so those rows are counted and set aside. Reading a result back also
+  absorbs the `(,-2147483648)` row of `DomainBoundaryDivergenceTests`: what the server holds beyond
+  the model's domain reads back as the value the model sees.
+- **A failure line** is `Type Operation [at the domain edge] LeftShape×RightShape [leg]: operands →
+  memory=…, EF=…, PostgreSQL=… (seed=…, row=…)`. The part before the leg is what a candidate row
+  matches. "At the domain edge" marks a row whose operand touches an exact extreme, so a candidate
+  for an edge defect cannot also swallow the same operation in the middle of the domain. Under
+  another seed the verdict does not require every candidate to fail. Those rows came from the default
+  seed, so missing one elsewhere does not mean it was fixed.
+
+It runs in about 12 seconds at the default budget and about 40 at 2,000 rows. Its first run found
+three families, none of which a hand-picked sweep had shown: `IsUnboundedStart`/`IsUnboundedEnd` on
+`(,)` (#109), `RangeSet.Overlaps` on every continuous type (#106), and adjacency at the date extremes
+(#110). Its seeds plant a tied-end `Intersect` and a value set `IsSubsetOf` that ignores the tail.
 
 ### The Multirange Oracle
 

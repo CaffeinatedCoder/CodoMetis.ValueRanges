@@ -54,7 +54,13 @@ public static class Candidates
     /// <param name="header">The first line of the failure message, naming the sweep.</param>
     /// <param name="shown">How many lines of the failure message to show.</param>
     /// <param name="method">The calling test method; a candidate scoped to another method is not this sweep's.</param>
-    public static void Verdict(string oracle, IReadOnlyList<string> failures, string header, int shown = 25, string? method = null)
+    /// <param name="requireEveryCandidate">
+    /// Whether a candidate no line matched fails as fixed. A sweep whose rows depend on a seed passes
+    /// <see langword="false"/> when run with another seed than the one its candidates were drawn from:
+    /// there, not meeting a candidate is not evidence that it was fixed.
+    /// </param>
+    public static void Verdict(string oracle, IReadOnlyList<string> failures, string header, int shown = 25, string? method = null,
+                               bool requireEveryCandidate = true)
     {
         var known   = For(oracle).Where(c => c.Method is null || method is null || string.Equals(c.Method, method, StringComparison.Ordinal)).ToList();
         var failing = new List<string>();
@@ -76,7 +82,7 @@ public static class Candidates
                 Console.WriteLine($"SKIPPED [known candidate: {candidate.Family}, {candidate.Issue}] {line.TrimStart()}");
         }
 
-        foreach (var fixedCandidate in known.Where(c => !matched.Contains(c)))
+        foreach (var fixedCandidate in known.Where(c => requireEveryCandidate && !matched.Contains(c)))
             failing.Add($"candidate fixed: remove the entry for '{fixedCandidate.Row}' ({fixedCandidate.Family}) from test/oracles/candidates.json");
 
         if (failing.Count == 0) return;

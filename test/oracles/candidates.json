@@ -52,5 +52,47 @@
     "family": "Guid.Parse trims whitespace uuid_in rejects",
     "issue": "#78",
     "method": "ElementWhitespace_ReadsAsPostgresReadsIt"
+  },
+  {
+    "oracle": "DifferentialFuzzParityTests",
+    "row": " IsUnboundedStart Infinite×",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Ranges_AgreeWithPostgres"
+  },
+  {
+    "oracle": "DifferentialFuzzParityTests",
+    "row": " IsUnboundedEnd Infinite×",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Ranges_AgreeWithPostgres"
+  },
+  {
+    "oracle": "DifferentialFuzzParityTests",
+    "row": "> Overlaps(range) ",
+    "family": "RangeSet.Overlaps skips the element before the candidate",
+    "issue": "#106",
+    "method": "Ranges_AgreeWithPostgres"
+  },
+  {
+    "oracle": "DifferentialFuzzParityTests",
+    "row": "> Overlaps(set) ",
+    "family": "RangeSet.Overlaps skips the element before the candidate",
+    "issue": "#106",
+    "method": "Ranges_AgreeWithPostgres"
+  },
+  {
+    "oracle": "DifferentialFuzzParityTests",
+    "row": "DateRange IsAdjacentTo at the domain edge ",
+    "family": "date extremes are ±infinity on the server, which no finite date is adjacent to",
+    "issue": "#110",
+    "method": "Ranges_AgreeWithPostgres"
+  },
+  {
+    "oracle": "DifferentialFuzzParityTests",
+    "row": "DateRange> IsAdjacentTo(set) at the domain edge ",
+    "family": "date extremes are ±infinity on the server, which no finite date is adjacent to",
+    "issue": "#110",
+    "method": "Ranges_AgreeWithPostgres"
   }
 ]

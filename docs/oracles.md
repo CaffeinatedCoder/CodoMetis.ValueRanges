@@ -179,6 +179,24 @@ the release epic it ships in), put the number in. Remove the entry in the PR tha
 nothing holds it. Ids are a letter (R ranges, M multirange, S sets, J literals/JSON/TypeConverter, E
 EF Core, A hosting/AOT), two digits and a slug, sorted.
 
+## Generated operands
+
+Most sweeps enumerate their cases: shapes, small universes, five cultures. `DifferentialFuzzParityTests`
+draws them, with a seeded generator, so its rows are reproducible but nobody chose them
+([testing.md](testing.md#the-differential-fuzzing-sweep)). Two rules follow from that:
+
+- **A candidate row is the stable prefix of a drawn line**: type, operation, optional `at the domain
+  edge`, and the shape pair, e.g. `"> Overlaps(set) "` or `"DateRange IsAdjacentTo at the domain edge "`.
+  Never include the operands, because the next budget or seed draws other ones.
+- **Candidates belong to the default seed.** With `VALUERANGES_FUZZ_SEED` set, the sweep passes
+  `requireEveryCandidate: false` to `Candidates.Verdict`. Unknown lines still fail, but an unmet
+  candidate is not reported as fixed. Raising `VALUERANGES_FUZZ_ROWS` keeps the default rows as a
+  prefix, so it changes nothing here.
+
+To replay a line, run with its seed and enough rows to reach its row number. To shrink one, keep
+the operation and change one operand at a time toward a literal you can paste into `psql`. The
+issue gets that shrunk row.
+
 ## What it does not see
 
 A promise no document makes. A behaviour whose correct answer has no independent reference (API
