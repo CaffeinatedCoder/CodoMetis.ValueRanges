@@ -1,0 +1,18 @@
+Seed: a value set literal written without a format string takes the caller's provider, so de-DE writes {1,5} for DecimalSet {1.5}
+Oracles: LiteralProviderContractTests
+Fails: every set type whose element text depends on the provider, under every non-invariant provider
+History: the 9.0.0 rule; found unguarded by the unit project in the 10.0.0 mutation run
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+index 2bcea7f..f2c6c08 100644
+--- a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+@@ -21,7 +21,7 @@ internal static class SetFormat
+         // applies only alongside an explicit format, which asks for display text. An empty format
+         // is no format — .NET reads "" as the general format, exactly like null.
+         if (string.IsNullOrEmpty(format)) format = null;
+-        provider = format is null ? CultureInfo.InvariantCulture : provider ?? CultureInfo.InvariantCulture;
++        provider = provider ?? CultureInfo.InvariantCulture;
+ 
+         var sb = new StringBuilder(elements.Length * 8).Append('{');
+         for (var i = 0; i < elements.Length; i++)

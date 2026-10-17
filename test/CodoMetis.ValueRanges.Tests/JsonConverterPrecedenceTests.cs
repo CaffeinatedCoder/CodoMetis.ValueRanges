@@ -154,6 +154,20 @@ public class JsonConverterPrecedenceTests
     }
 
     /// <summary>
+    /// A converter for some other type ahead of the union's is passed over, as System.Text.Json passes
+    /// over it for the union: the variant looks for the first converter that can handle the union,
+    /// not simply the first one registered.
+    /// </summary>
+    [TestMethod]
+    public void UnionConverterOnTheOptions_BehindAnUnrelatedConverter_StillReachesTheVariant()
+    {
+        var options = new JsonSerializerOptions { Converters = { new MarkerConverter(), new TaggedInt32RangeConverter() } };
+
+        Assert.AreEqual("\"tag:[1,2]\"", JsonSerializer.Serialize((Int32Range.Finite)OneTwo, options));
+        Assert.AreEqual("\"tag:[1,2]\"", JsonSerializer.Serialize<object>(OneTwo, options));
+    }
+
+    /// <summary>
     /// The variant follows the union's resolution exactly, so first match still decides: with the
     /// package's factory ahead of the custom converter, the union gets the literal — and so does
     /// the variant.

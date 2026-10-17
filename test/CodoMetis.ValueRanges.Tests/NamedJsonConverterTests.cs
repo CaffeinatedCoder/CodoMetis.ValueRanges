@@ -158,4 +158,18 @@ public class NamedJsonConverterTests
         _ when element == typeof(DateTimeOffset) => new DateTimeOffset(2024, seed, 1, 8, 0, 0, TimeSpan.Zero),
         _ => throw new NotSupportedException($"No sample for {element}.")
     };
+
+    /// <summary>
+    /// <c>AddRangeConverters</c> puts the factory on the options it was given and returns them, so a
+    /// converter registered after it is consulted after it, as System.Text.Json's first-match rule says.
+    /// </summary>
+    [TestMethod]
+    public void AddRangeConverters_RegistersTheFactoryOnTheGivenOptions()
+    {
+        var options = new System.Text.Json.JsonSerializerOptions();
+
+        Assert.AreSame(options, options.AddRangeConverters());
+        Assert.AreEqual(1, options.Converters.Count);
+        Assert.IsInstanceOfType<CodoMetis.ValueRanges.Serialization.RangeJsonConverterFactory>(options.Converters[0]);
+    }
 }

@@ -149,6 +149,10 @@ public class TemporalLiteralGrammarTests
     [DataRow("2027-02-01T09:30:00+5:30")]
     [DataRow("2027-02-01T09:30:00+15:00")]          // no such offset
     [DataRow("2027-02-01T09:30:00z")]
+    [DataRow("2027-02-01T09:30:00+05:99")]          // each offset field is range-checked,
+    [DataRow("2027-02-01T09:30:00+05:30:99")]       // the minutes and the seconds too,
+    [DataRow("2027-02-01T09:30:00+05x30")]          // and each separator is a colon
+    [DataRow("2027-02-01T09:30:00+05:30x00")]
     public void DateTime_Rejects(string text)
         => Assert.ThrowsExactly<FormatException>(() => DateTimeRange.ParseValue(text, null));
 
@@ -205,8 +209,27 @@ public class TemporalLiteralGrammarTests
     [DataRow("2026-01-01")]
     [DataRow("2026-01-01T09:30:00+15:00:00")]       // no such offset
     [DataRow("2026-01-01T09:30:00+05:30:60")]
+    [DataRow("2026-01-01T09:30:00x05:30:00")]       // a seconds offset needs its sign
+    [DataRow("2026-01-01T09:30:00+05x30:00")]       // and both colons
+    [DataRow("0001-01-01T00:00:00+00:00:01")]       // the instant falls before DateTime.MinValue
+    [DataRow("9999-12-31T23:59:59-00:00:01")]       // or after DateTime.MaxValue
     public void DateTimeOffset_Rejects(string text)
         => Assert.ThrowsExactly<FormatException>(() => DateTimeOffsetRange.ParseValue(text, null));
+
+    /// <summary>
+    /// The largest offset fields a seconds offset may carry, and the instants at the very edge of
+    /// the domain: each is the last value its range check lets through.
+    /// </summary>
+    [TestMethod]
+    [DataRow("2026-01-01T09:30:00+14:00:00", "2025-12-31T19:30:00")]
+    [DataRow("2026-01-01T09:30:00+05:59:00", "2026-01-01T03:31:00")]
+    [DataRow("2026-01-01T09:30:00+05:30:59", "2026-01-01T03:59:01")]
+    [DataRow("0001-01-01T00:00:00+00:00:00", "0001-01-01T00:00:00")]
+    [DataRow("9999-12-31T23:59:59.9999999-00:00:00", "9999-12-31T23:59:59.9999999")]
+    public void DateTimeOffset_Accepts_SecondsOffset_AtItsLimits(string text, string utc)
+        => Assert.AreEqual(
+            new DateTimeOffset(DateTime.ParseExact(utc, "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture), TimeSpan.Zero),
+            DateTimeOffsetRange.ParseValue(text, null));
 
     // ── TimeOnly ────────────────────────────────────────────────────────────────────────────
 

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -450,5 +451,46 @@ public class SetJsonConverterTests
         Assert.IsNull(readAbsent.Blocks);
         Assert.AreEqual(StringSet.Empty, readEmpty.Tags);
         Assert.AreEqual(RangeSet<Int32Range, int>.Empty, readEmpty.Blocks);
+    }
+
+    /// <summary>
+    /// A reader over a multi-segment buffer (a stream or a pipe) hands a number that straddles two
+    /// segments over as a value sequence with an empty value span. A decimal-backed wrapper reads the
+    /// raw token text to keep its scale, so it has to read the sequence.
+    /// </summary>
+    [TestMethod]
+    public void DecimalWrapperSet_NumberSplitAcrossBufferSegments_KeepsItsValueAndScale()
+    {
+        var bytes  = System.Text.Encoding.UTF8.GetBytes("[1.50,2.250]");
+        var reader = new Utf8JsonReader(OneByteSegments(bytes));
+
+        var set = JsonSerializer.Deserialize<DecimalSet<TestMoney>>(ref reader);
+
+        Assert.AreEqual("{1.50,2.250}", set!.ToString());
+    }
+
+    private static ReadOnlySequence<byte> OneByteSegments(byte[] bytes)
+    {
+        var first = new Segment(bytes.AsMemory(0, 1), 0);
+        var last  = first;
+        for (int i = 1; i < bytes.Length; i++)
+            last = last.Append(bytes.AsMemory(i, 1));
+        return new ReadOnlySequence<byte>(first, 0, last, 1);
+    }
+
+    private sealed class Segment : ReadOnlySequenceSegment<byte>
+    {
+        public Segment(ReadOnlyMemory<byte> memory, long runningIndex)
+        {
+            Memory       = memory;
+            RunningIndex = runningIndex;
+        }
+
+        public Segment Append(ReadOnlyMemory<byte> memory)
+        {
+            var next = new Segment(memory, RunningIndex + Memory.Length);
+            Next = next;
+            return next;
+        }
     }
 }

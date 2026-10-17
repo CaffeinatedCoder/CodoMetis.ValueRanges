@@ -1,0 +1,35 @@
+{
+  "stryker-config": {
+    "project": "CodoMetis.ValueRanges.csproj",
+    "test-projects": [
+      "CodoMetis.ValueRanges.Tests.csproj"
+    ],
+    "test-runner": "vstest",
+    "mutation-level": "Standard",
+    "coverage-analysis": "perTest",
+    "concurrency": 16,
+    "ignore-mutations": [
+      "string"
+    ],
+    "ignore-methods": [
+      "*Exception.ctor"
+    ],
+    "mutate": [
+      "**/Internals/**/*.cs",
+      "**/RangeSet.cs",
+      "**/Sets/**/*.cs",
+      "!**/Internals/LiteralExcerpt.cs",
+      "!**/Internals/ShapePair.cs"
+    ],
+    "reporters": [
+      "Progress",
+      "Html",
+      "Json"
+    ],
+    "thresholds": {
+      "high": 80,
+      "low": 60,
+      "break": 0
+    }
+  }
+}

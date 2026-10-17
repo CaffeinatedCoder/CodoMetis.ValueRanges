@@ -1,0 +1,18 @@
+Seed: RangeSet.IsAdjacentTo(range) tests the operand's end against the set's start even when the set is unbounded below, reading the placeholder value an infinite bound carries
+Oracles: SmallModelMultirangeOracleTests
+Fails: a set unbounded below against single ranges it overlaps or that lie beyond it, e.g. {0} IsAdjacentTo range {2} → True
+History: found by the 10.0.0 mutation run; the sweep had no IsAdjacentTo line until then
+
+diff --git a/src/CodoMetis.ValueRanges/RangeSet.cs b/src/CodoMetis.ValueRanges/RangeSet.cs
+index ee6f28c..40e136f 100644
+--- a/src/CodoMetis.ValueRanges/RangeSet.cs
++++ b/src/CodoMetis.ValueRanges/RangeSet.cs
+@@ -527,7 +527,7 @@ public sealed class RangeSet<TRange, T>
+         var (firstLower, firstLowerInc, firstLowerInf) = RangeSetHelpers.RangeLowerBound<T>(_elements[0]);
+         var (lastUpper, lastUpperInc, lastUpperInf)    = RangeSetHelpers.RangeUpperBound<T>(_elements[^1]);
+ 
+-        return (!otherUpperInf && !firstLowerInf
++        return (!otherUpperInf || !firstLowerInf
+                 && RangeBoundHelpers.BoundaryMeetsAdjacently<TRange, T>(
+                     otherUpper, otherUpperInc, firstLower, firstLowerInc))
+             || (!lastUpperInf && !otherLowerInf
