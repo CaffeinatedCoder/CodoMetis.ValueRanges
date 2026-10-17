@@ -5,7 +5,9 @@ covers all four packages, which share one version number and release together.
 
 ## [9.1.0] — 2026-10-17
 
-No change in this package.
+### Fixed
+
+- `ExecuteUpdate` setting a value set inside a `ToJson()` column to `null` is still refused, now for its own reason: a `NULL` there would turn the whole document into `NULL`. The message blamed the JSON array a value would write. Set it with `SaveChanges`, or replace the whole JSON property ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).
 
 ## [9.0.0] — 2026-10-11
 

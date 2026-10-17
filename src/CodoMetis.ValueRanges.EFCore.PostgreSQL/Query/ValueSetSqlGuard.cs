@@ -52,9 +52,11 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// translates an <c>ExecuteUpdate</c> setter targeting a scalar inside a JSON document to
 /// <c>jsonb_set(doc, path, to_jsonb(value))</c>. For a value set, <c>value</c> is the PostgreSQL
 /// array, so the document receives a JSON array where it holds the set's literal string: the
-/// update reports success and the row no longer loads. Detecting it here, by what will be
-/// written rather than by how the setter lambda named the property, covers every route to the
-/// property — a join, <c>EF.Property</c>, a nested complex type.
+/// update reports success and the row no longer loads. A <c>null</c> value set is refused too, with
+/// its own message: it arrives as <c>to_jsonb(NULL)</c>, which PostgreSQL cannot type, and a NULL
+/// that it could type would make <c>jsonb_set</c> return NULL for the whole document. Detecting it
+/// here, by what will be written rather than by how the setter lambda named the property, covers
+/// every route to the property — a join, <c>EF.Property</c>, a nested complex type.
 /// </para>
 /// <para>
 /// <b>The guard fails closed.</b> It runs from a decorated service, and a later
@@ -339,8 +341,14 @@ internal static class ValueSetSqlGuard
                     JsonSetter(column, written, segments is IEnumerable<PathSegment> named ? string.Join('.', named) : path);
                     break;
 
+                // A null value set — a constant or a null parameter, which the provider's processing has
+                // inlined as NULL by now — gets its own message: it is refused, but not for the JSON array.
                 case SqlFunctionExpression { Name: "to_jsonb" or "to_json", Arguments: [var serialized] } when IsSet(Unwrap(serialized)):
-                    throw Refusal.JsonSetter(column.Name, path);
+                    throw Unwrap(serialized) switch
+                    {
+                        SqlConstantExpression { Value: null } => Refusal.NullJsonSetter(column.Name, path),
+                        var written                            => Refusal.JsonSetter(column.Name, path, MayBeNull(written))
+                    };
 
                 default:
                     foreach (var child in ChildCollector.Of(value))
@@ -351,6 +359,20 @@ internal static class ValueSetSqlGuard
 
         private static SqlExpression Unwrap(SqlExpression expression)
             => expression is SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert ? Unwrap(convert.Operand) : expression;
+
+        /// <summary>
+        /// Whether a written value set may be NULL on some row: a conditional with a NULL branch, or a
+        /// nullable column. Only the message depends on it — the setter is refused either way.
+        /// </summary>
+        private static bool MayBeNull(SqlExpression expression) => Unwrap(expression) switch
+        {
+            SqlConstantExpression { Value: null } => true,
+            CaseExpression conditional            => conditional.ElseResult is null
+                                                  || MayBeNull(conditional.ElseResult)
+                                                  || conditional.WhenClauses.Any(c => MayBeNull(c.Result)),
+            ColumnExpression column               => column.IsNullable,
+            _                                     => false
+        };
     }
 
     /// <summary>Gives every checked <see cref="UnguardedUnion"/> the name PostgreSQL knows.</summary>
@@ -424,11 +446,25 @@ internal static class ValueSetSqlGuard
           + "duplicates in operand order, and from then on server-side equality and Count on that row are wrong. "
           + "Compute the union in memory and set the value, or load the entities and save them with SaveChanges.");
 
-        public static InvalidOperationException JsonSetter(string column, string? path) => new(
+        public static InvalidOperationException JsonSetter(string column, string? path, bool mayBeNull) => new(
             $"'ExecuteUpdate' cannot set the value set '{column}{(path is null ? "" : "." + path)}' inside a JSON column. "
           + "EF Core writes it with PostgreSQL's to_jsonb, which stores a JSON array where the document holds the "
           + "set's literal string, so the row would no longer load and queries on the property would fail. "
+          + (mayBeNull
+                ? "Where the value is NULL it is worse: jsonb_set returns NULL for a NULL value, so the UPDATE writes NULL "
+                + "as the whole document, which fails on a required JSON column (23502) and erases the document on an "
+                + "optional one. "
+                : "")
           + $"Load the entity and save it with SaveChanges, or set the whole JSON property (SetProperty(e => e.{column}, …)) "
           + "or a whole complex property that contains the set.");
+
+        public static InvalidOperationException NullJsonSetter(string column, string? path) => new(
+            $"'ExecuteUpdate' cannot set the value set '{column}{(path is null ? "" : "." + path)}' inside a JSON column "
+          + "to null. EF Core writes it as jsonb_set(document, path, to_jsonb(NULL)): PostgreSQL cannot type the "
+          + "untyped NULL (42804), and where it can, jsonb_set returns NULL for a NULL value, so the UPDATE writes NULL "
+          + "as the whole document instead of setting the property to JSON null. "
+          + "Load the entity, set the property to null and save it with SaveChanges, which writes JSON null, or set "
+          + $"the whole JSON property (SetProperty(e => e.{column}, …)) or a whole complex property that contains the "
+          + "set to a value holding null.");
     }
 }
