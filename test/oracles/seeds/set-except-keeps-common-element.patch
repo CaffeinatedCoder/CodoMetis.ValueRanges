@@ -1,0 +1,17 @@
+Seed: ValueSetCore.Except keeps an element present on both sides instead of dropping it, so A minus B equals A whenever B is a subset of A
+Oracles: SmallModelSetOracleTests
+Fails: every ordered pair of subsets with a common element, in every set family
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+index 0c32ce2..2b85a39 100644
+--- a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
++++ b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+@@ -187,7 +187,7 @@ internal static class ValueSetCore
+             else if (comparison > 0) j++;
+             else
+             {
+-                i++;
++                builder.Add(left[i++]);
+                 j++;
+             }
+         }

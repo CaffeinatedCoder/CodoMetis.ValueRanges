@@ -1,0 +1,17 @@
+Seed: (int.MaxValue, +inf) is built as [int.MaxValue, +inf) instead of the empty range: a range that contains nothing reports a value it does not hold
+Oracles: DiscreteDomainBoundaryTests
+Fails: the discrete-domain-edge sweep for Int32Range
+
+diff --git a/src/CodoMetis.ValueRanges/Int32Range.cs b/src/CodoMetis.ValueRanges/Int32Range.cs
+index 83a995f..4bf92a0 100644
+--- a/src/CodoMetis.ValueRanges/Int32Range.cs
++++ b/src/CodoMetis.ValueRanges/Int32Range.cs
+@@ -133,7 +133,7 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
+             ? new UnboundedEnd(start)
+             : NextValueAfter(start) is { } s
+                 ? new UnboundedEnd(s) // (start, +∞) ≡ [start + 1, +∞)
+-                : Empty;              // (int.MaxValue, +∞) contains nothing
++                : new UnboundedEnd(start);
+ 
+     /// <summary>
+     /// Creates an <see cref="Int32Range"/> that spans the entire domain: <c>(-∞, +∞)</c>.

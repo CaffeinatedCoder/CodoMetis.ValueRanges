@@ -1,0 +1,17 @@
+Seed: IsStrictlyLeftOf decides by the receiver's shape: an UnboundedStart receiver (-inf, e] has no arm and answers false, where PostgreSQL's << answers true
+Oracles: SmallModelOracleTests, DomainParityOracleTests, ShapeMatrixParityTests
+Fails: every pair with an UnboundedStart receiver strictly left of its operand, on every range type; the shape matrix row for << against PostgreSQL
+History: shipped in 6.x, fixed in 7.0.0 (receiver-shaped dispatch)
+
+diff --git a/src/CodoMetis.ValueRanges/RangeExtensions.cs b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+index 6bba451..b585708 100644
+--- a/src/CodoMetis.ValueRanges/RangeExtensions.cs
++++ b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+@@ -298,7 +298,6 @@ public static class RangeExtensions
+             (T Value, bool Inclusive)? upper = range switch
+             {
+                 IFiniteRange<T> f         => (f.End, f.EndInclusive),
+-                IUnboundedStartRange<T> s => (s.End, s.EndInclusive),
+                 _                         => null // +∞ (or empty): never left of anything
+             };
+ 

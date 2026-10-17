@@ -386,4 +386,31 @@ public class RangeParseFormatTests
         Assert.AreEqual("[2026-01-01,2026-06-30]", ((IFormattable)range).ToString(null, thai));
         Assert.AreEqual("[2569-01-01,2569-06-30]", ((IFormattable)range).ToString("yyyy-MM-dd", thai));
     }
+
+    // -----------------------------------------------------------------------
+    // The examples in docs/serialization.md#formatting, held exactly
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Every example in the guide's Formatting section prints the literal its comment shows.
+    /// </summary>
+    /// <remarks>
+    /// Found by the oracle catalogue (claim J02): the guide showed
+    /// <c>CreateUnboundedStart(5).ToString()</c> as <c>"(,5]"</c>, but <c>endInclusive</c> defaults
+    /// to <see langword="false"/>, so the range is <c>(,5)</c> and canonicalizes to <c>(,4]</c>; and
+    /// it showed <c>CreateFinite(1, 10, endInclusive: false)</c> as <c>"[1,10)"</c>, which an
+    /// <c>Int32Range</c> canonicalizes to <c>"[1,9]"</c> on construction. A reader copying either
+    /// example would have taken a value to be in the range that is not. The guide now shows the
+    /// canonical literals, and this test is what keeps every line of that block true.
+    /// </remarks>
+    [TestMethod]
+    public void FormattingExamples_InTheSerializationGuide_PrintExactlyTheirComments()
+    {
+        Assert.AreEqual("[1,10]", Int32Range.CreateFinite(1, 10).ToString());
+        Assert.AreEqual("[1,9]",  Int32Range.CreateFinite(1, 10, endInclusive: false).ToString());
+        Assert.AreEqual("(,4]",   Int32Range.CreateUnboundedStart(5).ToString());
+        Assert.AreEqual("[5,)",   Int32Range.CreateUnboundedEnd(5).ToString());
+        Assert.AreEqual("(,)",    Int32Range.Infinite.ToString());
+        Assert.AreEqual("empty",  Int32Range.Empty.ToString());
+    }
 }

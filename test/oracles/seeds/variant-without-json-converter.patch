@@ -1,0 +1,17 @@
+Seed: TimeRange.Finite carries no [JsonConverter]: System.Text.Json does not inherit the union's attribute, so a Finite reached through object or as its own type serializes as a property dump
+Oracles: JsonDefaultContractTests
+Fails: the unregistered-serialization sweep for TimeRange's Finite shape
+History: the 9.0.0 wire-default defect, on one variant
+
+diff --git a/src/CodoMetis.ValueRanges/TimeRange.cs b/src/CodoMetis.ValueRanges/TimeRange.cs
+index 7370988..7735678 100644
+--- a/src/CodoMetis.ValueRanges/TimeRange.cs
++++ b/src/CodoMetis.ValueRanges/TimeRange.cs
+@@ -48,7 +48,6 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
+     /// <summary>
+     /// Represents a <see cref="TimeRange"/> bounded on both sides.
+     /// </summary>
+-    [JsonConverter(typeof(RangeVariantJsonConverter<Finite, TimeRange, TimeOnly>))]
+     [TypeConverter(typeof(RangeVariantTypeConverter<Finite, TimeRange, TimeOnly>))]
+     public sealed record Finite : TimeRange, IFiniteRange<TimeOnly>
+     {

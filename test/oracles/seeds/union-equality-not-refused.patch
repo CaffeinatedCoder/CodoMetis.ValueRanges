@@ -1,0 +1,20 @@
+Seed: the SQL guard lets a value derived from array_cat reach array equality, so {a,c} UNION {a,b} compares unequal to {a,b} UNION {b,c} on the server and equal in memory
+Oracles: UnionCanonicalityTests
+Fails: every equality composition on a translated Union is executed instead of refused and answers wrongly
+History: the 8.0.0 LINQ-level guard's blind spot
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+index f024bc8..3e8a7ed 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+@@ -281,8 +281,8 @@ internal static class ValueSetSqlGuard
+                     return false;
+ 
+                 case SqlBinaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } equality:
+-                    Consume(equality.Left, Use.Equality);
+-                    Consume(equality.Right, Use.Equality);
++                    Derived(equality.Left);
++                    Derived(equality.Right);
+                     return false;
+ 
+                 case SqlFunctionExpression { Name: "cardinality", Arguments: [var counted] }:

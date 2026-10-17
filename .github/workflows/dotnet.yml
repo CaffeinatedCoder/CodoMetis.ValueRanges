@@ -69,13 +69,15 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
-      # Everything except the integration projects, which are the next job.
+      # Everything except the integration projects, which are the next job. test/oracles/ holds
+      # the oracle catalogue and seeds, not a project, so folders without a csproj are skipped.
       - name: Unit and convention tests
         run: |
           for project in test/*/; do
             case "$project" in
               *IntegrationTests/) continue ;;
             esac
+            ls "$project"*.csproj >/dev/null 2>&1 || continue
             echo "==> $project"
             dotnet test "$project" -c Release --no-build \
               --logger "trx;LogFileName=$(basename "$project")-ubuntu.trx" \

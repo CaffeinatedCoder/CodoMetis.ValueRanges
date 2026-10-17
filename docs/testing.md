@@ -96,6 +96,26 @@ Every test in this project has been verified by seeding the defect it claims to 
 
 ## Patterns
 
+### The Oracle Catalogue
+
+The sweeps below are the oracles; `test/oracles/` is what makes them a system. `claims.json` lists
+every promise the consumer-facing documents make, quoting the sentence verbatim and naming the test
+that holds it — or nothing, which is the worklist. `ApiSurface` enumerates every public member and
+`OracleSurfaceCoverageTests` requires each to be named by a claim or waived with a reason. Every
+registered oracle (`oracles.json`) ships a seed under `seeds/`, a patch to `src/` that plants a
+defect it was shown to catch: `OracleSeedTests` keeps the seeds present and applicable in CI, and
+`dotnet run tools/oracles.cs seeds` re-proves locally that each is caught. A disagreement an oracle
+finds is registered in `candidates.json` against its issue through `Candidates.Verdict`, so the suite
+stays green without hiding it and the entry is forced out when the fix lands. `docs/oracles.md` has
+the whole of it.
+
+`DomainParityOracleTests` (conventions) is the first sweep the catalogue produced: the small-model
+oracle generalized from `Int32Range` and `DecimalRange` to every discovered range type through an
+order-preserving embedding (a day, a month, a half hour per grid point). The engines are generic; what
+each type supplies itself — the step, the canonicalizing factories, the element's comparison, the
+half-open default — had worked examples only on nine of the eleven types before it.
+
+
 ### The Two Oracles
 
 Two tests check range algebra against something other than itself, and they answer different

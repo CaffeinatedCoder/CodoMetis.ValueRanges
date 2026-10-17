@@ -1,0 +1,17 @@
+Seed: TimeRange.Finite deconstructs End into start and Start into end, so a value passed back to CreateFinite is a different (empty) range
+Oracles: VariantDeconstructContractTests
+Fails: the construct(deconstruct(x)) == x sweep for TimeRange's Finite
+
+diff --git a/src/CodoMetis.ValueRanges/TimeRange.cs b/src/CodoMetis.ValueRanges/TimeRange.cs
+index 7370988..1fdc175 100644
+--- a/src/CodoMetis.ValueRanges/TimeRange.cs
++++ b/src/CodoMetis.ValueRanges/TimeRange.cs
+@@ -85,7 +85,7 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
+         /// <param name="startInclusive">Receives <see cref="StartInclusive"/>.</param>
+         /// <param name="endInclusive">Receives <see cref="EndInclusive"/>.</param>
+         public void Deconstruct(out TimeOnly start, out TimeOnly end, out bool startInclusive, out bool endInclusive) =>
+-            (start, end, startInclusive, endInclusive) = (Start, End, StartInclusive, EndInclusive);
++            (start, end, startInclusive, endInclusive) = (End, Start, StartInclusive, EndInclusive);
+     }
+ 
+     /// <summary>

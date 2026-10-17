@@ -1,0 +1,27 @@
+Seed: a temporal value written as text keeps its seven fraction digits, so a JSON document or a literal holds a value one PostgreSQL rounding away from the column
+Oracles: TemporalStoreParityTests, InfinityConversionsDisabledTests
+Fails: the column-vs-document parity for every temporal store conversion; the finite extremes with infinity conversions off
+History: the 9.0.0 JSON-column defect
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/StoreTemporal.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/StoreTemporal.cs
+index 063d727..cea83e5 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/StoreTemporal.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/StoreTemporal.cs
+@@ -35,7 +35,7 @@ internal static class StoreTemporal
+ 
+     /// <summary>Ticks cut to whole microseconds toward 2000-01-01 (C# division truncates toward zero).</summary>
+     internal static long TruncateTicks(long ticks)
+-        => PostgresEpochTicks + (ticks - PostgresEpochTicks) / 10 * 10;
++        => ticks;
+ 
+     internal static DateTime Truncate(DateTime value)
+         => IsInfinity(value == DateTime.MinValue, value == DateTime.MaxValue)
+@@ -50,7 +50,7 @@ internal static class StoreTemporal
+ 
+     /// <summary><c>time</c> counts microseconds from midnight; there is nothing to truncate toward but zero.</summary>
+     internal static TimeOnly Truncate(TimeOnly value)
+-        => new(value.Ticks / 10 * 10);
++        => value;
+ 
+     internal static string? InfinityText(DateTime value)
+         => Text(value == DateTime.MinValue, value == DateTime.MaxValue);

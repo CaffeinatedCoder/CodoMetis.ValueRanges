@@ -26,8 +26,8 @@ namespace CodoMetis.ValueRanges;
 /// there is no <c>Kind</c> to reinterpret at the database boundary.
 /// Bounds are normalized to the ISO calendar at construction — <see cref="LocalDateTime.CompareTo"/>
 /// is only defined between values of the same calendar system, and PostgreSQL <c>timestamp</c> is
-/// proleptic Gregorian. A value whose date is out of range of the ISO calendar throws
-/// <see cref="ArgumentOutOfRangeException"/> at construction.
+/// proleptic Gregorian. Every calendar NodaTime ships spans a subset of the ISO calendar's range,
+/// so the conversion cannot fail.
 /// </para>
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]

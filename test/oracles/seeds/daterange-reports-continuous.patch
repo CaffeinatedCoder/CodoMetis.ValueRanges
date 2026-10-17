@@ -1,0 +1,17 @@
+Seed: DateRange.IsDiscrete answers false while NextValueAfter still steps a day: the type canonicalizes one way and reports the other
+Oracles: RangeFactoryContractTests
+Fails: the IsDiscrete-agrees-with-the-step check for DateRange
+
+diff --git a/src/CodoMetis.ValueRanges/DateRange.cs b/src/CodoMetis.ValueRanges/DateRange.cs
+index 99c105e..2a46adb 100644
+--- a/src/CodoMetis.ValueRanges/DateRange.cs
++++ b/src/CodoMetis.ValueRanges/DateRange.cs
+@@ -176,7 +176,7 @@ public abstract record DateRange : IRange<DateOnly>, IRangeFactory<DateRange, Da
+              : Empty;
+ 
+     /// <inheritdoc />
+-    public static bool IsDiscrete => true;
++    public static bool IsDiscrete => false;
+ 
+     /// <inheritdoc />
+     public static DateOnly? NextValueAfter(DateOnly value) => value == DateOnly.MaxValue ? null : value.AddDays(1);

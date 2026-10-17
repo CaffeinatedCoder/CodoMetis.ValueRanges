@@ -14,8 +14,8 @@ All range types and `RangeSet<TRange, T>` implement `IParsable<T>` and `IFormatt
 ```csharp
 Int32Range.CreateFinite(1, 10).ToString()              // "[1,10]"
 Int32Range.CreateFinite(1, 10, endInclusive: false)
-          .ToString()                                  // "[1,10)"
-Int32Range.CreateUnboundedStart(5).ToString()          // "(,5]"
+          .ToString()                                  // "[1,9]"  (a discrete type canonicalizes)
+Int32Range.CreateUnboundedStart(5).ToString()          // "(,4]"
 Int32Range.CreateUnboundedEnd(5).ToString()            // "[5,)"
 Int32Range.Infinite.ToString()                         // "(,)"
 Int32Range.Empty.ToString()                            // "empty"

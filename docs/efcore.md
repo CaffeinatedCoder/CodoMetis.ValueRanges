@@ -293,7 +293,7 @@ hot, keep the value in a plain column of its own as well.
 | `ExecuteUpdate` of the whole JSON property, a JSON-to-JSON copy, a range or multirange | ✓ — a range is then stored in PostgreSQL's own text form, which reads back |
 | `ExecuteUpdate` of a value set | **refused** — EF Core would write it with `to_jsonb`, a JSON array the document cannot hold, and the row would no longer load. Recognized in the translated `UPDATE`, so it holds however the setter reaches the property (a join, `EF.Property`, a nested complex type) |
 | `ExecuteUpdate` of a whole complex property that contains a value set | ✓ — EF serializes the complex value through the plugin's writer |
-| `ExecuteUpdate` setting a property to `null` | fails in Npgsql (`42804`), for every type |
+| `ExecuteUpdate` setting a property to `null` | fails for every type — a range or multirange in Npgsql (`42804`), a value set by the refusal above, before it reaches Npgsql |
 | `ExecuteUpdate` on an owned JSON type | refused by EF Core |
 
 > Before 9.0 a `ToJson()` type holding any of these could not be saved: `SaveChanges` threw a

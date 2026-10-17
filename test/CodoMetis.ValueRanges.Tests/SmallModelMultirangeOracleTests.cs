@@ -1,4 +1,5 @@
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Oracles;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -121,7 +122,7 @@ public class SmallModelMultirangeOracleTests
             Check(failures, domain, "Complement twice", model, complement.Complement(), valueOf);
         }
 
-        Assert.AreEqual(0, failures.Count, Message(domain, "subsets", failures));
+        Candidates.Verdict(nameof(SmallModelMultirangeOracleTests), failures, Message(domain, "subsets"));
     }
 
     // ---------------------------------------------------------------- per-pair
@@ -150,6 +151,20 @@ public class SmallModelMultirangeOracleTests
                 Check(failures, domain, $"{Name(leftModel)} Except {Name(rightModel)}",
                       difference, left.Except(right), valueOf);
 
+                // The operator aliases are separate overloads, one per operand kind, so each is a
+                // line of its own rather than assumed to forward.
+                Check(failures, domain, $"{Name(leftModel)} | {Name(rightModel)}", union, left | right, valueOf);
+                Check(failures, domain, $"{Name(leftModel)} & {Name(rightModel)}", intersection, left & right, valueOf);
+                Check(failures, domain, $"{Name(leftModel)} - {Name(rightModel)}", difference, left - right, valueOf);
+
+                if (right.Count == 1)
+                {
+                    var range = right[0];
+                    Check(failures, domain, $"{Name(leftModel)} | range {Name(rightModel)}", union, left | range, valueOf);
+                    Check(failures, domain, $"{Name(leftModel)} & range {Name(rightModel)}", intersection, left & range, valueOf);
+                    Check(failures, domain, $"{Name(leftModel)} - range {Name(rightModel)}", difference, left - range, valueOf);
+                }
+
                 Bool("Contains",          left.Contains(right),          rightModel.IsSubsetOf(leftModel));
                 Bool("Overlaps",          left.Overlaps(right),          intersection.Count > 0);
                 Bool("Equals",            left.Equals(right),            leftModel.SetEquals(rightModel));
@@ -171,7 +186,7 @@ public class SmallModelMultirangeOracleTests
 
         Assert.IsTrue(checks > 100_000,
                       $"{domain}: expected well over 100,000 predicate checks, made {checks}.");
-        Assert.AreEqual(0, failures.Count, Message(domain, "ordered pairs", failures));
+        Candidates.Verdict(nameof(SmallModelMultirangeOracleTests), failures, Message(domain, "ordered pairs"));
     }
 
     // ---------------------------------------------------------------- the model
@@ -303,8 +318,6 @@ public class SmallModelMultirangeOracleTests
 
     private static string Join(HashSet<int> values) => string.Join(",", values.Order());
 
-    private static string Message(string domain, string sweep, List<string> failures) =>
-        $"{domain}: {failures.Count} disagreements with set theory over {sweep}:"
-      + Environment.NewLine + string.Join(Environment.NewLine, failures.Take(25))
-      + (failures.Count > 25 ? $"{Environment.NewLine}  … and {failures.Count - 25} more" : "");
+    private static string Message(string domain, string sweep) =>
+        $"{domain}: disagreements with set theory over {sweep}";
 }

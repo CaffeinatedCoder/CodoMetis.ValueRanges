@@ -1,0 +1,2166 @@
+[
+  {
+    "id": "A01-omitted-element-type-fails-loudly",
+    "source": "docs/serialization.md#native-aot",
+    "quote": "Leaving the element type out fails loudly on first use, in both directions, with System.Text.Json's `NotSupportedException` naming it: `JsonTypeInfo metadata for type 'PermissionKey' was not provided by TypeInfoResolver …`.",
+    "claim": "Under a source-generated JsonSerializerContext that lists a value set type but not its element type, both Serialize and Deserialize of that set throw NotSupportedException naming the element type, including for families that define ElementJsonConverter.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Set.From",
+      "IValueSetFactory.ElementJsonConverter"
+    ],
+    "heldBy": [
+      "SetSourceGenerationTests"
+    ]
+  },
+  {
+    "id": "A02-aot-default-options-throw",
+    "source": "docs/serialization.md#native-aot",
+    "quote": "Under Native AOT, System.Text.Json also disables reflection-based serialization, so `JsonSerializer.Serialize(value)` with default options throws `InvalidOperationException` for every type, these included — typed or through `object`.",
+    "claim": "Under a Native AOT binary, JsonSerializer.Serialize(range) with default options throws InvalidOperationException for a range, variant, RangeSet and value set, typed or boxed as object.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "RangeSet.From",
+      "*Set.From"
+    ],
+    "heldBy": []
+  },
+  {
+    "id": "A03-generic-converters-self-registered",
+    "source": "docs/serialization.md#native-aot",
+    "quote": "The generic types — `RangeSet<TRange, T>` and the validated-wrapper sets — get their converters from a registration each type makes for itself, never from `MakeGenericType`, so a type your program only ever deserializes works too.",
+    "claim": "Under Native AOT, a RangeSet<TRange,T> or wrapper set instantiation that the program never constructs (only deserializes) still deserializes through its attribute converter; if the registration is trimmed away, the converter lookup throws NotSupportedException naming the type rather than property-dumping.",
+    "oracle": "silent-default",
+    "surfaces": [
+      "RangeSet.Parse",
+      "*Set.Parse",
+      "RangeJsonConverterFactory.CreateConverter"
+    ],
+    "heldBy": []
+  },
+  {
+    "id": "E01-mapped-by-convention",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "Properties of the range types and of `RangeSet<TRange, T>` are then mapped by convention:",
+    "claim": "After UseValueRanges(), a property of any range type maps to its PostgreSQL range column type and a RangeSet property to the corresponding multirange column type with no per-property configuration.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "ValueRangesTypeMappingSourcePlugin.FindMapping",
+      "ValueSetsTypeMappingSourcePlugin.FindMapping",
+      "ValueRangesOptionsExtension.ApplyServices",
+      "NpgsqlValueRangesServiceCollectionExtensions.AddEntityFrameworkNpgsqlValueRanges"
+    ],
+    "heldBy": [
+      "ModelMappingTests",
+      "NodaModelMappingTests",
+      "MappingParityTests"
+    ]
+  },
+  {
+    "id": "E02-predicates-translate-to-operators",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "`Contains`, `Overlaps`, `IsContainedBy`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` and `IsAdjacentTo` map to `@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>` and `-|-` — on ranges and, since v4, on `RangeSet` with range or multirange operands.",
+    "claim": "In a LINQ predicate over a range or RangeSet column, each of the eight binary predicates translates to its PostgreSQL operator and the server's rows equal the in-memory answer for every operand shape; ==/!= on a range or multirange column translates to =/<> and matches exactly the rows equal to the operand, Empty and Infinite included; RangeSet.Complement() translates to '{(,)}'::<multirange> - x and equals the in-memory complement.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.Contains",
+      "RangeSet.Overlaps",
+      "RangeSet.IsAdjacentTo",
+      "RangeSet.op_Equality",
+      "RangeSet.Complement",
+      "ValueRangesMethodCallTranslatorPlugin.Translators",
+      "ValueSetsMethodCallTranslatorPlugin.Translators",
+      "ValueSetsMemberTranslatorPlugin.Translators"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "ExecutedQueryTests",
+      "ShapeMatrixParityTests",
+      "NodaQueryTranslationTests",
+      "ContinuousMultirangeParityTests"
+    ]
+  },
+  {
+    "id": "E03-intersect-union-except-translate",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "`Intersect` maps to `*`; `Union` and `Except` lift both operands to multiranges (`+`/`-`), matching their `RangeSet` return type — a disjoint union is a real two-element multirange, never an error.",
+    "claim": "In a projection, range Intersect translates to `*`, Union to multirange `+` and Except to multirange `-`, and a disjoint Union materializes as a two-element RangeSet equal to the in-memory result.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Intersect",
+      "RangeExtensions.Union",
+      "RangeExtensions.Except"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "ExecutedQueryTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
+    "id": "E04-factories-translate-guarded",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "The `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` factories translate to guarded range constructor calls with the model's inverted-bounds-yield-empty semantics.",
+    "claim": "When a factory is called on column values inside a query, it translates to a CASE-guarded range constructor and the server-built range equals what the in-memory factory builds, including Empty for inverted bounds.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "*Range.CreateUnboundedStart",
+      "*Range.CreateUnboundedEnd",
+      "ValueRangesQueryExpressionInterceptor.QueryCompilationStarting"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "MultirangeCoverageTests",
+      "NodaQueryTranslationTests"
+    ]
+  },
+  {
+    "id": "E05-range-state-checks-translate",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "Range state checks translate directly: `IsEmpty()` → `isempty`, `IsUnboundedStart()` → `lower_inf`, `IsUnboundedEnd()` → `upper_inf`, `IsInfinity()` → `lower_inf AND upper_inf`, `IsFinite()` → `NOT lower_inf AND NOT upper_inf AND NOT isempty`.",
+    "claim": "On a range column, each of the five shape predicates translates to the stated isempty/lower_inf/upper_inf composition and matches the in-memory predicate for every shape; on a RangeSet the same checks translate to the multirange functions except IsInfinity(), which is equality against '{(,)}', so a gapped set open at both ends answers false on both sides.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.IsEmpty",
+      "RangeExtensions.IsUnboundedStart",
+      "RangeExtensions.IsUnboundedEnd",
+      "RangeExtensions.IsInfinity",
+      "RangeExtensions.IsFinite",
+      "RangeSet.IsInfinity",
+      "RangeSet.IsEmpty"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "ExecutedQueryTests",
+      "RangeSetComparisonTests"
+    ]
+  },
+  {
+    "id": "E06-discrete-upper-compensation",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "`UpperBound()` therefore translates to `upper(x) - 1` and `UpperBoundInclusive()` to `NOT upper_inf(x) AND NOT isempty(x)`, so server results always equal the in-memory results ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).",
+    "claim": "For a discrete range column (int4range, int8range, daterange and the NodaTime date forms), UpperBound() and UpperBoundInclusive() projected on the server equal the in-memory closed-canonical answers.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.UpperBound",
+      "RangeExtensions.UpperBoundInclusive",
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.LowerBoundInclusive"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "ExecutedQueryTests",
+      "NodaTimeIntegrationTests",
+      "TimeAndYearMonthIntegrationTests"
+    ]
+  },
+  {
+    "id": "E07-aggregates-null-on-zero-rows",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "The aggregates return `NULL` in SQL for zero input rows (standard PostgreSQL aggregate behavior), while the in-memory `RangeAgg()` returns the empty set.",
+    "claim": "RangeAgg over a group with zero rows is NULL on the server and RangeSet.Empty in memory; RangeIntersectAgg is null in both; for one or more rows both aggregates agree with memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg",
+      "RangeAggregateExtensions.RangeIntersectAgg",
+      "ValueRangesAggregateMethodCallTranslatorPlugin.Translators"
+    ],
+    "heldBy": [
+      "RangeAggregateParityTests",
+      "RangeAggregateTests",
+      "ExecutedQueryTests"
+    ]
+  },
+  {
+    "id": "E08-inclusiveness-flags-must-be-constant",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "The factory-method bound-inclusiveness flags must be compile-time constants to translate (they pick the bounds literal, e.g. `'[]'`); in practice they always are, because the flags default at the call site.",
+    "claim": "When a factory inside a query receives a non-constant inclusiveness flag (a column or parameter bool), translation fails with an EF exception rather than emitting a wrong bounds literal.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "*Range.CreateUnboundedStart",
+      "*Range.CreateUnboundedEnd"
+    ],
+    "heldBy": [
+      "QueryTranslationTests"
+    ]
+  },
+  {
+    "id": "E09-timestamp-kind-reinterpreted",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "`DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified` — a UTC-kinded `DateTime` is reinterpreted as wall-clock time, not converted.",
+    "claim": "A DateTimeRange with Utc-kinded bounds round-trips through a tsrange column with the same wall-clock values (no offset shift), read back as Unspecified kind; a DateTimeOffsetRange with non-zero offsets round-trips through tstzrange as an equal range whose bounds carry +00:00; a Contains element operand of any Kind or offset matches the same rows as the in-memory Contains.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateTimeRange.CreateFinite",
+      "DateTimeOffsetRange.CreateFinite",
+      "RangeExtensions.Contains"
+    ],
+    "heldBy": [
+      "RangeRoundTripTests",
+      "ProviderConversionTests",
+      "MultirangeCoverageTests",
+      "TemporalStoreTextTests",
+      "TemporalStoreParityTests"
+    ]
+  },
+  {
+    "id": "E10-maxvalue-is-infinity-but-finite",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "A *finite* bound of `DateTime.MaxValue` therefore becomes an explicit `infinity` bound in the database — which is distinct from an *unbounded* side (`upper_inf` stays `false`), so shape checks behave consistently.",
+    "claim": "A Finite range ending at DateTime.MaxValue (or Instant.MaxValue) stores an `infinity` bound, reads back as Finite with MaxValue, and IsUnboundedEnd()/upper_inf is false on both sides.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateTimeRange.CreateFinite",
+      "InstantRange.CreateFinite",
+      "RangeExtensions.IsUnboundedEnd"
+    ],
+    "heldBy": [
+      "RangeRoundTripTests",
+      "NodaTimeIntegrationTests",
+      "TemporalStoreTextTests",
+      "InfinityConversionsDisabledTests"
+    ]
+  },
+  {
+    "id": "E11-scaffold-maps-to-npgsqlrange",
+    "source": "docs/efcore.md#entity-framework-core-postgresql",
+    "quote": "Reverse engineering (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`, not to these types — the plugin provides no design-time services.",
+    "claim": "Neither EF plugin assembly implements IDesignTimeServices or carries a design-time services attribute naming a type of this package, so `dotnet ef dbcontext scaffold` sees only Npgsql's design-time services and emits NpgsqlRange<T> and plain arrays. (The NodaTime satellite carries Npgsql's own NodaTime DesignTimeServicesReference, written by that package's build targets.)",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "MappingParityTests"
+    ]
+  },
+  {
+    "id": "E12-adjacent-dateranges-not-overlapping",
+    "source": "docs/efcore.md#indexing-a-range-column-and-preventing-overlaps",
+    "quote": "Different rooms are unaffected, and — because `daterange` is discrete and canonicalized — `[2024-01-01, 2024-01-10]` and `[2024-01-11, 2024-01-20]` are *adjacent, not overlapping*, so both are accepted.",
+    "claim": "Two closed DateRanges one day apart are not Overlaps and are IsAdjacentTo in memory, and a daterange `&&` exclusion constraint over the mapped column accepts both rows while rejecting a genuinely overlapping one with 23P01, as a DbUpdateException wrapping a PostgresException that names the constraint.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsAdjacentTo",
+      "DateRange.CreateFinite"
+    ],
+    "heldBy": [
+      "ExclusionConstraintTests"
+    ]
+  },
+  {
+    "id": "E13-set-columns-by-convention",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "Wrapper instantiations (`StringSet<AccessRight>`) are recognized automatically from the open generic; there is no per-element registration to forget:",
+    "claim": "A property of any closed set family or any wrapper arity instantiation maps to the family's native array column type with no configuration, and the wrapper maps to the same store type as its closed sibling; plain T[]/List<T> properties keep the provider's native array mapping in the same entity and a store-type-name lookup for text[] never resolves to a set type.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "*Set.From"
+    ],
+    "heldBy": [
+      "SetModelMappingTests",
+      "MappingParityTests",
+      "NodaModelMappingTests",
+      "NodaSetTests"
+    ]
+  },
+  {
+    "id": "E14-set-contains-is-containment",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "`Contains` deliberately translates as containment (`@>`) rather than `= ANY(...)`, because only containment is GIN-servable — one code path, always indexable.",
+    "claim": "set.Contains(x) in a predicate translates to `column @> ARRAY[x]::<type>[]` with a typed operand for every family, and a GIN index on the column serves it; Count translates to cardinality(column) and IsEmpty to cardinality(column) = 0, agreeing with memory for canonical rows.",
+    "oracle": "claim",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "StringSet.Count",
+      "StringSet.IsEmpty"
+    ],
+    "heldBy": [
+      "SetQueryTranslationTests",
+      "WrapperSetTranslationTests",
+      "NodaWrapperSetTranslationTests",
+      "SetIntegrationTests",
+      "SetOperatorParityTests"
+    ]
+  },
+  {
+    "id": "E15-proper-subset-is-negated-converse",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "// b.\"Tags\" <@ @allowed AND NOT (b.\"Tags\" @> @allowed)   — the negated converse, not <>,",
+    "claim": "IsProperSubsetOf/IsProperSupersetOf translate to `<@ AND NOT @>` (and the mirror), so the server answer equals memory even when the stored row holds duplicates or non-canonical order.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.IsProperSubsetOf",
+      "ValueSetExtensions.IsProperSupersetOf",
+      "ValueSetExtensions.IsSubsetOf",
+      "ValueSetExtensions.IsSupersetOf",
+      "ValueSetExtensions.Overlaps"
+    ],
+    "heldBy": [
+      "SetQueryTranslationTests",
+      "SetOperatorParityTests"
+    ]
+  },
+  {
+    "id": "E16-remove-preserves-canonical",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "`Remove` has no such caveat: `array_remove` leaves the array sorted and deduplicated.",
+    "claim": "set.Remove(x) translates to array_remove and composes freely (Count, equality, further operators) with results equal to memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "SetQueryTranslationTests",
+      "WrapperSetTranslationTests",
+      "WrapperArityIntegrationTests"
+    ]
+  },
+  {
+    "id": "E17-set-client-side-ops-fail-translation",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "`Intersect`, `Except` and `Add` are client-side only and fail query translation by design.",
+    "claim": "A value set Intersect, Except or Add inside a Where throws an EF translation InvalidOperationException rather than fetching the table; inside a Select it evaluates on the client.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except",
+      "ValueSetExtensions.Add"
+    ],
+    "heldBy": [
+      "SetQueryTranslationTests"
+    ]
+  },
+  {
+    "id": "E18-union-derived-allowed-compositions",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "A value derived from a union — `array_cat` itself, `array_remove` over one, a conditional or `??` that may yield one, a subquery or `Concat` column projecting one — may only feed `@>`, `<@`, `&&` (`Contains`, `Overlaps`, the subset and superset family), `Remove`, `IsEmpty`, a null test, or the outermost projection, which is materialized.",
+    "claim": "A server-side set Union composed under Contains/Overlaps/subset family/Remove/IsEmpty/null test or materialized in the outer projection executes and equals the in-memory result.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Overlaps",
+      "ValueSetExtensions.IsSupersetOf",
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "UnionCanonicalityTests",
+      "SetQueryTranslationTests",
+      "SetOperatorParityTests"
+    ]
+  },
+  {
+    "id": "E19-union-derived-refusals",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "It is refused under equality, `Count`, `GroupBy`, `Distinct`, `OrderBy`, `Union`/`Intersect`/`Except` of queries, `Contains` over a sequence of sets, and as an `ExecuteUpdate` value — which would store the concatenation, after which equality and `Count` on that row are wrong for good.",
+    "claim": "Executing a query whose translated SQL feeds a union-derived array into =, cardinality, GROUP BY, DISTINCT, ORDER BY, a deduplicating set operation, IN, or an UPDATE setter throws before the SQL is sent, however the query was written; Select(b => b.Tags.Union(more).Count) is client-evaluated and returns the deduplicated count while Select(b => b.Tags.Union(more) == expected) throws.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "StringSet.Count"
+    ],
+    "heldBy": [
+      "UnionCanonicalityTests",
+      "SetQueryTranslationTests",
+      "SetIntegrationTests"
+    ]
+  },
+  {
+    "id": "E20-guard-fails-closed",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "If something replaces that service after `UseValueRanges()` — a `ReplaceService` call, or another extension that replaces rather than decorates it — every query with a server-side `Union` fails with PostgreSQL's `function valueranges_union_without_sql_guard(…) does not exist` instead of answering as if the check were not there.",
+    "claim": "With the IRelationalParameterBasedSqlProcessorFactory replaced after UseValueRanges(), a query containing a server-side set Union fails on the server with an undefined-function error naming valueranges_union_without_sql_guard.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "SqlGuardRegistrationTests",
+      "UnionCanonicalityTests"
+    ]
+  },
+  {
+    "id": "E21-noncanonical-rows-operators-match",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "Rows written by other tools in non-canonical order are still matched correctly by every *operator* above — `@>`, `<@`, `&&` and the proper-containment pairs ignore both order and duplicates — and normalize when materialized.",
+    "claim": "A row stored as a non-canonical array (unsorted, duplicates) is matched by Contains/Overlaps/subset operators exactly as the normalized set would be, materializes canonical, and is not matched by `==` against the canonical set; for a row stored as {b,a,b} the server-side Count is 3 while the materialized set's Count is 2, and IsEmpty agrees on both sides.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Overlaps",
+      "ValueSetExtensions.IsSubsetOf",
+      "*Set.Equals",
+      "StringSet.Count",
+      "StringSet.IsEmpty"
+    ],
+    "heldBy": [
+      "SetIntegrationTests"
+    ]
+  },
+  {
+    "id": "E22-empty-set-vs-null-column",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is the property's own concern.",
+    "claim": "Saving StringSet.Empty stores `{}` and reads back as the empty set; saving null on a nullable property stores NULL and reads back null; neither becomes the other.",
+    "oracle": "claim",
+    "surfaces": [
+      "StringSet.Empty",
+      "*Set.Empty"
+    ],
+    "heldBy": [
+      "SetIntegrationTests",
+      "JsonColumnTests"
+    ]
+  },
+  {
+    "id": "E23-yearmonthset-first-of-month",
+    "source": "docs/efcore.md#value-set-columns",
+    "quote": "The NodaTime satellite registers its five set types via the same `UseValueRangesNodaTime()` call; `YearMonthSet` persists first-of-month dates and reads validate alignment, exactly like `YearMonthRange`.",
+    "claim": "A YearMonthSet stores a date[] of first-of-month dates, Contains(yearMonth) translates against DATE 'yyyy-MM-01', and a stored non-first-of-month date throws on read rather than shifting to its month.",
+    "oracle": "claim",
+    "surfaces": [
+      "YearMonthSet.From",
+      "ValueSetExtensions.Contains",
+      "NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions.UseValueRangesNodaTime"
+    ],
+    "heldBy": [
+      "NodaSetTests",
+      "SetIntegrationTests",
+      "NodaWrapperSetTranslationTests"
+    ]
+  },
+  {
+    "id": "E24-json-document-holds-store-text",
+    "source": "docs/efcore.md#inside-a-json-column",
+    "quote": "**The document holds the store's text, not the API's JSON.**",
+    "claim": "Inside a ToJson() complex or owned type, a range is stored as its range literal, a RangeSet as its multirange literal and a value set as its array literal (`\"{a,b}\"`), and a query reaching into the document casts that text to the store type so operators translate as on a plain column.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.ToString",
+      "RangeSet.ToString",
+      "*Set.ToString",
+      "RangeExtensions.Contains",
+      "LiteralJsonValueReaderWriter.*",
+      "YearMonthRangeJsonValueReaderWriter.*",
+      "YearMonthRangeSetJsonValueReaderWriter.*",
+      "YearMonthSetJsonValueReaderWriter.*"
+    ],
+    "heldBy": [
+      "JsonColumnTests",
+      "TemporalStoreTextTests"
+    ]
+  },
+  {
+    "id": "E25-json-document-temporal-truncation",
+    "source": "docs/efcore.md#inside-a-json-column",
+    "quote": "the store's microsecond, truncated toward 2000-01-01 as Npgsql truncates a parameter",
+    "claim": "A temporal range or set written into a JSON document or SQL literal holds each value truncated to the microsecond toward 2000-01-01 and spells DateTime/DateTimeOffset/DateOnly/Instant/LocalDate/LocalDateTime extremes as -infinity/infinity, so the document, a column, a parameter and a constant compare equal on the server; NodaTime nanosecond bounds are truncated identically in a column, a document and an inlined constant.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateTimeRange.CreateFinite",
+      "DateTimeOffsetRange.CreateFinite",
+      "InstantRange.CreateFinite",
+      "DateTimeSet.From",
+      "InstantSet.From"
+    ],
+    "heldBy": [
+      "TemporalStoreParityTests",
+      "TemporalStoreTextTests",
+      "InfinityConversionsDisabledTests",
+      "NodaTimeIntegrationTests"
+    ]
+  },
+  {
+    "id": "E26-executeupdate-set-in-json-refused",
+    "source": "docs/efcore.md#inside-a-json-column",
+    "quote": "**refused** — EF Core would write it with `to_jsonb`, a JSON array the document cannot hold, and the row would no longer load.",
+    "claim": "ExecuteUpdate setting a value set property inside a JSON document throws before execution (via join, EF.Property or nested complex type alike) and the row still loads afterwards, while ExecuteUpdate of a range, a multirange or the whole JSON property succeeds and reads back.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Set.From",
+      "*Range.CreateFinite"
+    ],
+    "heldBy": [
+      "ExecuteUpdateJsonTests",
+      "ExecuteUpdateGuardTests"
+    ]
+  },
+  {
+    "id": "E27-executeupdate-null-fails",
+    "source": "docs/efcore.md#inside-a-json-column",
+    "quote": "fails for every type — a range or multirange in Npgsql (`42804`), a value set by the refusal above, before it reaches Npgsql",
+    "claim": "ExecuteUpdate setting a range, temporal range or multirange property inside a JSON document to null fails with PostgreSQL error 42804, a value set property is refused by the plugin with InvalidOperationException before reaching Npgsql, and the row still loads afterwards.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Empty",
+      "*Set.Empty"
+    ],
+    "heldBy": [
+      "ExecuteUpdateJsonTests"
+    ]
+  },
+  {
+    "id": "E28-timerange-custom-type-full-translation",
+    "source": "docs/efcore.md#timerange-and-the-custom-timerange-type",
+    "quote": "Everything else is automatic: all range and multirange operators, functions and aggregates in PostgreSQL are polymorphic (`anyrange`/`anymultirange`), so the full LINQ translation works on the custom type exactly as on the built-ins — [verified against live PostgreSQL](../README.md#verified-against-postgresql).",
+    "claim": "With HasPostgresRange(\"timerange\",\"time\") and EnableUnmappedTypes(), a TimeRange column round-trips every shape, a RangeSet<TimeRange,TimeOnly> maps to timemultirange, and operators, bound accessors and RangeAgg agree with memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "TimeRange.CreateFinite",
+      "RangeExtensions.Contains",
+      "RangeExtensions.Overlaps",
+      "RangeAggregateExtensions.RangeAgg"
+    ],
+    "heldBy": [
+      "TimeAndYearMonthIntegrationTests",
+      "QueryTranslationTests",
+      "ModelMappingTests"
+    ]
+  },
+  {
+    "id": "E29-yearmonthrange-month-aligned-storage",
+    "source": "docs/efcore.md#yearmonthrange-storage",
+    "quote": "Reads validate month alignment: a `daterange` covering a partial month fails loudly instead of silently shifting boundaries.",
+    "claim": "A YearMonthRange column is stored as a daterange from first-of-start-month to first-of-month-after-end (exclusive), every operator and bound accessor agrees with memory, and reading a daterange whose bounds are not month-aligned throws.",
+    "oracle": "claim",
+    "surfaces": [
+      "YearMonthRange.CreateFinite",
+      "RangeExtensions.UpperBound",
+      "RangeExtensions.Contains"
+    ],
+    "heldBy": [
+      "TimeAndYearMonthIntegrationTests",
+      "NodaQueryTranslationTests"
+    ]
+  },
+  {
+    "id": "E30-yearmonthrange-column-factory-fails",
+    "source": "docs/efcore.md#yearmonthrange-storage",
+    "quote": "The one restriction: because months are coarser than the `date` subtype, the `CreateFinite`/`CreateUnbounded*` factories cannot be built *in SQL from column values* — constant and parameter ranges work as usual, and a column-dependent factory call fails translation with a clear error.",
+    "claim": "A YearMonthRange factory over constants inside a query is evaluated client-side and rendered as a month-aligned daterange literal, while a factory over a column value fails translation with InvalidOperationException.",
+    "oracle": "exception",
+    "surfaces": [
+      "YearMonthRange.CreateFinite",
+      "YearMonthRange.CreateUnboundedEnd",
+      "YearMonthRange.CreateUnboundedStart"
+    ],
+    "heldBy": [
+      "NodaQueryTranslationTests"
+    ]
+  },
+  {
+    "id": "E31-range-client-side-only-operations",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**Client-side only** — these compute the right answer in memory, fail translation in a predicate, and fall back to client evaluation in a projection:",
+    "claim": "Length, Values(), Clamp, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Length",
+      "*Range.Values",
+      "RangeExtensions.Clamp",
+      "ValueSetRangeExtensions.ToRangeSet",
+      "ValueSetRangeExtensions.ToInt32Set",
+      "StringSet.Item"
+    ],
+    "heldBy": [
+      "ClientSideOnlyTranslationTests",
+      "ClientSideOnlyProjectionTests"
+    ]
+  },
+  {
+    "id": "E32-nodatime-implies-both-plugins",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#entity-framework-core",
+    "quote": "One line — it implies both `UseNodaTime()` (the Npgsql NodaTime plugin) and `UseValueRanges()` (the base plugin), so BCL-based and NodaTime-based range types coexist in one model.",
+    "claim": "After UseValueRangesNodaTime() alone, NodaTime scalars, NodaTime ranges/sets and BCL ranges/sets all map and translate in one model and one query.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions.UseValueRangesNodaTime"
+    ],
+    "heldBy": [
+      "NodaModelMappingTests",
+      "NodaQueryTranslationTests",
+      "MappingParityTests"
+    ]
+  },
+  {
+    "id": "E33-calendar-normalization-reaches-operands",
+    "source": "src/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/README.md#notes",
+    "quote": "`LocalDateSet`/`LocalDateTimeSet` hold ISO elements, so a probe in another calendar is normalized before it is bound — `Holidays.Contains(copticDate)` queries the ISO date it denotes, not that calendar's year/month/day read as if they were ISO.",
+    "claim": "A Contains query with a LocalDate/LocalDateTime operand in a non-ISO calendar binds the ISO date it denotes and matches the same row as in memory; a non-ISO YearMonth operand, or a non-ISO wrapper element, is refused with ArgumentException.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "RangeExtensions.Contains"
+    ],
+    "heldBy": [
+      "NodaSetTests",
+      "SetIntegrationTests",
+      "NodaTimeIntegrationTests",
+      "NodaWrapperSetTranslationTests",
+      "WrapperArityIntegrationTests"
+    ]
+  },
+  {
+    "id": "E34-change-detection-no-false-diffs",
+    "source": "docs/value-sets.md#canonical-form-is-the-contract",
+    "quote": "This is load-bearing twice: the EF `ValueComparer` collapses to a cheap equality with no false diffs in change detection, and SQL `=` on the stored array coincides with set equality.",
+    "claim": "Reassigning a tracked set property to an equal set built from a different input order issues no UPDATE on SaveChanges, while assigning a different set does.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Set.From",
+      "*Set.Equals"
+    ],
+    "heldBy": [
+      "SetIntegrationTests"
+    ]
+  },
+  {
+    "id": "E35-client-side-in-where-throws",
+    "source": "docs/getting-started.md#the-one-thing-to-know-about-boundaries",
+    "quote": "When a client-side operation appears in a `Where`, EF **throws** rather than silently fetching the table.",
+    "claim": "A query whose Where uses a client-side-only set operation (Intersect, Except, Add) throws at translation instead of evaluating the predicate in memory over the whole table.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except",
+      "ValueSetExtensions.Add"
+    ],
+    "heldBy": [
+      "SetQueryTranslationTests"
+    ]
+  },
+  {
+    "id": "J01-tostring-is-postgres-literal",
+    "source": "docs/serialization.md#formatting",
+    "quote": "`ToString()` (and `IFormattable.ToString(format, provider)`) produces PostgreSQL range literals:",
+    "claim": "ToString() of a Finite range is `[a,b]`/`[a,b)` per inclusiveness, of UnboundedEnd `[a,)`, of Infinite `(,)` and of Empty `empty`, with temporal bounds in ISO 8601 round-trip form.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.ToString"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests",
+      "LiteralCultureContractTests",
+      "NodaTimeParseFormatTests",
+      "TimeRangeTests"
+    ]
+  },
+  {
+    "id": "J02-unboundedstart-exclusive-literal",
+    "source": "docs/serialization.md#formatting",
+    "quote": "Int32Range.CreateUnboundedStart(5).ToString()          // \"(,4]\"",
+    "claim": "Every example in the Formatting section prints exactly the literal in its comment: a discrete type canonicalizes, so CreateFinite(1, 10, endInclusive: false) is [1,9] and CreateUnboundedStart(5), exclusive by default, is (,4].",
+    "oracle": "claim",
+    "surfaces": [
+      "Int32Range.CreateUnboundedStart",
+      "Int32Range.CreateUnboundedEnd",
+      "Int32Range.CreateFinite",
+      "Int32Range.Empty",
+      "Int32Range.Infinite",
+      "*Range.ToString"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests"
+    ]
+  },
+  {
+    "id": "J03-format-forwarded-to-element",
+    "source": "docs/serialization.md#formatting",
+    "quote": "The optional `format` parameter is forwarded to the element type, so you can control how individual bound values are rendered:",
+    "claim": "IFormattable.ToString(\"MMM d yyyy\", invariant) on a DateRange renders each bound with that format inside the brackets, and the result is display text that Parse rejects; ToString(\"yyyy-MM-dd\", th-TH) renders Buddhist-era years while ToString(null, th-TH) is the invariant literal.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.ToString",
+      "*Range.FormatValue",
+      "*Range.Parse",
+      "IRangeFactory.FormatValue",
+      "IRangeFactory.ParseValue",
+      "*Range.ParseValue"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests",
+      "LiteralProviderContractTests"
+    ]
+  },
+  {
+    "id": "J04-literal-never-depends-on-culture",
+    "source": "docs/serialization.md#formatting",
+    "quote": "Without a format string — `ToString()`, `ToString(null, provider)`, `ToString(\"\", provider)` (an empty format is the general format, as everywhere in .NET), string interpolation, `string.Format`, a logging template — the result is the invariant literal, whatever provider is passed or current.",
+    "claim": "For every range shape, RangeSet and set type, ToString(), ToString(null, p), ToString(\"\", p), interpolation and string.Format produce the identical invariant literal under th-TH, de-DE and any other current or passed culture.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.ToString",
+      "RangeSet.ToString",
+      "*Set.ToString"
+    ],
+    "heldBy": [
+      "LiteralProviderContractTests",
+      "LiteralCultureContractTests",
+      "RangeParseFormatTests"
+    ]
+  },
+  {
+    "id": "J05-parse-ignores-provider",
+    "source": "docs/serialization.md#parsing",
+    "quote": "`Parse` and `TryParse` read the invariant literal and **ignore the provider**, as `Guid.Parse` does: the text is PostgreSQL's, which has no culture.",
+    "claim": "Parse/TryParse of any range, RangeSet or set literal return the same value whatever IFormatProvider is passed (null, invariant, th-TH, de-DE).",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.TryParse",
+      "RangeSet.Parse",
+      "*Set.Parse"
+    ],
+    "heldBy": [
+      "LiteralProviderContractTests",
+      "RangeParseFormatTests"
+    ]
+  },
+  {
+    "id": "J06-decimal-numeric-grammar",
+    "source": "docs/serialization.md#parsing",
+    "quote": "Decimal bounds follow PostgreSQL's `numeric` grammar — sign, digits, point, exponent — so a group separator or currency symbol is a `FormatException`.",
+    "claim": "DecimalRange.Parse and DecimalSet.Parse accept `1e3` as 1000 and refuse `1,5` and `$1.5` with FormatException, agreeing with PostgreSQL's numeric input.",
+    "oracle": "exception",
+    "surfaces": [
+      "DecimalRange.Parse",
+      "DecimalSet.Parse",
+      "DecimalSet.ParseValue"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests",
+      "SetParseFormatTests",
+      "LiteralGrammarParityTests",
+      "WrapperGrammarContractTests"
+    ]
+  },
+  {
+    "id": "J07-temporal-strict-iso",
+    "source": "docs/serialization.md#parsing",
+    "quote": "Temporal bounds and elements are **strict ISO 8601** — the forms this library writes and the forms PostgreSQL prints in its default ISO `DateStyle`, nothing else: a date `yyyy-MM-dd`; a time `HH:mm` or `HH:mm:ss` with any number of fraction digits, truncated to the 100 ns the BCL types hold (Go and Java write nine); date and time joined by `T` or a space; for a `DateTime` an optional `Z` (read as `Utc`) or `±HH`, `±HH:mm` or `±HH:mm:ss` (read as `Local`), with the wall clock kept as written and the offset never applied — PostgreSQL's rule for `timestamp` input, and what a `tsrange` stores, so one literal is one value on every machine and a local value round-trips with its kind; for a `DateTimeOffset` a required `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss` (PostgreSQL's historical local-mean-time offsets, kept as the instant at offset zero).",
+    "claim": "Every temporal range and set type refuses a non-ISO element (`01.02.2027`, `06/15/2024`, an offset-less DateTimeOffset) with FormatException through Parse, TryParse, JSON and TypeConverter, accepts `T` or space separators and `HH:mm`, keeps a DateTime's wall clock when an offset is present (Kind Local), and truncates more than seven fraction digits; a closed temporal set's JSON array is read with the same grammar (an offset-less DateTimeOffset element is a JsonException) and a registered element converter still reads.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.Parse",
+      "DateTimeRange.Parse",
+      "DateTimeOffsetRange.Parse",
+      "TimeRange.Parse",
+      "DateTimeSet.Parse",
+      "DateTimeOffsetSet.Parse",
+      "*Range.ParseValue",
+      "DateTimeOffsetSet.From"
+    ],
+    "heldBy": [
+      "TemporalLiteralGrammarTests",
+      "TemporalLiteralStrictnessContractTests",
+      "LiteralGrammarParityTests",
+      "TemporalSetJsonTests"
+    ]
+  },
+  {
+    "id": "J08-infinity-reads-as-extremes",
+    "source": "docs/serialization.md#parsing",
+    "quote": "`infinity` / `-infinity` read as `MaxValue` / `MinValue`, which is what Npgsql materializes for them.",
+    "claim": "A temporal range literal with `infinity`/`-infinity` bounds parses to a Finite range whose bounds are MaxValue/MinValue of the element type, for BCL and NodaTime types alike, and TimeRange refuses them.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateTimeRange.Parse",
+      "DateTimeOffsetRange.Parse",
+      "DateRange.Parse",
+      "InstantRange.Parse",
+      "LocalDateRange.Parse",
+      "TimeRange.Parse"
+    ],
+    "heldBy": [
+      "TemporalLiteralGrammarTests",
+      "NodaTimeParseFormatTests"
+    ]
+  },
+  {
+    "id": "J09-discrete-canonicalize-on-parse",
+    "source": "docs/serialization.md#parsing",
+    "quote": "Discrete types canonicalize on parse — `\"[1,10)\"` is equivalent to `\"[1,9]\"` and both parse to the same closed `[1, 9]` range:",
+    "claim": "For every discrete range type, Parse(\"[a,b)\") and Parse(\"(a-1,b-1]\") equal Parse(\"[a,b-1]\") and format as the closed literal.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.ToString"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests",
+      "NodaTimeParseFormatTests",
+      "RangeFactoryContractTests",
+      "YearMonthRangeTests"
+    ]
+  },
+  {
+    "id": "J10-rangeset-multirange-literal",
+    "source": "docs/serialization.md#formatting",
+    "quote": "`RangeSet<TRange, T>` formats as a PostgreSQL multirange literal:",
+    "claim": "RangeSet.ToString() is `{}` for Empty, `{(,)}` for Infinite and `{[1,5],[7,10]}` for two elements, and Parse reads each back to an equal set, normalizing overlapping input.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.ToString",
+      "RangeSet.Parse",
+      "RangeSet.TryParse"
+    ],
+    "heldBy": [
+      "RangeSetParseFormatTests",
+      "NodaTimeRangeSetTests",
+      "LiteralCultureContractTests"
+    ]
+  },
+  {
+    "id": "J11-span-and-string-overloads-agree",
+    "source": "docs/serialization.md#parsing-from-a-span",
+    "quote": "Each type's two overloads are the same call, so results are unaffected.",
+    "claim": "For every range, RangeSet and set type, Parse(ReadOnlySpan<char>) over a slice of a larger buffer returns the same value as Parse(string) of that slice, and TryParse(span) reports the same success.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.TryParse",
+      "RangeSet.Parse",
+      "*Set.Parse"
+    ],
+    "heldBy": [
+      "SpanParsingTests"
+    ]
+  },
+  {
+    "id": "J12-only-absent-bound-is-infinite",
+    "source": "docs/serialization.md#quoted-bounds",
+    "quote": "`(,5)` is unbounded below; `[\"\",5)` and `[ ,5)` are not — their lower bound is present and empty, which no element type reads, so they are a `FormatException`, as PostgreSQL answers `invalid input syntax for type integer: \"\"`.",
+    "claim": "For every range type, `[\"\",5)` and `[ ,5)` throw FormatException while `(,5)` parses as UnboundedStart; quoted bounds, a quote opening mid-bound, doubled quotes and backslash escapes parse to the value PostgreSQL's range_in gives.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.TryParse"
+    ],
+    "heldBy": [
+      "RangeLiteralGrammarContractTests",
+      "LiteralGrammarParityTests",
+      "RangeSetOptimizationTests"
+    ]
+  },
+  {
+    "id": "J13-typeconverter-every-type",
+    "source": "docs/serialization.md#typeconverter-and-configuration-binding",
+    "quote": "Every type also carries a `TypeConverter` to and from the same literal, so anything built on `TypeDescriptor` — `Microsoft.Extensions.Configuration` binding above all — reads it:",
+    "claim": "TypeDescriptor.GetConverter(type).ConvertFromString(literal) returns the parsed value and ConvertToString returns the literal for every range shape, RangeSet and set type, and IConfiguration.Get<T> binds a property of each; binding yields the same value with CurrentCulture th-TH or de-DE as under invariant.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Parse",
+      "RangeSet.Parse",
+      "*Set.Parse",
+      "LiteralTypeConverter.*",
+      "LiteralTypeConverterBase.*",
+      "RangeTypeConverter..ctor",
+      "RangeVariantTypeConverter..ctor",
+      "RangeSetTypeConverter..ctor",
+      "ValueSetTypeConverter..ctor"
+    ],
+    "heldBy": [
+      "TypeConverterContractTests",
+      "ConfigurationBindingTests"
+    ]
+  },
+  {
+    "id": "J14-typeconverter-empty-null-malformed-variant",
+    "source": "docs/serialization.md#typeconverter-and-configuration-binding",
+    "quote": "An empty string converts to `null`, never to the empty range (that is `empty`), and a malformed literal fails the bind with a `FormatException` inside the binder's `InvalidOperationException`.",
+    "claim": "Binding \"\" to a range property yields null, \"empty\" yields the Empty range, a malformed literal throws InvalidOperationException with an inner FormatException, and a DateRange.Finite-typed property refuses a literal of another shape.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.Empty"
+    ],
+    "heldBy": [
+      "ConfigurationBindingTests",
+      "TypeConverterContractTests"
+    ]
+  },
+  {
+    "id": "J15-model-binding-through-tryparse",
+    "source": "docs/serialization.md#typeconverter-and-configuration-binding",
+    "quote": "ASP.NET Core model binding was never affected: minimal APIs and MVC bind query, route and form values through the static `TryParse`.",
+    "claim": "An MVC or minimal-API endpoint with a DateRange or StringSet query parameter binds a valid literal and returns 400 for a malformed one, with no registration.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.TryParse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "HostBindingTests"
+    ]
+  },
+  {
+    "id": "J16-json-no-registration",
+    "source": "docs/serialization.md#registration",
+    "quote": "Every range type, each of its five variants, `RangeSet<TRange, T>` and every value set carries its converter as a `[JsonConverter]` attribute, so plain `JsonSerializer.Serialize(range)` writes the literal and an ASP.NET Core host binds request bodies with no setup:",
+    "claim": "With default JsonSerializerOptions, every range shape (via union, variant, object, inside a RangeSet, as a dictionary key) and every set type serializes exactly as it does under AddRangeConverters() and reads back equal; options.AddRangeConverters() yields byte-identical JSON and calling it twice is harmless.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "RangeSet.From",
+      "*Set.From",
+      "RangeJsonSerializerOptionsExtensions.AddRangeConverters",
+      "RangeJsonConverter.Read",
+      "RangeJsonConverter.Write",
+      "RangeJsonConverter..ctor",
+      "RangeSetJsonConverter.Read",
+      "RangeSetJsonConverter.Write",
+      "RangeSetJsonConverter..ctor",
+      "ValueSetJsonConverter.Read",
+      "ValueSetJsonConverter.Write",
+      "ValueSetJsonConverter..ctor",
+      "RangeJsonConverterFactory.CanConvert",
+      "RangeJsonConverterFactory.CreateConverter",
+      "RangeJsonConverterFactory..ctor",
+      "*JsonConverter..ctor"
+    ],
+    "heldBy": [
+      "JsonDefaultContractTests",
+      "JsonConverterPrecedenceTests",
+      "HostBindingTests",
+      "RangeJsonConverterTests",
+      "NodaTimeConverterRegistrationTests"
+    ]
+  },
+  {
+    "id": "J17-union-converter-reaches-variants",
+    "source": "docs/serialization.md#registration",
+    "quote": "A converter registered on the options for a range union also reaches the union's variants.",
+    "claim": "A converter registered for Int32Range on the options is used when the value is declared as Int32Range.Finite, boxed as object, held in List<object> or used as a dictionary key, on write and on read, and a read into a variant still refuses another shape with JsonException; a converter registered on the options or placed on a property wins over the type's attribute; a property converter stays scoped to its property and a converter registered for the variant type itself wins for that variant.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "RangeJsonConverterFactory.CreateConverter",
+      "RangeJsonConverterFactory.CanConvert"
+    ],
+    "heldBy": [
+      "JsonConverterPrecedenceTests",
+      "JsonDefaultContractTests"
+    ]
+  },
+  {
+    "id": "J18-null-roundtrips-distinct-from-empty",
+    "source": "docs/serialization.md#usage",
+    "quote": "`null` round-trips as `null`, in both directions and for every type here — ranges, variants, `RangeSet` and the value sets — exactly as any other reference-typed property does.",
+    "claim": "A null range, variant, RangeSet or set property writes JSON null and reads back null, while Empty writes `\"empty\"` (or `{}` / `[]`) and reads back Empty; neither becomes the other.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Empty",
+      "RangeSet.Empty",
+      "*Set.Empty"
+    ],
+    "heldBy": [
+      "RangeJsonConverterTests",
+      "SetJsonConverterTests",
+      "InterfaceDeclaredJsonTests"
+    ]
+  },
+  {
+    "id": "J19-variants-serialize-same-literal",
+    "source": "docs/serialization.md#usage",
+    "quote": "The union's sealed variants serialize to the same literal, so a range reached through `object` — a boxed value, an `object`-typed property, a heterogeneous collection — is not a special case:",
+    "claim": "Serialize<object>(range), a List<object> of ranges and a variant-typed property each write the same literal string as Serialize(range) declared as its union.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "*Range.Empty",
+      "*Range.Infinite",
+      "RangeVariantJsonConverter.Read",
+      "RangeVariantJsonConverter.Write",
+      "RangeVariantJsonConverter..ctor"
+    ],
+    "heldBy": [
+      "RangeJsonConverterTests",
+      "JsonDefaultContractTests",
+      "NodaTimeJsonTests"
+    ]
+  },
+  {
+    "id": "J20-variant-read-refuses-wrong-shape",
+    "source": "docs/serialization.md#usage",
+    "quote": "Reading into a variant-typed declaration works too, and refuses a literal of the wrong shape: `\"empty\"` is not an `Int32Range.Finite`, so it throws `JsonException` rather than widening.",
+    "claim": "Deserialize<Int32Range.Finite>(\"\\\"empty\\\"\") and other wrong-shape literals throw JsonException while a matching-shape literal reads back equal.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Parse"
+    ],
+    "heldBy": [
+      "RangeJsonConverterTests",
+      "JsonConverterPrecedenceTests",
+      "JsonDictionaryKeyTests"
+    ]
+  },
+  {
+    "id": "J21-interface-declared-write-read",
+    "source": "docs/serialization.md#usage",
+    "quote": "Reading into such a declaration throws `NotSupportedException`: the interface does not say which type to construct, and the remedy is to declare the concrete type, which reads the same JSON.",
+    "claim": "A property declared as IRange<T>, a shape interface or IValueSet<T> writes the runtime type's literal or array, and Deserialize into it throws NotSupportedException while null round-trips.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "*Set.From",
+      "InterfaceDeclaredJsonConverter.*"
+    ],
+    "heldBy": [
+      "InterfaceDeclaredJsonTests"
+    ]
+  },
+  {
+    "id": "J22-interface-under-source-gen-unlisted-fails",
+    "source": "docs/serialization.md#usage",
+    "quote": "Under a source-generated context the runtime type must be listed, or the write fails naming it.",
+    "claim": "Serializing an IRange<int>-declared property under a JsonSerializerContext that does not list the runtime type (Int32Range.EmptyRange) throws NotSupportedException naming that type rather than writing `{}`.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.CreateFinite"
+    ],
+    "heldBy": [
+      "InterfaceDeclaredJsonTests"
+    ]
+  },
+  {
+    "id": "J23-dictionary-keys-canonicalize",
+    "source": "docs/serialization.md#dictionary-keys",
+    "quote": "The property name is the same literal as the value form, and reads back through the same parse — so it canonicalizes (`\"[1,10)\"` is the key `[1,9]`) and a malformed key is a `JsonException`:",
+    "claim": "A Dictionary keyed by a range, variant or RangeSet serializes keys as literals, reads `\"[1,10)\"` as the key [1,9], and throws JsonException for a malformed or wrong-shape key; DictionaryKeyPolicy is not applied to these keys.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.ToString",
+      "RangeSet.Parse",
+      "RangeJsonConverter.ReadAsPropertyName",
+      "RangeJsonConverter.WriteAsPropertyName",
+      "RangeSetJsonConverter.ReadAsPropertyName",
+      "RangeSetJsonConverter.WriteAsPropertyName",
+      "RangeVariantJsonConverter.ReadAsPropertyName",
+      "RangeVariantJsonConverter.WriteAsPropertyName"
+    ],
+    "heldBy": [
+      "JsonDictionaryKeyTests"
+    ]
+  },
+  {
+    "id": "J24-value-sets-cannot-be-keys",
+    "source": "docs/serialization.md#dictionary-keys",
+    "quote": "Value sets cannot be keys — their value form is a JSON array, not a string.",
+    "claim": "Serializing or deserializing a Dictionary keyed by a value set (closed or wrapper arity) throws NotSupportedException naming the set type rather than writing or reading a property name.",
+    "oracle": "exception",
+    "surfaces": [
+      "StringSet.From"
+    ],
+    "heldBy": [
+      "JsonDictionaryKeyTests"
+    ]
+  },
+  {
+    "id": "J25-canonical-key-collision",
+    "source": "docs/serialization.md#dictionary-keys",
+    "quote": "It checks duplicates on the parsed key, so a canonical collision is a `JsonException` like a literal duplicate:",
+    "claim": "Deserializing `{\"[1,5]\":\"a\",\"[1,6)\":\"b\"}` into Dictionary<Int32Range,string> keeps the later value by default and throws JsonException with AllowDuplicateProperties = false.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Parse"
+    ],
+    "heldBy": [
+      "JsonDictionaryKeyTests"
+    ]
+  },
+  {
+    "id": "J26-rejection-message-excerpt",
+    "source": "docs/serialization.md#rejections",
+    "quote": "A literal that does not parse is a `JsonException` naming the target type and quoting the input — at most 64 characters of it, plus its length when longer: `Cannot parse '[2026-13-01,2026-14-01]' as DateRange.`",
+    "claim": "The JsonException for an unparsable literal contains the target type name and at most 64 characters of the input (plus its length when longer), never the whole payload; every malformed literal read into any range, variant, RangeSet or set type throws JsonException, never FormatException or a default value.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.Parse",
+      "RangeSet.Parse",
+      "*Set.Parse"
+    ],
+    "heldBy": [
+      "ParserResilienceTests",
+      "RangeJsonConverterTests",
+      "SetJsonConverterTests",
+      "JsonDictionaryKeyTests"
+    ]
+  },
+  {
+    "id": "J27-element-converter-consulted-last",
+    "source": "docs/serialization.md#element-converters",
+    "quote": "It is consulted last — only when System.Text.Json has no scalar converter for the element type at all — so registering one by any of the three normal routes still wins.",
+    "claim": "A wrapper or NodaTime set serializes its elements through the family's ElementJsonConverter only when no converter for the element type is registered on the options, property or element type; otherwise that converter's output appears; each wrapper arity writes its primitive sibling's token type (integer arities a JSON number, DecimalSet<T> a number keeping scale, string/Guid/temporal/NodaTime arities a string) and reads back through the element's Parse; the five NodaTime sets serialize as ISO 8601 string arrays with default options.",
+    "oracle": "claim",
+    "surfaces": [
+      "IValueSetFactory.ElementJsonConverter",
+      "*Set.From",
+      "LocalDateSet.From"
+    ],
+    "heldBy": [
+      "NodaTimeConverterRegistrationTests",
+      "SetJsonConverterTests",
+      "TemporalSetJsonTests",
+      "ValueSetContractTests",
+      "SetElementBridgeTests",
+      "NodaTimeSetElementBridgeTests",
+      "NodaTimeSetJsonTests"
+    ]
+  },
+  {
+    "id": "J28-wrapper-byte-identical-nontemporal",
+    "source": "docs/value-sets.md#ordering-and-json",
+    "quote": "For the string, Guid, integer and decimal arities the payload is **byte-identical** to the primitive set it replaces, so swapping `Int32Set` for `Int32Set<OrderId>` is invisible to API consumers.",
+    "claim": "For the same values, JsonSerializer.Serialize of StringSet<T>, GuidSet<T>, Int16/32/64Set<T> and DecimalSet<T> equals byte for byte the output of the closed sibling.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.From"
+    ],
+    "heldBy": [
+      "SetJsonConverterTests"
+    ]
+  },
+  {
+    "id": "J29-wrapper-temporal-same-value-different-text",
+    "source": "docs/value-sets.md#ordering-and-json",
+    "quote": "Each payload still deserializes into the other's type.",
+    "claim": "DateTimeOffsetSet<T> writes seven fraction digits where DateTimeOffsetSet writes none, and each payload deserializes into the other type as an equal value.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateTimeOffsetSet.From",
+      "DateTimeSet.From",
+      "TimeSet.From",
+      "DateSet.From"
+    ],
+    "heldBy": [
+      "SetJsonConverterTests"
+    ]
+  },
+  {
+    "id": "J30-nodatime-converters-fallback-and-refusal",
+    "source": "docs/serialization.md#element-converters",
+    "quote": "Those converters are a fallback too — any other converter on the options for the same type wins, in either registration order, so NodaTime.Serialization.SystemTextJson stays authoritative — and a bare `LocalDate`, `LocalDateTime` or `YearMonth` in a calendar other than ISO is refused on write with an `ArgumentException`, as NodaTime's converter refuses it.",
+    "claim": "AddNodaTimeRangeConverters() gives bare NodaTime properties ISO 8601 text, is idempotent, yields to ConfigureForNodaTime in either order, and throws ArgumentException when writing a bare non-ISO-calendar LocalDate/LocalDateTime/YearMonth.",
+    "oracle": "exception",
+    "surfaces": [
+      "NodaTimeRangeJsonSerializerOptionsExtensions.AddNodaTimeRangeConverters"
+    ],
+    "heldBy": [
+      "NodaTimeConverterRegistrationTests"
+    ]
+  },
+  {
+    "id": "J31-openapi-without-transformer",
+    "source": "docs/serialization.md#openapi",
+    "quote": "So a range, multirange or value set in a request or response body is described as `{}`, an unconstrained value.",
+    "claim": "Without the transformer the generated OpenAPI schema for a body range/multirange/set is an empty schema; with ValueRangesSchemaTransformer a range is `type: string` with a pattern, a RangeSet `type: string` with the multirange pattern, and a set `type: array` with uniqueItems and element items; the documented patterns accept every literal the parsers accept (whitespace, EMPTY in any case, quoted bounds with commas) and the documented transformer source equals the tested copy; a range-typed query parameter is type: string with or without the transformer.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "RangeSet.From",
+      "*Set.From",
+      "*Range.Parse"
+    ],
+    "heldBy": [
+      "OpenApiSchemaTests"
+    ]
+  },
+  {
+    "id": "J32-nodatime-literals-iso-culture-free",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#semantics-worth-knowing",
+    "quote": "Literals use NodaTime's ISO patterns: `[2025-01-01,2025-03-31]`, `[2024-06-01T08:00:00,2024-06-01T17:30:00)`, `[2024-06-01T00:00:00Z,2024-07-01T00:00:00Z)`.",
+    "claim": "LocalDateRange, LocalDateTimeRange and InstantRange format as ISO literals (Instant with Z, subsecond digits only when present) under any culture and parse their own output back equal; YearMonthRange writes uuuu-MM bounds and canonicalizes [2025-01,2026-01) to [2025-01,2025-12] on parse; Parse also accepts the psql wire form: a space separator, a numeric offset (+02) converted to the instant it denotes, and infinity/-infinity read as the extreme values.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "LocalDateRange.ToString",
+      "LocalDateTimeRange.ToString",
+      "InstantRange.ToString",
+      "InstantRange.Parse",
+      "YearMonthRange.ToString",
+      "YearMonthRange.Parse"
+    ],
+    "heldBy": [
+      "NodaTimeParseFormatTests",
+      "LiteralCultureContractTests",
+      "LiteralProviderContractTests",
+      "YearMonthRangeTests",
+      "TemporalLiteralStrictnessContractTests"
+    ]
+  },
+  {
+    "id": "M01-rangeset-invariant-on-construction",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "Its invariant — elements sorted by lower bound, pairwise disjoint, pairwise non-adjacent — is enforced on every construction: empty ranges are dropped, overlapping or adjacent inputs are merged, and any `Infinity` input collapses the set to `RangeSet<TRange, T>.Infinite`.",
+    "claim": "RangeSet.From over any input yields elements sorted by lower bound, pairwise disjoint and non-adjacent, with empties dropped and an Infinity input yielding the Infinite singleton.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.From",
+      "RangeSet.Create",
+      "RangeSet.Infinite",
+      "RangeSet.Empty"
+    ],
+    "heldBy": [
+      "RangeSetTests",
+      "SmallModelMultirangeOracleTests",
+      "NodaTimeRangeSetTests",
+      "ContinuousMultirangeParityTests"
+    ]
+  },
+  {
+    "id": "M02-set-adjacency-directional-outer-edges",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "**Adjacency mirrors PostgreSQL exactly:** it is *directional through the outer edges* — the operand must end exactly where the set's first element begins, or begin exactly where the set's last element ends.",
+    "claim": "RangeSet.IsAdjacentTo(range) is true only when the operand abuts the first element's start or the last element's end; touching an interior boundary answers false, as PostgreSQL's multirange -|- does.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeSetComparisonTests",
+      "ExecutedQueryTests"
+    ]
+  },
+  {
+    "id": "M03-set-positional-operators-first-last",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "The positional operators (`<<`, `>>`, `&<`, `&>`) likewise compare the first/last element's bounds.",
+    "claim": "RangeSet.IsStrictlyLeftOf/DoesNotExtendRightOf are decided by the last element and IsStrictlyRightOf/DoesNotExtendLeftOf by the first, matching PostgreSQL's multirange operators.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.IsStrictlyLeftOf",
+      "RangeSet.IsStrictlyRightOf",
+      "RangeSet.DoesNotExtendLeftOf",
+      "RangeSet.DoesNotExtendRightOf"
+    ],
+    "heldBy": [
+      "RangeSetComparisonTests",
+      "ExecutedQueryTests"
+    ]
+  },
+  {
+    "id": "M04-isinfinity-not-conjunction",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "**`IsInfinity()` is not the conjunction of the two unbounded checks.**",
+    "claim": "A RangeSet of (-∞,5] and [10,+∞) answers IsUnboundedStart() and IsUnboundedEnd() true, Contains(7) false and IsInfinity() false; only RangeSet.Infinite answers IsInfinity() true.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeSet.IsInfinity",
+      "RangeSet.IsUnboundedStart",
+      "RangeSet.IsUnboundedEnd",
+      "RangeSet.IsFinite"
+    ],
+    "heldBy": [
+      "RangeSetComparisonTests",
+      "ExecutedQueryTests",
+      "QueryTranslationTests"
+    ]
+  },
+  {
+    "id": "M05-collection-expressions-normalize",
+    "source": "docs/ranges.md#collection-expressions",
+    "quote": "`RangeSet<TRange, T>` supports collection expressions, and they normalize exactly as `From` does:",
+    "claim": "A RangeSet collection expression yields the same set as From over the same elements; `[]` is the Empty singleton and one containing Infinite is the Infinite singleton; From(IEnumerable) and From(params ReadOnlySpan) over the same ranges produce equal sets with equal hash codes.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.Create",
+      "RangeSet.From",
+      "RangeSet.Empty",
+      "RangeSet.Infinite"
+    ],
+    "heldBy": [
+      "RangeSetTests"
+    ]
+  },
+  {
+    "id": "M06-readonlylist-and-structural-equality",
+    "source": "docs/ranges.md#collection-expressions",
+    "quote": "The set implements `IReadOnlyList<TRange>` (enumeration in lower-bound order, `Count`, indexer) and structural equality, including `==`/`!=`: two sets built from different inputs that normalize identically are equal.",
+    "claim": "Two RangeSets whose inputs normalize to the same elements are Equals, ==, share GetHashCode, enumerate the same elements in lower-bound order and agree on Count and indexer.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.Equals",
+      "RangeSet.GetHashCode",
+      "RangeSet.op_Equality",
+      "RangeSet.Count",
+      "RangeSet.GetEnumerator",
+      "RangeSet.op_Inequality",
+      "RangeSet.Item"
+    ],
+    "heldBy": [
+      "RangeSetTests",
+      "RangeSetComparisonTests",
+      "SmallModelMultirangeOracleTests"
+    ]
+  },
+  {
+    "id": "M07-range-equality-value-semantics",
+    "source": "docs/ranges.md#collection-expressions",
+    "quote": "a == b;       // true — same value semantics as the ranges themselves",
+    "claim": "Two ranges holding the same values (e.g. (1,5), [2,5), (1,4], [2,4] over int) are Equals, ==, and have equal hash codes; ranges holding different values are not equal.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Equals",
+      "*Range.GetHashCode",
+      "*Range.CreateFinite",
+      "*Range.op_Equality",
+      "*Range.op_Inequality",
+      "*Range+*.Equals",
+      "*Range+*.GetHashCode",
+      "*Range+*.op_Equality",
+      "*Range+*.op_Inequality"
+    ],
+    "heldBy": [
+      "SmallModelOracleTests",
+      "RangeSetTests"
+    ]
+  },
+  {
+    "id": "M08-lowerboundcomparer-order",
+    "source": "docs/ranges.md#sorting-ranges-externally",
+    "quote": "`IUnboundedStartRange<T>` sorts first (its lower bound is -∞); at the same finite value, an inclusive lower bound sorts before an exclusive one (`[5, …` before `(5, …`).",
+    "claim": "Sorting a List<TRange> with RangeSet.LowerBoundComparer places UnboundedStart first and, at equal lower values, an inclusive bound before an exclusive one; the result order equals the set's enumeration order.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeSet.LowerBoundComparer",
+      "RangeLowerBoundComparer.Compare"
+    ],
+    "heldBy": [
+      "RangeSetOptimizationTests"
+    ]
+  },
+  {
+    "id": "M09-lowerboundcomparer-same-instance",
+    "source": "docs/ranges.md#sorting-ranges-externally",
+    "quote": "The same instance is available as `RangeLowerBoundComparer<Int32Range, int>.Instance` for contexts where you only have the comparer type and not the set type.",
+    "claim": "RangeSet<TRange,T>.LowerBoundComparer and RangeLowerBoundComparer<TRange,T>.Instance are the same object reference.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.LowerBoundComparer",
+      "RangeLowerBoundComparer.Instance"
+    ],
+    "heldBy": [
+      "RangeSetOptimizationTests"
+    ]
+  },
+  {
+    "id": "M10-complement-every-value-not-covered",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "// Complement — every value not covered by the set",
+    "claim": "For every value v, set.Complement().Contains(v) == !set.Contains(v); Complement of Empty is Infinite, of Infinite is Empty, and Complement is its own inverse.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.Complement",
+      "RangeSet.Contains"
+    ],
+    "heldBy": [
+      "RangeSetTests",
+      "RangeSetOptimizationTests",
+      "SmallModelMultirangeOracleTests",
+      "ContinuousMultirangeParityTests"
+    ]
+  },
+  {
+    "id": "M11-operator-aliases",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "// Set operations — single-range and bulk variants, with operator aliases (|, &, -)",
+    "claim": "set | x, set & x and set - x (x a range or a set) return sets equal to set.Union(x), set.Intersect(x) and set.Except(x).",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.op_BitwiseOr",
+      "RangeSet.op_BitwiseAnd",
+      "RangeSet.op_Subtraction",
+      "RangeSet.Union",
+      "RangeSet.Intersect",
+      "RangeSet.Except"
+    ],
+    "heldBy": [
+      "SmallModelMultirangeOracleTests"
+    ]
+  },
+  {
+    "id": "R01-createfinite-degenerate-is-empty",
+    "source": "docs/ranges.md#creating-ranges",
+    "quote": "`CreateFinite()` automatically returns an `Empty` when the arguments form a degenerate or inverted interval (e.g. `start > end`, or equal bounds that are both exclusive).",
+    "claim": "For every range type, CreateFinite with start > end, or equal bounds with any exclusive side (continuous), or exclusive bounds one step apart (discrete), returns the Empty variant.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "*Range.Empty",
+      "IRangeFactory.CreateFinite",
+      "IRangeFactory.CreateUnboundedStart",
+      "IRangeFactory.CreateUnboundedEnd",
+      "IRangeFactory.Empty",
+      "IRangeFactory.Infinite",
+      "*Range+EmptyRange..ctor",
+      "*Range+Infinity..ctor",
+      "*Range+UnboundedStart..ctor",
+      "*Range+UnboundedEnd..ctor"
+    ],
+    "heldBy": [
+      "RangeShapePredicateTests",
+      "TimeRangeTests",
+      "InstantRangeTests",
+      "LocalDateRangeTests",
+      "YearMonthRangeTests",
+      "LocalDateTimeRangeTests"
+    ]
+  },
+  {
+    "id": "R02-default-inclusiveness",
+    "source": "docs/ranges.md#creating-ranges",
+    "quote": "Discrete types default to fully closed intervals; continuous types default to the half-open convention that is conventional for monetary amounts and timestamps.",
+    "claim": "CreateFinite(a,b) on Int32/Int64/Date/LocalDate/YearMonth ranges is [a,b]; on Decimal/DateTime/DateTimeOffset/Time/LocalDateTime/Instant ranges it is [a,b) and Contains(b) is false.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "RangeExtensions.Contains",
+      "RangeExtensions.UpperBoundInclusive",
+      "*Range+Finite.StartInclusive",
+      "*Range+Finite.EndInclusive",
+      "*Range+UnboundedStart.EndInclusive",
+      "*Range+UnboundedEnd.StartInclusive",
+      "IFiniteRange.StartInclusive",
+      "IFiniteRange.EndInclusive",
+      "IUnboundedStartRange.EndInclusive",
+      "IUnboundedEndRange.StartInclusive"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests",
+      "RangeBoundAccessorTests",
+      "TimeRangeTests",
+      "InstantRangeTests",
+      "LocalDateRangeTests",
+      "YearMonthRangeTests",
+      "LocalDateTimeRangeTests"
+    ]
+  },
+  {
+    "id": "R03-discrete-canonicalization-at-construction",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#semantics-worth-knowing",
+    "quote": "Discrete canonicalization applies: `(2025-01-01, 2025-01-31)` normalizes to `[2025-01-02, 2025-01-30]`.",
+    "claim": "For every discrete range type, CreateFinite with exclusive bounds returns a Finite whose Start/End are stepped inward and whose inclusiveness flags are both true; CreateUnboundedStart(x) exclusive yields End = predecessor(x).",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.CreateFinite",
+      "*Range.CreateUnboundedStart",
+      "*Range.CreateUnboundedEnd",
+      "IRangeFactory.NextValueAfter",
+      "IRangeFactory.PreviousValueBefore"
+    ],
+    "heldBy": [
+      "RangeFactoryContractTests",
+      "LocalDateRangeTests",
+      "RangeBoundAccessorTests",
+      "YearMonthRangeTests"
+    ]
+  },
+  {
+    "id": "R04-deconstruction-forms",
+    "source": "docs/ranges.md#pattern-matching",
+    "quote": "A discrete type's `Finite` gives `(start, end)`, both inclusive — the canonical form; a continuous type's gives `(start, end, startInclusive, endInclusive)`:",
+    "claim": "Deconstructing a discrete Finite yields (start,end) that passed to CreateFinite rebuilds an equal range; a continuous Finite yields four values that rebuild an equal range; unbounded variants deconstruct into their constructor arguments.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range+Finite.Deconstruct",
+      "*Range+UnboundedStart.Deconstruct",
+      "*Range+UnboundedEnd.Deconstruct",
+      "*Range.CreateFinite",
+      "*Range.CreateUnboundedStart",
+      "*Range.CreateUnboundedEnd"
+    ],
+    "heldBy": [
+      "RangeDeconstructTests",
+      "VariantDeconstructContractTests",
+      "NodaTimeDeconstructTests"
+    ]
+  },
+  {
+    "id": "R05-empty-contained-by-everything",
+    "source": "docs/ranges.md#containment",
+    "quote": "The empty range is contained by every range, which is the vacuous reading of \"every value of the inner range is also in the outer\" and matches PostgreSQL's `@>`.",
+    "claim": "For every range shape S, S.Contains(Empty) is true (Empty included) and Empty.Contains(S) is false for non-empty S, matching PostgreSQL's @>.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "*Range.Empty"
+    ],
+    "heldBy": [
+      "RangeContainsTests",
+      "ShapeMatrixParityTests",
+      "SmallModelOracleTests",
+      "RangeContainedByTests"
+    ]
+  },
+  {
+    "id": "R06-empty-overlaps-nothing",
+    "source": "docs/ranges.md#containment",
+    "quote": "Containment and *overlap* part ways here: `sprint.Overlaps(DateRange.Empty)` is `false`, because overlap needs a shared value and the empty range has none.",
+    "claim": "For every range shape S, S.Overlaps(Empty) and Empty.Overlaps(S) are false, while Overlaps is true exactly when some value is in both.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeExtensions.Overlaps",
+      "*Range.Empty"
+    ],
+    "heldBy": [
+      "RangeOverlapsTests",
+      "ShapeMatrixParityTests",
+      "SmallModelOracleTests"
+    ]
+  },
+  {
+    "id": "R07-adjacency-definition",
+    "source": "docs/ranges.md#adjacency",
+    "quote": "Two ranges are adjacent when they are contiguous with no gap and no overlap — their union would form a single range.",
+    "claim": "a.IsAdjacentTo(b) is true iff a and b do not overlap and a.Union(b) has exactly one element; discrete neighbours one step apart and continuous ranges touching with complementary inclusiveness are adjacent.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeExtensions.IsAdjacentTo",
+      "RangeExtensions.Union",
+      "RangeExtensions.Overlaps"
+    ],
+    "heldBy": [
+      "RangeIsAdjacentTests",
+      "ShapeMatrixParityTests",
+      "SmallModelOracleTests",
+      "RangeUnionTests"
+    ]
+  },
+  {
+    "id": "R08-adjacency-symmetric-unbounded",
+    "source": "docs/ranges.md#adjacency",
+    "quote": "An unbounded range is adjacent on its bounded edge, and the relation is symmetric — the receiver's shape does not change the answer, matching PostgreSQL's `-|-`:",
+    "claim": "For every ordered pair of shapes, a.IsAdjacentTo(b) == b.IsAdjacentTo(a); (-∞,0] is adjacent to [1,+∞) and to [1,3]; Empty and Infinite are adjacent to nothing; two ranges unbounded at the same end are never adjacent.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeIsAdjacentTests",
+      "ShapeMatrixParityTests",
+      "ExecutedQueryTests"
+    ]
+  },
+  {
+    "id": "R09-discrete-step-adjacency",
+    "source": "README.md#supported-types",
+    "quote": "This matters for adjacency checks: `[1, 5]` and `[6, 10]` are adjacent for integers because there is no integer between 5 and 6.",
+    "claim": "For every discrete type, IsDiscrete is true, NextValueAfter(x) is the successor (null at the domain maximum), and [a,b] is adjacent to [b+1,c].",
+    "oracle": "claim",
+    "surfaces": [
+      "IRangeFactory.NextValueAfter",
+      "IRangeFactory.PreviousValueBefore",
+      "IRangeFactory.IsDiscrete",
+      "RangeExtensions.IsAdjacentTo",
+      "*Range.IsDiscrete",
+      "*Range.NextValueAfter",
+      "*Range.PreviousValueBefore"
+    ],
+    "heldBy": [
+      "RangeIsAdjacentTests",
+      "RangeFactoryContractTests",
+      "DiscreteDomainBoundaryTests",
+      "YearMonthRangeTests",
+      "LocalDateRangeTests"
+    ]
+  },
+  {
+    "id": "R10-length-convention",
+    "source": "docs/ranges.md#measuring-a-range",
+    "quote": "The convention follows the domain: a discrete one counts its values inclusive of both bounds, a continuous one measures the span between them.",
+    "claim": "Length of a discrete Finite equals its Values().Count() (DateRange in days, int ranges as long), and of a continuous Finite equals End - Start regardless of inclusiveness; Empty.Length is 0 and Length of UnboundedStart, UnboundedEnd and Infinite is null for every type.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Length",
+      "*Range.Values",
+      "*Range.Empty",
+      "*Range.Infinite"
+    ],
+    "heldBy": [
+      "RangeLengthTests",
+      "NodaTimeLengthAndBridgeTests"
+    ]
+  },
+  {
+    "id": "R11-values-enumerates-contents",
+    "source": "docs/ranges.md#enumerating-a-discrete-range",
+    "quote": "The discrete range types enumerate what they contain.",
+    "claim": "For a discrete Finite range, Values() yields exactly the values v with Contains(v) true, ascending, including both bounds, and terminates at the domain maximum; Empty yields nothing; Values() on an unbounded shape throws NotSupportedException at the call, before any enumeration.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Values",
+      "RangeExtensions.Contains"
+    ],
+    "heldBy": [
+      "RangeValuesAndClampTests",
+      "NodaTimeLengthAndBridgeTests",
+      "YearMonthRangeTests"
+    ]
+  },
+  {
+    "id": "R12-clamp-unbounded-side-never-constrains",
+    "source": "docs/ranges.md#clamping-a-value-into-a-range",
+    "quote": "An unbounded side never constrains: clamping into `(-∞, 10]` only ever pulls a value down.",
+    "claim": "Clamp returns the value unchanged when Contains(value), the nearest bound otherwise, the value itself for Infinite, and never moves a value across an unbounded side; the result is always contained (discrete); Clamp on Empty returns null.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeExtensions.Clamp",
+      "RangeExtensions.Contains",
+      "*Range.Empty"
+    ],
+    "heldBy": [
+      "RangeValuesAndClampTests",
+      "SmallModelOracleTests",
+      "NodaTimeLengthAndBridgeTests"
+    ]
+  },
+  {
+    "id": "R13-strictly-left-shared-point",
+    "source": "docs/ranges.md#directional-comparisons",
+    "quote": "Int32Range.CreateFinite(1, 5).IsStrictlyLeftOf(Int32Range.CreateFinite(5, 9));  // false — they share 5",
+    "claim": "IsStrictlyLeftOf is true iff every value of the receiver is below every value of the operand (touching with complementary inclusiveness counts); IsStrictlyRightOf is its mirror; both match PostgreSQL << and >> for every shape pair; DoesNotExtendRightOf compares upper bounds and DoesNotExtendLeftOf lower bounds, matching &< and &> for every ordered shape pair.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf"
+    ],
+    "heldBy": [
+      "RangeStrictlyLeftOrRightOfTests",
+      "ShapeMatrixParityTests",
+      "SmallModelOracleTests",
+      "ExecutedQueryTests",
+      "RangeDoesNotExtendLeftOfTests",
+      "RangeDoesNotExtendRightOfTests"
+    ]
+  },
+  {
+    "id": "R14-bound-accessors-null-semantics",
+    "source": "docs/ranges.md#bound-accessors",
+    "quote": "The variants expose `Start`/`End` only where they exist structurally; the accessors provide the dynamic view: `T?` with `null` for a missing bound — exactly PostgreSQL's `NULL` semantics.",
+    "claim": "LowerBound()/UpperBound() return the bound where the shape has one and null for an unbounded side or Empty; LowerBoundInclusive()/UpperBoundInclusive() are false for Empty, Infinite and unbounded sides, matching lower/upper/lower_inc/upper_inc; on a RangeSet the accessors report the first element's lower and the last element's upper bound, null/false for the empty set.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeExtensions.LowerBoundInclusive",
+      "RangeExtensions.UpperBoundInclusive",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound",
+      "*Range+Finite.Start",
+      "*Range+Finite.End",
+      "*Range+UnboundedStart.End",
+      "*Range+UnboundedEnd.Start",
+      "IFiniteRange.Start",
+      "IFiniteRange.End",
+      "IUnboundedStartRange.End",
+      "IUnboundedEndRange.Start",
+      "RangeSet.LowerBoundInclusive",
+      "RangeSet.UpperBoundInclusive"
+    ],
+    "heldBy": [
+      "RangeBoundAccessorTests",
+      "SmallModelOracleTests",
+      "ExecutedQueryTests",
+      "InstantRangeTests",
+      "LocalDateRangeTests"
+    ]
+  },
+  {
+    "id": "R15-intersect-single-range",
+    "source": "docs/ranges.md#intersection",
+    "quote": "The intersection of two ranges is always expressible as a single range, so `Intersect` returns the range type directly — `Empty` genuinely means an empty intersection.",
+    "claim": "For every shape pair, a.Intersect(b) contains exactly the values in both, is Empty when they share none, and equals PostgreSQL's `*`.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Intersect"
+    ],
+    "heldBy": [
+      "RangeIntersectTests",
+      "ShapeMatrixParityTests",
+      "SmallModelOracleTests",
+      "ExecutedQueryTests"
+    ]
+  },
+  {
+    "id": "R16-union-merge-or-two-elements",
+    "source": "docs/ranges.md#union",
+    "quote": "When the ranges overlap or are adjacent, the set holds the single merged range; when they are disjoint, the set holds both — the union of two separated ranges genuinely *is* two ranges, and the result type says so.",
+    "claim": "a.Union(b) is a one-element RangeSet when a and b overlap or are adjacent and a two-element set otherwise, containing exactly the values of either, and equals PostgreSQL's multirange `+`; UnboundedEnd ∪ overlapping Finite is one UnboundedEnd element and UnboundedStart ∪ overlapping UnboundedEnd is RangeSet.Infinite.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Union",
+      "RangeSet.Count",
+      "RangeSet.Infinite"
+    ],
+    "heldBy": [
+      "RangeUnionTests",
+      "ShapeMatrixParityTests",
+      "SmallModelOracleTests"
+    ]
+  },
+  {
+    "id": "R17-except-cardinality",
+    "source": "docs/ranges.md#except-set-difference",
+    "quote": "Removes the overlap of `other` from the receiver, returning a `RangeSet<TRange, T>` whose cardinality reflects the structural outcome directly.",
+    "claim": "a.Except(b) has 0 elements when b contains a, 2 when b is strictly interior to a, and 1 otherwise, holding exactly the values of a not in b, and equals PostgreSQL's multirange `-`; for every value v exactly one of a.Except(b).Contains(v) and (b.Contains(v) || !a.Contains(v)) holds, with a continuous cut flipping inclusiveness at the boundary.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Except",
+      "RangeSet.Count",
+      "RangeSet.Contains"
+    ],
+    "heldBy": [
+      "RangeExceptTests",
+      "ShapeMatrixParityTests",
+      "SmallModelOracleTests",
+      "ContinuousMultirangeParityTests"
+    ]
+  },
+  {
+    "id": "R18-merge-covers-gap",
+    "source": "docs/ranges.md#merge-convex-hull",
+    "quote": "Unlike `Union`, the result also covers any gap between disjoint operands.",
+    "claim": "a.Merge(b) is the smallest single range containing both, so a.Merge(b).Contains(v) for every v in a or b or between them, matching PostgreSQL's range_merge; RangeSet.Merge() spans the whole set (Empty for the empty set, the element for a singleton); a.Merge(Empty) equals a and UnboundedStart.Merge(UnboundedEnd) is Infinite even when disjoint.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Merge",
+      "RangeSet.Merge",
+      "*Range.Empty",
+      "*Range.Infinite"
+    ],
+    "heldBy": [
+      "RangeMergeSpanTests",
+      "ShapeMatrixParityTests",
+      "ExecutedQueryTests",
+      "LocalDateRangeTests"
+    ]
+  },
+  {
+    "id": "R19-aggregates-in-memory",
+    "source": "docs/ranges.md#aggregates",
+    "quote": "`RangeAgg()` and `RangeIntersectAgg()` aggregate a sequence of ranges — the in-memory counterparts of PostgreSQL's `range_agg` and `range_intersect_agg`:",
+    "claim": "RangeAgg of a sequence equals RangeSet.From of it (normalized, empties dropped) and RangeIntersectAgg equals the fold of Intersect (null for an empty source, Empty for disjoint inputs, Infinity neutral), each agreeing with PostgreSQL over every subset of inputs.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg",
+      "RangeAggregateExtensions.RangeIntersectAgg",
+      "NodaTimeRangeAggregateExtensions.RangeAgg",
+      "NodaTimeRangeAggregateExtensions.RangeIntersectAgg"
+    ],
+    "heldBy": [
+      "RangeAggregateTests",
+      "RangeAggregateParityTests",
+      "NodaTimeRangeSetTests",
+      "YearMonthRangeTests",
+      "TimeRangeTests"
+    ]
+  },
+  {
+    "id": "R20-timerange-cannot-cross-midnight",
+    "source": "README.md#supported-types",
+    "quote": "A single range cannot cross midnight; a 22:00–06:00 window is two ranges, which is exactly what a two-element `RangeSet` (and its PostgreSQL multirange counterpart) represents.",
+    "claim": "TimeRange.CreateFinite(22:00, 06:00) is Empty (inverted), and the overnight window is RangeSet.From([22:00,24h), [00:00,06:00)) with Count 2 that round-trips as a timemultirange.",
+    "oracle": "claim",
+    "surfaces": [
+      "TimeRange.CreateFinite",
+      "RangeSet.From",
+      "RangeSet.Count"
+    ],
+    "heldBy": [
+      "TimeRangeTests",
+      "TimeAndYearMonthIntegrationTests"
+    ]
+  },
+  {
+    "id": "R21-yearmonth-localdate-lossless",
+    "source": "README.md#nodatime",
+    "quote": "It converts losslessly to the `LocalDateRange` covering exactly its months (`ToLocalDateRange()` / `ToYearMonthRange()`), which is also how the EF Core satellite stores it: as a month-aligned `daterange`, with every operator working server-side and reads validating alignment rather than silently shifting boundaries.",
+    "claim": "For every YearMonthRange shape, ToLocalDateRange() covers exactly the days of its months and ToYearMonthRange() inverts it; ToYearMonthRange on a LocalDateRange whose bound is not a month boundary throws.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "NodaTimeInteropExtensions.ToLocalDateRange",
+      "NodaTimeInteropExtensions.ToYearMonthRange",
+      "NodaTimeInteropExtensions.ToDateInterval"
+    ],
+    "heldBy": [
+      "YearMonthRangeTests",
+      "NodaTimeLengthAndBridgeTests"
+    ]
+  },
+  {
+    "id": "R22-nodatime-iso-normalization-at-construction",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#semantics-worth-knowing",
+    "quote": "`LocalDateRange` and `LocalDateTimeRange` therefore normalize bounds to the ISO calendar at construction (`WithCalendar(CalendarSystem.Iso)` — same day on the timeline, ISO representation).",
+    "claim": "A LocalDateRange or LocalDateTimeRange built from non-ISO-calendar bounds holds ISO bounds denoting the same days, so mixed-calendar operands never throw and compare by timeline.",
+    "oracle": "claim",
+    "surfaces": [
+      "LocalDateRange.CreateFinite",
+      "LocalDateTimeRange.CreateFinite",
+      "LocalDateRange.CreateUnboundedEnd"
+    ],
+    "heldBy": [
+      "LocalDateRangeTests",
+      "LocalDateTimeRangeTests",
+      "NodaTimeInteropTests"
+    ]
+  },
+  {
+    "id": "R23-nodatime-iso-normalization-cannot-fail",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#semantics-worth-knowing",
+    "quote": "Every calendar NodaTime ships spans a subset of the ISO calendar's range (the latest, Coptic, ends on ISO 9999-11-10), so the conversion cannot fail.",
+    "claim": "For every NodaTime calendar, its earliest and latest dates construct LocalDateRange, LocalDateTimeRange, LocalDateSet and LocalDateTimeSet without throwing, with bounds and elements normalized to ISO.",
+    "oracle": "exception",
+    "surfaces": [
+      "LocalDateRange.CreateFinite",
+      "LocalDateTimeRange.CreateFinite",
+      "LocalDateSet.From",
+      "LocalDateTimeSet.From"
+    ],
+    "heldBy": [
+      "CalendarBoundaryTests"
+    ]
+  },
+  {
+    "id": "R24-yearmonthrange-rejects-non-iso",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#semantics-worth-knowing",
+    "quote": "`YearMonthRange` is stricter: a non-ISO year-month spans parts of two ISO months and has no lossless equivalent, so it **rejects** non-ISO bounds with `ArgumentException` instead of reinterpreting them.",
+    "claim": "Every YearMonthRange factory throws ArgumentException for a YearMonth in a non-ISO calendar.",
+    "oracle": "exception",
+    "surfaces": [
+      "YearMonthRange.CreateFinite",
+      "YearMonthRange.CreateUnboundedStart",
+      "YearMonthRange.CreateUnboundedEnd"
+    ],
+    "heldBy": [
+      "YearMonthRangeTests",
+      "CalendarBoundaryTests"
+    ]
+  },
+  {
+    "id": "R25-interval-interop",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#interop-with-nodatimes-own-interval-types",
+    "quote": "`interval.ToInstantRange()` (total) · `range.ToInterval()` (throws for shapes an `Interval` cannot express)",
+    "claim": "Every NodaTime Interval converts to an InstantRange (absent ends to unbounded shapes, degenerate to Empty) and back equal; ToInterval() on Empty or on a non-half-open Finite throws.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "NodaTimeInteropExtensions.ToInstantRange",
+      "NodaTimeInteropExtensions.ToInterval",
+      "NodaTimeInteropExtensions.ToDateInterval"
+    ],
+    "heldBy": [
+      "NodaTimeInteropTests"
+    ]
+  },
+  {
+    "id": "S01-canonical-set",
+    "source": "docs/value-sets.md#value-sets",
+    "quote": "A value set is an immutable, **canonical** set of scalar values: deduplicated, sorted, never containing null, with structural equality.",
+    "claim": "For every set type, From over any input yields deduplicated elements in CanonicalComparer order; two sets with the same elements are Equals and share GetHashCode; a null element throws.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Set.From",
+      "*Set.Equals",
+      "*Set.GetHashCode",
+      "*Set.Values",
+      "*Set.op_Equality",
+      "*Set.op_Inequality",
+      "*Set.Count",
+      "*Set.IsEmpty",
+      "*Set.Empty",
+      "IValueSetFactory.From",
+      "IValueSetFactory.Empty"
+    ],
+    "heldBy": [
+      "SetCanonicalFormTests",
+      "SetEqualityTests",
+      "SmallModelSetOracleTests",
+      "ValueSetNullContractTests",
+      "ValueSetContractTests"
+    ]
+  },
+  {
+    "id": "S02-every-construction-path-canonical",
+    "source": "docs/value-sets.md#canonical-form-is-the-contract",
+    "quote": "Every construction path deduplicates and sorts — `From`, parsing, JSON, and materialization from the database.",
+    "claim": "The same element multiset reaching a set through From, a collection expression, Parse, JSON deserialization or a database read lands on the identical canonical array.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.From",
+      "*Set.Parse",
+      "*Set.Values"
+    ],
+    "heldBy": [
+      "SmallModelSetOracleTests",
+      "SetParseFormatTests",
+      "SetJsonConverterTests",
+      "SetIntegrationTests",
+      "ProviderConversionTests"
+    ]
+  },
+  {
+    "id": "S03-string-sets-sort-ordinal",
+    "source": "docs/value-sets.md#canonical-form-is-the-contract",
+    "quote": "**String-backed sets sort ordinal** — never a culture-sensitive comparison.",
+    "claim": "StringSet and StringSet<T> order elements by StringComparer.Ordinal over the text form (uppercase before lowercase, umlauts after z) under any culture, and Contains/Remove find elements by that order; every non-string family orders by the element's own comparison (10 after 2, chronological, Guid.CompareTo) and a wrapper arity by its backing primitive; StringSet<T> with a culture-comparing element still orders ordinally over the text form.",
+    "oracle": "claim",
+    "surfaces": [
+      "StringSet.From",
+      "StringSet.CanonicalComparer",
+      "ValueSetExtensions.Contains",
+      "*Set.CanonicalComparer",
+      "IValueSetFactory.CanonicalComparer"
+    ],
+    "heldBy": [
+      "SetCanonicalFormTests",
+      "ValueSetContractTests",
+      "SetAlgebraTests",
+      "SetRangeBridgeTests",
+      "SetElementBridgeTests"
+    ]
+  },
+  {
+    "id": "S04-noop-returns-same-instance",
+    "source": "docs/value-sets.md#value-sets",
+    "quote": "`Intersect`, `Except` and `Add` are also available; they evaluate client-side only (PostgreSQL has no native array intersection or difference operator, and cannot insert at a sorted position), and operations that change nothing return the same instance.",
+    "claim": "Union with a subset, Intersect with a superset, Except with a disjoint set, Add of a present element and Remove of an absent one return the receiver instance itself.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "SetAlgebraTests"
+    ]
+  },
+  {
+    "id": "S05-set-algebra-set-theory",
+    "source": "docs/value-sets.md#value-sets",
+    "quote": "tags.IsProperSubsetOf(more); // false — proper containment excludes equality",
+    "claim": "For every set type and every pair of subsets of a probe universe, Union/Intersect/Except/Overlaps/the four subset predicates agree with set theory, and IsProperSubsetOf of equal sets is false.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "ValueSetExtensions.IsProperSubsetOf",
+      "ValueSetExtensions.IsSubsetOf",
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except",
+      "ValueSetExtensions.Overlaps"
+    ],
+    "heldBy": [
+      "SmallModelSetOracleTests",
+      "SetAlgebraTests",
+      "SetOperatorParityTests"
+    ]
+  },
+  {
+    "id": "S06-wrapper-revalidates-on-read",
+    "source": "docs/value-sets.md#validated-wrapper-elements",
+    "quote": "`IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain.",
+    "claim": "Parsing or deserializing a wrapper set whose element text the wrapper's Parse rejects throws (FormatException/JsonException) rather than yielding a default element; a wrapper element query operand binds as the backing primitive (text, integer, date, …) and a stored element the wrapper's Parse rejects throws on materialization.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.ParseValue",
+      "*Set.FormatValue",
+      "ValueSetExtensions.Contains"
+    ],
+    "heldBy": [
+      "SetElementBridgeTests",
+      "SetJsonConverterTests",
+      "NodaTimeSetElementBridgeTests",
+      "WrapperArityIntegrationTests",
+      "SetQueryTranslationTests",
+      "WrapperSetTranslationTests"
+    ]
+  },
+  {
+    "id": "S07-decorative-format-fails-loudly",
+    "source": "docs/value-sets.md#the-text-form-contract",
+    "quote": "A decorative format (`\"CUST-{value}\"`) fails loudly at the persistence boundary with an error naming the contract.",
+    "claim": "A wrapper element whose ToString(format, provider) returns text that is not the backing primitive's form is rejected with an error naming the text-form contract when written to a literal, JSON or SQL, for every arity including StringSet<T>; a temporal or decimal wrapper element that swallows the format argument and returns its culture/default text is rejected on Parse, JSON write and SQL literal rendering rather than stored truncated, for the NodaTime arities too.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Set.FormatValue",
+      "*Set.ToString",
+      "*Set.Parse"
+    ],
+    "heldBy": [
+      "SqlLiteralTests",
+      "SetElementBridgeTests",
+      "SetJsonConverterTests",
+      "DecorativeElementContractTests"
+    ]
+  },
+  {
+    "id": "S08-temporal-arities-pin-format",
+    "source": "docs/value-sets.md#the-text-form-contract",
+    "quote": "The temporal families pin a format because the default one loses data: a `TimeOnly` renders as `09:30` and a `DateTime` as `06/15/2024 10:30:00`, so an arity that took the element's default would store every timestamp truncated to the second, and every `DateTimeKind` with it.",
+    "claim": "TimeSet<T>, DateTimeSet<T> and DateTimeOffsetSet<T> format elements with \"O\" and DateSet<T> with yyyy-MM-dd, so sub-second ticks and Kind survive the literal, JSON, SQL constant and database round trip.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "TimeSet.FormatValue",
+      "DateTimeSet.FormatValue",
+      "DateTimeOffsetSet.FormatValue",
+      "DateSet.FormatValue"
+    ],
+    "heldBy": [
+      "SetElementBridgeTests",
+      "WrapperSetTranslationTests",
+      "WrapperArityIntegrationTests",
+      "SqlLiteralTests"
+    ]
+  },
+  {
+    "id": "S09-wrapper-reads-family-grammar",
+    "source": "docs/value-sets.md#the-text-form-contract",
+    "quote": "Whatever a generated `Parse` accepts (`decimal.Parse` with `NumberStyles.Number` takes group separators and no exponent), `DecimalSet<Money>` reads `{\"1,5\"}` as a `FormatException` and `{1e3}` as 1000, exactly as `DecimalSet` does — through `Parse`, `TryParse`, JSON and configuration binding.",
+    "claim": "Every wrapper arity, even over a lenient element Parse, accepts and refuses element text exactly as its closed sibling does through Parse, TryParse, JSON and TypeConverter.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse",
+      "*Set.ParseValue",
+      "IValueSetFactory.ParseValue",
+      "IValueSetFactory.FormatValue",
+      "*Set.FormatValue"
+    ],
+    "heldBy": [
+      "WrapperGrammarContractTests",
+      "SetParseFormatTests",
+      "SetJsonConverterTests",
+      "TemporalLiteralStrictnessContractTests"
+    ]
+  },
+  {
+    "id": "S10-array-literal-roundtrip",
+    "source": "docs/value-sets.md#literals-parsing-json",
+    "quote": "`ToString()` produces the PostgreSQL array literal, with the same quoting rules the server uses; `Parse`/`TryParse` accept it back, normalizing to canonical form:",
+    "claim": "For every set type and every element (spaces, commas, quotes, backslashes, empty string, the word NULL), Parse(ToString()) equals the set and PostgreSQL reads the same literal to the same array.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.ToString",
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetParseFormatTests",
+      "LiteralGrammarParityTests",
+      "SmallModelSetOracleTests",
+      "NodaTimeSetTests"
+    ]
+  },
+  {
+    "id": "S11-parse-null-element-refused",
+    "source": "docs/value-sets.md#literals-parsing-json",
+    "quote": "StringSet.Parse(\"{a,NULL}\", null);           // FormatException — sets never contain null",
+    "claim": "An unquoted NULL in an array literal throws FormatException for every family; a quoted or escaped \"NULL\" is the string value; From/Add/Remove/Contains with a null element throw; a JSON null element throws JsonException and a non-array token throws, while an unsorted array with duplicates reads canonical.",
+    "oracle": "exception",
+    "surfaces": [
+      "StringSet.Parse",
+      "StringSet.From",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Contains"
+    ],
+    "heldBy": [
+      "SetParseFormatTests",
+      "ValueSetNullContractTests",
+      "SetAlgebraTests",
+      "SetJsonConverterTests",
+      "NodaTimeSetJsonTests"
+    ]
+  },
+  {
+    "id": "S12-array-in-grammar",
+    "source": "docs/value-sets.md#literals-parsing-json",
+    "quote": "The grammar is PostgreSQL's `array_in`: whitespace around an unquoted element is dropped and whitespace inside it kept (`{ a b }` is `{\"a b\"}`); an unescaped `{`, `}` or `\"` inside an unquoted element is refused, as is text after a quoted one; only ASCII whitespace counts, so a no-break space is element text, as it is on the server.",
+    "claim": "StringSet.Parse drops ASCII whitespace around unquoted elements, keeps inner whitespace and non-ASCII whitespace, honours backslash escapes outside quotes, and refuses nested braces, stray quotes and text after a closing quote exactly as PostgreSQL does.",
+    "oracle": "differential",
+    "surfaces": [
+      "StringSet.Parse",
+      "*Set.Parse"
+    ],
+    "heldBy": [
+      "SetParseFormatTests",
+      "LiteralGrammarParityTests"
+    ]
+  },
+  {
+    "id": "S13-set-range-bridge-membership",
+    "source": "docs/value-sets.md#converting-between-sets-and-ranges",
+    "quote": "Over a discrete domain the same membership has two shapes: `{1,2,3,7}` and `{[1,3],[7,7]}` contain exactly the same values.",
+    "claim": "For Int32Set, Int64Set, DateSet, LocalDateSet and YearMonthSet, set.ToRangeSet() collapses consecutive runs, Contains agrees with the set for every value, and the reverse conversion returns the original set; expanding a RangeSet with an unbounded element throws before any partial result.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "ValueSetRangeExtensions.ToRangeSet",
+      "ValueSetRangeExtensions.ToInt32Set",
+      "ValueSetRangeExtensions.ToDateSet",
+      "NodaTimeValueSetRangeExtensions.ToLocalDateSet",
+      "NodaTimeValueSetRangeExtensions.ToYearMonthSet",
+      "ValueSetRangeExtensions.ToInt64Set",
+      "NodaTimeValueSetRangeExtensions.ToRangeSet"
+    ],
+    "heldBy": [
+      "SetRangeBridgeTests",
+      "NodaTimeLengthAndBridgeTests"
+    ]
+  },
+  {
+    "id": "S14-calendar-rule-reaches-probes",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#semantics-worth-knowing",
+    "quote": "`LocalDateSet`/`LocalDateTimeSet` normalize to ISO and `YearMonthSet` rejects non-ISO — not only in `From`, but in `Contains`, `Add` and `Remove`, which take a bare element rather than a set.",
+    "claim": "holidays.Contains(copticEquivalent) is true when the set holds the ISO date, Add of it is a no-op returning the same instance, Remove removes it, and YearMonthSet throws ArgumentException for a non-ISO probe; From itself normalizes LocalDate/LocalDateTime elements to ISO and YearMonthSet.From throws ArgumentException for a non-ISO YearMonth.",
+    "oracle": "silent-default",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Remove",
+      "LocalDateSet.From",
+      "YearMonthSet.From"
+    ],
+    "heldBy": [
+      "NodaTimeSetTests",
+      "ValueSetContractTests"
+    ]
+  },
+  {
+    "id": "S15-nodatime-wrappers-refuse-non-iso",
+    "source": "src/CodoMetis.ValueRanges.NodaTime/README.md#semantics-worth-knowing",
+    "quote": "`LocalDateSet<T>`, `LocalDateTimeSet<T>` and `YearMonthSet<T>` cannot convert an element to ISO — the only way to build a `T` from an ISO value is to parse it — so an element backed by a value in another calendar is refused with `ArgumentException`: in `From`, in a collection expression, when reading (JSON through a registered element converter), and as the probe of `Contains`/`Add`/`Remove`.",
+    "claim": "A LocalDateSet<T>/LocalDateTimeSet<T>/YearMonthSet<T> element whose backing value is in a non-ISO calendar throws ArgumentException in From, a collection expression, a registered-converter JSON read, and as a Contains/Add/Remove probe even against the empty set.",
+    "oracle": "exception",
+    "surfaces": [
+      "LocalDateSet.From",
+      "YearMonthSet.From",
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Add"
+    ],
+    "heldBy": [
+      "NodaTimeSetElementBridgeTests",
+      "NodaWrapperSetTranslationTests",
+      "WrapperArityIntegrationTests"
+    ]
+  }
+]

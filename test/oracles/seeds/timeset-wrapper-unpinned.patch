@@ -1,0 +1,35 @@
+Seed: TimeSet<TElement> no longer pins the round-trip format, in FormatValue nor in its SetTypeRegistry bridge entry, so an element renders as 09:30 and loses its seconds on the way to the literal, JSON and the column
+Oracles: WrapperGrammarContractTests, WrapperArityIntegrationTests
+Fails: the wrapper-vs-primitive grammar sweep for TimeSet<T>; the stored column text and the near-miss Contains for TimeSet<T> against PostgreSQL
+History: the 7.0.0 arity defect, re-seeded in both halves the CLAUDE.md rule names
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs
+index 67a19ad..5f7f972 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs
+@@ -74,9 +74,9 @@ internal static class SetTypeRegistry
+                 static value => value.ToString("yyyy-MM-dd", Invariant),
+                 storeText: true),
+             [typeof(TimeSet<>)] = Bridged<TimeOnly>(
+-                "time without time zone", "O",
+-                static text => TimeOnly.ParseExact(text, "O", Invariant),
+-                static value => value.ToString("O", Invariant),
++                "time without time zone", null,
++                static text => TimeOnly.Parse(text, Invariant),
++                static value => value.ToString(null, Invariant),
+                 storeValue: StoreTemporal.Truncate, storeText: true),
+ 
+             // The same store-side normalization the closed siblings apply: PostgreSQL
+diff --git a/src/CodoMetis.ValueRanges/Sets/TimeSet.cs b/src/CodoMetis.ValueRanges/Sets/TimeSet.cs
+index 87f1bc6..e3e8d08 100644
+--- a/src/CodoMetis.ValueRanges/Sets/TimeSet.cs
++++ b/src/CodoMetis.ValueRanges/Sets/TimeSet.cs
+@@ -215,7 +215,7 @@ public sealed class TimeSet<TElement> :
+     /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
+     /// — see the class remarks.</summary>
+     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
+-        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
++        => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+ 
+     /// <summary>
+     /// The JSON fallback for elements that carry no converter of their own: a JSON string

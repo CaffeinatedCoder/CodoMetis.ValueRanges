@@ -1,0 +1,18 @@
+Seed: RangeSet normalization merges overlapping neighbours only: two adjacent ranges stay two elements, so the set is not in canonical form
+Oracles: SmallModelMultirangeOracleTests
+Fails: From(shattered, reversed) over every subset — every multi-point run comes back as one element per value
+History: the defect that walked through every worked example when the multirange oracle was written (8.0.0)
+
+diff --git a/src/CodoMetis.ValueRanges/RangeSet.cs b/src/CodoMetis.ValueRanges/RangeSet.cs
+index ee6f28c..55fb116 100644
+--- a/src/CodoMetis.ValueRanges/RangeSet.cs
++++ b/src/CodoMetis.ValueRanges/RangeSet.cs
+@@ -206,7 +206,7 @@ public sealed class RangeSet<TRange, T>
+         for (int i = 1; i < sorted.Count; i++)
+         {
+             var next = sorted[i];
+-            if (current.Overlaps(next) || current.IsAdjacentTo(next))
++            if (current.Overlaps(next))
+             {
+                 current = current.MergeWith<TRange>(next);
+             }

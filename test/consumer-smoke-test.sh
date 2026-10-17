@@ -238,6 +238,19 @@ Case("aot-interface", () => JsonSerializer.Serialize(new Declared(h1, StringSet.
 var tagged = new SmokeJson(new JsonSerializerOptions { Converters = { new TaggedDateRange() } });
 Case("aot-union-converter", () => JsonSerializer.Serialize<object>(h1, tagged.Object)
                                 + " " + JsonSerializer.Deserialize("\"tag:[2026-01-01,2026-06-30]\"", tagged.Finite));
+// Default options under AOT: reflection-based serialization is off, so every type throws — these
+// included, typed or through object. A converter attribute does not bring the reflection back.
+#pragma warning disable IL2026, IL3050 // The reflection-based overloads are what is tested.
+Case("aot-default-options", () => string.Join(" ", new Func<string>[]
+{
+    () => JsonSerializer.Serialize(h1),
+    () => JsonSerializer.Serialize((DateRange.Finite)h1),
+    () => JsonSerializer.Serialize(RangeSet<DateRange, DateOnly>.From([h1])),
+    () => JsonSerializer.Serialize(StringSet.From("alpha")),
+    () => JsonSerializer.Serialize<object>(h1),
+    () => JsonSerializer.Serialize<object>(StringSet.From("alpha")),
+}.Select(write => { try { return "WROTE " + write(); } catch (Exception e) { return e.GetType().Name; } })));
+#pragma warning restore IL2026, IL3050
 #pragma warning disable IL2026 // TypeDescriptor is not trim-safe in general; the converter lookup is what is tested.
 Case("aot-typeconverter", () => TypeDescriptor.GetConverter(typeof(RangeSet<Int64Range, long>)).ConvertFromInvariantString("{[1,5]}")!.ToString()!);
 #pragma warning restore IL2026
@@ -326,6 +339,7 @@ assert_contains 'aot-stringset=["alpha","beta"] roundtrip'     "$work/aot.native
 assert_contains 'aot-object="[2026-01-01,2026-06-30]"'         "$work/aot.native.out" "AOT: a range serializes through object"
 assert_contains 'aot-dtoset=["2026-01-01T09:30:00+01:00"]'     "$work/aot.native.out" "AOT: a DateTimeOffsetSet round-trips"
 assert_contains 'aot-dtoset-offsetless=FAILED JsonException'   "$work/aot.native.out" "AOT: a DateTimeOffsetSet element without an offset is refused"
+assert_contains 'aot-default-options=InvalidOperationException InvalidOperationException InvalidOperationException InvalidOperationException InvalidOperationException InvalidOperationException' "$work/aot.native.out" "AOT: default options throw InvalidOperationException for a range, a variant, a RangeSet and a value set, typed or through object"
 assert_contains 'aot-typeconverter={[1,5]}'                    "$work/aot.native.out" "AOT: TypeConverter for a RangeSet the program never constructs"
 assert_contains 'aot-interface={"Period":"[2026-01-01,2026-06-30]","Tags":["alpha"]}' "$work/aot.native.out" "AOT: interface-declared properties write through the runtime type"
 assert_contains 'aot-union-converter="tag:[2026-01-01,2026-06-30]" [2026-01-01,2026-06-30]' "$work/aot.native.out" "AOT: a union converter on the options reaches the variant"

@@ -4,6 +4,8 @@ using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Serialization;
 
+using CodoMetis.ValueRanges.Oracles;
+
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
 /// <summary>
@@ -319,9 +321,6 @@ public sealed class SmallModelSetOracleTests
     private static string Join<TElement>(IEnumerable<TElement> values) => string.Join(", ", values);
 
     private static void Report<TSet>(string sweep, List<string> failures) =>
-        Assert.AreEqual(0, failures.Count,
-                        $"{typeof(TSet).Name} disagrees with set theory over {sweep} "
-                      + $"({failures.Count} failures):" + Environment.NewLine
-                      + string.Join(Environment.NewLine, failures.Take(15))
-                      + (failures.Count > 15 ? $"{Environment.NewLine}  … and {failures.Count - 15} more" : ""));
+        Candidates.Verdict(nameof(SmallModelSetOracleTests), failures,
+                           $"{typeof(TSet).Name} disagrees with set theory over {sweep}", shown: 15);
 }

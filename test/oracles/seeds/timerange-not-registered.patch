@@ -1,0 +1,20 @@
+Seed: TimeRange is missing from the core registry, so a TimeRange or RangeSet<TimeRange, TimeOnly> property has no type mapping
+Oracles: MappingParityTests
+Fails: the every-range-type-is-mapped sweep for TimeRange and its multirange
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs
+index 966620b..f6fb5f5 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs
+@@ -54,11 +54,6 @@ internal static class RangeTypeRegistry
+                 value => value.ToUniversalTime(),
+                 StoreTemporal.Truncate, StoreTemporal.InfinityText),
+ 
+-            // `timerange` is not built into PostgreSQL: the database needs
+-            // `CREATE TYPE timerange AS RANGE (subtype = time)` (e.g. via HasPostgresRange)
+-            // and the Npgsql data source needs EnableUnmappedTypes() to put it on the wire.
+-            new RangeTypeDefinition<TimeRange, TimeOnly>(
+-                "timerange", "timemultirange", "time without time zone", storeValue: StoreTemporal.Truncate)
+         ],
+         [typeof(RangeAggregateExtensions)]);
+ 

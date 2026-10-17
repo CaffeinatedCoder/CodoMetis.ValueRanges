@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using Npgsql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -132,6 +133,55 @@ public sealed class ExecuteUpdateJsonTests
 
         await using var read = new IntegrationDbContext();
         Assert.AreEqual(permissions, (await read.Reservations.AsNoTracking().SingleAsync(r => r.Id == 9604)).Permissions);
+    }
+
+    /// <summary>
+    /// <c>docs/efcore.md#inside-a-json-column</c>: setting a property inside the document to
+    /// <c>null</c> with <c>ExecuteUpdate</c> fails for every family, and the row still loads. A range,
+    /// a temporal range and a multirange reach Npgsql and fail there with <c>42804</c>; a value set
+    /// never reaches it, because the value set refusal recognizes the setter first.
+    /// </summary>
+    [TestMethod]
+    public async Task SettingAPropertyInsideTheDocumentToNull_Fails_ForEveryFamily()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var outcomes = new List<string>();
+        await Attempt(9631, "range",          "42804", s => s.SetProperty(r => r.Doc.MaybeSeats, (Int32Range?)null));
+        await Attempt(9632, "temporal range", "42804", s => s.SetProperty(r => r.Doc.MaybeWindow, (DateTimeOffsetRange?)null));
+        await Attempt(9633, "multirange",     "42804", s => s.SetProperty(r => r.Doc.Blocks, (RangeSet<DateRange, DateOnly>)null!));
+        await Attempt(9634, "value set",      "refused", s => s.SetProperty(r => r.Doc.MaybeTags, (StringSet?)null));
+
+        Assert.AreEqual(0, outcomes.Count, "Unexpected outcomes:\n" + string.Join("\n", outcomes));
+
+        async Task Attempt(
+            int    id,
+            string family,
+            string expected,
+            Action<Microsoft.EntityFrameworkCore.Query.UpdateSettersBuilder<JsonDocumentRow>> setter)
+        {
+            await Seed(id);
+            string actual;
+            await using (var update = new IntegrationDbContext())
+            {
+                try
+                {
+                    await update.JsonDocuments.Where(r => r.Id == id).ExecuteUpdateAsync(setter);
+                    actual = "succeeded";
+                }
+                catch (PostgresException raised)
+                {
+                    actual = raised.SqlState;
+                }
+                catch (InvalidOperationException refusal) when (refusal.Message.Contains("cannot set the value set"))
+                {
+                    actual = "refused";
+                }
+            }
+
+            if (actual != expected) outcomes.Add($"  {family}: {actual}, expected {expected}");
+            _ = await Reload(id);
+        }
     }
 
     // -- The refusal keys off what the UPDATE writes, not off how the setter names the property --

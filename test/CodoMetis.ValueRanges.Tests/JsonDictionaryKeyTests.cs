@@ -148,6 +148,31 @@ public class JsonDictionaryKeyTests
         StringAssert.Contains(ex.Message, "EmptyRange");
     }
 
+    /// <summary>
+    /// A value set's value form is a JSON array, so it has no property-name form: keying a dictionary
+    /// by one is refused in both directions with <see cref="NotSupportedException"/> rather than
+    /// written as some text that reads back as a different set.
+    /// </summary>
+    [TestMethod]
+    public void ValueSetKeys_AreRefused_BothWays()
+    {
+        AssertRefused(StringSet.From(["b", "a"]), """{"a":1}""");
+        AssertRefused(Int32Set.From([2, 1]), """{"1":1}""");
+        AssertRefused(DateSet.From([new DateOnly(2026, 1, 1)]), """{"2026-01-01":1}""");
+        AssertRefused(StringSet<TestPermission>.From(TestPermission.Parse("users.read", null)), """{"users.read":1}""");
+
+        static void AssertRefused<TSet>(TSet key, string json) where TSet : notnull
+        {
+            var write = Assert.ThrowsExactly<NotSupportedException>(
+                () => JsonSerializer.Serialize(new Dictionary<TSet, int> { [key] = 1 }), typeof(TSet).Name);
+            StringAssert.Contains(write.Message, typeof(TSet).Name);
+
+            var read = Assert.ThrowsExactly<NotSupportedException>(
+                () => JsonSerializer.Deserialize<Dictionary<TSet, int>>(json), typeof(TSet).Name);
+            StringAssert.Contains(read.Message, typeof(TSet).Name);
+        }
+    }
+
     private sealed class PrefixPolicy : JsonNamingPolicy
     {
         public override string ConvertName(string name) => "policy_" + name;

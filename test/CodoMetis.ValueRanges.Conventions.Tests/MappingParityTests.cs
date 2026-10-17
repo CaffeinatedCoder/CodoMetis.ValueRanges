@@ -236,4 +236,38 @@ public sealed class MappingParityTests
             "The store type name 'text[]' resolved to StringSet. It belongs to the provider's native "
           + "string[] mapping — value sets are resolved from the CLR type only.");
     }
+
+    /// <summary>
+    /// <c>docs/efcore.md</c>: scaffolding maps range columns to <c>NpgsqlRange&lt;T&gt;</c>, "the
+    /// plugin provides no design-time services". The scaffolder's own output is Npgsql's; what this
+    /// package decides is that it contributes nothing to it. EF finds design-time services through an
+    /// assembly attribute (<c>DesignTimeProviderServices</c>, <c>DesignTimeServicesReference</c>) or
+    /// an <c>IDesignTimeServices</c> implementation, so neither plugin assembly carries one naming a
+    /// type of this package. <c>UseValueRanges()</c> in the application's options never reaches the
+    /// scaffolder, which builds its services from the provider and those references alone.
+    /// </summary>
+    [TestMethod]
+    public void ThePlugins_ProvideNoDesignTimeServices()
+    {
+        foreach (var name in new[] { "CodoMetis.ValueRanges.EFCore.PostgreSQL", "CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime" })
+        {
+            var assembly = System.Reflection.Assembly.Load(name);
+
+            // Npgsql's NodaTime package writes a DesignTimeServicesReference to its own NodaTime
+            // scaffolding services into every assembly that references it, the satellite included.
+            // That one is Npgsql's; a reference naming a type of this package would be ours.
+            var attributes = assembly.GetCustomAttributesData()
+                                     .Where(attribute => attribute.AttributeType.Name.StartsWith("DesignTime", StringComparison.Ordinal))
+                                     .Select(attribute => $"{attribute.AttributeType.Name}({string.Join(", ", attribute.ConstructorArguments.Select(a => a.Value))})")
+                                     .Where(attribute => attribute.Contains("CodoMetis", StringComparison.Ordinal))
+                                     .ToList();
+            Assert.AreEqual(0, attributes.Count, $"{name} declares design-time services: {string.Join(", ", attributes)}");
+
+            var services = assembly.GetTypes()
+                                   .Where(type => type.GetInterfaces().Any(i => i.Name == "IDesignTimeServices"))
+                                   .Select(type => type.FullName)
+                                   .ToList();
+            Assert.AreEqual(0, services.Count, $"{name} implements IDesignTimeServices: {string.Join(", ", services)}");
+        }
+    }
 }

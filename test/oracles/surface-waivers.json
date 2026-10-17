@@ -1,0 +1,9 @@
+{
+  "*Set.GetEnumerator": "the duck-typed struct enumerator over Values, for foreach; no document promises more than Values, which S01 holds",
+  "*Set.Item": "the indexer into Values; no document promises more than Values, which S01 holds",
+  "*Plugin..ctor": "EF Core infrastructure: constructed by EF's service provider when UseValueRanges() registers it; E01 holds the registration through the model",
+  "ValueRangesOptionsExtension..ctor": "EF Core infrastructure: constructed by UseValueRanges(); E01 holds the registration through the model",
+  "ValueRangesOptionsExtension.Info": "EF Core infrastructure: the options extension's debug info and service-provider cache key, read by EF only",
+  "ValueRangesOptionsExtension.Validate": "EF Core infrastructure: no-op validation hook EF calls on every options extension",
+  "ValueRangesQueryExpressionInterceptor..ctor": "EF Core infrastructure: constructed by EF's service provider; E04 holds the interception through a query"
+}
