@@ -1,0 +1,28 @@
+name: Enhancement
+description: A new type, operation, translation or option.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The task, not the API. What do you write today, and why doesn't it work?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like
+      description: A sketch of the call you'd make, and what PostgreSQL does for the same thing if it applies.
+      render: csharp
+  - type: dropdown
+    id: answers
+    attributes:
+      label: Does it change an answer the library gives today?
+      description: Anything that changes an existing answer needs a major version, even if the new answer is better.
+      options:
+        - No, it only adds
+        - Yes, an existing call would answer differently
+        - I'm not sure
+    validations:
+      required: true
