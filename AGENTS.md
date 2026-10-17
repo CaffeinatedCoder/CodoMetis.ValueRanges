@@ -1,5 +1,8 @@
 # CodoMetis.ValueRanges
 
+This file is the canonical agent guide. `CLAUDE.md` only imports it (`@AGENTS.md`), so Claude Code
+and every other agent read the same rules. Edit this file, never `CLAUDE.md`.
+
 In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (`int4range`, `int8range`, `numrange`, `daterange`, `tsrange`, `tstzrange`) plus two v5 additions: `TimeRange` over `TimeOnly` (maps to the custom `timerange` type — needs `HasPostgresRange` + `EnableUnmappedTypes` on the EF side) and, in the NodaTime satellite, `YearMonthRange` over `YearMonth` (stored as a month-aligned `daterange`). Each range type is a discriminated union of five sealed variants with exhaustive pattern matching.
 
 Since v6 there is a second type family: **value sets** (`Sets/`) — immutable, canonical (deduplicated, sorted, no nulls) sets of scalar values stored as native PostgreSQL arrays (`StringSet`/`text[]`, `GuidSet`/`uuid[]`, …), plus a validated-wrapper arity for every family (`StringSet<T>` … `DateTimeOffsetSet<T>`, and five more in the NodaTime satellite) constrained only on BCL interfaces. EF maps them as scalars with plugin-owned mappings and translators (`@>`, `&&`, `<@`, `cardinality`, `array_cat`, `array_remove`) — never through EF's primitive-collection machinery. `Intersect`/`Except`/`Add` are deliberately client-side only: PostgreSQL's array type has no intersection, difference, or sorted insert.
