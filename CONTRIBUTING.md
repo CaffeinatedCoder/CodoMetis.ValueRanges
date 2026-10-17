@@ -81,12 +81,45 @@ labels when triaging, and a pull request gets the same labels as the issue it cl
 - One concern per PR, with the reasoning in the description rather than only the diff.
 - Full suite green, including integration if you have Docker.
 - User-visible changes get a changelog entry in the root [CHANGELOG.md](CHANGELOG.md) *and* in the
-  affected package changelogs under `src/`. The convention tests enforce that the version being
-  shipped is documented everywhere it needs to be.
+  affected package changelogs under `src/`, in the form [below](#changelog). The convention tests
+  enforce that the version being shipped is documented everywhere it needs to be.
 - New range or set types must be wired through the registries — the parity tests will tell you if
   they are not.
 - Match the surrounding style. Comments explain *why*, especially where behaviour is load-bearing
   and non-obvious.
+
+## Changelog
+
+A version's section of the root `CHANGELOG.md` is the GitHub release's notes, word for word, so it
+is written for someone deciding what to change before they upgrade. The package changelogs use the
+same form, with the entries that affect that package.
+
+- **The heading** is `## [x.y.z] — yyyy-mm-dd`. Write entries under the version being prepared,
+  never under `Unreleased`.
+- **One optional line first**, for a version where something can break you: what kind of change it
+  is, and a link to its section of [docs/migration.md](docs/migration.md).
+- **Then the sections, in this order:** `### Breaking`, `### Added`, `### Changed`, `### Fixed`.
+  Leave out the ones you don't need. A version with nothing for a package says so in one line:
+  "No change in this package."
+- **Breaking** holds everything that can break existing code or data, in a major or not: a call
+  that answers, accepts, writes or translates differently, a payload that changes shape, a query
+  that now throws. Each line says what to do about it.
+- **One change per line, on one line.** Say what happens now and, for a fix, what happened before:
+  "`RangeSet.Contains(T)` on the infinite set returns `true`, where it threw …". Start with the area
+  where it helps a reader skim (`JSON:`, `Literals:`, `EF Core:`, `NodaTime:`). In `Added`, lead
+  with the new member in bold.
+- **End with a link** to the guide that explains it. Links are absolute
+  (`https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/…`), because the
+  release page can't resolve a relative one.
+- **Leave out** the reasoning, the measurements and the history of how it was found, test names,
+  internal refactoring with no effect you can observe, and fixes to something new in the same
+  release. The reasoning goes in the guide or the migration guide, the history in the commit and
+  the issue.
+- **Write in the plain voice of the guides:** short sentences, active voice, no emphasis markers or
+  emoji.
+
+`ChangelogConventionTests` holds the form: known sections in order, one line per change, at most
+60 words a change and 40 for the introduction, and absolute links.
 
 ## Oracle tests
 

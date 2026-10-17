@@ -1,457 +1,203 @@
 # Changelog — CodoMetis.ValueRanges
 
-Entries affecting the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
+The changes that affect the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
 ## [9.0.0] — 2026-10-11
 
-### Changed
+Nothing was removed or renamed. What existing calls write and accept changed: [Migration from v8.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x).
 
-- **⚠️ Every range, variant, `RangeSet` and value set serializes as its literal with nothing
-  registered.** Without `AddRangeConverters()`, System.Text.Json fell back to a property dump —
-  `DateRange` wrote `{"Length":181}`, `StringSet` `{"Values":[…],"Count":2,"IsEmpty":false}` — and
-  none of it read back. Each type, and each sealed variant (the attribute is not inherited), now
-  carries `[JsonConverter]`. A converter registered on the options or a property still wins;
-  `AddRangeConverters()` stays valid and is redundant. **Payload change** for anyone who wrote the
-  old form. See the [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
-  for source generation and why this is a major.
+### Breaking
 
-- **⚠️ Temporal bounds and elements parse as strict ISO 8601.** The BCL temporal ranges, sets
-  and wrapper arities read element text with the lenient BCL `Parse`, month first:
-  `[01.02.2027,05.03.2027)` was January 2 to May 2, and a `DateTimeOffset` without an offset took
-  the parsing machine's. They now accept what this library and PostgreSQL write — `yyyy-MM-dd`,
-  `HH:mm[:ss[.f…]]` (extra fraction digits truncated to 100 ns), `T` or a space, `Z` / `±HH` /
-  `±HH:mm` / `±HH:mm:ss` offsets (required for a `DateTimeOffset`) — and `infinity` / `-infinity` as
-  `MaxValue` / `MinValue`; everything else is a `FormatException`. The wrapper arities parse as the
-  primitive first, so a lenient element `Parse` never sees non-ISO text. **A closed temporal set's
-  JSON elements use the same grammar**: System.Text.Json's own converter read an offset-less
-  `DateTimeOffset` in the machine's offset. A converter registered for the element type still wins.
-  **A `DateTime` with an offset keeps its wall clock** (`Local`), as PostgreSQL's `timestamp` input
-  does: `2026-01-01T09:30+05:30` was converted into the parsing machine's zone, a different value
-  on every server, and a local value inside a DST gap came back an hour off.
-
-- **The range interfaces are declared not to be an extension point.** Implementing `IRange<T>`,
-  the shape interfaces or `IRangeFactory<TRange, T>` outside the library is unsupported, and they
-  may gain members in a minor version. Consuming them is unaffected.
-
-### Fixed
-
-- **⚠️ `$"{range}"` under a comma-decimal culture produced a different range.** `Int32Range`,
-  `Int64Range` and `DecimalRange` formatted a `null` provider in the current culture: under `de-DE`
-  a `[1.5,2)` interpolated as `[1,5,2)` and parsed back as `[1,52)`. A `null` provider is now the
-  invariant culture.
-
-- **⚠️ Decimal bounds and elements parse with PostgreSQL's numeric grammar** (`NumberStyles.Float`
-  instead of `Any`): `"1,000"`, `"(5)"` and currency symbols are a `FormatException` rather than
-  1000, −5 and 5, and `DecimalRange.Parse("[1.5,2.5)", de-DE)` fails instead of returning `[15,25)`.
-  The wrapper arities read element text with the same grammar before the element's own `Parse`
-  sees it: `DecimalSet<Price>.Parse("{\"1,5\"}")` was `{15}` through a generated
-  `NumberStyles.Number` `Parse`; the integer arities likewise.
-
-- **⚠️ `ToString("", provider)` wrote a culture-formatted literal** (`[1,5,2)` under `de-DE`,
-  Buddhist-era dates under `th-TH`): `""` is the general format, as `null` is, and now writes the
-  invariant literal.
-
-- **⚠️ A quoted empty range bound read as unbounded** — `["",5)` was `(,4]`, `("","")` was `(,)`,
-  and `[ ,5)` the same. Bounds follow PostgreSQL's `range_in`: only an absent bound is infinite,
-  and a backslash escapes the next character outside quotes too.
-
-- **⚠️ Array literals follow PostgreSQL's `array_in`**: `{a\,b}` is the one element `a,b` (was `a\`
-  and `b`), and `{{a,b}}`, `{a}b}` and `{a"b}` are a `FormatException` (`{{a,b}}` was
-  `{"{a","b}"}`). Only ASCII whitespace is skipped around elements.
-
-- **⚠️ A union converter on the options now reaches the union's variants.** A range serialized
-  through `object`, an `object` collection or a variant-typed declaration wrote the literal while a
-  union-typed declaration used the registered converter. The variant converter now delegates to the
-  converter System.Text.Json would choose for the union, narrowing on read. **Payload change** for
-  anyone relying on the mixed form.
-
-- **⚠️ Interface-declared ranges and sets no longer write a property dump.** `IRange<int>` wrote
-  `{}` and `IValueSet<string>` `{"Values":["a"]}`. The interfaces carry the new
-  `InterfaceDeclaredJsonConverter`: writes go through the runtime type's converter, reads throw
-  `NotSupportedException` — declare the concrete type.
-
-- **⚠️ A culture provider no longer changes the literal.** `Parse(s, th-TH)` read
-  `2026-01-01` as a Buddhist-era date (Gregorian 1483) and `ToString(null, th-TH)` wrote `2569`;
-  `de-DE` read `1.5` as fifteen. `Parse`/`TryParse` now ignore the provider, and formatting without
-  a format string is always the invariant literal; a provider applies only with an explicit format.
+- JSON: every range, variant, `RangeSet` and value set writes its literal with nothing registered (`"[2026-01-01,2026-06-30]"`, `["a","b"]`), where it wrote a property dump such as `{"Length":181}` that nothing could read back. `AddRangeConverters()` is now redundant, and a converter on the options or on a property still wins ([JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- JSON: a converter you register on the options for a range type also handles values serialized through `object` or declared as a variant, which wrote the literal before ([JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- JSON: a property declared as `IRange<T>`, a shape interface or `IValueSet<T>` writes its runtime type's literal, where it wrote `{}` or a property dump. Reading one throws `NotSupportedException`, so declare the concrete type ([JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- Literals: `Parse` and `TryParse` ignore the format provider, and formatting without a format string, or with `""`, writes the invariant literal whatever the provider. `th-TH` read `2026-01-01` as the year 1483. To read culture-formatted text, parse the bounds yourself and use the factories ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- Literals: interpolating an `Int32Range`, `Int64Range` or `DecimalRange` is invariant under every culture. Under `de-DE`, `$"{range}"` wrote `[1,5,2)`, which parsed back as `[1,52)` ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- Literals: temporal bounds and elements are strict ISO 8601 in `Parse`, `TryParse`, JSON, the `TypeConverter` and configuration binding. Dotted, slashed and named-month dates, a date alone for a date-time, and a `DateTimeOffset` without an offset throw `FormatException` (`[01.02.2027,05.03.2027)` read as January 2 to May 2). `HH:mm`, a space before the time and `infinity` still parse ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- Literals: a wrapper set parses element text as its underlying type first and hands your element the round-trip form, so a lenient element `Parse` no longer sees other text. An element that ignores the format specifier fails on read, where it was truncated ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
+- Literals: a closed temporal set reads its JSON elements with the same ISO grammar, unless you register a converter for the element type. System.Text.Json's own converter read an offset-less `DateTimeOffset` in the machine's offset ([JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- Literals: a `DateTime` bound or element with an offset keeps its wall clock as `Local` (`2026-01-01T09:30+05:30` is 09:30 on every machine), where it was converted into the parsing machine's zone. If you mean instants, use `DateTimeOffsetRange`, or convert with `ToUniversalTime()` first ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x)).
+- Literals: decimal bounds and elements use PostgreSQL's numeric grammar, so `"1,000"`, `"(5)"` and currency symbols throw `FormatException`. This covers `DecimalRange`, `DecimalSet` and the numeric wrapper sets (`DecimalSet<Price>.Parse("{\"1,5\"}")` was `{15}`) ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- Literals: the grammar is PostgreSQL's. A quoted-empty or blank range bound throws, where it meant unbounded (`["",5)` was `(,4]`). A backslash escapes outside quotes too (`{a\,b}` is the one element `a,b`). `{{a,b}}`, `{a}b}` and `{a"b}` throw, and only ASCII whitespace is skipped ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
 
 ### Added
 
-- **A `TypeConverter` on every range, variant, `RangeSet` and value set.** Configuration binding of
-  a range property from its literal produced `null` with no error; it now binds. Always invariant;
-  an empty string is `null`; each variant refuses a literal of another shape.
-- **Native AOT and trimming.** `RangeSet` and the wrapper sets no longer fail under Native AOT:
-  each generic type registers its own closed converters instead of the factory building them with
-  `MakeGenericType`. The library builds with `IsAotCompatible`, raises no trim/AOT warnings, and is
-  tagged `native-aot` and `trimming`.
-- **Ranges and multiranges as dictionary keys**, writing the same literal as the value form.
-  `RangeJsonConverter`, `RangeVariantJsonConverter` and `RangeSetJsonConverter` override
-  `ReadAsPropertyName`/`WriteAsPropertyName`; `DictionaryKeyPolicy` is not applied. Two spellings
-  of one key (`"[1,5]"`, `"[1,6)"`) collide: the later value wins by default, and
-  `AllowDuplicateProperties = false` refuses it.
-- **`Deconstruct` on every `Finite` variant**, mirroring its constructor as the positional variants
-  already did: `var (start, end) = finite` on a discrete type (both bounds inclusive), and
-  `(start, end, startInclusive, endInclusive)` on a continuous one, which has no lossy two-value form.
+- **A `TypeConverter` on every type**, so configuration binding reads `"Period": "[2026-01-01,2026-06-30]"`, where it bound `null` with no error. It is always invariant, an empty string is `null`, and a variant rejects a literal of another shape ([TypeConverter](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- **Native AOT and trimming**: the package builds with `IsAotCompatible` and is tagged `native-aot` and `trimming`, and `RangeSet` and the wrapper sets no longer fail with "missing native code". A source-generated context lists a value set's element type as well as the set ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+- **Ranges and multiranges as dictionary keys**, written as the literal (`{"[2026-01-01,2026-06-30]":181}`), where they threw `NotSupportedException`. `DictionaryKeyPolicy` is not applied, and two spellings of one key collide; set `AllowDuplicateProperties = false` to reject that ([Dictionary keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- **`Deconstruct` on every bounded variant**: `var (start, end) = finite` on a discrete type, and `(start, end, startInclusive, endInclusive)` on a continuous one ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **Docs: an OpenAPI schema transformer** to copy into your API project. It describes ranges and multiranges as `type: string` with a pattern and value sets as arrays, where ASP.NET Core wrote `{}` ([OpenAPI](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#openapi)).
+
+### Changed
+
+- The range interfaces (`IRange<T>`, the shape interfaces and `IRangeFactory<TRange, T>`) are not an extension point. Implementing them outside the library is unsupported, and they may gain members in a minor version ([Architecture](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/architecture.md)).
+
+### Fixed
+
+- `DecimalSet<T>` reads exponent notation (`{1e3}`, a JSON `1.5e1`), as `DecimalSet` does.
 
 ## [8.0.0] — 2026-08-17
 
-### Fixed
+No signature changed. Some existing calls answer differently: [Migration from v7.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v7x).
 
-- **`RangeSet.Contains(T)` threw on the infinite set.**
-  `RangeSet<Int32Range, int>.Infinite.Contains(value)` raised
-  `InvalidOperationException: Range shape 'Infinity' has no lower bound` for every value, where the
-  answer is `true`. The set binary-searches the sorted lower bounds to find the candidate element,
-  and the infinite set's single element has no lower bound to search on; every other query
-  short-circuits that case first and this one did not. Loud rather than silent, and found by the
-  new `SmallModelOracleTests` on its first run.
-- **`RangeSet.Except(TRange)` returned the whole domain when subtracting an infinity range.**
-  `RangeSet<Int32Range, int>.Infinite.Except(Int32Range.Infinite)` answered `{(,)}` where `X \ (-∞,
-  +∞)` is the empty set for every `X`, and `Complement()` on the infinite set was wrong through the
-  same path. The set-minus-set overload has always guarded its infinite operand, and the
-  single-range overload answers it through its `Contains` guard, so the three overloads were
-  answering one question two ways. This is the fourth bug from the pattern 7.0.0 documented: the
-  engine's discard arm supplied `∞` for the one shape pair it was never given.
+### Breaking
+
+- `RangeSet.Except(TRange)` with an infinite range returns the empty set, where it returned the whole domain, and `Complement()` of the infinite set does too.
+- `RangeSet.Contains(T)` on the infinite set returns `true`, where it threw `InvalidOperationException`. Only code that caught the exception is affected.
 
 ### Changed
 
-- **The `Intersect`, `Merge` and `Except` engines dispatch on the shape pair.** Each had three
-  entry points typed by the receiver's shape, each switching over the operand's shape with a
-  discard that rebuilt the receiver or returned `Empty`. They are now one entry point per engine
-  taking `IRange<T>` on both sides and switching over `(left, right)`, so an unhandled pair is a
-  missing line rather than something a fallback absorbs. Internal: no public signature changed, and
-  no behaviour beyond the fix above.
-- **A shape dispatch with no arm for its operands throws `UnreachableException` naming the pair**
-  instead of returning a plausible value. Every one of the four bugs was a fallback returning
-  something well-formed — a wrong boolean, or a correctly shaped range holding the wrong values.
-  These paths sit behind the callers' guards and are unreachable; if a change breaks a guard, the
-  first test to reach it now names the missing pair.
+- An `IRange<T>` that is none of the five shapes makes `IRangeFactory.ToString` throw, where it was formatted as `"empty"` and stored as the empty range.
+- A shape dispatch with no case for a pair of shapes throws `UnreachableException` naming the pair, instead of returning a value. No reachable call changed.
 
-### Documentation
+### Fixed
 
-- **⚠️ This package's README claimed pattern matching over the five shapes has compiler-enforced
-  coverage. It does not.** A switch expression over the variants warns `CS8509` — a build error
-  under `TreatWarningsAsErrors` — and adding a `null` arm only moves the complaint to `'not null'`,
-  because C# exhaustiveness analysis does not reason about a closed class hierarchy. The private
-  base constructor still guarantees no external subtype exists, so the five arms are complete in
-  fact and a discard is unreachable; it now says that, and says to make the discard throw. See the
-  root changelog for the full note.
+- Docs: a switch over the five range shapes needs a `_` arm, which should throw. This package's README said the compiler checks the cases, and the example failed to build with CS8509 ([Pattern matching](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
 
 ## [7.0.0] — 2026-08-17
 
+Nothing was removed or renamed. Three range fixes change what existing calls answer: [Migration from v6.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v6x).
+
+### Breaking
+
+- `Contains` and `IsContainedBy` treat the empty range as contained by every range, as PostgreSQL's `@>` does, so `[1,5].Contains(Int32Range.Empty)` is `true`. For the old meaning, write `outer.Contains(inner) && !inner.IsEmpty()` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v6x)).
+- `IsStrictlyLeftOf` and `IsStrictlyRightOf` give PostgreSQL's `<<` and `>>` answer for a range unbounded at its start: `(,5]` is left of `[10,20]`, where it returned `false`. A one-element `RangeSet` changes with it.
+- `Except` subtracts when the two ranges are unbounded in opposite directions: `(,5].Except([1,))` is `{(,0]}`, where it returned `(,5]` unchanged. `RangeSet.Except` changes with it.
+- JSON: `Int16Set<T>`, `Int32Set<T>`, `Int64Set<T>` and `DecimalSet<T>` honour `JsonNumberHandling.WriteAsString` and write strings, as their primitive sets do. Reads are unchanged ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v6x)).
+- `DecimalRange.Length` returns `null` for a span wider than `decimal`, where it threw `OverflowException`.
+
 ### Added
 
-- **Six new validated-wrapper arities** — `Int16Set<T>`, `DecimalSet<T>`, `DateSet<T>`,
-  `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>` — so every core value set family has one,
-  not just the string, Guid and integer families. `TElement` is constrained only on BCL interfaces
-  (`struct`, `IEquatable<T>`, `IComparable<T>`, `IFormattable`, `IParsable<T>`), and the collection
-  expression, parsing, formatting, JSON and set algebra work as on the existing arities.
-- **A decimal element JSON converter**, so `DecimalSet<T>` writes its elements as JSON numbers with
-  their scale intact. The integer converter the other numeric arities use reads and writes through
-  `long` on both legs and would have truncated every decimal element.
+- **A wrapper set for every family**: `Int16Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>` and `DateTimeOffsetSet<T>`. `DecimalSet<T>` writes JSON numbers with their scale ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
 
 ### Changed
 
-- **The four temporal arities pin a round-trip element format.** `DateSet<T>` asks its elements for
-  `yyyy-MM-dd`; `TimeSet<T>`, `DateTimeSet<T>` and `DateTimeOffsetSet<T>` ask for `O`. Their
-  closed siblings already default `FormatValue` to those formats, and the arities now match, so
-  the array literal, the JSON payload and the EF Core bridge share one text form. Taking the
-  element's default instead would drop sub-seconds — `TimeOnly` formats as `09:30` and `DateTime`
-  as `06/15/2024 10:30:00` — and, for `DateTime`, the `DateTimeKind` with them.
-
-  The contract this puts on a wrapper is that it forwards the `format` argument to the value it
-  wraps, which is what the generators emit. One that ignores it fails loudly rather than storing a
-  truncated value.
-
-### Fixed
-
-- **⚠️ The numeric wrapper arities ignored `JsonSerializerOptions.NumberHandling`.** `Int16Set<T>`,
-  `Int32Set<T>`, `Int64Set<T>` and `DecimalSet<T>` write their elements' JSON tokens themselves, so
-  System.Text.Json is not in the loop to apply the setting for them — and they did not consult it.
-  Under `JsonNumberHandling.WriteAsString` an arity emitted a bare number where its primitive
-  sibling emitted a string: `Int64Set` produced `["9007199254740993"]` and `Int64Set<OrderId>`
-  produced `[9007199254740993]`.
-
-  That setting is switched on almost exclusively because the consumer is JavaScript, where a bare
-  number above 2^53 is rounded on arrival — 9007199254740993 arrives as 9007199254740992. So
-  swapping a closed set for its arity silently reintroduced, at the client only, exactly the
-  corruption the setting was turned on to prevent, contradicting the byte-for-byte parity these
-  converters exist to provide. **Payloads change for anyone serializing a numeric wrapper arity
-  under `WriteAsString`**, from a number to the string their primitive sibling was already writing.
-
-  Reads are unchanged: the numeric converters accept a JSON string unconditionally, so payloads
-  written either way have always round-tripped. The integer half of this dates to the converters'
-  introduction in 6.1.0; `DecimalSet<T>` shipped with it in this release.
-
-- **`DecimalRange.Length` threw `OverflowException` instead of refusing.** The span of
-  `[decimal.MinValue, decimal.MaxValue]` is twice `decimal.MaxValue`, and no wider type exists to
-  compute it in, so the subtraction overflowed out of the property. It now returns `null` — the
-  same answer `Int64Range.Length` gives for a count above `long.MaxValue`, and the behaviour its
-  documentation already described for that sibling. Only a range straddling zero can overflow, and
-  the boundary is exact: a span of exactly `decimal.MaxValue` still measures, one unit more does
-  not.
-
-- **⚠️ `Except` subtracted nothing when the two operands were unbounded in opposite directions.**
-  `((-∞,5]).Except([1,+∞))` returned `{(-∞,5]}` where the answer is `{(-∞,0]}`, and
-  `([1,+∞)).Except((-∞,5])` returned `{[1,+∞)}` where the answer is `{[6,+∞)}`.
-  `RangeSet<TRange,T>.Except` shares the engine through its merge-join and had it too. Both discrete
-  and continuous domains, every element type.
-
-  The result was a well-formed range of the expected shape holding the wrong values, so a
-  subtraction silently kept what it was asked to remove — no exception, nothing odd-looking in a
-  debugger, and a disagreement with the `-` operator the EF translation emits.
-
-  `ExceptEngine` dispatched on the receiver's shape; the inner switch under each unbounded receiver
-  had an arm for a finite operand and one for an operand unbounded the *same* way, but none for the
-  opposing one, so the `_` fallback rebuilt the receiver. That fallback can only be reached by the
-  opposing-unbounded pair — `RangeExtensions.Except` filters an empty operand through its `Overlaps`
-  guard and an infinite one through its `Contains` guard — so it was wrong on every call that
-  reached it. It is now the explicit arm, and the fallback carries a comment saying why it is
-  unreachable.
-
-- **⚠️ The empty range is now contained by every range**, in `RangeExtensions.Contains`,
-  `IsContainedBy` and `RangeSet.Contains(IRange<T>)`. `[1,5].Contains(Int32Range.Empty)` returned
-  `false` and now returns `true`; so do `Int32Range.Empty.IsContainedBy(x)`,
-  `Int32Range.Empty.Contains(Int32Range.Empty)` and `RangeSet.Empty.Contains(Int32Range.Empty)`.
-
-  ∅ ⊆ S for every S — "every value of the inner range is also in the outer" has nothing to falsify
-  it when the inner range has no values. Three things agreed on that already and the single-range
-  overload did not: PostgreSQL's `@>`, so the same comparison answered differently in memory and in
-  SQL; `RangeSet.Contains(RangeSet)`, which reaches it by iterating zero elements; and
-  `RangeSet.From`, which drops empty elements and therefore makes `RangeSet.Empty` and
-  `Int32Range.Empty` the same value asked about two ways.
-
-  The converse is unchanged: `Int32Range.Empty.Contains(nonEmpty)` is still `false`, and `Overlaps`
-  still answers `false` for an empty operand — overlap requires a shared value, containment does
-  not. Nothing internal depended on the old answer: both engine call sites (`Except`, and the
-  multirange subtraction scan) are guarded by `Overlaps` first, so neither can see an empty operand.
-
-  **Migration.** Only comparisons with an explicitly empty operand change. For the old meaning,
-  write `outer.Contains(inner) && !inner.IsEmpty()` — or use `Overlaps`, which is what "shares
-  something" wanted all along.
-
-- **⚠️ `IsStrictlyLeftOf` answered `false` for every range unbounded at its *start***, and
-  `IsStrictlyRightOf` for every such operand. The `<<` relation compares the receiver's **upper**
-  bound with the operand's **lower** bound, so being unbounded at the *other* end is irrelevant:
-  `(-∞, 5]` ends at 5 and is strictly left of `[10, 20]`. The implementation switched on the
-  receiver's shape and handled only `IFiniteRange<T>` there, while its inner switch handled
-  unbounded *operands* — so `((-∞,5]).IsStrictlyLeftOf([10,20])` returned `false` where
-  `'(,5]'::int4range << '[10,20]'` returns `true`.
-
-  The EF translation emits `<<` and was always correct, which is what made this dangerous: the
-  same predicate over the same two values answered `true` server-side and `false` in memory.
-  `RangeSet.IsStrictlyLeftOf`/`RightOf` delegate to their outermost element and inherited it, so a
-  one-element set `{(,5]}` was affected too.
-
-  Now decided by reading the receiver's upper bound and the operand's lower bound rather than by
-  switching on the receiver's shape, so the two directions cannot drift apart again — the same
-  correction `IsAdjacentTo` received in 6.2.1, which was the only other receiver-shaped predicate.
-  A 5×5 shape sweep in both directions and a live-PostgreSQL parity test now cover it.
-  **Behaviour changes for in-memory comparisons involving an unbounded-start range**, from a wrong
-  `false` to the answer the database already gave.
+- The temporal wrapper sets ask their elements for a round-trip format (`yyyy-MM-dd` for `DateSet<T>`, `O` for the others), so a hand-written element must pass its `format` argument on. One that ignores it is rejected when stored ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
+- JSON: a temporal wrapper set writes the same value as its primitive set but not the same bytes: seven fraction digits, and `+` escaped. Give the element its own `[JsonConverter]` if the response shape matters ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
 
 ## [6.3.0] — 2026-08-16
 
 ### Added
 
-- **`RangeSet.IsInfinity()` and `RangeSet.IsFinite()`**, completing the shape predicates the single
-  ranges already had. `IsInfinity()` is true only for the set covering the whole domain — not the
-  same thing as unbounded at both ends, which `{(,5],[10,)}` satisfies while missing 7.
-  `IsFinite()` is true for a non-empty set bounded at both ends.
-- **Collection expressions for `RangeSet<TRange, T>`** — `RangeSet<Int32Range, int> set = [a, b];`,
-  as the value set types already supported. Normalization is unchanged: empties dropped, sorted,
-  overlapping and adjacent neighbours merged. Adds `From(params ReadOnlySpan<TRange>)` and the
-  non-generic builder `RangeSet.Create<TRange, T>`.
-- **`ISpanParsable<T>`** on the seven range types, `RangeSet<TRange, T>`, and the fourteen set types
-  and arities, with `Parse`/`TryParse` overloads over `ReadOnlySpan<char>`. The literal parsers
-  were already span-based internally; this exposes them, so a slice of a larger buffer no longer
-  needs a substring allocation first. `IParsable<T>` is still satisfied.
-
-- **`Length`** on every range type: a count for the discrete domains (inclusive of both bounds),
-  a span for the continuous ones. Zero for the empty range, `null` for every unbounded shape.
-- **`Values()`** on `Int32Range`, `Int64Range` and `DateRange` — the contained values, ascending.
-  The continuous types do not declare it, so misuse is a compile error; an unbounded range throws
-  eagerly.
-- **`ToRangeSet()` / `ToInt32Set()` / `ToInt64Set()` / `ToDateSet()`** — conversions between a
-  value set and a range set over the same discrete domain, collapsing runs of consecutive values
-  into ranges and expanding them back. Client-side only.
-- **`Clamp(value)`** on every range, and an **indexer** on every value set type.
-- **`IRangeFactory<TRange, T>.IsDiscrete`**, a defaulted virtual static reporting whether the
-  domain has a step.
+- **`RangeSet.IsInfinity()` and `IsFinite()`**. `IsInfinity()` is true only for the set that covers the whole domain, which `{(,5],[10,)}` is not, though it is unbounded at both ends ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **Collection expressions for `RangeSet<TRange, T>`** (`RangeSet<Int32Range, int> set = [a, b];`), normalized as `From` normalizes. Also `From(params ReadOnlySpan<TRange>)` and the builder `RangeSet.Create<TRange, T>` ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **`ISpanParsable<T>`** on every range type, `RangeSet` and every value set: `Parse` and `TryParse` over a `ReadOnlySpan<char>` ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- **`Length`** on every range: a count for a discrete type, both ends included, and a span for a continuous one. It is `0` for the empty range and `null` when unbounded, and runs in memory only ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **`Values()`** on `Int32Range`, `Int64Range` and `DateRange` lists the values in order. An unbounded range throws at the call ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **`ToRangeSet()`** on `Int32Set`, `Int64Set` and `DateSet`, and `ToInt32Set()`, `ToInt64Set()` and `ToDateSet()` back: `{1,2,3,7}` becomes `{[1,3],[7,7]}`. In memory only ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
+- **`Clamp(value)`** on every range: the contained value nearest the argument, or `null` for the empty range ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **An indexer** on every value set (`set[0]`).
+- **`IRangeFactory<TRange, T>.IsDiscrete`**, for generic code that needs to know whether the element type has a step.
 
 ## [6.2.1] — 2026-08-16
 
-### Changed
+### Breaking
 
-- **Parse and JSON rejections no longer echo the whole input.** A malformed range, multirange or
-  array literal used to come back in the `FormatException` — and a bad bound or element chained the
-  BCL's exception, whose message embeds the text again — so a megabyte of hostile input became a
-  megabyte of exception message, copied into every log sink and, in development, returned to the
-  client. Messages now carry a 64-character excerpt plus the input's length, and element failures
-  report the inner parser's reason as an excerpt instead of chaining it. **If you matched on the
-  full message text or read `InnerException` on these failures, that shape has changed.** Exception
-  types are unchanged: `FormatException`, `OverflowException`, `JsonException`; `TryParse` still
-  never throws.
-- **Tests:** a parser resilience suite (`ParserResilienceTests`) now backs the "denial of service
-  through parsing" line in SECURITY.md — megabyte-scale malformed literals and 200,000-element sets
-  are accepted or rejected in bounded time, `TryParse` never throws, and no rejection echoes the
-  payload.
-
-### Fixed
-
-- **⚠️ `IsAdjacentTo` answered `false` whenever the receiver was unbounded.** The predicate
-  switched on the receiver and handled only `IFiniteRange<T>`, while its inner switch handled
-  unbounded *operands* — so the relation was asymmetric: `[1,3].IsAdjacentTo((,0])` was `true`,
-  `(,0].IsAdjacentTo([1,3])` was `false`. PostgreSQL's `-|-` answers `true` for both.
-  `RangeSet.From` and `RangeSet.Union` merge neighbours after sorting by lower bound, which puts an
-  unbounded-start element in the receiver position every time, so they built sets that violated the
-  pairwise-non-adjacent invariant: `From([(,0], [1,)])` returned `{(,0],[1,)}` rather than `{(,)}`,
-  and a set unioned with its complement did not equal `RangeSet.Infinite`. **Results change for any
-  range or set with an unbounded element adjacent to its neighbour**, in every case from a wrong
-  answer to PostgreSQL's.
+- `IsAdjacentTo` returns `true` for an unbounded range next to its neighbour, as PostgreSQL's `-|-` does: `(,0].IsAdjacentTo([1,3])` returned `false`. `RangeSet.From` and `Union` now merge such neighbours, so `From([(,0], [1,)])` is `{(,)}` ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- A literal that fails to parse, through `Parse` or JSON, quotes at most 64 characters of the input and its length, and no longer chains the element parser's exception. If you match the message or read `InnerException`, update that. Exception types are unchanged.
 
 ## [6.2.0] — 2026-08-16
 
-### Changed
+### Breaking
 
-- **⚠️ A null range now reads back as `null` instead of throwing.** Writing a null `Int32Range?`
-  property emitted `{"Seats":null}`, and reading that same document threw `JsonException` — the
-  package could not read a payload it had just written, so an ASP.NET Core API could return a body
-  it was unable to accept. `null` is now left to System.Text.Json in both directions, as for any
-  other reference type, matching what `RangeSet` and the value sets already did. `null` and the
-  empty range stay distinct: absent is `null`, empty is the literal `"empty"`. **If you relied on
-  the exception to reject a null where a non-nullable range was expected, that validation is
-  gone.** Malformed literals are still rejected.
+- JSON: a `null` range reads back as `null`, where it threw `JsonException`. If you relied on that to reject a null, validate it yourself. `null` and `"empty"` stay different.
 
 ## [6.1.0] — 2026-08-15
 
-### Fixed
+### Breaking
 
-- **Value set elements without a converter serialized as objects.** A validated wrapper —
-  `StringSet<PermissionKey>`, `GuidSet<TenantId>`, … — whose element type carried no
-  `[JsonConverter]` was handed to System.Text.Json's reflection path, which wrote
-  `[{"Value":"users.read"}]`, or `[{}]` for the generator-typical record struct over a private
-  field. The `[{}]` form destroyed data on read, and both disagreed with the `{users.read}` stored
-  in PostgreSQL. Elements now go through the family's own text form, and reads re-run the element's
-  `IParsable` validation. **Payload change:** string- and Guid-backed sets now write
-  `["users.read"]`, integer-backed ones write `[1,2]` — indistinguishable from the primitive each
-  wraps. A registered converter still wins.
-- **Nullable range properties threw.** `HandleNull` routed nulls into the write path, which
-  dereferenced them: serializing an object with a null `Int32Range?` threw
-  `NullReferenceException`. It now writes `null`. Reads still reject a null token — use `"empty"`.
-- **Ranges reached through `object` threw.** `Serialize<object>(range)`, an `object`-typed property
-  and heterogeneous collections all present the union's sealed variant, for which the converter
-  could not be constructed, and a reflection `ArgumentException` escaped.
+- JSON: a wrapper set whose element has no `[JsonConverter]` writes the underlying values (`["users.read"]`, `[1,2]`), where it wrote objects such as `[{"Value":"users.read"}]` or `[{}]`. Reads run the element's `Parse`, and a registered converter still wins ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
 
 ### Added
 
-- `IValueSetFactory<TSet, T>.ElementJsonConverter` — a defaulted virtual static hook consulted only
-  when the element type has no registered converter. The interface stays closed to external
-  implementation.
-- `RangeVariantJsonConverter<TVariant, TRange, T>`.
+- **`IValueSetFactory<TSet, T>.ElementJsonConverter`**, the element converter a set uses when none is registered.
+- **`RangeVariantJsonConverter<TVariant, TRange, T>`**.
+
+### Fixed
+
+- JSON: a `null` range property is written as `null`, where it threw `NullReferenceException`. Reading `null` still throws; write `"empty"` for the empty range.
+- JSON: a range serialized through `object` works, where it threw `ArgumentException`.
 
 ## [6.0.0] — 2026-08-14
 
+Value sets, a second type family. No breaking changes.
+
 ### Added
 
-- **Value sets — a second type family:** immutable, canonical (deduplicated, sorted, null-free)
-  sets of scalar values whose PostgreSQL storage shape is a native array. Ten closed types —
-  `StringSet`, `GuidSet`, `Int16Set`, `Int32Set`, `Int64Set`, `DecimalSet`, `DateSet`, `TimeSet`,
-  `DateTimeSet`, `DateTimeOffsetSet` — plus the validated-wrapper arities `StringSet<T>`,
-  `GuidSet<T>`, `Int32Set<T>`, `Int64Set<T>` for generator-produced domain values, constrained only
-  on BCL interfaces so domain types never reference this package.
-- **Membership algebra** — `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`,
-  `IsProperSubsetOf`, `IsProperSupersetOf`, `Union`, `Remove`, `Count`, `IsEmpty`, plus
-  client-side-only `Intersect`, `Except` and `Add` (PostgreSQL's array type has no intersection,
-  difference or sorted insert) — with array literals, JSON support and collection expressions.
-
-No breaking changes; the major marks the package growing a second type family.
+- **Value sets**: `StringSet`, `GuidSet`, `Int16Set`, `Int32Set`, `Int64Set`, `DecimalSet`, `DateSet`, `TimeSet`, `DateTimeSet` and `DateTimeOffsetSet`, deduplicated and sorted, with no nulls. The wrapper sets `StringSet<T>`, `GuidSet<T>`, `Int32Set<T>` and `Int64Set<T>` hold your own element types and need only BCL interfaces on them ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
+- **Set operations**: `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, `IsProperSubsetOf`, `IsProperSupersetOf`, `Union`, `Remove`, `Count` and `IsEmpty`, and `Intersect`, `Except` and `Add` in memory only. Also array literals, JSON and collection expressions.
 
 ## [5.0.0] — 2026-08-13
 
+No breaking changes.
+
 ### Added
 
-- **`TimeRange`** — a time-of-day range over `TimeOnly`, matching the most common custom range type
-  in PostgreSQL practice (`CREATE TYPE timerange AS RANGE (subtype = time)`). Continuous and
-  half-open by default, so `[09:00, 12:00)` and `[12:00, 17:00)` compose the way shifts do; a
-  window crossing midnight is two ranges, which `RangeSet` represents naturally.
-
-No breaking changes.
+- **`TimeRange`** over `TimeOnly`, for the custom `timerange` type. It is half-open by default, so `[09:00,12:00)` and `[12:00,17:00)` join like shifts, and a window across midnight is two ranges ([TimeRange](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#timerange-and-the-custom-timerange-type)).
 
 ## [4.1.0] — 2026-08-12
 
-Version-alignment release — no changes to this package. The NodaTime satellites were introduced in
-4.1.0; see the [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md).
+No change in this package. 4.1.0 added the two NodaTime packages.
 
 ## [4.0.0] — 2026-08-10
 
+[Migration from v3.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v3x).
+
+### Breaking
+
+- `==` and `!=` on `RangeSet` compare values, as the range records and SQL `=` do. Use `ReferenceEquals` where you meant identity.
+- `DoesNotExtendRightOf` and `DoesNotExtendLeftOf` match PostgreSQL for infinite bounds: `+∞ ≤ +∞`, so an unbounded range no longer always returns `false`.
+
 ### Added
 
-- **Bound accessors** — `LowerBound()`/`UpperBound()` returning `T?` with PostgreSQL's `NULL`
-  semantics, and `LowerBoundInclusive()`/`UpperBoundInclusive()` mirroring `lower_inc`/`upper_inc`,
-  on ranges and on `RangeSet`.
-- **`Merge`** — the smallest single range spanning both operands including any gap.
-- **Aggregates** — `RangeAgg()` and `RangeIntersectAgg()` over sequences of ranges.
-- **Multirange operator parity** — `Contains`, `Overlaps`, `IsAdjacentTo`,
-  `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` on `RangeSet`, plus `IsEmpty()`,
-  `IsUnboundedStart()`, `IsUnboundedEnd()`.
-
-### Changed
-
-- **Breaking — `==`/`!=` on `RangeSet` is now structural equality**, consistent with the range
-  records and with the SQL `=` the EF provider generates. Call sites relying on reference identity
-  must switch to `ReferenceEquals`.
-- **Breaking — `DoesNotExtendRightOf`/`LeftOf` now match PostgreSQL for infinite bounds.** An
-  infinite bound compares equal to another infinite bound (`+∞ ≤ +∞`), so an unbounded receiver no
-  longer always returns `false`. Results against finite-bounded or empty operands are unchanged.
+- **Bound accessors**: `LowerBound()` and `UpperBound()` return `T?`, `null` where PostgreSQL returns `NULL`, and `LowerBoundInclusive()` and `UpperBoundInclusive()`, on ranges and `RangeSet`.
+- **`Merge`**: the smallest range covering both, gap included (`range_merge`).
+- **Aggregates**: `RangeAgg()` and `RangeIntersectAgg()` over a sequence of ranges.
+- **`RangeSet` operators**: `Contains`, `Overlaps`, `IsAdjacentTo`, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendLeftOf`, `DoesNotExtendRightOf`, `IsEmpty()`, `IsUnboundedStart()` and `IsUnboundedEnd()`.
 
 ### Fixed
 
-- `RangeSet.Infinite.Contains(range)` and `.Overlaps(range)` threw `InvalidOperationException` for
-  operands with a finite bound.
+- `RangeSet.Infinite.Contains(range)` and `Overlaps(range)` work for a range with a finite bound, where they threw `InvalidOperationException`.
 
 ## [3.1.0] — 2026-06-17
 
-### Changed
-
-- **Performance** — `RangeSet<TRange, T>` now exploits its sorted, disjoint, non-adjacent
-  invariant: `Contains`/`Overlaps` go from O(n) to O(log n), `Union`/`Intersect`/`Except` become
-  merge-joins over two pre-sorted streams, `Except` from `Infinite` becomes a single-pass
-  complement walk, and single-element `From` takes a zero-allocation fast path. No public API or
-  result changed.
-
 ### Added
 
-- `RangeSet<TRange, T>.LowerBoundComparer`, exposing the set's internal lower-bound ordering as a
-  public `IComparer<TRange>` singleton (also `RangeLowerBoundComparer<TRange, T>.Instance`).
+- **`RangeSet<TRange, T>.LowerBoundComparer`**, the set's lower-bound ordering as an `IComparer<TRange>`, also as `RangeLowerBoundComparer<TRange, T>.Instance`.
+
+### Changed
+
+- `RangeSet` is faster: `Contains` and `Overlaps` are O(log n), and `Union`, `Intersect` and `Except` merge two sorted lists. No result changed.
 
 ### Fixed
 
-- Quoted range bounds now unescape `\"` → `"` and `\\` → `\` on parse, so element types whose
-  stringification contains quotes or backslashes round-trip correctly.
+- A quoted range bound unescapes `\"` and `\\`, so an element whose text holds a quote or a backslash round-trips.
 
 ## [3.0.0] — 2026-06-11
 
-### Changed
+[Migration from v2.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v2x).
 
-- **Breaking — the state checks are extension methods, not extension properties.** `IsEmpty`,
-  `IsFinite`, `IsInfinity`, `IsUnboundedStart` and `IsUnboundedEnd` need parentheses at every call
-  site. Extension properties cannot appear in LINQ expression trees, which blocked SQL
-  translation; as methods they translate.
+### Breaking
+
+- `IsEmpty`, `IsFinite`, `IsInfinity`, `IsUnboundedStart` and `IsUnboundedEnd` are methods, so add parentheses at every call. As methods they translate to SQL.
 
 ## [2.0.0] — 2026-06-11
 
+[Migration from v1.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v1x).
+
+### Breaking
+
+- `ToString()` returns the PostgreSQL literal (`[1,10]`), where it returned the record's `Finite { Start = 1, … }`. Update code that logs, displays or compares that text.
+
 ### Added
 
-- `Parse`/`TryParse` and `ToString` support for PostgreSQL range literals.
-
-### Changed
-
-- **Breaking — `ToString()` returns a PostgreSQL range literal** (`[1,10]`) rather than the default
-  C# record representation. Code depending on the old format must be updated.
+- **`Parse` and `TryParse`** for PostgreSQL range literals.
 
 ## [1.0.0] — 2026-06-10
 
-Initial release: the six PostgreSQL range domains as discriminated unions of five sealed variants
-(`Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`), the interval algebra, and
-`RangeSet<TRange, T>` as an always-normalized multirange.
+The first release.
+
+### Added
+
+- **The six PostgreSQL range types** as unions of five shapes (`Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`), with the range operations and `RangeSet<TRange, T>`, a multirange that keeps itself normalized.
