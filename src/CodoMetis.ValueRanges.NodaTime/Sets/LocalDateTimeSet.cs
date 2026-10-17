@@ -101,7 +101,7 @@ public sealed class LocalDateTimeSet : IValueSet<LocalDateTime>, IValueSetFactor
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
     public static LocalDateTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => NodaPatterns.ParseDateTime(s.ToString());
+        => NodaPatterns.ParseDateTime(LiteralWhiteSpace.TrimAsInputFunction(s).ToString());
 
     /// <summary>
     /// Formats a <see cref="LocalDateTime"/> value using ISO 8601 (<c>uuuu-MM-ddTHH:mm:ss</c> with optional subseconds) by default.
@@ -277,7 +277,7 @@ public sealed class LocalDateTimeSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(NodaPatterns.DateTime.Format(NodaPatterns.ParseDateTime(s.ToString())), CultureInfo.InvariantCulture);
+        => TElement.Parse(NodaPatterns.DateTime.Format(NodaPatterns.ParseDateTime(LiteralWhiteSpace.TrimAsInputFunction(s).ToString())), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using extended ISO 8601
     /// (<c>uuuu-MM-ddTHH:mm:ss.FFFFFFFFF</c>) by default — see the class remarks.</summary>

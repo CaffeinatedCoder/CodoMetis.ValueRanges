@@ -86,7 +86,7 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
     public static LocalTime ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => NodaPatterns.ParseTime(s.ToString());
+        => NodaPatterns.ParseTime(LiteralWhiteSpace.TrimAsInputFunction(s).ToString());
 
     /// <summary>
     /// Formats a <see cref="LocalTime"/> value using ISO 8601 (<c>HH:mm:ss</c> with optional subseconds) by default.
@@ -238,7 +238,7 @@ public sealed class LocalTimeSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(NodaPatterns.Time.Format(NodaPatterns.ParseTime(s.ToString())), CultureInfo.InvariantCulture);
+        => TElement.Parse(NodaPatterns.Time.Format(NodaPatterns.ParseTime(LiteralWhiteSpace.TrimAsInputFunction(s).ToString())), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using extended ISO 8601 (<c>HH:mm:ss.FFFFFFFFF</c>) by
     /// default — see the class remarks.</summary>

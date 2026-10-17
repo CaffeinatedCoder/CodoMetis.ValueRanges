@@ -281,6 +281,11 @@ Good to know:
   does text after a quoted element.
 - **Only ASCII whitespace counts.** A no-break space is part of the element, as it is on the
   server.
+- **Whitespace inside quotes depends on the element type,** as it does on the server. A string
+  keeps it, so `{" ab"}` is `{" ab"}`. A number, date or time drops it from both ends, so
+  `DateSet.Parse("{\" 2026-01-01\"}", null)` is `{2026-01-01}`. A backslash-escaped space works
+  the same way, and so does a date or time in JSON.
+- **Before 9.1, a date or time set kept it.** `{" 2026-01-01"}` failed (`FormatException`).
 
 ## Serialize to JSON
 

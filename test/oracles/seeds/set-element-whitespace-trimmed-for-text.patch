@@ -1,0 +1,17 @@
+Seed: the shared array parser trims every element, so a text[] element loses its own surrounding spaces and {" ab "} reads as {ab} where PostgreSQL's textin keeps them
+Oracles: SetElementWhiteSpaceContractTests, LiteralGrammarParityTests
+Fails: the keeps rows of StringSet and its arity; the element-whitespace parity sweep against PostgreSQL for text[]
+History: never shipped; the trap a shared fix for #70 falls into
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+--- a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+@@ -187,7 +187,7 @@
+         try
+         {
+             // Always invariant, whatever provider the caller handed Parse: the literal is a wire format.
+-            return TSet.ParseValue(text, CultureInfo.InvariantCulture);
++            return TSet.ParseValue(LiteralWhiteSpace.Trim(text), CultureInfo.InvariantCulture);
+         }
+         catch (FormatException ex)
+         {

@@ -73,7 +73,7 @@ public sealed class TimeSet : IValueSet<TimeOnly>, IValueSetFactory<TimeSet, Tim
     /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
     /// <c>HH:mm</c> without seconds; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
     public static TimeOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => IsoTemporal.ParseTime(s);
+        => IsoTemporal.ParseTime(LiteralWhiteSpace.TrimAsInputFunction(s));
 
     /// <summary>Formats a <see cref="TimeOnly"/> value using the round-trip format specifier (<c>O</c>) by default, preserving full precision.</summary>
     public static string FormatValue(TimeOnly value, string? format, IFormatProvider? provider)
@@ -210,7 +210,7 @@ public sealed class TimeSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(IsoTemporal.ParseTime(s).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        => TElement.Parse(IsoTemporal.ParseTime(LiteralWhiteSpace.TrimAsInputFunction(s)).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
     /// — see the class remarks.</summary>

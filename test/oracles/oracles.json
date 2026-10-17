@@ -60,6 +60,12 @@
     "against": "PostgreSQL's range_in grammar, for every discovered range type"
   },
   {
+    "class": "SetElementWhiteSpaceContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "claim",
+    "against": "the whitespace PostgreSQL's element input functions strip, keep or reject inside an array element, for every discovered value set type"
+  },
+  {
     "class": "WrapperGrammarContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "differential",

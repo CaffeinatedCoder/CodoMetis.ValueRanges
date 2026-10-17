@@ -18,13 +18,16 @@ internal static class Reflect
     internal static void InvokeGeneric(Type host, string method, params Type[] typeArguments) =>
         InvokeGeneric<object?>(host, method, typeArguments);
 
-    internal static TResult InvokeGeneric<TResult>(Type host, string method, params Type[] typeArguments)
+    internal static TResult InvokeGeneric<TResult>(Type host, string method, params Type[] typeArguments) =>
+        InvokeGeneric<TResult>(host, method, typeArguments, null);
+
+    internal static TResult InvokeGeneric<TResult>(Type host, string method, Type[] typeArguments, params object?[]? arguments)
     {
         try
         {
             return (TResult)host.GetMethod(method, BindingFlags.NonPublic | BindingFlags.Static)!
                                 .MakeGenericMethod(typeArguments)
-                                .Invoke(null, null)!;
+                                .Invoke(null, arguments)!;
         }
         catch (TargetInvocationException wrapped) when (wrapped.InnerException is { } actual)
         {

@@ -253,6 +253,59 @@ public class SetParseFormatTests
     }
 
     /// <summary>
+    /// A quoted or escaped string element keeps its surrounding whitespace, as PostgreSQL's
+    /// <c>textin</c> does: <c>'{" ab "}'::text[]</c> is <c>{" ab "}</c>. Only the temporal families
+    /// strip it (#70), so the trim must never move into the shared array parser.
+    /// </summary>
+    [TestMethod]
+    public void Parse_QuotedOrEscapedStringElement_KeepsSurroundingWhitespace()
+    {
+        Assert.AreEqual(StringSet.From(" ab "), StringSet.Parse("{\" ab \"}", null));
+        Assert.AreEqual(StringSet.From("\tab"), StringSet.Parse("{\"\tab\"}", null));
+        Assert.AreEqual(StringSet.From(" ab"), StringSet.Parse("{\\ ab}", null));
+        Assert.AreEqual(StringSet.From(" "), StringSet.Parse("{\" \"}", null));
+        Assert.AreEqual("{\" ab \"}", StringSet.Parse("{\" ab \"}", null).ToString());
+    }
+
+    /// <summary>
+    /// A quoted or escaped temporal element with whitespace at either end reads as the element
+    /// without it, as PostgreSQL's <c>date_in</c>, <c>timestamp_in</c>, <c>timestamptz_in</c> and
+    /// <c>time_in</c> read it.
+    /// </summary>
+    /// <remarks>
+    /// Until 9.1.0 the whitespace reached the strict ISO grammar and the literal threw, where
+    /// <c>'{" 2026-01-01"}'::date[]</c> is <c>{2026-01-01}</c> (#70).
+    /// </remarks>
+    [TestMethod]
+    public void Parse_QuotedTemporalElementWithSurroundingWhitespace_ReadsTheTrimmedElement()
+    {
+        Assert.AreEqual(DateSet.From(new DateOnly(2026, 1, 1)), DateSet.Parse("{\" 2026-01-01\"}", null));
+        Assert.AreEqual(DateSet.From(new DateOnly(2026, 1, 1)), DateSet.Parse("{\\\t2026-01-01}", null));
+        Assert.AreEqual(TimeSet.From(new TimeOnly(9, 0)), TimeSet.Parse("{\"09:00\n\"}", null));
+        Assert.AreEqual(
+            DateTimeSet.From(new DateTime(2026, 1, 1, 10, 0, 0)),
+            DateTimeSet.Parse("{\" 2026-01-01 10:00:00 \"}", null));
+        Assert.AreEqual(
+            DateTimeOffsetSet.From(new DateTimeOffset(2026, 1, 1, 10, 0, 0, TimeSpan.Zero)),
+            DateTimeOffsetSet.Parse("{\"2026-01-01 10:00:00+00\\ \"}", null));
+        Assert.AreEqual(
+            DateSet.From(new DateOnly(2026, 1, 1)),
+            System.Text.Json.JsonSerializer.Deserialize<DateSet>("[\" 2026-01-01\"]"));
+    }
+
+    /// <summary>
+    /// Only ASCII whitespace is stripped from a temporal element, and an element of only whitespace
+    /// is still rejected — as PostgreSQL rejects both.
+    /// </summary>
+    [TestMethod]
+    [DataRow("{\"\u00A02026-01-01\"}")]
+    [DataRow("{\"2026-01-01\u2003\"}")]
+    [DataRow("{\" \"}")]
+    [DataRow("{\\ }")]
+    public void Parse_TemporalElement_NonAsciiOrOnlyWhitespace_IsRejected(string literal)
+        => Assert.ThrowsExactly<FormatException>(() => DateSet.Parse(literal, null));
+
+    /// <summary>
     /// Text PostgreSQL refuses, or reads as something a one-dimensional set cannot be. A nested
     /// brace is a multi-dimensional array; an unescaped brace or quote inside an unquoted element,
     /// text after a quoted one, a dangling escape and a missing element are malformed.
