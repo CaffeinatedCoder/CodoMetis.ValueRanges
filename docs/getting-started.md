@@ -1,19 +1,20 @@
 # Getting started
 
-From an empty project to a first translated query. Part 1 needs nothing but the core package and
-runs entirely in memory; part 2 adds PostgreSQL. Together they take about five minutes.
+This page takes you from an empty project to a first query that runs in PostgreSQL. Part 1 needs
+only the core package and runs entirely in memory. Part 2 adds PostgreSQL. Together they take about
+five minutes.
 
-If you would rather see the reasoning first, [Why this exists](why.md) covers the design; this page
-assumes you have decided to try it.
+If you'd like to see the reasoning first, [Why this exists](why.md) covers the design. This page
+assumes you have decided to try the library.
 
-## Part 1 — in memory, no database (2 minutes)
+## Part 1 — Try it in memory, no database (2 minutes)
 
 ```sh
 dotnet new console -o RangeDemo && cd RangeDemo
 dotnet add package CodoMetis.ValueRanges
 ```
 
-A booking system's core question is whether two stays collide. That is one call:
+The core question in a booking system is whether two stays collide. You answer it with one call:
 
 ```csharp
 using CodoMetis.ValueRanges;
@@ -26,10 +27,13 @@ Console.WriteLine(june.Contains(new DateOnly(2025, 6, 3)));  // True
 Console.WriteLine(june);                                 // [2025-06-01,2025-06-08]
 ```
 
-Three things are worth noticing, because they are what the type is for.
+The next three steps show what the types are for.
 
-**A gap is a value, not an error.** Union two disjoint stays and you get a `RangeSet` — a multirange
-in memory, with the same algebra as a single range:
+### Combine stays that leave a gap
+
+A gap is a value, not an error. Call `Union` on two stays that don't overlap, and you get a
+`RangeSet` back. A `RangeSet` is a multirange in memory, and it supports the same operations as a
+single range:
 
 ```csharp
 var blocked = june.Union(july);        // {[2025-06-01,2025-06-08],[2025-07-01,2025-07-05]}
@@ -39,8 +43,12 @@ blocked.Contains(new DateOnly(2025, 6, 20));    // False — falls in the gap
 blocked.Complement();                       // everything else, as a RangeSet
 ```
 
-**"No end date" is a shape, not a null.** An open-ended stay has no `End` property to read, so there
-is no nullable to guard and no sentinel to misread:
+### Leave the end date open
+
+"No end date" is a shape, not a null. A range comes in five kinds, called shapes: `Finite`,
+`UnboundedStart`, `UnboundedEnd`, `EmptyRange` and `Infinity`. An open-ended stay is an
+`UnboundedEnd`. It has no `End` property to read, so you have no nullable to guard and no sentinel
+value to misread:
 
 ```csharp
 DateRange openEnded = DateRange.CreateUnboundedEnd(new DateOnly(2025, 6, 1));   // [2025-06-01,)
@@ -58,12 +66,15 @@ var description = openEnded switch
 };
 ```
 
-That discard is not a formality worth skipping: without it the switch warns `CS8509`, which is a
-build **error** in any project that treats warnings as errors. [Pattern
-matching](ranges.md#pattern-matching) explains why C# cannot close the gap itself, and why the arm
-should throw rather than return a value.
+Don't skip the discard arm. Without it, the switch warns `CS8509`, and that warning is a build
+**error** in any project that treats warnings as errors. [Pattern matching](ranges.md#pattern-matching)
+explains why C# can't see that the five arms are complete, and why the discard should throw instead
+of returning a value.
 
-**Sets are the same idea for scalars.** Canonical on every path — deduplicated, sorted, immutable:
+### Work with sets of values
+
+Value sets bring the same idea to plain values such as strings. Every way you create a set gives you
+the same canonical form: deduplicated and sorted. The set is also immutable:
 
 ```csharp
 var tags = StringSet.From("beta", "alpha", "beta");   // {alpha,beta}
@@ -73,26 +84,26 @@ tags.IsSubsetOf(required);   // False
 tags.Overlaps(required);     // True — they share "alpha"
 ```
 
-That is the whole library, in process. No database has been involved so far, and none is required —
-if you only need the algebra, you are done. [Ranges and range sets](ranges.md) and
-[Value sets](value-sets.md) are the complete references.
+That is the whole library, running in your process. No database has been involved so far, and you
+don't need one. If the in-memory operations are all you need, you are done.
+[Ranges and range sets](ranges.md) and [Value sets](value-sets.md) are the complete references.
 
-## Part 2 — persist and query it in PostgreSQL (3 minutes)
+## Part 2 — Store and query it in PostgreSQL (3 minutes)
 
-The companion package maps these types to PostgreSQL's native `daterange`, `datemultirange` and
-`text[]` columns and translates the same method calls into the same operators, server-side.
+The EF Core package maps these types to PostgreSQL's native `daterange`, `datemultirange` and
+`text[]` columns. Your method calls then run in the database, as the matching PostgreSQL operators.
 
 ```sh
 dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL
 dotnet add package Microsoft.EntityFrameworkCore.Design
 ```
 
-The EF package brings `Npgsql.EntityFrameworkCore.PostgreSQL` and the core package with it.
+The EF Core package brings `Npgsql.EntityFrameworkCore.PostgreSQL` and the core package with it.
 
-### The entity
+### Add range and set properties to an entity
 
-Range and set properties are ordinary properties. There are no value converters, comparers or column
-types to configure:
+Range and set properties are ordinary properties. You don't configure value converters, comparers
+or column types:
 
 ```csharp
 using CodoMetis.ValueRanges;
@@ -111,9 +122,9 @@ public class Booking
 }
 ```
 
-### The context
+### Turn on the mapping in your DbContext
 
-One line enables the whole mapping:
+One line, `UseValueRanges()`, turns on the whole mapping:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -129,14 +140,14 @@ public class BookingContext : DbContext
 }
 ```
 
-### The migration
+### Create the database
 
 ```sh
 dotnet ef migrations add InitialCreate
 dotnet ef database update
 ```
 
-Mapping is by convention, so the properties above land in these columns with no further
+The mapping works by convention. The properties above get these column types with no further
 configuration:
 
 | Property | Column type |
@@ -145,14 +156,18 @@ configuration:
 | `BlockedDays` | `datemultirange` |
 | `Tags` | `text[]` |
 
-[Entity Framework Core](efcore.md) has the full table for every type. Two need one extra line, and
-it is worth knowing which before you model with them: `TimeRange` needs a custom PostgreSQL type
-(`modelBuilder.HasPostgresRange("timerange", "time")` plus `EnableUnmappedTypes` on the data source),
-and the NodaTime types need `UseValueRangesNodaTime()` instead of `UseValueRanges()`.
+[Entity Framework Core](efcore.md) has the full table for every type.
 
-### The query
+Good to know before you model with these types:
 
-The same calls from part 1, now as SQL:
+- **`TimeRange` needs a custom PostgreSQL type.** Add `modelBuilder.HasPostgresRange("timerange", "time")`
+  to your model, and call `EnableUnmappedTypes` on the data source. See
+  [TimeRange and the custom timerange type](efcore.md#timerange-and-the-custom-timerange-type).
+- **The NodaTime types need `UseValueRangesNodaTime()`.** Call it instead of `UseValueRanges()`.
+
+### Query with the same methods
+
+Here are the calls from part 1 again, now running as SQL:
 
 ```csharp
 var day = new DateOnly(2025, 6, 3);
@@ -171,28 +186,32 @@ var tagged = context.Bookings.Where(b => b.Tags.Contains("vip")).ToList();
 var chronological = context.Bookings.OrderBy(b => b.Period.LowerBound()).ToList();
 ```
 
-`ToQueryString()` on any of those prints the SQL if you want to confirm it yourself — that is
-exactly what the translation test suite asserts on.
+Call `ToQueryString()` on any of these queries to print the SQL and check it yourself. The
+translation tests assert on exactly that output.
 
-### Stopping double-bookings
+### Prevent double bookings
 
-Worth flagging early, because application code cannot do it: checking for an overlap and then
-inserting is a read-then-write race, so under concurrency two requests can both find the slot free.
-Only a database constraint is atomic. PostgreSQL's answer is an exclusion constraint, and
+Plan for this early, because your application code can't do it. Checking for an overlap and then
+inserting is a race between a read and a write. Under concurrency, two requests can both find the
+slot free. Only a database constraint is atomic.
+
+In PostgreSQL, that constraint is an exclusion constraint.
 [Indexing a range column, and preventing overlaps](efcore.md#indexing-a-range-column-and-preventing-overlaps)
-shows how to declare one over a column mapped by this package.
+shows how to declare one on a column this package maps.
 
-## The one thing to know about boundaries
+## What runs in memory only
 
-Most of the algebra translates. A few operations are client-side only — `Intersect`, `Except` and
-`Add` on *value sets*, because PostgreSQL's array type has no intersection, difference or sorted
-insert — and one composition is refused outright rather than translated, because it would answer
-wrongly (equality over a server-computed set `Union`).
+Most operations run in the database. A few run in memory only, such as `Intersect`, `Except` and
+`Add` on *value sets*. PostgreSQL's array type has no intersection, difference or sorted insert.
 
-When a client-side operation appears in a `Where`, EF **throws** rather than silently fetching the
-table. That is intended: a loud failure is the correct outcome, and `AsEnumerable()` is how you ask
-for the in-memory answer deliberately. [What runs where](efcore.md#what-runs-where) is the exhaustive
-list, and it is short.
+Some queries over a `Union` of sets that the database computes throw instead of running as SQL,
+because the database would return a wrong result. An equality check on such a union is one.
+[Combine sets with `Union`](efcore.md#combine-sets-with-union) lists the rest.
+
+When an in-memory-only operation appears in a `Where`, EF Core **throws**. It does not quietly
+fetch the whole table. This is intended, because a loud failure is the right outcome. Call
+`AsEnumerable()` when you want the in-memory answer on purpose.
+[What runs where](efcore.md#what-runs-where) has the complete list, and it is short.
 
 ## Where to go next
 

@@ -1,14 +1,14 @@
 # Ranges and range sets
 
-The complete in-memory algebra: constructing ranges, matching on their shape, querying and
-combining them, and the `RangeSet<TRange, T>` multirange counterpart. Everything here runs in
-process with no database involved — [Entity Framework Core](efcore.md) covers what the same
-calls translate to in SQL, and [What runs where](efcore.md#what-runs-where) is the exhaustive
-list of which ones do.
+This page shows you how to create ranges, match on their kind, ask questions about them and
+combine them. It also covers `RangeSet<TRange, T>`, which holds several ranges as one value, like a
+PostgreSQL multirange. Everything here runs in memory, with no database involved.
+[Entity Framework Core](efcore.md) shows what the same calls become in SQL, and
+[What runs where](efcore.md#what-runs-where) lists exactly which ones run in the database.
 
-## Creating Ranges
+## Create a range
 
-Every type exposes four static factory methods:
+Every range type has three factory methods and two properties, one for each kind of range:
 
 ```csharp
 // Bounded on both sides
@@ -30,20 +30,31 @@ Int32Range everything = Int32Range.Infinite;  // (-∞, +∞)
 Int32Range empty = Int32Range.Empty;
 ```
 
-`CreateFinite()` automatically returns an `Empty` when the arguments form a degenerate or inverted interval (e.g. `start > end`, or equal bounds that are both exclusive).
+`CreateUnboundedStart` excludes its end unless you pass `endInclusive: true`. `CreateUnboundedEnd`
+includes its start by default.
 
-**Default boundary inclusiveness:**
+Which bounds `CreateFinite` includes by default depends on the element type:
 
 | Range type                                                 | `CreateFinite()` default   |
 |------------------------------------------------------------|----------------------------|
 | `Int32Range`, `Int64Range`, `DateRange`                    | `[start, end]` — closed    |
 | `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`     | `[start, end)` — half-open |
 
-Discrete types default to fully closed intervals; continuous types default to the half-open convention that is conventional for monetary amounts and timestamps.
+Discrete types, whose values have a next value (integers and dates), include both bounds.
+Continuous types include the start and exclude the end. That half-open form is the usual
+convention for money amounts and timestamps.
 
-## Pattern Matching
+Good to know:
 
-The nested sealed records are first-class citizens and ideal for exhaustive pattern matching:
+- **An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form
+  an empty or inverted interval. Examples are `start > end`, or equal bounds that are both
+  exclusive.
+
+## Pattern matching
+
+Every range is one of five kinds, which this page calls its *shape*: `Finite`, `UnboundedStart`,
+`UnboundedEnd`, `Infinity` and `EmptyRange`. Each shape is a nested sealed record, so you can
+switch on it:
 
 ```csharp
 string Describe(Int32Range range) => range switch
@@ -57,10 +68,11 @@ string Describe(Int32Range range) => range switch
 };
 ```
 
-Every variant that carries a bound also deconstructs into exactly what its constructor takes, so
-positional patterns and deconstruction work on all of them. A discrete type's `Finite` gives
-`(start, end)`, both inclusive — the canonical form; a continuous type's gives
-`(start, end, startInclusive, endInclusive)`:
+Every shape that carries a bound also deconstructs into exactly what its constructor takes. So
+positional patterns and deconstruction work on all of them:
+
+- **A discrete type's `Finite`** gives `(start, end)`, both inclusive. That is its canonical form.
+- **A continuous type's `Finite`** gives `(start, end, startInclusive, endInclusive)`.
 
 ```csharp
 var (first, last) = (DateRange.Finite)period;   // pass straight back to DateRange.CreateFinite
@@ -68,26 +80,34 @@ var (first, last) = (DateRange.Finite)period;   // pass straight back to DateRan
 if (price is DecimalRange.Finite(var low, var high, var lowInclusive, var highInclusive)) { … }
 ```
 
-A continuous type deliberately has no two-value form: passed back to `CreateFinite`, the bounds
-alone would pick up its half-open default, and `(1.5,2]` would come back as `[1.5,2)`.
+A continuous type has no two-value form, on purpose. If you passed only the bounds back to
+`CreateFinite`, they would pick up its half-open default, and `(1.5,2]` would come back as
+`[1.5,2)`.
 
-The five variants are the only ranges that can exist: the private constructor on the abstract base
-record prevents any subtype being declared outside the assembly. So the five arms are complete in
-fact, and the discard is genuinely unreachable.
+### Why the discard arm must throw
 
-C# does not prove that, though — its exhaustiveness analysis does not reason about a closed class
-hierarchy, so a switch *expression* over the variants warns `CS8509` without a discard arm, and
-adding a `null` arm does not help (the complaint just moves to `not null`). Keep the discard and make
-it **throw** rather than return a value: that is the same rule the library applies to its own shape
-dispatches, and for the same reason — a fallback that produces a plausible answer is how four
-range-algebra bugs stayed hidden ([architecture](architecture.md)). A switch *statement* needs no
-discard, and `if`/`is` chains are unaffected.
+The five shapes are the only ranges that can exist. The abstract base record has a private
+constructor, so no code outside the assembly can declare another subtype. Your five arms are
+complete in fact, and the discard arm can never run.
 
-## Query Operations
+C# can't prove that, though. Its exhaustiveness check doesn't reason about a closed class
+hierarchy. So a switch *expression* over the shapes warns `CS8509` unless it has a discard arm.
+Adding a `null` arm doesn't help: the warning moves to `not null`.
 
-All query methods are extension methods on `IRange<T>` and work across any combination of range shapes.
+Keep the discard arm, and make it **throw** rather than return a value. The library follows the
+same rule in its own shape dispatches, for the same reason. A fallback that returns a plausible
+answer is how four range-algebra bugs stayed hidden ([architecture](architecture.md)).
 
-### Containment
+Good to know:
+
+- **A switch *statement* needs no discard arm.** `if`/`is` chains aren't affected either.
+
+## Ask questions about a range
+
+Every query method is an extension method on `IRange<T>`. Each one works for any combination of
+shapes.
+
+### Check containment
 
 ```csharp
 var sprint = DateRange.CreateFinite(new DateOnly(2025, 1, 6), new DateOnly(2025, 1, 17));
@@ -104,12 +124,18 @@ DateRange.Empty.Contains(DateRange.Empty);  // true  — including itself
 DateRange.Empty.Contains(sprint);        // false — ∅ contains nothing
 ```
 
-The empty range is contained by every range, which is the vacuous reading of "every value of the
-inner range is also in the outer" and matches PostgreSQL's `@>`. Containment and *overlap* part
-ways here: `sprint.Overlaps(DateRange.Empty)` is `false`, because overlap needs a shared value and
-the empty range has none.
+`Contains` takes a value or a range, and `IsContainedBy` asks the same question the other way
+round.
 
-### Overlap
+The empty range is contained by every range, including itself. That is the vacuous reading of
+"every value of the inner range is also in the outer one", and it matches PostgreSQL's `@>`.
+
+Good to know:
+
+- **Containment and overlap differ for the empty range.** `sprint.Overlaps(DateRange.Empty)` is
+  `false`, because overlap needs a shared value, and the empty range has none.
+
+### Check overlap
 
 ```csharp
 var a = Int32Range.CreateFinite(1, 5);
@@ -120,9 +146,10 @@ a.Overlaps(b);  // true  — they share the point 5
 a.Overlaps(c);  // false
 ```
 
-### Adjacency
+### Check adjacency
 
-Two ranges are adjacent when they are contiguous with no gap and no overlap — their union would form a single range.
+Two ranges are adjacent when they touch with no gap and no overlap. Their union would be a single
+range.
 
 ```csharp
 // Discrete: consecutive integer values are adjacent
@@ -136,7 +163,13 @@ var y = DecimalRange.CreateFinite(5m, 10m, startInclusive: false);  // (5, 10)
 x.IsAdjacentTo(y);  // true — one side claims 5, the other does not
 ```
 
-An unbounded range is adjacent on its bounded edge, and the relation is symmetric — the receiver's shape does not change the answer, matching PostgreSQL's `-|-`:
+- **For a discrete type**, consecutive values touch. `[1, 5]` and `[6, 10]` are adjacent because
+  `NextValueAfter(5)` is `6`.
+- **For a continuous type**, the two bounds must be equal, and exactly one of the two ranges
+  includes that value.
+
+An unbounded range is adjacent on its bounded edge. The relation is symmetric: the shape of the
+range you call it on doesn't change the result. This matches PostgreSQL's `-|-`:
 
 ```csharp
 var upTo    = Int32Range.CreateUnboundedStart(0, true);  // (-∞, 0]
@@ -152,11 +185,22 @@ Int32Range.Infinite.IsAdjacentTo(between);                        // false
 upTo.IsAdjacentTo(Int32Range.CreateUnboundedStart(9, true));      // false
 ```
 
-> **Changed in 6.2.1.** Before 6.2.1 `IsAdjacentTo` answered `false` whenever the *receiver* was unbounded, so the relation was asymmetric and disagreed with PostgreSQL. Because `RangeSet` normalization merges neighbours after sorting by lower bound — which always puts an unbounded-start element in the receiver position — `RangeSet.From([(,0], [1,)])` returned `{(,0],[1,)}` instead of `{(,)}`. See the [changelog](../CHANGELOG.md).
+Good to know:
 
-### Measuring a range
+- **The empty and infinite ranges are adjacent to nothing.**
+- **Two ranges open at the same end are never adjacent.** They always overlap.
+- **Changed in 6.2.1.** Before 6.2.1, `IsAdjacentTo` returned `false` whenever the range you
+  called it on was unbounded. So the relation was not symmetric, and it disagreed with PostgreSQL.
+  `RangeSet` merges neighbours after sorting them by lower bound, which always puts an
+  unbounded-start element in the position of the range `IsAdjacentTo` is called on. As a result,
+  `RangeSet.From([(,0], [1,)])` returned `{(,0],[1,)}` instead of `{(,)}`. See the
+  [changelog](../CHANGELOG.md).
 
-`Length` reports what a range covers. The convention follows the domain: a discrete one counts its values inclusive of both bounds, a continuous one measures the span between them.
+### Measure a range
+
+`Length` tells you how much a range covers, and the rule depends on the element type. A discrete
+range counts its values, including both bounds. A continuous range measures the span between its
+bounds.
 
 ```csharp
 DateRange.CreateFinite(new DateOnly(2024, 1, 1), new DateOnly(2024, 1, 31)).Length;  // 31 (days)
@@ -166,18 +210,35 @@ DecimalRange.CreateFinite(1m, 5m).Length;                                       
 DateTimeRange.CreateFinite(nineAm, fiveThirtyPm).Length;  // TimeSpan of 8.5 hours
 ```
 
-Empty and unbounded are different answers and stay distinguishable — the empty range contains nothing, an unbounded one contains too much to measure:
+An empty range and an unbounded one give different results, so you can always tell them apart. The
+empty range contains nothing, and an unbounded one contains too much to measure:
 
 ```csharp
 Int32Range.Empty.Length;     // 0
 Int32Range.Infinite.Length;  // null
 ```
 
-The type follows the domain: `long?` for the integer ranges, `int?` days for `DateRange`, `TimeSpan?` for the timestamp ranges, `decimal?` for `DecimalRange`, and `Duration?`/`Period?` for the NodaTime ranges — an instant range measures exact elapsed time, a wall-clock range a calendar quantity. `Length` is client-side and does not translate to SQL.
+The type of `Length` also depends on the element type:
 
-### Enumerating a discrete range
+| Range type | `Length` type |
+|---|---|
+| The integer ranges | `long?` |
+| `DateRange` | `int?`, in days |
+| The timestamp ranges | `TimeSpan?` |
+| `DecimalRange` | `decimal?` |
+| The NodaTime ranges | `Duration?` or `Period?` |
 
-The discrete range types enumerate what they contain. The continuous ones do not declare `Values()` at all, so the mistake is caught at compile time rather than at runtime:
+In the NodaTime package, an instant range measures exact elapsed time (`Duration?`). A wall-clock
+range measures a calendar quantity (`Period?`).
+
+Good to know:
+
+- **`Length` runs in memory only.** It does not translate to SQL.
+
+### List the values of a discrete range
+
+A discrete range can list the values it contains with `Values()`. The continuous types don't
+declare `Values()` at all, so the compiler catches the mistake, not a failure at runtime:
 
 ```csharp
 foreach (var day in DateRange.CreateFinite(monday, friday).Values())
@@ -187,9 +248,12 @@ Int32Range.CreateFinite(1, 5).Values();   // 1, 2, 3, 4, 5
 DecimalRange.CreateFinite(1m, 5m).Values();  // does not compile — no step to walk
 ```
 
-An unbounded range throws `NotSupportedException` at the call rather than at the first iteration, so the failure points at the line that was wrong.
+Good to know:
 
-### Clamping a value into a range
+- **An unbounded range throws at the call.** `Values()` throws `NotSupportedException` when you
+  call it, not at the first iteration. So the error points at the line that was wrong.
+
+### Clamp a value into a range
 
 ```csharp
 var year = DateRange.CreateFinite(jan1, dec31);
@@ -199,9 +263,15 @@ year.Clamp(new DateOnly(2024, 6, 15)); // unchanged — already inside
 DateRange.Empty.Clamp(anyDate);        // null — nothing to snap to
 ```
 
-An unbounded side never constrains: clamping into `(-∞, 10]` only ever pulls a value down.
+`Clamp` returns the value itself when the range contains it. Otherwise it returns the bound the
+value falls outside of.
 
-### Directional Comparisons
+Good to know:
+
+- **The empty range returns `null`.** There is no value to snap to.
+- **An unbounded side never constrains.** Clamping into `(-∞, 10]` only ever pulls a value down.
+
+### Compare positions
 
 ```csharp
 Int32Range.CreateFinite(1, 3).IsStrictlyLeftOf(Int32Range.CreateFinite(5, 9));  // true
@@ -210,7 +280,9 @@ Int32Range.CreateFinite(1, 5).IsStrictlyLeftOf(Int32Range.CreateFinite(5, 9));  
 Int32Range.CreateFinite(7, 9).IsStrictlyRightOf(Int32Range.CreateFinite(1, 5)); // true
 ```
 
-**PostgreSQL `&<` / `&>` equivalents:**
+Two ranges that share a value are not strictly left or right of each other.
+
+Two more methods match PostgreSQL's `&<` and `&>`:
 
 ```csharp
 // Does not extend to the right of other  (&<)
@@ -220,9 +292,12 @@ Int32Range.CreateFinite(1, 5).DoesNotExtendRightOf(Int32Range.CreateFinite(1, 10
 Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10));  // true
 ```
 
-### Bound Accessors
+### Read the bounds
 
-The PostgreSQL `lower` / `upper` / `lower_inc` / `upper_inc` functions, on any range shape. The variants expose `Start`/`End` only where they exist structurally; the accessors provide the dynamic view: `T?` with `null` for a missing bound — exactly PostgreSQL's `NULL` semantics.
+These methods are PostgreSQL's `lower`, `upper`, `lower_inc` and `upper_inc`, and they work on any
+shape. The shapes only have `Start` and `End` properties where that bound exists. The bound methods
+give you the same information on every shape, as `T?`, with `null` for a missing bound. That is
+exactly how PostgreSQL returns `NULL`.
 
 ```csharp
 Int32Range.CreateFinite(1, 10).LowerBound();          // 1
@@ -238,13 +313,17 @@ set.LowerBound();  // 1
 set.UpperBound();  // 9
 ```
 
-## Set Operations
+On a `RangeSet`, `LowerBound()` is the first element's lower bound, and `UpperBound()` the last
+element's upper bound.
 
-Set operations are extension methods on the range types, written against `IRangeFactory<TRange, T>`, which every shipped range type implements.
+## Combine two ranges
 
-### Intersection
+The set operations are extension methods on the range types. They are written against
+`IRangeFactory<TRange, T>`, which every range type in the library implements.
 
-Returns the largest range contained by both operands. The intersection of two ranges is always expressible as a single range, so `Intersect` returns the range type directly — `Empty` genuinely means an empty intersection.
+### Intersect two ranges
+
+`Intersect` returns the largest range that is contained by both ranges.
 
 ```csharp
 var a = Int32Range.CreateFinite(1, 10);
@@ -254,11 +333,15 @@ Int32Range intersection = a.Intersect(b);       // [5, 10]
 a.Intersect(Int32Range.CreateFinite(11, 20));   // Empty — no overlap
 ```
 
-All shape combinations are handled: `Finite ∩ UnboundedStart`, `UnboundedEnd ∩ UnboundedStart`, and so on, each producing the correctly shaped result type.
+The intersection of two ranges is always a single range, so `Intersect` returns the range type
+itself. An `Empty` result really means that the two ranges have no value in common.
 
-### Union
+Every combination of shapes works, such as `Finite ∩ UnboundedStart` or
+`UnboundedEnd ∩ UnboundedStart`. Each one returns a result of the right shape.
 
-Returns a `RangeSet<TRange, T>` containing every value of both operands. When the ranges overlap or are adjacent, the set holds the single merged range; when they are disjoint, the set holds both — the union of two separated ranges genuinely *is* two ranges, and the result type says so.
+### Union of two ranges
+
+`Union` returns a `RangeSet<TRange, T>` that holds every value of both ranges.
 
 ```csharp
 var a = Int32Range.CreateFinite(1, 5);
@@ -273,11 +356,20 @@ ac.Count;  // 2
 ac[1];     // [7, 10]
 ```
 
-Merging an `UnboundedEnd` with an overlapping `Finite` yields an `UnboundedEnd`; an `UnboundedStart` overlapping an `UnboundedEnd` covers the entire domain and yields `{ Infinity }`.
+- **Ranges that overlap or are adjacent** give a set with one merged range.
+- **Ranges with a gap between them** give a set with both. The union of two separate ranges really
+  is two ranges, and the result type says so.
 
-### Except (Set Difference)
+Good to know:
 
-Removes the overlap of `other` from the receiver, returning a `RangeSet<TRange, T>` whose cardinality reflects the structural outcome directly.
+- **Unbounded ranges merge into unbounded ones.** An `UnboundedEnd` merged with an overlapping
+  `Finite` gives an `UnboundedEnd`. An `UnboundedStart` that overlaps an `UnboundedEnd` covers the
+  entire domain, and gives `{ Infinity }`.
+
+### Subtract one range from another
+
+`Except` removes from the range you call it on every value it shares with `other`. You get a
+`RangeSet<TRange, T>`, and its number of elements tells you what happened.
 
 ```csharp
 var range  = Int32Range.CreateFinite(1, 10);
@@ -289,17 +381,20 @@ var result = range.Except(remove);
 // result[1] = (6, 10] ≡ [7, 10]
 ```
 
-| Result       | Meaning                                                            |
-|--------------|--------------------------------------------------------------------|
-| `0` elements | The receiver is fully contained by `other`; nothing remains        |
-| `1` element  | One-sided trim or no overlap; the remaining range                  |
-| `2` elements | `other` was strictly interior to the receiver; it is split in two  |
+| Result       | Meaning                                                                         |
+|--------------|---------------------------------------------------------------------------------|
+| `0` elements | The range you call it on is fully contained by `other`; nothing remains         |
+| `1` element  | One-sided trim or no overlap; the remaining range                               |
+| `2` elements | `other` was strictly inside the range you call it on; that range is split in two |
 
-Boundary inclusiveness is inverted at the cut point so that no value is lost or double-counted across the resulting pieces.
+At each cut, the bound flips between inclusive and exclusive. So no value is lost, and no value is
+counted twice across the pieces.
 
-### Merge (Convex Hull)
+### Cover two ranges and the gap between them
 
-Returns the smallest single range containing both operands — PostgreSQL's `range_merge`. Unlike `Union`, the result also covers any gap between disjoint operands.
+`Merge` returns the smallest single range that contains both ranges. It is PostgreSQL's
+`range_merge`, also known as the convex hull. Unlike `Union`, the result also covers any gap
+between two separate ranges.
 
 ```csharp
 var a = Int32Range.CreateFinite(1, 3);
@@ -315,9 +410,13 @@ Int32Range.CreateUnboundedStart(3, true).Merge(Int32Range.CreateUnboundedEnd(10)
 RangeSet<Int32Range, int>.From([a, b]).Merge(); // [1, 12]
 ```
 
-### Aggregates
+`Merge` ignores an empty range, and an unbounded edge stays unbounded in the result. On a
+`RangeSet`, `Merge()` covers the whole set.
 
-`RangeAgg()` and `RangeIntersectAgg()` aggregate a sequence of ranges — the in-memory counterparts of PostgreSQL's `range_agg` and `range_intersect_agg`:
+### Aggregate a sequence of ranges
+
+`RangeAgg()` and `RangeIntersectAgg()` combine a sequence of ranges. They are the in-memory
+versions of PostgreSQL's `range_agg` and `range_intersect_agg`:
 
 ```csharp
 new[] { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8), Int32Range.CreateFinite(20, 25) }
@@ -327,11 +426,18 @@ new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
     .RangeIntersectAgg();  // [5, 10] — the common intersection; null for an empty source
 ```
 
-In EF Core queries they translate to the SQL aggregates inside `GroupBy` projections — see [Entity Framework Core](efcore.md).
+- **`RangeAgg()`** returns a normalized `RangeSet` with every value of every range.
+- **`RangeIntersectAgg()`** returns the intersection of all the ranges, or `null` when the
+  sequence is empty.
 
-## RangeSet — Multirange Support
+In an EF Core query, both run as the SQL aggregates inside a `GroupBy` projection. See
+[Entity Framework Core](efcore.md).
 
-`RangeSet<TRange, T>` is the in-memory counterpart of a PostgreSQL 14+ multirange (`int4multirange`, `nummultirange`, …): an immutable, always-normalized set of disjoint ranges. Its invariant — elements sorted by lower bound, pairwise disjoint, pairwise non-adjacent — is enforced on every construction: empty ranges are dropped, overlapping or adjacent inputs are merged, and any `Infinity` input collapses the set to `RangeSet<TRange, T>.Infinite`.
+## RangeSet — multirange support
+
+`RangeSet<TRange, T>` holds several ranges as one value. It is the in-memory version of a
+PostgreSQL 14+ multirange (`int4multirange`, `nummultirange`, …). A set is immutable, and it is
+always normalized.
 
 ```csharp
 using IntSet = RangeSet<Int32Range, int>;
@@ -377,7 +483,29 @@ set.DoesNotExtendRightOf(Int32Range.CreateFinite(1, 30));     // true   (&<)
 set.IsAdjacentTo(Int32Range.CreateFinite(31, 40));            // true   (-|-)
 ```
 
-**Adjacency mirrors PostgreSQL exactly:** it is *directional through the outer edges* — the operand must end exactly where the set's first element begins, or begin exactly where the set's last element ends. Touching any interior boundary, even the inner side of the first or last element, does not count ([verified against live PostgreSQL](../README.md#verified-against-postgresql)):
+Every way you create a set keeps three rules. The elements are sorted by lower bound, no two of
+them overlap, and no two are adjacent. To keep those rules, creating a set:
+
+- **Drops empty ranges.**
+- **Merges ranges that overlap or are adjacent.**
+- **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**
+
+What the example shows:
+
+- **Union, intersection and difference** each take a single range or a whole set. They also have
+  the operators `|`, `&` and `-`.
+- **`Complement()`** returns every value the set does not cover.
+- **The state checks** match PostgreSQL's `isempty`, `lower_inf` and `upper_inf`. `IsFinite()`
+  and `IsInfinity()` are the two derived shapes.
+- **The comparisons** also take a whole set, so you get the full multirange operator matrix.
+
+### Adjacency counts only at the outer edges
+
+A set's adjacency matches PostgreSQL exactly. It is directional, through the set's outer edges.
+The range you pass must end exactly where the set's first element begins, or begin exactly where
+the set's last element ends. Touching any boundary inside the set doesn't count, not even the inner
+side of the first or last element
+([verified against live PostgreSQL](../README.md#verified-against-postgresql)):
 
 ```csharp
 var three = IntSet.From([
@@ -388,9 +516,14 @@ three.IsAdjacentTo(Int32Range.CreateFinite(4, 6));   // false — inner side of 
 three.IsAdjacentTo(Int32Range.CreateFinite(10, 12)); // false — touches only the interior [7, 9]
 ```
 
-The positional operators (`<<`, `>>`, `&<`, `&>`) likewise compare the first/last element's bounds.
+The positional operators (`<<`, `>>`, `&<`, `&>`) work the same way. They compare the bounds of the
+first and last element.
 
-**`IsInfinity()` is not the conjunction of the two unbounded checks.** For a single range it would be — a range is contiguous, so unbounded on both sides means the whole domain. A set can be open at both ends and still have a hole:
+### A set open at both ends can still have a gap
+
+`IsInfinity()` is not the same as `IsUnboundedStart()` and `IsUnboundedEnd()` both being true. For
+a single range it would be. A range has no gaps, so a range unbounded on both sides covers the whole
+domain. A set can be open at both ends and still have a hole:
 
 ```csharp
 var gapped = IntSet.From([
@@ -406,11 +539,10 @@ gapped.IsInfinity();        // false
 IntSet.Infinite.IsInfinity();  // true — the only set that covers everything
 ```
 
-Because normalization collapses any `Infinity` input to the one-element `Infinite` set, that set is the unique representation of full coverage, which is what lets the check be exact both in memory and in SQL.
+Creating a set collapses any `Infinity` input to the one-element `Infinite` set. So that set is the
+only way to represent full coverage. That is what makes the check exact, both in memory and in SQL.
 
-### Collection expressions
-
-`RangeSet<TRange, T>` supports collection expressions, and they normalize exactly as `From` does:
+### Build a set with a collection expression
 
 ```csharp
 RangeSet<Int32Range, int> set = [
@@ -424,9 +556,25 @@ RangeSet<Int32Range, int> none = [];                                  // the Emp
 RangeSet<Int32Range, int> all  = [Int32Range.Infinite, someRange];    // the Infinite singleton
 ```
 
-The builder behind it is the non-generic `RangeSet.Create<TRange, T>`, since a `[CollectionBuilder]` target cannot itself be generic. Prefer the collection expression over calling it: C# does not infer type arguments from constraints, so `T` cannot be deduced from `TRange` and a direct call has to name both. There is also a `From(params ReadOnlySpan<TRange>)` overload beside `From(IEnumerable<TRange>)`.
+A collection expression normalizes the ranges exactly as `From` does. An empty one gives you the
+`Empty` singleton, and one that contains `Infinite` gives you the `Infinite` singleton.
 
-The set implements `IReadOnlyList<TRange>` (enumeration in lower-bound order, `Count`, indexer) and structural equality, including `==`/`!=`: two sets built from different inputs that normalize identically are equal.
+Good to know:
+
+- **The builder is `RangeSet.Create<TRange, T>`.** It lives on the non-generic `RangeSet`, because a
+  `[CollectionBuilder]` target can't itself be generic.
+- **Prefer the collection expression to calling `Create` yourself.** C# doesn't infer type
+  arguments from constraints. It can't deduce `T` from `TRange`, so a direct call has to name both.
+- **`From` has two overloads.** There is `From(params ReadOnlySpan<TRange>)` beside
+  `From(IEnumerable<TRange>)`.
+
+### Read and compare sets
+
+A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use
+`Count` and the indexer.
+
+Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges
+are equal when they normalize to the same ranges:
 
 ```csharp
 var a = IntSet.From([Int32Range.CreateFinite(1, 10)]);
@@ -435,9 +583,11 @@ a.Equals(b);  // true — both normalize to { [1, 10] }
 a == b;       // true — same value semantics as the ranges themselves
 ```
 
-### Sorting ranges externally
+### Sort ranges the way a set does
 
-The set's internal lower-bound ordering is exposed as `RangeSet<TRange, T>.LowerBoundComparer` — an `IComparer<TRange>` singleton for sorting arbitrary `List<TRange>`s the same way the set does, for example to pre-sort inputs before handing them to `From`. `IUnboundedStartRange<T>` sorts first (its lower bound is -∞); at the same finite value, an inclusive lower bound sorts before an exclusive one (`[5, …` before `(5, …`).
+`RangeSet<TRange, T>.LowerBoundComparer` sorts ranges by lower bound, in the same order the set uses
+inside. It is an `IComparer<TRange>` singleton. Use it to sort any `List<TRange>`, for example to
+sort your ranges before you pass them to `From`.
 
 ```csharp
 var unsorted = new List<Int32Range>
@@ -451,11 +601,18 @@ unsorted.Sort(RangeSet<Int32Range, int>.LowerBoundComparer);
 // { (-∞, 10], [1, 5], [20, 30] }
 ```
 
-The same instance is available as `RangeLowerBoundComparer<Int32Range, int>.Instance` for contexts where you only have the comparer type and not the set type.
+The order follows two rules:
 
-## Interface Overview
+- **An `IUnboundedStartRange<T>` sorts first.** Its lower bound is -∞.
+- **At the same finite value, an inclusive lower bound sorts first.** `[5, …` comes before
+  `(5, …`.
 
-The library exposes a structured set of interfaces for writing generic code:
+The same instance is also available as `RangeLowerBoundComparer<Int32Range, int>.Instance`. Use it
+where you only have the comparer type, not the set type.
+
+## Write generic code over any range
+
+The library has a set of interfaces for writing generic code:
 
 | Interface                  | Purpose                                                            |
 |----------------------------|--------------------------------------------------------------------|
@@ -467,13 +624,17 @@ The library exposes a structured set of interfaces for writing generic code:
 | `IInfinityRange<T>`        | Marker for the range covering the entire domain                    |
 | `IRangeFactory<TRange, T>` | Abstract static factories; also `NextValueAfter`/`PreviousValueBefore` for step-aware (discrete) types |
 
-`T` is constrained to `struct, IComparable<T>, IEquatable<T>` throughout.
+In all of these interfaces, `T` is constrained to `struct, IComparable<T>, IEquatable<T>`.
 
-`IRangeFactory<TRange, T>` and `IValueSetFactory<TSet, T>` both extend `ISpanParsable<TSelf>` (and so `IParsable<TSelf>`) and `IFormattable`, which is what lets generic code parse and format any range or set without knowing the concrete type:
+`IRangeFactory<TRange, T>` and `IValueSetFactory<TSet, T>` both extend `ISpanParsable<TSelf>`,
+and so `IParsable<TSelf>`, and `IFormattable`. That lets generic code parse and format any range
+or set without knowing its concrete type:
 
 ```csharp
 static T Load<T>(ReadOnlySpan<char> literal) where T : ISpanParsable<T>
     => T.Parse(literal, CultureInfo.InvariantCulture);
 ```
 
-For sorting ranges externally, `RangeLowerBoundComparer<TRange, T>` (an `IComparer<TRange>` singleton) exposes the same lower-bound ordering the set uses internally. See [Sorting ranges externally](#sorting-ranges-externally).
+To sort ranges in generic code, use `RangeLowerBoundComparer<TRange, T>`, an `IComparer<TRange>`
+singleton. It gives you the same lower-bound order the set uses inside. See
+[Sort ranges the way a set does](#sort-ranges-the-way-a-set-does).
