@@ -1,5 +1,5 @@
 Seed: whitespace inside a quoted or escaped range bound is kept, so [" 2026-01-01",2026-02-01) throws where PostgreSQL's range_in reads [2026-01-01,2026-02-01)
-Oracles: RangeLiteralGrammarContractTests, LiteralGrammarParityTests
+Oracles: RangeLiteralGrammarContractTests, LiteralGrammarParityTests, LiteralCorpusProbeTests
 Fails: the quoted and escaped bound-whitespace rows of the range_in grammar sweep for every temporal range type; the bound-whitespace parity sweep against PostgreSQL
 History: shipped before 9.1.0 (#45)
 

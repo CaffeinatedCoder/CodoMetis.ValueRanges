@@ -171,5 +171,810 @@
     "family": "minimal API binds a variant-typed parameter through the union's TryParse: 200 with null for a valid literal and for another shape",
     "issue": "#116",
     "method": "EveryHostEntryPoint_BindsTheInvariantValue_UnderEveryRequestCulture"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet whitespace ",
+    "family": "Guid.Parse trims whitespace uuid_in rejects",
+    "issue": "#78",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet<TenantId> whitespace ",
+    "family": "Guid.Parse trims whitespace uuid_in rejects",
+    "issue": "#78",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DecimalRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "InstantRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Range inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Range inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DateRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DateTimeOffsetRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DateTimeRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DecimalRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<InstantRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<Int32Range> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<Int64Range> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<LocalDateRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<LocalDateTimeRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<TimeRange> inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "TimeRange inverted ",
+    "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
+    "issue": "#114",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DecimalRange beyond 28 digits ",
+    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
+    "issue": "#115",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DecimalSet beyond 28 digits ",
+    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
+    "issue": "#115",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DecimalRange> beyond 28 digits ",
+    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
+    "issue": "#115",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetRange sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetSet sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetSet<EventStamp> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeRange sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeSet sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeSet<AuditStamp> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "InstantRange sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "InstantSet sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "InstantSet<EventInstant> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeRange sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeSet sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeSet<WallClockStamp> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalTimeSet sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalTimeSet<OpeningTime> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DateTimeOffsetRange> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DateTimeRange> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<InstantRange> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<LocalDateTimeRange> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<TimeRange> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "TimeRange sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "TimeSet sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "TimeSet<ShiftTime> sub-microsecond ",
+    "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
+    "issue": "#126",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int16Set digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int16Set non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int16Set<TinyCode> digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int16Set<TinyCode> non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Range digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Range non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Set digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Set non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Set<SmallCode> digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Set<SmallCode> non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Range digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Range non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Set digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Set non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Set<LargeCode> digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Set<LargeCode> non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<Int32Range> digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<Int32Range> non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<Int64Range> digit separator integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<Int64Range> non-decimal integer ",
+    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
+    "issue": "#127",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateSet<BusinessDate> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetSet<EventStamp> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeSet<AuditStamp> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DecimalSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DecimalSet<Money> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet<TenantId> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "InstantSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "InstantSet<EventInstant> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int16Set dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int16Set<TinyCode> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Set dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Set<SmallCode> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Set dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Set<LargeCode> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateSet<CalendarDay> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeSet<WallClockStamp> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalTimeSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalTimeSet<OpeningTime> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "StringSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "StringSet<TextKey> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "TimeSet dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "TimeSet<ShiftTime> dimension decoration ",
+    "family": "array_in's dimension decoration and {{}} are refused",
+    "issue": "#128",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet hyphen groups ",
+    "family": "Guid.Parse's grammar, not uuid_in's",
+    "issue": "#129",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet parentheses ",
+    "family": "Guid.Parse's grammar, not uuid_in's",
+    "issue": "#129",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet<TenantId> hyphen groups ",
+    "family": "Guid.Parse's grammar, not uuid_in's",
+    "issue": "#129",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "GuidSet<TenantId> parentheses ",
+    "family": "Guid.Parse's grammar, not uuid_in's",
+    "issue": "#129",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeRange offset ",
+    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
+    "issue": "#130",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeSet offset ",
+    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
+    "issue": "#130",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateTimeSet<WallClockStamp> offset ",
+    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
+    "issue": "#130",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<LocalDateTimeRange> offset ",
+    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
+    "issue": "#130",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetRange offset range ",
+    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
+    "issue": "#131",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetSet offset range ",
+    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
+    "issue": "#131",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateTimeOffsetSet<EventStamp> offset range ",
+    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
+    "issue": "#131",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DateTimeOffsetRange> offset range ",
+    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
+    "issue": "#131",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Range extreme (,2147483647]:",
+    "family": "(,max] needs max + 1 to canonicalize; PostgreSQL raises 22003",
+    "issue": "#132",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Range extreme (,9223372036854775807]:",
+    "family": "(,max] needs max + 1 to canonicalize; PostgreSQL raises 22003",
+    "issue": "#132",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "StringSet NUL ",
+    "family": "a NUL character PostgreSQL text cannot hold",
+    "issue": "#133",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "StringSet<TextKey> NUL ",
+    "family": "a NUL character PostgreSQL text cannot hold",
+    "issue": "#133",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "DateRange infinity bound ",
+    "family": "a discrete bound exclusive at ±infinity is canonicalized one step inside the domain",
+    "issue": "#117",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "LocalDateRange infinity bound ",
+    "family": "a discrete bound exclusive at ±infinity is canonicalized one step inside the domain",
+    "issue": "#117",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<DateRange> infinity bound ",
+    "family": "a discrete bound exclusive at ±infinity is canonicalized one step inside the domain",
+    "issue": "#117",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "RangeSet<LocalDateRange> infinity bound ",
+    "family": "a discrete bound exclusive at ±infinity is canonicalized one step inside the domain",
+    "issue": "#117",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
   }
 ]
