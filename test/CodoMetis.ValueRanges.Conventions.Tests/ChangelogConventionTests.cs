@@ -144,6 +144,181 @@ public sealed class ChangelogConventionTests
         }
     }
 
+    /// <summary>The sections a version may have, in the order they must appear.</summary>
+    private static readonly string[] SectionOrder = ["Breaking", "Added", "Changed", "Fixed"];
+
+    /// <summary>
+    /// The longest a change may be, in words, not counting link targets. TypeKit's terse entries
+    /// run to 73 at most and 25 on average; past this a line is an explanation, which belongs in
+    /// a guide the line links to.
+    /// </summary>
+    private const int MaxWordsPerChange = 60;
+
+    /// <summary>The longest a version's one-line introduction may be, in words.</summary>
+    private const int MaxWordsPerIntro = 40;
+
+    /// <summary>
+    /// Every version section is terse: at most one introductory line, then <c>###</c> sections from
+    /// <see cref="SectionOrder"/>, in that order, each holding one-line changes.
+    /// </summary>
+    /// <remarks>
+    /// The root section is the GitHub release's notes, verbatim, and before 9.1.0 the majors opened
+    /// with paragraphs of reasoning and a numbered list of what could break, and single entries ran
+    /// to twenty lines of measurements and test names. A reader looking for what to change had to
+    /// dig for it. The explanation belongs in <c>docs/migration.md</c> and the guides; the line says
+    /// what happens now and what to do, and links there. A continuation line, a nested bullet, a
+    /// code block or a second paragraph is how prose comes back, so each is refused here.
+    /// </remarks>
+    [TestMethod]
+    public void EveryVersionSection_HasOneLineChangesUnderKnownSections()
+    {
+        var offenders = new List<string>();
+        var sections  = VersionSections().ToList();
+
+        // A section reader that finds nothing would pass everything below.
+        var changelogs = AllChangelogs().Count(file => file.Exists);
+        Assert.AreEqual(
+            changelogs, sections.Select(section => section.Changelog.FullName).Distinct().Count(),
+            "Some changelog has no '## [x.y.z]' section this test could read, so its form went unchecked.");
+
+        foreach (var (changelog, version, lines) in sections)
+        {
+            var intro   = 0;
+            var current = -1;
+
+            foreach (var (number, line) in lines)
+            {
+                var where = $"{RepoPath(changelog)}:{number} ({version})";
+
+                if (line.Length == 0 || ReferenceDefinition.IsMatch(line)) continue;
+
+                if (line.StartsWith("### ", StringComparison.Ordinal))
+                {
+                    var index = Array.IndexOf(SectionOrder, line[4..].Trim());
+
+                    if (index < 0)
+                        offenders.Add($"{where}: '{line}' is not one of {string.Join(", ", SectionOrder)}");
+                    else if (index <= current)
+                        offenders.Add($"{where}: '{line}' is repeated or out of order; sections go {string.Join(", ", SectionOrder)}");
+                    else
+                        current = index;
+                }
+                else if (line.StartsWith("- ", StringComparison.Ordinal))
+                {
+                    if (current < 0) offenders.Add($"{where}: a change sits outside a ### section");
+                }
+                else if (char.IsWhiteSpace(line[0]) || line.StartsWith("```", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{where}: a continuation line, nested bullet or code block; say the change in one line");
+                }
+                else if (current >= 0 || ++intro > 1)
+                {
+                    offenders.Add($"{where}: a paragraph; a version has at most one introductory line, before its sections");
+                }
+            }
+        }
+
+        Assert.AreEqual(
+            0, offenders.Count,
+            "These changelog lines are not in the terse form (CONTRIBUTING.md, Changelog):"
+          + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// A change fits in <see cref="MaxWordsPerChange"/> words and an introduction in
+    /// <see cref="MaxWordsPerIntro"/>, link targets not counted.
+    /// </summary>
+    [TestMethod]
+    public void EveryChangelogLine_IsShort()
+    {
+        var offenders = new List<string>();
+
+        foreach (var (changelog, version, lines) in VersionSections())
+        {
+            foreach (var (number, line) in lines.Where(entry => entry.Line.Length > 0 && !entry.Line.StartsWith('#')
+                                                             && !ReferenceDefinition.IsMatch(entry.Line)))
+            {
+                var limit = line.StartsWith("- ", StringComparison.Ordinal) ? MaxWordsPerChange : MaxWordsPerIntro;
+                var words = LinkTarget.Replace(line, "]").Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+
+                if (words > limit)
+                    offenders.Add($"{RepoPath(changelog)}:{number} ({version}): {words} words, at most {limit}");
+            }
+        }
+
+        Assert.AreEqual(
+            0, offenders.Count,
+            "These changelog lines are explanations rather than changes. Move the detail to the guide "
+          + "the line links to (CONTRIBUTING.md, Changelog):"
+          + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>A link inside a version section is an absolute URL.</summary>
+    /// <remarks>
+    /// The root section is published as the GitHub release's notes, where a relative link resolves
+    /// against the release page and lands nowhere. The package changelogs follow the same rule so an
+    /// entry can be copied between them as it is.
+    /// </remarks>
+    [TestMethod]
+    public void EveryChangelogLink_IsAbsolute()
+    {
+        var offenders = VersionSections()
+                       .SelectMany(section => section.Lines.SelectMany(entry => LinkTarget.Matches(entry.Line)
+                                                                    .Select(match => match.Groups["target"].Value)
+                                                                    .Where(target => !target.StartsWith("https://", StringComparison.Ordinal))
+                                                                    .Select(target => $"{RepoPath(section.Changelog)}:{entry.Number} ({section.Version}): {target}")))
+                       .ToList();
+
+        Assert.AreEqual(
+            0, offenders.Count,
+            "These changelog links are relative, and break on the GitHub release page. Use the "
+          + "https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/… form:"
+          + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>Matches a reference-style link definition: <c>[9.0.0]: https://…</c>.</summary>
+    private static readonly Regex ReferenceDefinition = new(@"^\[[^\]]+\]:\s+\S+$");
+
+    /// <summary>Matches the target of an inline link: <c>](target)</c>.</summary>
+    private static readonly Regex LinkTarget = new(@"\]\((?<target>[^)\s]*)\)");
+
+    /// <summary>
+    /// Each version section of every changelog: the lines after its <c>## [x.y.z]</c> heading up to
+    /// the next <c>##</c> heading, with their line numbers. The file's own header is not a section.
+    /// </summary>
+    private static IEnumerable<(FileInfo Changelog, string Version, List<(int Number, string Line)> Lines)> VersionSections()
+    {
+        foreach (var changelog in AllChangelogs().Where(file => file.Exists))
+        {
+            string? version = null;
+            var lines = new List<(int Number, string Line)>();
+            var all   = File.ReadAllLines(changelog.FullName);
+
+            for (var index = 0; index < all.Length; index++)
+            {
+                var line = all[index].TrimEnd();
+
+                if (line.StartsWith("## ", StringComparison.Ordinal))
+                {
+                    if (version is not null) yield return (changelog, version, lines);
+
+                    var heading = VersionHeading.Match(line);
+                    version = heading.Success ? heading.Groups["version"].Value : null;
+                    lines   = [];
+                }
+                else if (version is not null)
+                {
+                    lines.Add((index + 1, line));
+                }
+            }
+
+            if (version is not null) yield return (changelog, version, lines);
+        }
+    }
+
+    private static string RepoPath(FileInfo file) =>
+        Path.GetRelativePath(RepoLayout.Root.FullName, file.FullName).Replace('\\', '/');
+
     [TestMethod]
     public void EveryChangelog_ListsVersionsNewestFirst()
     {

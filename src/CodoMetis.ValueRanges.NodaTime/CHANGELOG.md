@@ -1,192 +1,114 @@
 # Changelog — CodoMetis.ValueRanges.NodaTime
 
-Entries affecting the NodaTime satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
+The changes that affect the NodaTime package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
 ## [9.0.0] — 2026-10-11
 
-### Changed
+Nothing was removed or renamed. What existing calls write and accept changed: [Migration from v8.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x).
 
-- **⚠️ `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`, `YearMonthRange`, their variants and
-  the five set families serialize as their literal with nothing registered**, as the core types
-  now do — previously a property dump that did not read back. The four ranges are also dictionary
-  keys now, and every type carries a `TypeConverter`, so configuration binding works. The five wrapper sets
-  register their own closed converters, so they work under Native AOT; the package builds with
-  `IsAotCompatible` and is tagged `native-aot` and `trimming`. Parsing ignores the
-  provider, as for the core types (the NodaTime element parsers already used fixed ISO patterns). See
-  `CodoMetis.ValueRanges` 9.0.0.
-- **⚠️ The wrapper arities parse as their primitive first.** `LocalDateSet<T>`, `LocalDateTimeSet<T>`,
-  `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>` handed element text straight to the
-  element's own `Parse`, as lenient as the consumer wrote it; they now read it with the family's ISO
-  patterns and hand the element its round-trip form. `Instant`, `LocalDate` and `LocalDateTime`
-  bounds and elements also read PostgreSQL's `infinity` / `-infinity`, as the extremes Npgsql maps
-  them from (`MaxValue` / `MinValue`, `MaxIsoValue` / `MinIsoValue`).
+### Breaking
 
-### Fixed
-
-- **⚠️ `AddNodaTimeRangeConverters()` no longer shadows `ConfigureForNodaTime`, and refuses bare
-  non-ISO values.** Registered first, its element converters won for all five types; now any other
-  converter registered for the type wins, in either order. A bare `LocalDate`, `LocalDateTime` or
-  `YearMonth` in a non-ISO calendar was written in that calendar's fields — a Julian 2024-01-01
-  read back as ISO 2024-01-01, thirteen days off — and is now refused with `ArgumentException`, as
-  NodaTime's converter does. Sets and ranges are unaffected.
-- **⚠️ `LocalDateSet<T>`, `LocalDateTimeSet<T>` and `YearMonthSet<T>` refuse an element backed by
-  a non-ISO value.** Its ISO text spelled the other calendar's fields — a Julian 2024-01-01 was
-  written, and read back, as ISO 2024-01-01 — silently. The element is refused with
-  `ArgumentException` in `From`, collection expressions and reads, and as the
-  `Contains`/`Add`/`Remove` probe.
-- **`HH:mm` is accepted** for `LocalTime`, the time part of `LocalDateTime`, and an `Instant` with
-  its offset or `Z`, as the core types accept it; it was a `FormatException`.
-- The core fixes to literal grammar (empty format string, quoted empty bounds, array escapes) and
-  to JSON precedence (union converters reaching variants, interface-declared properties) apply to
-  the NodaTime types too. See `CodoMetis.ValueRanges` 9.0.0.
+- JSON: `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`, `YearMonthRange`, their variants, their multiranges and the five value set families write their literal with nothing registered, where they wrote a property dump that nothing could read back ([JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- JSON: the core package's other JSON changes apply here too: a union converter on the options handles variants and `object`, and an interface-declared property writes its literal and can't be read ([JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- NodaTime: a bare `LocalDate`, `LocalDateTime` or `YearMonth` in a non-ISO calendar throws `ArgumentException` on write, where a Julian 2024-01-01 was written as ISO 2024-01-01, thirteen days off. Sets and ranges are unaffected. Convert with `WithCalendar(CalendarSystem.Iso)` first ([NodaTime](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/src/CodoMetis.ValueRanges.NodaTime/README.md)).
+- NodaTime: `LocalDateSet<T>`, `LocalDateTimeSet<T>` and `YearMonthSet<T>` throw `ArgumentException` for an element backed by a non-ISO value, in `From`, collection expressions, reads, and as the value passed to `Contains`, `Add` or `Remove` ([NodaTime](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/src/CodoMetis.ValueRanges.NodaTime/README.md)).
+- NodaTime: `AddNodaTimeRangeConverters()` no longer outranks `ConfigureForNodaTime` when registered first. Any other converter for the type wins, in either order ([JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#element-converters)).
+- Literals: `Parse` and `TryParse` ignore the format provider, as in the core package; the NodaTime element patterns were already fixed ISO. An empty format string, a quoted-empty range bound and backslashes in array elements follow the core package's new rules ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- Literals: the five wrapper sets parse element text with the family's ISO patterns first and hand your element the round-trip form, where they passed the text straight to the element's own `Parse` ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
 
 ### Added
 
-- **`Deconstruct` on every `Finite` variant, and on the unbounded variants of `LocalDateRange`,
-  `LocalDateTimeRange` and `YearMonthRange`** — the ones whose constructors normalize the calendar
-  and so are not positional records. Each mirrors its constructor, as for the core types:
-  `var (start, end) = finite` on the discrete `LocalDateRange` and `YearMonthRange`, and
-  `(start, end, startInclusive, endInclusive)` on `LocalDateTimeRange` and `InstantRange`.
+- **A `TypeConverter` on every type**, so configuration binding reads a NodaTime range or set from its literal ([TypeConverter](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- **Native AOT and trimming**: the package builds with `IsAotCompatible` and is tagged `native-aot` and `trimming`, and the five wrapper sets register their own converters ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+- **The four ranges as dictionary keys**, written as the literal ([Dictionary keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- **`Deconstruct`** on every `Finite` variant and on the unbounded variants of `LocalDateRange`, `LocalDateTimeRange` and `YearMonthRange`: `(start, end)` on `LocalDateRange` and `YearMonthRange`, and `(start, end, startInclusive, endInclusive)` on `LocalDateTimeRange` and `InstantRange` ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **`infinity` and `-infinity`** parse as the extremes of `Instant`, `LocalDate` and `LocalDateTime` (`MaxValue` and `MinValue`, `MaxIsoValue` and `MinIsoValue`), the ones Npgsql maps them to.
+
+### Fixed
+
+- `HH:mm` parses for a `LocalTime`, the time of a `LocalDateTime`, and an `Instant` with its offset or `Z`, where it threw `FormatException`.
 
 ## [8.0.0] — 2026-08-17
 
-### Fixed
+No signature changed: [Migration from v7.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v7x).
 
-- **The step functions missed a domain maximum spelled in another calendar.**
-  `LocalDateRange.NextValueAfter` compared against `LocalDate.MaxIsoValue` with `==`, and NodaTime's
-  equality includes the calendar system. Only ISO and Gregorian can represent `9999-12-31` at all,
-  and Gregorian is a distinct `CalendarSystem` instance, so the Gregorian spelling of the domain
-  maximum compared unequal, the guard was skipped and `PlusDays(1)` ran off the end of the domain.
-  `LocalDateRange` now normalizes to ISO before comparing and `YearMonthRange` rejects non-ISO
-  outright — each the policy that type already documents for its bounds.
+### Breaking
 
-Otherwise no source change in this package. The NodaTime range types run on the core engines, so they inherit
-both the infinity-operand subtraction fix and the shape-pair dispatch — see
-`CodoMetis.ValueRanges` 8.0.0.
+- `YearMonthRange.NextValueAfter` and `PreviousValueBefore` reject a non-ISO calendar, where they stepped in it and returned a value the type's constructors reject.
+- `LocalDateRange`'s step functions return `null` at a Gregorian `9999-12-31`, where they threw. They now compare in ISO.
+- `RangeSet.Except(TRange)` with an infinite range returns the empty set for the NodaTime ranges too, as in the core package.
 
 ## [7.0.0] — 2026-08-17
 
+Nothing was removed or renamed: [Migration from v6.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v6x).
+
+### Breaking
+
+- The core package's three range fixes apply to the NodaTime ranges: the empty range is contained by every range, `IsStrictlyLeftOf` and `IsStrictlyRightOf` are right for a range unbounded at its start, and `Except` subtracts between ranges unbounded in opposite directions ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v6x)).
+
 ### Added
 
-- **Five validated-wrapper arities** — `LocalDateSet<T>`, `LocalDateTimeSet<T>`, `InstantSet<T>`,
-  `LocalTimeSet<T>` and `YearMonthSet<T>` — matching the core package's arities, so a domain type
-  backed by a NodaTime value can be stored as a native PostgreSQL array without referencing this
-  package.
+- **Wrapper sets**: `LocalDateSet<T>`, `LocalDateTimeSet<T>`, `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>`, for your own element types over NodaTime values ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
 
-  Each pins the ISO pattern as the format it asks its elements for, for the same reason the closed
-  NodaTime sets pass an explicit literal text: NodaTime's `IFormattable` with a null format
-  produces the culture's form, so a `LocalDate` would otherwise render as
-  `Saturday, 15 June 2024`. A wrapper that forwards its `format` argument to the value it wraps
-  needs no configuration.
-
-  Unlike their closed siblings these arities cannot normalize the element's calendar — the element
-  type is opaque to them — so the ISO text form is part of the contract rather than something the
-  set enforces. `YearMonthSet<T>` is stored as a month-aligned `date[]`, exactly as `YearMonthSet`
-  is.
 ### Changed
 
-- **⚠️ Three range results change**, inherited from the core algebra that the NodaTime range types
-  share — see `CodoMetis.ValueRanges` 7.0.0 for each. `Contains`/`IsContainedBy` now answer `true`
-  for an empty operand (∅ ⊆ S); `IsStrictlyLeftOf`/`IsStrictlyRightOf` now answer correctly for a
-  range unbounded at its start, so `LocalDateRange.CreateUnboundedStart(…)` agrees with
-  PostgreSQL's `<<`; and `Except` now actually subtracts when the two operands are unbounded in
-  opposite directions, where it used to return the receiver untouched.
-
+- The wrapper sets ask their elements for the ISO pattern, since NodaTime's own text without a format is the culture's (`Saturday, 15 June 2024`). A wrapper that passes its `format` argument on needs nothing else ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
+- The wrapper sets can't convert an element's calendar, because the element type is yours, so ISO text is part of the element's contract. `YearMonthSet<T>` is stored as a month-aligned `date[]`, as `YearMonthSet` is.
 
 ## [6.3.0] — 2026-08-16
 
 ### Added
 
-- **`ISpanParsable<T>`** on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`,
-  `YearMonthRange` and the five NodaTime set types, with `Parse`/`TryParse` overloads over
-  `ReadOnlySpan<char>` beside the existing `string` ones. The NodaTime patterns were already
-  applied to spans internally; this exposes that entry point.
-- The core additions apply to the NodaTime types too, since they come from the shared generic
-  surface: `RangeSet<LocalDateRange, LocalDate>` and its siblings gain `IsInfinity()`/`IsFinite()`
-  and collection-expression support. See `CodoMetis.ValueRanges` 6.3.0.
-
-- **`Length`** on the NodaTime ranges: `int?` days for `LocalDateRange`, `int?` months for
-  `YearMonthRange`, `Duration?` for `InstantRange` — exact elapsed time — and `Period?` for
-  `LocalDateTimeRange`, whose wall-clock bounds bound a calendar quantity rather than a fixed
-  span.
-- **`Values()`** on `LocalDateRange` and `YearMonthRange`, the two discrete NodaTime domains.
-  `InstantRange`, `LocalDateTimeRange` and the time sets are continuous and do not declare it.
-- **`ToRangeSet()` / `ToLocalDateSet()` / `ToYearMonthSet()`** — the value-set ↔ range-set bridge
-  for the discrete NodaTime domains.
-- **`Clamp(value)`** on every NodaTime range, and an **indexer** on the five NodaTime set types.
+- **`ISpanParsable<T>`** on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`, `YearMonthRange` and the five value sets ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+- **`Length`**: `int?` days on `LocalDateRange`, `int?` months on `YearMonthRange`, `Duration?` on `InstantRange` and `Period?` on `LocalDateTimeRange` ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
+- **`Values()`** on `LocalDateRange` and `YearMonthRange`, the two discrete NodaTime ranges.
+- **`ToRangeSet()`** on `LocalDateSet` and `YearMonthSet`, and `ToLocalDateSet()` and `ToYearMonthSet()` back ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
+- **`Clamp(value)`** on every NodaTime range, and **an indexer** on the five value sets.
+- **From the core package**: `RangeSet` over a NodaTime range gets `IsInfinity()`, `IsFinite()` and collection expressions.
 
 ## [6.2.1] — 2026-08-16
 
-### Fixed
+### Breaking
 
-- **⚠️ `IsAdjacentTo` answered `false` whenever the receiver was unbounded**, and the NodaTime
-  range types share the core predicate, so `LocalDateRange`, `LocalDateTimeRange`, `InstantRange`
-  and `YearMonthRange` all had it — along with the `RangeSet` normalization built on top of it.
-  Fixed in `CodoMetis.ValueRanges` 6.2.1 and inherited here. **Results change for any range or set
-  with an unbounded element adjacent to its neighbour**, from a wrong answer to PostgreSQL's.
+- `IsAdjacentTo` returns `true` for an unbounded NodaTime range next to its neighbour, as in the core package, and `RangeSet` merges such neighbours ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)).
 
 ## [6.2.0] — 2026-08-16
 
-No source change in this package, but its behaviour changes with the core package it depends on.
+### Breaking
 
-### Changed
-
-- **⚠️ A null NodaTime range now reads back as `null` instead of throwing.** The range types here
-  serialize through the core `RangeJsonConverterFactory` rather than converters of their own, so
-  `LocalDateRange?`, `LocalDateTimeRange?`, `InstantRange?` and `YearMonthRange?` all had the core
-  package's asymmetry: the property wrote as `null` and threw `JsonException` on the way back in.
-  Fixed in `CodoMetis.ValueRanges` 6.2.0 and inherited here. `null` and `"empty"` stay distinct.
-  **If you relied on the exception to reject a null where a non-nullable range was expected, that
-  validation is gone.**
+- JSON: a `null` `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` or `YearMonthRange` reads back as `null`, where it threw `JsonException`. If you relied on that to reject a null, validate it yourself.
 
 ## [6.1.0] — 2026-08-15
 
-### Fixed
-
-- **The NodaTime set types serialized their elements as objects.** With no converter registered for
-  the element type, System.Text.Json's reflection path wrote
-  `[{"Calendar":{…},"Year":2024,"Month":1,"Day":15,…}]` and read back `default` — silently, on both
-  legs. All five sets now write ISO 8601 element forms through the family's own converter, and
-  `AddRangeConverters()` alone is enough.
-
 ### Added
 
-- `AddNodaTimeRangeConverters()` — registers the same element converters on the options, extending
-  the ISO 8601 form to bare NodaTime properties sitting *alongside* a set, which the element hook
-  does not reach. Idempotent, and composes with `ConfigureForNodaTime` in either registration
-  order.
+- **`AddNodaTimeRangeConverters()`** registers the ISO 8601 element converters on the options, for bare NodaTime values next to a set. It works before or after `ConfigureForNodaTime`, and calling it twice is harmless.
+
+### Fixed
+
+- JSON: the five value sets write ISO 8601 elements, where they wrote objects such as `[{"Calendar":{…},"Year":2024,…}]` and read back `default`. `AddRangeConverters()` alone is enough.
 
 ## [6.0.0] — 2026-08-14
 
+No breaking changes.
+
 ### Added
 
-- **Five NodaTime value set types** — `LocalDateSet`, `LocalDateTimeSet`, `InstantSet`,
-  `LocalTimeSet` and the month-granularity `YearMonthSet`: immutable, canonical (deduplicated,
-  sorted, null-free) sets with the full membership algebra, ISO-calendar normalization at
-  construction, PostgreSQL array literals and JSON support.
-
-No breaking changes.
+- **Value sets**: `LocalDateSet`, `LocalDateTimeSet`, `InstantSet`, `LocalTimeSet` and `YearMonthSet`, deduplicated, sorted and converted to the ISO calendar, with literals and JSON ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)).
 
 ## [5.0.0] — 2026-08-13
 
+No breaking changes.
+
 ### Added
 
-- **`YearMonthRange`** — a month-granularity range over NodaTime's `YearMonth` for billing and
-  reporting periods. Discrete with a one-month step, so `[2024-01, 2024-03]` and `[2024-04,
-  2024-06]` are adjacent and merge. Conversions to and from `LocalDateRange` and `DateInterval`
-  included; non-ISO calendars are rejected at construction.
-
-No breaking changes.
+- **`YearMonthRange`** over `YearMonth`, with a one-month step, so `[2024-01,2024-03]` and `[2024-04,2024-06]` are adjacent and merge. It converts to and from `LocalDateRange` and `DateInterval`, and rejects a non-ISO calendar.
 
 ## [4.1.0] — 2026-08-12
 
-Initial release of this package.
+The first release of this package.
 
 ### Added
 
-- `LocalDateRange` (`daterange`), `LocalDateTimeRange` (`tsrange`) and `InstantRange` (`tstzrange`)
-  with the complete algebra, multiranges, literals and JSON support of the core package, plus
-  conversions to and from NodaTime's own `Interval` and `DateInterval`.
-- `LocalDateTime` is wall-clock time by construction and `Instant` is an instant by construction,
-  so the `DateTimeKind` and offset-normalization caveats of the BCL-based types do not arise.
+- **`LocalDateRange`** (`daterange`), **`LocalDateTimeRange`** (`tsrange`) and **`InstantRange`** (`tstzrange`), with the core package's operations, multiranges, literals and JSON, and conversions to and from NodaTime's `Interval` and `DateInterval`. A `LocalDateTime` is a wall-clock time and an `Instant` an instant, so the BCL types' `DateTimeKind` and offset caveats don't apply.

@@ -1,129 +1,85 @@
 # Changelog — CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime
 
-Entries affecting the NodaTime EF Core satellite. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
+The changes that affect the NodaTime EF Core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
 ## [9.0.0] — 2026-10-11
 
+Nothing was removed or renamed: [Migration from v8.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x).
+
+### Breaking
+
+- `Instant`, `LocalDateTime` and `LocalTime` in a SQL constant or JSON column carry the microsecond Npgsql binds, where they carried nine fraction digits the server rounded. The extremes (`Instant.MinValue`, `MaxValue`, and the `MinIsoValue` and `MaxIsoValue` of `LocalDate` and `LocalDateTime`) are `-infinity` and `infinity`, where they were invalid SQL such as `-9998-01-01` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x)).
+- A non-ISO element of `LocalDateSet<T>`, `LocalDateTimeSet<T>` or `YearMonthSet<T>` throws as a query operand, where it was bound as the ISO date its fields spell, so a Julian January matched rows holding ISO January.
+
 ### Fixed
 
-- **The NodaTime types inside an EF Core JSON column** could not be saved, as for the core types
-  (see `CodoMetis.ValueRanges.EFCore.PostgreSQL` 9.0.0). `YearMonthRange`, its multirange and
-  `YearMonthSet` are written in their store's month-aligned date form
-  (`[2026-01-01,2026-06-30]`, `{2026-01-01,2026-06-01}`) rather than their own `2026-01` literal,
-  because a query into the document casts the text to `daterange`/`date[]`, which only reads
-  dates. Reads validate month alignment. `YearMonthRangeJsonValueReaderWriter`,
-  `YearMonthRangeSetJsonValueReaderWriter` and `YearMonthSetJsonValueReaderWriter` are public for
-  compiled models (`dotnet ef dbcontext optimize`; `--nativeaot` is not supported yet). The wrapper `YearMonthSet<T>` is written in the date form too; its own
-  `{2026-02}` literal could not be cast, so every query into it failed.
-- **NodaTime values written as text at the database's resolution.** In a JSON document and in a SQL
-  constant, `Instant`, `LocalDateTime` and `LocalTime` carried all nine fraction digits, which the
-  server rounds while Npgsql truncates a parameter toward 2000-01-01; and `Instant.MinValue` /
-  `MaxValue`, `LocalDate` and `LocalDateTime` `MinIsoValue` / `MaxIsoValue` stayed finite where a
-  parameter carries `-infinity` / `infinity` — `-9998-01-01` is not even valid SQL. Both now carry
-  the value Npgsql would bind, including a `YearMonthRange` that ends in 9999-12 and the element
-  constant of an `InstantSet` or `LocalTimeSet` probe — and of an `InstantRange` or
-  `LocalDateTimeRange` element operand — which was Npgsql's nine-digit literal. See
-  `CodoMetis.ValueRanges.EFCore.PostgreSQL` 9.0.0.
-- **A `LocalDateRange` or `LocalDateTimeRange` element operand in another calendar was compared by
-  its own fields.** `Contains(EF.Constant(julianDate))` rendered the Julian year, month and day as
-  if they were ISO and missed its row, and a `LocalDate` parameter threw inside Npgsql. The operand
-  is now converted to ISO, as the bounds are and as the NodaTime sets already did.
-- **⚠️ A non-ISO element of `LocalDateSet<T>`, `LocalDateTimeSet<T>` or `YearMonthSet<T>` is
-  refused as a bare operand** instead of being bound, inlined or written as the ISO date its own
-  calendar's fields spell (a Julian January parameter matched rows holding ISO January).
+- The NodaTime types inside a `ToJson()` column save and query, as the core types do. `YearMonthRange`, its multirange, `YearMonthSet` and `YearMonthSet<T>` are written as month-aligned dates (`[2026-01-01,2026-06-30]`), which the `daterange` and `date[]` casts read, and reads check the alignment ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md)).
+- A compiled model works through the public `YearMonthRangeJsonValueReaderWriter`, `YearMonthRangeSetJsonValueReaderWriter` and `YearMonthSetJsonValueReaderWriter`. `--nativeaot` generation isn't supported yet.
+- A `LocalDateRange` or `LocalDateTimeRange` element operand in another calendar is converted to ISO, where it missed its row or threw inside Npgsql.
 
 ## [8.0.0] — 2026-08-17
 
-No source change in this package. See `CodoMetis.ValueRanges` 8.0.0 for the infinity-operand
-subtraction fix and the shape-pair dispatch the NodaTime range types inherit.
+No change in this package. The NodaTime ranges get the core package's `RangeSet.Except` fix.
 
 ## [7.0.0] — 2026-08-17
 
+Nothing was removed or renamed: [Migration from v6.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v6x).
+
+### Breaking
+
+- The core package's three range fixes change what the NodaTime ranges answer in memory: `Contains` with an empty range, `IsStrictlyLeftOf` and `IsStrictlyRightOf` for a range unbounded at its start, and `Except` between ranges unbounded in opposite directions. No translation changed.
+
 ### Added
 
-- **Mappings for the five NodaTime wrapper arities** — `LocalDateSet<T>` to `date[]`,
-  `LocalDateTimeSet<T>` to `timestamp[]`, `InstantSet<T>` to `timestamptz[]`, `LocalTimeSet<T>`
-  to `time[]`, and `YearMonthSet<T>` to a month-aligned `date[]`. `UseValueRangesNodaTime()`
-  registers them through the base plugin's new `SetTypeRegistry.RegisterFamily` seam; nothing
-  changes at the call site.
-
-  Each family pins its ISO pattern as the format handed to the element's `IFormattable` and
-  parses with the matching pattern, so a corrupt or decoratively formatted element fails loudly
-  at the boundary. `YearMonthSet<T>` bridges through the first day of the month and validates the
-  alignment on read, exactly as the closed `YearMonthSet` definition does.
-### Changed
-
-- **The range corrections in `CodoMetis.ValueRanges` 7.0.0 reach the NodaTime range types too** —
-  they are translated by the base plugin and carry the core algebra, so empty-range containment,
-  `IsStrictlyLeftOf`/`IsStrictlyRightOf` and `Except` between opposing unbounded operands all
-  change what they answer in memory. No translation in this package changed; see the core
-  changelog for why in-memory and server-side evaluation disagreed in each case.
-
+- **Mappings for the NodaTime wrapper sets**: `LocalDateSet<T>` to `date[]`, `LocalDateTimeSet<T>` to `timestamp[]`, `InstantSet<T>` to `timestamptz[]`, `LocalTimeSet<T>` to `time[]` and `YearMonthSet<T>` to a month-aligned `date[]`. `UseValueRangesNodaTime()` registers them.
+- Each one writes and parses elements with its ISO pattern, so a corrupt element fails when stored or read. `YearMonthSet<T>` checks month alignment on read, as `YearMonthSet` does.
 
 ## [6.3.0] — 2026-08-16
 
-No source change in this package. The NodaTime range sets are translated by the base plugin, so
-`RangeSet<LocalDateRange, LocalDate>.IsFinite()` and `.IsInfinity()` translate here too — see
-`CodoMetis.ValueRanges.EFCore.PostgreSQL` 6.3.0 for the operators and for why `IsInfinity` does not
-translate to `lower_inf AND upper_inf`.
+No change in this package. `RangeSet<LocalDateRange, LocalDate>.IsFinite()` and `IsInfinity()` translate through the base package.
 
 ## [6.2.1] — 2026-08-16
 
-No source change in this package. See `CodoMetis.ValueRanges` 6.2.1 for the `IsAdjacentTo`
-asymmetry fix, which the NodaTime range types inherit.
+No change in this package. The NodaTime ranges get the core package's `IsAdjacentTo` fix.
 
 ## [6.2.0] — 2026-08-16
 
-No source change in this package, but its behaviour changes with the packages it depends on.
+No change in this package, but it inherits two changes.
 
-### Changed
+### Breaking
 
-- **`Count` over a union reached through `Remove` is now refused rather than counted twice.** The
-  NodaTime set types are translated by the base plugin's member translator, not one of their own,
-  so `Holidays.Union(other).Remove(d).Count` had the same defect: `array_remove` preserves
-  canonical form rather than establishing it, so `cardinality` ran over a concatenation and
-  counted shared elements twice. Fixed in `CodoMetis.ValueRanges.EFCore.PostgreSQL` 6.2.0 and
-  inherited here. In a predicate the expression now fails translation; in a projection it falls
-  back to client evaluation and answers correctly.
-- **⚠️ A null NodaTime range now reads back as `null` instead of throwing** — see
-  `CodoMetis.ValueRanges.NodaTime` 6.2.0.
+- JSON: a `null` NodaTime range reads back as `null`, where it threw `JsonException`. See the NodaTime package's 6.2.0.
+
+### Fixed
+
+- `Count` over `Holidays.Union(other).Remove(d)` fails translation in a filter and runs in memory in a projection, where it counted shared elements twice.
 
 ## [6.1.0] — 2026-08-15
 
-Version-alignment release — no changes to this package. 6.1.0 was a System.Text.Json audit
-affecting the core and NodaTime packages.
+No change in this package.
 
 ## [6.0.0] — 2026-08-14
 
+No breaking changes.
+
 ### Added
 
-- **NodaTime value set columns** mapped to native arrays: `LocalDateSet` → `date[]`,
-  `LocalDateTimeSet` → `timestamp[]`, `InstantSet` → `timestamptz[]`, `LocalTimeSet` → `time[]`
-  (no `CREATE TYPE` needed, unlike `timerange`) and `YearMonthSet` → a month-aligned `date[]`.
-- The set algebra translates to the array operators (`@>`, `&&`, `<@`, `cardinality`) exactly as
-  for the BCL-backed sets.
-
-No breaking changes.
+- **NodaTime value set columns**: `LocalDateSet` → `date[]`, `LocalDateTimeSet` → `timestamp[]`, `InstantSet` → `timestamptz[]`, `LocalTimeSet` → `time[]` (no `CREATE TYPE` needed) and `YearMonthSet` → a month-aligned `date[]`, with the set operations in SQL as for the core sets.
 
 ## [5.0.0] — 2026-08-13
 
+No breaking changes.
+
 ### Added
 
-- **`YearMonthRange` storage** as a month-aligned `daterange` — no custom database type required,
-  and every operator works server-side.
-
-No breaking changes.
+- **`YearMonthRange` columns**, stored as a month-aligned `daterange`, so no custom database type is needed and every operator runs in SQL.
 
 ## [4.1.0] — 2026-08-12
 
-Initial release of this package.
+The first release of this package.
 
 ### Added
 
-- Maps `LocalDateRange` to `daterange`, `LocalDateTimeRange` to `tsrange` and `InstantRange` to
-  `tstzrange` (plus their `RangeSet<TRange, T>` multirange counterparts), bridging through
-  `NpgsqlRange<T>` via `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`.
-- The full range algebra translates from LINQ to SQL exactly as for the BCL-based types.
-- Enabled with one line: `options.UseNpgsql(..., npgsql => npgsql.UseValueRangesNodaTime())`,
-  which implies both `UseNodaTime()` and `UseValueRanges()`.
+- **NodaTime range columns**: `LocalDateRange` to `daterange`, `LocalDateTimeRange` to `tsrange` and `InstantRange` to `tstzrange`, and their multiranges, through `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`, with the range operations in SQL as for the core types.
+- Turn it on with `npgsql.UseValueRangesNodaTime()`, which also turns on `UseNodaTime()` and `UseValueRanges()`.
