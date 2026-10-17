@@ -226,6 +226,20 @@ query, nullable query, route value or form field, answers 200 with `null` for th
 shape alike. It is registered as one candidate per range type, scoped by the line's `variant minimal TryParse`
 prefix so the JSON-body and MVC cells of the same variants stay held.
 
+Route B's step 3 is `LiteralCorpusProbeTests` (integration project, #123): literal corpus × entry point × type,
+judged by PostgreSQL's own text input on the same text. The corpus is generated per element kind from the
+families `axes.md` lists; the authority is `pg_input_is_valid($1, type)` and the canonical text, asked
+for every literal of a type in one statement; the entry points are `Parse` and `TryParse` over a string
+and a span, JSON, the `TypeConverter` and the EF Core JSON document reader, plus the EF Core write-back
+as a SQL constant and a JSON document, compared on the server as typed values. Its first run turned the
+pair's two known cells (#114, #115) into 120 rows over 23 types and found eight more defects (#126–#133): a
+sub-microsecond literal is a different value on each side, integer and array forms PostgreSQL 16 reads
+are refused, `GuidSet` follows `Guid.Parse` instead of `uuid_in`, `LocalDateTime` refuses an offset,
+`DateTimeOffset` refuses offsets beyond ±14:00, `(,max]` is an undocumented boundary row, and a NUL
+character reaches a `text` element. A row the documents name as a refusal (J06, J07), a value outside the
+CLR type's domain, and an extreme the store spells `±infinity` are counted, not reported, so the
+classification is part of what the class asserts and lives in its `DocumentedRefusal`.
+
 ## How to use it
 
 **Run the oracles.** They are ordinary tests; `dotnet test` runs them all. The registered classes are
