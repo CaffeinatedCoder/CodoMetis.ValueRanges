@@ -666,7 +666,8 @@
     ],
     "heldBy": [
       "SetCollectionContainsTests",
-      "SetCollectionTranslationTests"
+      "SetCollectionTranslationTests",
+      "CapturedCollectionProbeTests"
     ]
   },
   {
@@ -680,7 +681,8 @@
     ],
     "heldBy": [
       "RangeCollectionContainsTests",
-      "RangeCollectionTranslationTests"
+      "RangeCollectionTranslationTests",
+      "CapturedCollectionProbeTests"
     ]
   },
   {

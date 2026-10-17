@@ -47,7 +47,7 @@ request culture and configuration × every type are varied by `HostCultureProbeT
 |---|---|---|
 | Type | every range, multirange and set type, BCL and NodaTime | `MappingParityTests`, `DifferentialFuzzParityTests`; `ShapeMatrixParityTests` over `int4range`, `numrange`, `daterange` only |
 | Shape pair | 5 × 5 ordered | `ShapeMatrixParityTests` (against PostgreSQL), `SmallModelOracleTests` (against set theory) |
-| Operand position | column × column, column × parameter, column × inlined constant, constant element, server-side constructor | `MultirangeCoverageTests`, `InlineRangeConstantTests`, `InlineRangeConstantExecutionTests`; `DifferentialFuzzParityTests` (three legs, constant and parameter per probe) |
+| Operand position | column × column, column × parameter, column × inlined constant, constant element, server-side constructor, captured collection (array, `List`, `HashSet`, `IEnumerable`) read by `Contains`, `Any`, `Count` | `MultirangeCoverageTests`, `InlineRangeConstantTests`, `InlineRangeConstantExecutionTests`; `DifferentialFuzzParityTests` (three legs, constant and parameter per probe); `CapturedCollectionProbeTests` (captured collection × every range and set type × list contents × alone or beside `Contains`) |
 | Store text route | binary parameter, SQL literal, JSON document | `TemporalStoreParityTests`, `TemporalStoreTextTests`, `JsonColumnTests` |
 | `Npgsql.DisableDateTimeInfinityConversions` | off, on | every integration project (off); `InfinityConversionsDisabledTests` (on, temporal extremes only — per process, hence its own project) |
 | Temporal value | sub-microsecond, the extremes, each `DateTimeKind` | `TemporalStoreParityTests`, `RangeRoundTripTests`, `ProviderConversionTests` |

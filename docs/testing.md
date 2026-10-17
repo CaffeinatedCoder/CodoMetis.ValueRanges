@@ -213,6 +213,14 @@ three families, none of which a hand-picked sweep had shown: `IsUnboundedStart`/
 `(,)` (#109), `RangeSet.Overlaps` on every continuous type (#106), and adjacency at the date extremes
 (#110). Its seeds plant a tied-end `Intersect` and a value set `IsSubsetOf` that ignores the tail.
 
+The fuzz sweep binds an operand as a column, a constant or a single parameter, never as a collection.
+`CapturedCollectionProbeTests` covers that operand position: every discovered range and value set type,
+read from a captured collection through `Contains`, `Any` and `Count`, compared with the same projection in
+memory ([oracles.md](oracles.md#axesmd--what-a-consumer-varies)). Its lists are built from the rows as
+loaded, so the store's microsecond truncation does not count as a disagreement. It reuses the fuzz sweep's
+type discovery (`FuzzTypes`), links `RangeProbes` and `SetProbes` from the conventions project, and runs in
+about five seconds.
+
 ### The Multirange Oracle
 
 `SmallModelMultirangeOracleTests` covers what the other two do not reach. The single-range oracle

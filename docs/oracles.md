@@ -241,6 +241,16 @@ character reaches a `text` element. A row the documents name as a refusal (J06, 
 CLR type's domain, and an extreme the store spells `±infinity` are counted, not reported, so the
 classification is part of what the class asserts and lives in its `DocumentedRefusal`.
 
+The fourth (#136) is the captured collection, the EF Core operand position no other sweep sends.
+`CapturedCollectionProbeTests` (integration project) reads every range and value set type from a captured
+array, `List`, `HashSet` and `IEnumerable` holding lists chosen to tell a list from the multirange it would
+collapse into (empty, overlapping, adjacent, with an empty value, a duplicate, every shape), through
+`Contains`, `Any` and `Count`, alone and beside a `Contains` that reads the same collection. The oracle is
+the same projection run in memory over the rows as loaded. Its first run registered #76, measured wider (a
+range collection no `Contains` reads also fails loudly, as `42809` for `Any(==)` and for `timerange`), and
+found #137: `Any` or `Count` with a predicate over an empty collection the plugin sends one parameter per
+element throws.
+
 ## How to use it
 
 **Run the oracles.** They are ordinary tests; `dotnet test` runs them all. The registered classes are
