@@ -1,6 +1,9 @@
 using System.Linq.Expressions;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Query;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
@@ -15,7 +18,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// method call translators; the rewrite routes them through
 /// <see cref="ValueRangesMethodCallTranslator"/> instead, producing valid multirange SQL. A second
 /// rewrite gives a range constant EF Core inlined its union type — see
-/// <see cref="RangeVariantConstantRetyper"/>.
+/// <see cref="RangeVariantConstantRetyper"/>. A third sends a captured collection of value sets one
+/// parameter per set, because PostgreSQL has no array of arrays to bind it as one — see
+/// <see cref="SetCollectionParameterExpander"/>.
 /// </para>
 /// <para>
 /// The value set refusals — a server-computed <c>Union</c> consumed by an order- or
@@ -29,7 +34,75 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
 {
     /// <inheritdoc />
     public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
-        => RangeVariantConstantRetyper.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression));
+        => new SetCollectionParameterExpander(DefaultCollectionMode(eventData.Context)).Visit(
+            RangeVariantConstantRetyper.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)));
+
+    private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)
+        => context is null
+               ? ParameterTranslationMode.Parameter
+               : RelationalOptionsExtension.Extract(context.GetService<IDbContextOptions>()).ParameterizedCollectionMode;
+
+    /// <summary>
+    /// Binds a captured collection of value sets one parameter per set — <c>IN (@p1, @p2, …)</c> —
+    /// where EF Core would bind it as a single array parameter.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A value set is itself a PostgreSQL array, so a collection of them as one parameter is an array
+    /// of arrays (<c>text[][]</c>), which PostgreSQL does not have: Npgsql refused to write it, and
+    /// <c>wanted.Contains(r.Tags)</c> over a captured list or array threw <c>InvalidCastException</c>
+    /// for every family. EF Core's <see cref="ParameterTranslationMode.MultipleParameters"/> mode binds
+    /// each set as its own parameter, through the set's own mapping, so <c>Contains</c> becomes
+    /// <c>IN</c> — equality against each — and <c>Any</c> or <c>Count</c> over the collection read it
+    /// from <c>VALUES</c>. Equality of two canonical arrays is set equality, so the answer is the one
+    /// the same expression gives in memory.
+    /// </para>
+    /// <para>
+    /// Only a collection that would have gone out as one array parameter is changed. A context
+    /// configured with <see cref="ParameterTranslationMode.Constant"/> or
+    /// <see cref="ParameterTranslationMode.MultipleParameters"/>, and a collection wrapped in
+    /// <see cref="EF.Constant{T}"/>, already translate, so they keep their mode. A collection wrapped
+    /// in <see cref="EF.Parameter{T}"/> asks for the one array parameter that cannot be bound, so it is
+    /// refused here, with what to write instead.
+    /// </para>
+    /// <para>
+    /// A <c>Union</c> computed on the server stays refused under <c>IN</c>: that is decided on the SQL
+    /// tree, by <see cref="ValueSetSqlGuard"/>.
+    /// </para>
+    /// </remarks>
+    private sealed class SetCollectionParameterExpander(ParameterTranslationMode defaultMode) : ExpressionVisitor
+    {
+        protected override Expression VisitExtension(Expression node)
+            => node is QueryParameterExpression parameter
+               && (parameter.TranslationMode ?? defaultMode) == ParameterTranslationMode.Parameter
+               && SetElementType(parameter.Type) is not null
+                   ? new QueryParameterExpression(parameter.Name, parameter.Type, ParameterTranslationMode.MultipleParameters)
+                   : base.VisitExtension(node);
+
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+            => node.Method is { Name: nameof(EF.Parameter), IsGenericMethod: true }
+               && node.Method.DeclaringType == typeof(EF)
+               && SetElementType(node.Type) is { } set
+                   ? throw new InvalidOperationException(
+                       $"A collection of {set.Name} cannot be sent as a single parameter ('EF.Parameter'). Each {set.Name} "
+                     + "is a PostgreSQL array, and PostgreSQL has no array of arrays, so there is no type to bind the "
+                     + "collection as. Remove 'EF.Parameter': without it the collection is sent one parameter per set, "
+                     + "and Contains translates to IN (@p1, @p2, …).")
+                   : base.VisitMethodCall(node);
+
+        /// <summary>The registered value set type a collection type holds, or <see langword="null"/>.</summary>
+        private static Type? SetElementType(Type type)
+        {
+            var enumerable = type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+                                 ? type
+                                 : type.GetInterfaces().FirstOrDefault(
+                                     i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+
+            return enumerable?.GetGenericArguments()[0] is { } element && SetTypeRegistry.TryGetByClrType(element, out _)
+                       ? element
+                       : null;
+        }
+    }
 
     /// <summary>
     /// Retypes a range constant that EF Core inlined from the runtime type of its value — the sealed
