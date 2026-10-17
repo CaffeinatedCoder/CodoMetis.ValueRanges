@@ -29,7 +29,7 @@ the parts that pay for themselves here: no covering arrays, no ledger, no replay
 Claims are extracted by a person (or a model) once per document version and held by a test; the
 sweeps themselves are ordinary MSTest classes.
 
-## The six files
+## The seven files
 
 ### `claims.json` — what the documents promise
 
@@ -190,6 +190,30 @@ issue outlives its member, and a waiver that points at a `docs/*.md#heading` poi
 exists. Refreshing the listing against a new major therefore turns its new rows into failures naming
 them, each a decision: a member, a waiver, or an issue.
 
+### `axes.md` — what a consumer varies
+
+The claims say what is promised and the surface says what is offered. Neither says which *settings* a
+consumer combines: the declared type of a property, the `JsonSerializerOptions` of the host, the
+current culture, the entry point, `Npgsql.DisableDateTimeInfinityConversions`. #114, #116 and #117 were
+each found by one such combination that no test had varied, as a one-off that was not kept. `axes.md` is
+the hand-written list (route B of #105, the BLite way: no covering arrays, no generated axes): one
+section per surface family, each axis with its values, the test that already varies it, and **the pairs
+no test varies yet**, which are the next probe class.
+
+A **probe class** (`*ProbeTests`) is an ordinary MSTest sweep over the full product of a few axes, in
+the project that already has the harness: the conventions project for type discovery, `AspNetCore.Tests`
+for a `TestServer`, the integration project for a live server. Its oracle is the document's promise
+(differential across declarations, or the refusal the document names), it ends in `Candidates.Verdict`,
+and it is registered in `oracles.json` with a seed and named in the `heldBy` of the claims it holds like
+every other oracle — `OracleCatalogueTests` requires the registration of any `*ProbeTests` that holds a
+claim. It stays under a minute, because nothing replays by footprint here. A probe whose test method runs
+once per `[DynamicData]` row passes the row's label as `rowPrefix` to the verdict, so a candidate is
+scoped to the row whose lines start with it and another row does not report it fixed.
+
+The first is `JsonOptionsProbeTests`: every range, multirange and value set type × {union, sealed
+variant, interface, `object`, record property, dictionary value} × {default, camelCase, snake_case,
+`ReferenceHandler.Preserve`, a source-generated context, `NumberHandling.AllowReadingFromString`}.
+
 ## How to use it
 
 **Run the oracles.** They are ordinary tests; `dotnet test` runs them all. The registered classes are
@@ -239,6 +263,11 @@ gets its `member` and the fragment a translation test asserts; a row it should n
 `waiver` that says why in terms of the set or range semantics (order, randomness, dimensions, a
 canonical form the server cannot keep); anything else gets an issue, filed under the release epic it
 ships in with the package and area labels, and the number goes in `issue`.
+
+**Write a probe.** Take a "pairs no test varies" line from `axes.md`, write the product as a
+`*ProbeTests` class (one row per type, the other axes inside the row, the oracle from the claims it
+holds), register and seed it, name it in those claims' `heldBy`, and move the pair into the axis table
+with the class as what varies it.
 
 **Add a claim.** Read the document section, copy the sentence verbatim into `quote`, restate it as
 "under conditions, observable result", name the surfaces a probe calls, and leave `heldBy` empty if

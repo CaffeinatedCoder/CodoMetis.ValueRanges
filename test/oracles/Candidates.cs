@@ -59,10 +59,18 @@ public static class Candidates
     /// <see langword="false"/> when run with another seed than the one its candidates were drawn from:
     /// there, not meeting a candidate is not evidence that it was fixed.
     /// </param>
+    /// <param name="rowPrefix">
+    /// The label this call's failure lines start with, for a data-driven sweep whose test method runs
+    /// once per row (one type, one option set): only a candidate whose <c>row</c> starts with it is this
+    /// call's, so a candidate of another row is neither matched nor judged fixed here. Without it every
+    /// candidate of the oracle (and method) is judged by every row.
+    /// </param>
     public static void Verdict(string oracle, IReadOnlyList<string> failures, string header, int shown = 25, string? method = null,
-                               bool requireEveryCandidate = true)
+                               bool requireEveryCandidate = true, string? rowPrefix = null)
     {
-        var known   = For(oracle).Where(c => c.Method is null || method is null || string.Equals(c.Method, method, StringComparison.Ordinal)).ToList();
+        var known   = For(oracle).Where(c => c.Method is null || method is null || string.Equals(c.Method, method, StringComparison.Ordinal))
+                                 .Where(c => rowPrefix is null || c.Row.StartsWith(rowPrefix, StringComparison.Ordinal))
+                                 .ToList();
         var failing = new List<string>();
         var matched = new HashSet<Candidate>();
 

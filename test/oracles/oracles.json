@@ -202,5 +202,11 @@
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "exception",
     "against": "the documented text-form contract: a decorated wrapper element refused naming the contract at the JSON write, the SQL literal and the bound parameter, string and integer arities"
+  },
+  {
+    "class": "JsonOptionsProbeTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the documented wire form, for every discovered range, multirange and set type × six declarations × six JsonSerializerOptions (test/oracles/axes.md)"
   }
 ]
