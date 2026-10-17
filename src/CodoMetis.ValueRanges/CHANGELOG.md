@@ -3,6 +3,10 @@
 The changes that affect the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [9.1.0] — 2026-10-17
+
+No change in this package.
+
 ## [9.0.0] — 2026-10-11
 
 Nothing was removed or renamed. What existing calls write and accept changed: [Migration from v8.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x).
