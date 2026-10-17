@@ -1,0 +1,17 @@
+Seed: ValueSetCore.IsSubsetOf stops at the end of the right array and answers true, so a set with elements above the other's largest counts as its subset
+Oracles: DifferentialFuzzParityTests
+Fails: IsSubsetOf, IsSupersetOf, IsProperSubsetOf, IsProperSupersetOf and Union.IsSubsetOf(right) rows on every value set family, closed and wrapper, through column, constant and parameter
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+index 0c32ce2..7e63936 100644
+--- a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
++++ b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+@@ -95,7 +95,7 @@ internal static class ValueSetCore
+         int i = 0, j = 0;
+         while (i < left.Length)
+         {
+-            if (j == right.Length) return false;
++            if (j == right.Length) break;
+ 
+             var comparison = comparer.Compare(left[i], right[j]);
+             if (comparison < 0) return false;

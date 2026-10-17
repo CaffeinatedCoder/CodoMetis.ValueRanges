@@ -1,0 +1,17 @@
+Seed: EarlierEnd keeps the receiver's inclusivity when both end bounds are equal, so Intersect on a continuous domain answers [a,b] where one side ends b)
+Oracles: DifferentialFuzzParityTests
+Fails: Intersect, Intersect(range) and Intersect(set) rows whose operands end on the same value with different inclusivity, on every continuous range type, through column, constant and parameter
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeBoundHelpers.cs b/src/CodoMetis.ValueRanges/Internals/RangeBoundHelpers.cs
+index add340a..596a975 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeBoundHelpers.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeBoundHelpers.cs
+@@ -71,7 +71,7 @@ internal static class RangeBoundHelpers
+         {
+             < 0 => (aValue, aInclusive),
+             > 0 => (bValue, bInclusive),
+-            _   => (aValue, aInclusive && bInclusive)
++            _   => (aValue, aInclusive)
+         };
+ 
+     // Selects the earlier (more permissive) of two start bounds for merge/union.

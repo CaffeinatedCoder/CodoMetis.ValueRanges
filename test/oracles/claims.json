@@ -87,7 +87,8 @@
       "ExecutedQueryTests",
       "ShapeMatrixParityTests",
       "NodaQueryTranslationTests",
-      "ContinuousMultirangeParityTests"
+      "ContinuousMultirangeParityTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -104,7 +105,8 @@
     "heldBy": [
       "QueryTranslationTests",
       "ExecutedQueryTests",
-      "ShapeMatrixParityTests"
+      "ShapeMatrixParityTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -143,7 +145,8 @@
     "heldBy": [
       "QueryTranslationTests",
       "ExecutedQueryTests",
-      "RangeSetComparisonTests"
+      "RangeSetComparisonTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -162,7 +165,8 @@
       "QueryTranslationTests",
       "ExecutedQueryTests",
       "NodaTimeIntegrationTests",
-      "TimeAndYearMonthIntegrationTests"
+      "TimeAndYearMonthIntegrationTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -295,7 +299,8 @@
       "WrapperSetTranslationTests",
       "NodaWrapperSetTranslationTests",
       "SetIntegrationTests",
-      "SetOperatorParityTests"
+      "SetOperatorParityTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -313,7 +318,8 @@
     ],
     "heldBy": [
       "SetQueryTranslationTests",
-      "SetOperatorParityTests"
+      "SetOperatorParityTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -328,7 +334,8 @@
     "heldBy": [
       "SetQueryTranslationTests",
       "WrapperSetTranslationTests",
-      "WrapperArityIntegrationTests"
+      "WrapperArityIntegrationTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -362,7 +369,8 @@
     "heldBy": [
       "UnionCanonicalityTests",
       "SetQueryTranslationTests",
-      "SetOperatorParityTests"
+      "SetOperatorParityTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1565,7 +1573,8 @@
       "RangeContainsTests",
       "ShapeMatrixParityTests",
       "SmallModelOracleTests",
-      "RangeContainedByTests"
+      "RangeContainedByTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1581,7 +1590,8 @@
     "heldBy": [
       "RangeOverlapsTests",
       "ShapeMatrixParityTests",
-      "SmallModelOracleTests"
+      "SmallModelOracleTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1708,7 +1718,8 @@
       "SmallModelOracleTests",
       "ExecutedQueryTests",
       "RangeDoesNotExtendLeftOfTests",
-      "RangeDoesNotExtendRightOfTests"
+      "RangeDoesNotExtendRightOfTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1756,7 +1767,8 @@
       "RangeIntersectTests",
       "ShapeMatrixParityTests",
       "SmallModelOracleTests",
-      "ExecutedQueryTests"
+      "ExecutedQueryTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1773,7 +1785,8 @@
     "heldBy": [
       "RangeUnionTests",
       "ShapeMatrixParityTests",
-      "SmallModelOracleTests"
+      "SmallModelOracleTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1791,7 +1804,8 @@
       "RangeExceptTests",
       "ShapeMatrixParityTests",
       "SmallModelOracleTests",
-      "ContinuousMultirangeParityTests"
+      "ContinuousMultirangeParityTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1810,7 +1824,8 @@
       "RangeMergeSpanTests",
       "ShapeMatrixParityTests",
       "ExecutedQueryTests",
-      "LocalDateRangeTests"
+      "LocalDateRangeTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {

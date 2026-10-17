@@ -117,6 +117,15 @@
     ]
   },
   {
+    "class": "DifferentialFuzzParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "EF Core and PostgreSQL on the literals, over seeded random operands of every discovered range, multirange and value set type",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "SetOperatorParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
