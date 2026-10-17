@@ -28,8 +28,13 @@ namespace CodoMetis.ValueRanges.Oracles;
 /// </remarks>
 public static class Candidates
 {
-    /// <summary>One known disagreement: the oracle class, the row's stable text, its family and the issue that tracks it.</summary>
-    public sealed record Candidate(string Oracle, string Row, string Family, string Issue);
+    /// <summary>
+    /// One known disagreement: the oracle class, the row's stable text, its family and the issue that
+    /// tracks it. <paramref name="Method"/> scopes the row to one test method of the class; without it
+    /// the row belongs to every sweep of the class, and an oracle whose methods have disjoint rows
+    /// would read another method's rows as fixed.
+    /// </summary>
+    public sealed record Candidate(string Oracle, string Row, string Family, string Issue, string? Method = null);
 
     private static readonly Lazy<IReadOnlyList<Candidate>> s_all = new(Load);
 
@@ -48,9 +53,10 @@ public static class Candidates
     /// <param name="failures">The sweep's disagreements, one line each.</param>
     /// <param name="header">The first line of the failure message, naming the sweep.</param>
     /// <param name="shown">How many lines of the failure message to show.</param>
-    public static void Verdict(string oracle, IReadOnlyList<string> failures, string header, int shown = 25)
+    /// <param name="method">The calling test method; a candidate scoped to another method is not this sweep's.</param>
+    public static void Verdict(string oracle, IReadOnlyList<string> failures, string header, int shown = 25, string? method = null)
     {
-        var known   = For(oracle);
+        var known   = For(oracle).Where(c => c.Method is null || method is null || string.Equals(c.Method, method, StringComparison.Ordinal)).ToList();
         var failing = new List<string>();
         var matched = new HashSet<Candidate>();
 

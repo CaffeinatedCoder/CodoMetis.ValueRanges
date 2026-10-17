@@ -3,18 +3,35 @@
     "oracle": "DecorativeElementContractTests",
     "row": "StringSet<DecoratedText>: JSON write accepted",
     "family": "string arity writes a decorated element",
-    "issue": "#53"
+    "issue": "#53",
+    "method": "StringArity_RefusesADecoratedElement_AtEveryWriteBoundary"
   },
   {
     "oracle": "DecorativeElementContractTests",
     "row": "StringSet<DecoratedText>: SQL literal accepted",
     "family": "string arity writes a decorated element",
-    "issue": "#53"
+    "issue": "#53",
+    "method": "StringArity_RefusesADecoratedElement_AtEveryWriteBoundary"
   },
   {
     "oracle": "DecorativeElementContractTests",
     "row": "StringSet<DecoratedText>: bound parameter accepted",
     "family": "string arity writes a decorated element",
-    "issue": "#53"
+    "issue": "#53",
+    "method": "StringArity_RefusesADecoratedElement_AtEveryWriteBoundary"
+  },
+  {
+    "oracle": "DecorativeElementContractTests",
+    "row": "Int32Set<OffByOne>: literal round trip changed the set",
+    "family": "wrapper arity does not check that the element's text form round-trips",
+    "issue": "#53",
+    "method": "IntegerArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip"
+  },
+  {
+    "oracle": "DecorativeElementContractTests",
+    "row": "StringSet<Lenient>: literal round trip changed the set",
+    "family": "wrapper arity does not check that the element's text form round-trips",
+    "issue": "#53",
+    "method": "StringArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip"
   }
 ]

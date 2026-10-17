@@ -24,6 +24,15 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// element's message rather than the contract's.
 /// </para>
 /// <para>
+/// The integer arity refuses only decoration that is not numeric. An element whose text form is a
+/// <em>different number</em> (<c>ToString</c> gives <c>V + 1</c>, <c>Parse</c> gives <c>V</c>) is
+/// written as <c>{124}</c> and read back as 124: the set that comes back is not equal to the one
+/// written, and nothing throws. A string element whose <c>Parse</c> keeps any text is written as
+/// <c>{CUST-123}</c> and read back as <c>{CUST-CUST-123}</c>. Neither arity checks that an
+/// element's text form round-trips (#53); both are candidate rows here, per arity so that a seeded
+/// defect in one cannot be read as the other's known failure.
+/// </para>
+/// <para>
 /// The temporal and NodaTime arities are held for the same sentence by <c>SqlLiteralTests</c>,
 /// <c>SetElementBridgeTests</c> and <c>SetJsonConverterTests</c>, with elements that swallow the
 /// format argument.
@@ -62,7 +71,52 @@ public sealed class DecorativeElementContractTests
 
         Sweep(failures, StringSet<DecoratedText>.From(DecoratedText.Parse("123", CultureInfo.InvariantCulture)));
 
-        Candidates.Verdict(nameof(DecorativeElementContractTests), failures, Header);
+        Candidates.Verdict(nameof(DecorativeElementContractTests), failures, Header,
+                           method: nameof(StringArity_RefusesADecoratedElement_AtEveryWriteBoundary));
+    }
+
+    private const string RoundTripHeader = "A wrapper element whose text form does not round-trip was written and read back as a different set";
+
+    [TestMethod]
+    public void IntegerArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip()
+    {
+        var failures = new List<string>();
+
+        RoundTrip<Int32Set<OffByOne>, OffByOne>(failures, Int32Set<OffByOne>.From(OffByOne.Parse("123", CultureInfo.InvariantCulture)));
+
+        Candidates.Verdict(nameof(DecorativeElementContractTests), failures, RoundTripHeader,
+                           method: nameof(IntegerArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip));
+    }
+
+    [TestMethod]
+    public void StringArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip()
+    {
+        var failures = new List<string>();
+
+        RoundTrip<StringSet<Lenient>, Lenient>(failures, StringSet<Lenient>.From(Lenient.Parse("123", CultureInfo.InvariantCulture)));
+
+        Candidates.Verdict(nameof(DecorativeElementContractTests), failures, RoundTripHeader,
+                           method: nameof(StringArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip));
+    }
+
+    /// <summary>The array literal written for the set must read back as an equal set — or the write must refuse.</summary>
+    private static void RoundTrip<TSet, T>(List<string> failures, TSet set)
+        where TSet : Core.IValueSetFactory<TSet, T>, Core.IValueSet<T>
+        where T : IEquatable<T>
+    {
+        string text;
+        try
+        {
+            text = set.ToString()!;
+        }
+        catch (Exception refusal) when (refusal.Message.Contains("text form", StringComparison.Ordinal))
+        {
+            return; // refused, naming the contract: the documented behaviour
+        }
+
+        var back = TSet.Parse(text, null);
+        if (!back.Equals(set))
+            failures.Add($"  {Name(typeof(TSet))}: literal round trip changed the set → wrote {text}, read back [{string.Join(",", back.Values)}], built from [{string.Join(",", set.Values)}]");
     }
 
     private static void Sweep<TSet>(List<string> failures, TSet set) where TSet : notnull
@@ -111,6 +165,49 @@ public sealed class DecorativeElementContractTests
             var ok = s is { Length: > 0 } && s.All(char.IsAsciiDigit);
             result = ok ? new(s!) : default;
             return ok;
+        }
+
+        public string ToString(string? format, IFormatProvider? formatProvider) => $"CUST-{_value}";
+
+        public override string ToString() => ToString(null, null);
+    }
+
+    /// <summary>An integer whose text form is a different number: formats <c>V + 1</c>, parses <c>V</c>.</summary>
+    public readonly record struct OffByOne : IFormattable, IParsable<OffByOne>, IComparable<OffByOne>
+    {
+        private readonly int _value;
+
+        private OffByOne(int value) => _value = value;
+
+        public static OffByOne Parse(string s, IFormatProvider? provider) => new(int.Parse(s, provider));
+
+        public static bool TryParse(string? s, IFormatProvider? provider, out OffByOne result)
+        {
+            var ok = int.TryParse(s, provider, out var value);
+            result = new(value);
+            return ok;
+        }
+
+        public int CompareTo(OffByOne other) => _value.CompareTo(other._value);
+
+        public string ToString(string? format, IFormatProvider? formatProvider) => (_value + 1).ToString(formatProvider);
+
+        public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>A text element that decorates when formatted and keeps any text when parsed.</summary>
+    public readonly record struct Lenient : IFormattable, IParsable<Lenient>
+    {
+        private readonly string _value;
+
+        private Lenient(string value) => _value = value;
+
+        public static Lenient Parse(string s, IFormatProvider? provider) => new(s);
+
+        public static bool TryParse(string? s, IFormatProvider? provider, out Lenient result)
+        {
+            result = new(s ?? "");
+            return s is not null;
         }
 
         public string ToString(string? format, IFormatProvider? formatProvider) => $"CUST-{_value}";

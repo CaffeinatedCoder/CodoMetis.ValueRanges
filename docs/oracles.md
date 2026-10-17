@@ -129,7 +129,9 @@ line that matches a candidate's `row` text:
   so the fix's PR removes it and the registry cannot outlive the defect.
 
 The `row` is the stable prefix of the sweep's own failure line — the operands and the operation, not
-the actual value, which changes with the fix.
+the actual value, which changes with the fix. An optional `method` scopes the row to one test method
+of the class; use it when a class has several sweeps with disjoint rows, since "candidate fixed" is
+otherwise judged over every row of the class.
 
 ## How to use it
 
