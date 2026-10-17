@@ -9,8 +9,9 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// Every range type reads a bound as PostgreSQL's <c>range_in</c> does: only an <em>absent</em> bound
 /// is infinite; a quoted <c>""</c> or a bound of only whitespace is a value — one no element type here
 /// accepts; quotes may wrap any part of a bound and a backslash escapes the next character, inside
-/// quotes or out. Swept through <c>Parse</c>, <c>TryParse</c>, the span overload, JSON, the
-/// <c>TypeConverter</c> and the multirange literal.
+/// quotes or out; ASCII whitespace at either end of a bound is stripped, quoted or not. Swept through
+/// <c>Parse</c>, <c>TryParse</c>, the span overload, JSON, the <c>TypeConverter</c> and the
+/// multirange literal.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -82,16 +83,34 @@ public sealed class RangeLiteralGrammarContractTests
         // Whitespace around an unquoted bound is not part of it for any element type here.
         Reads($"[ {lo} , {hi} )", finite);
 
+        // Nor is ASCII whitespace at either end of a quoted or escaped bound: range_in keeps it and
+        // every element input function behind these types strips it (#45, measured on PostgreSQL 17).
+        foreach (var ws in AsciiWhiteSpace)
+        {
+            Reads($"[\"{ws}{lo}\",\"{hi}{ws}\")", finite);
+            Reads($"[\"{ws}{lo}{ws}\",{hi})", finite);
+            Reads($"[\\{ws}{lo},{hi}\\{ws})", finite);
+            Reads($"[ \"{ws}{lo}\" ,{hi})", finite);
+        }
+
         // Structure PostgreSQL refuses: a second comma, a closing bracket inside a bound, an
         // unterminated quote or escape, Unicode whitespace where only ASCII whitespace is skipped.
         foreach (var literal in new[]
                  {
                      $"[{lo},{hi},{hi})", $"[{lo}),{hi})", $"[{lo}],{hi})", $"[\"{lo},{hi})", $"[{lo},{hi}\\)",
-                     // Only ASCII whitespace is skipped, as in PostgreSQL: a no-break space is bound text.
-                     $"[\u00A0{lo},{hi})", $"\u00A0[{lo},{hi})"
+                     // Only ASCII whitespace is skipped, as in PostgreSQL: a no-break space is bound text,
+                     // quoted or not.
+                     $"[\u00A0{lo},{hi})", $"\u00A0[{lo},{hi})", $"[\"\u00A0{lo}\",{hi})", $"[{lo},\"{hi}\u2003\")"
                  })
         {
             Refused(literal);
+        }
+
+        // A quoted or escaped bound of only whitespace is present and empty once stripped.
+        foreach (var ws in AsciiWhiteSpace)
+        {
+            Refused($"[\"{ws}\",{hi})");
+            Refused($"[{lo},\\{ws})");
         }
 
         return failures;
@@ -146,6 +165,9 @@ public sealed class RangeLiteralGrammarContractTests
             }
         }
     }
+
+    /// <summary>The whitespace PostgreSQL's element input functions strip: <c>isspace</c> in the C locale.</summary>
+    private static readonly string[] AsciiWhiteSpace = [" ", "\t", "\n", "\r", "\v", "\f"];
 
     private static string EscapeEach(string text) => string.Concat(text.Select(c => $"\\{c}"));
 }

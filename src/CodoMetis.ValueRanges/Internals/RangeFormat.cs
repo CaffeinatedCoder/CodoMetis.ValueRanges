@@ -71,20 +71,19 @@ internal static class RangeFormat
     /// Within a bound, a double quote opens or closes a quoted section anywhere (<c>"1"2</c> is
     /// <c>12</c>), a doubled quote inside one is a literal quote, and a backslash takes the next
     /// character literally, inside quotes or out. An unquoted, unescaped comma, <c>)</c> or <c>]</c>
-    /// ends the bound. Whitespace around the unquoted part is dropped: PostgreSQL hands it to the
-    /// element's input function, and every input function behind these types ignores it. That is
-    /// ASCII whitespace only (<see cref="LiteralWhiteSpace"/>): a no-break space stays in the bound,
-    /// where the element parser refuses it as PostgreSQL's does.
+    /// ends the bound. Whitespace at either end of the bound text is dropped once the bound is read,
+    /// whether it was quoted, escaped or neither: PostgreSQL keeps it all and hands it to the
+    /// element's input function, and every input function behind these types strips it (measured
+    /// for all seven range types, #45). That is ASCII whitespace only (<see cref="LiteralWhiteSpace"/>):
+    /// a no-break space stays in the bound, where the element parser refuses it as PostgreSQL's does.
+    /// Until 9.1.0 only unquoted whitespace was dropped, so <c>[" 2026-01-01",2026-02-01)</c> threw.
     /// </para>
     /// </remarks>
     private static string? ScanBound(ReadOnlySpan<char> inner, ref int position, ReadOnlySpan<char> literal)
     {
-        var start = position;
-        var sb    = new StringBuilder();
-
-        // The length of the text up to its last character that is not unquoted whitespace.
-        var significant = 0;
-        var inQuotes    = false;
+        var start    = position;
+        var sb       = new StringBuilder();
+        var inQuotes = false;
 
         while (position < inner.Length && (inQuotes || inner[position] is not (',' or ')' or ']')))
         {
@@ -96,19 +95,16 @@ internal static class RangeFormat
                     throw new FormatException($"The input string '{LiteralExcerpt.Of(literal)}' is not a valid range literal: unterminated escape.");
 
                 sb.Append(inner[position++]);
-                significant = sb.Length;
             }
             else if (c == '"')
             {
                 if (!inQuotes)
                 {
-                    inQuotes    = true;
-                    significant = sb.Length;
+                    inQuotes = true;
                 }
                 else if (position < inner.Length && inner[position] == '"')
                 {
                     sb.Append('"');
-                    significant = sb.Length;
                     position++;
                 }
                 else
@@ -116,14 +112,9 @@ internal static class RangeFormat
                     inQuotes = false;
                 }
             }
-            else if (inQuotes || !LiteralWhiteSpace.Is(c))
+            else
             {
                 sb.Append(c);
-                significant = sb.Length;
-            }
-            else if (sb.Length > 0 || significant > 0)
-            {
-                sb.Append(c); // inner whitespace; dropped below if nothing significant follows
             }
         }
 
@@ -132,8 +123,7 @@ internal static class RangeFormat
 
         if (position == start) return null;
 
-        sb.Length = significant;
-        return sb.ToString();
+        return LiteralWhiteSpace.Trim(sb.ToString()).ToString();
     }
 
     /// <summary>

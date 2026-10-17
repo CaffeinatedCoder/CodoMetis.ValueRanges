@@ -170,4 +170,28 @@ public class NodaTimeParseFormatTests
         Assert.IsTrue(LocalDateRange.TryParse("[2025-01-01,2025-01-31]", null, out var range));
         Assert.AreEqual("[2025-01-01,2025-01-31]", range.ToString());
     }
+
+    /// <summary>
+    /// Whitespace at either end of a quoted bound is stripped for every NodaTime range type, as
+    /// PostgreSQL strips it (#45); a no-break space is not.
+    /// </summary>
+    [TestMethod]
+    public void Parse_QuotedBoundWithSurroundingWhitespace_ReadsTheTrimmedBound()
+    {
+        Assert.AreEqual(
+            LocalDateRange.CreateFinite(new LocalDate(2026, 1, 1), new LocalDate(2026, 2, 1), endInclusive: false),
+            LocalDateRange.Parse("[\" 2026-01-01\",\"2026-02-01\t\")", null));
+        Assert.AreEqual(
+            LocalDateTimeRange.CreateFinite(new LocalDateTime(2026, 1, 1, 10, 0), new LocalDateTime(2026, 2, 1, 0, 0), endInclusive: false),
+            LocalDateTimeRange.Parse("[\" 2026-01-01 10:00:00\",2026-02-01T00:00:00)", null));
+        Assert.AreEqual(
+            InstantRange.CreateFinite(Instant.FromUtc(2026, 1, 1, 10, 0), Instant.FromUtc(2026, 2, 1, 0, 0), endInclusive: false),
+            InstantRange.Parse("[\"\n2026-01-01T10:00:00Z \",2026-02-01T00:00:00Z)", null));
+        Assert.AreEqual(
+            YearMonthRange.CreateFinite(new YearMonth(2026, 1), new YearMonth(2026, 3), endInclusive: false),
+            YearMonthRange.Parse("[\" 2026-01\",2026-03)", null));
+
+        Assert.ThrowsExactly<FormatException>(() => LocalDateRange.Parse("[\"\u00A02026-01-01\",2026-02-01)", null));
+        Assert.ThrowsExactly<FormatException>(() => InstantRange.Parse("[\" \",2026-02-01T00:00:00Z)", null));
+    }
 }

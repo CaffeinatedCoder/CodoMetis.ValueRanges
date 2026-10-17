@@ -1,0 +1,73 @@
+Seed: whitespace inside a quoted or escaped range bound is kept, so [" 2026-01-01",2026-02-01) throws where PostgreSQL's range_in reads [2026-01-01,2026-02-01)
+Oracles: RangeLiteralGrammarContractTests, LiteralGrammarParityTests
+Fails: the quoted and escaped bound-whitespace rows of the range_in grammar sweep for every temporal range type; the bound-whitespace parity sweep against PostgreSQL
+History: shipped before 9.1.0 (#45)
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
+--- a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
+@@ -81,10 +81,13 @@
+     /// </remarks>
+     private static string? ScanBound(ReadOnlySpan<char> inner, ref int position, ReadOnlySpan<char> literal)
+     {
+-        var start    = position;
+-        var sb       = new StringBuilder();
+-        var inQuotes = false;
++        var start = position;
++        var sb    = new StringBuilder();
+ 
++        // The length of the text up to its last character that is not unquoted whitespace.
++        var significant = 0;
++        var inQuotes    = false;
++
+         while (position < inner.Length && (inQuotes || inner[position] is not (',' or ')' or ']')))
+         {
+             var c = inner[position++];
+@@ -95,16 +98,19 @@
+                     throw new FormatException($"The input string '{LiteralExcerpt.Of(literal)}' is not a valid range literal: unterminated escape.");
+ 
+                 sb.Append(inner[position++]);
++                significant = sb.Length;
+             }
+             else if (c == '"')
+             {
+                 if (!inQuotes)
+                 {
+-                    inQuotes = true;
++                    inQuotes    = true;
++                    significant = sb.Length;
+                 }
+                 else if (position < inner.Length && inner[position] == '"')
+                 {
+                     sb.Append('"');
++                    significant = sb.Length;
+                     position++;
+                 }
+                 else
+@@ -112,10 +118,15 @@
+                     inQuotes = false;
+                 }
+             }
+-            else
++            else if (inQuotes || !LiteralWhiteSpace.Is(c))
+             {
+                 sb.Append(c);
++                significant = sb.Length;
+             }
++            else if (sb.Length > 0 || significant > 0)
++            {
++                sb.Append(c); // inner whitespace; dropped below if nothing significant follows
++            }
+         }
+ 
+         if (inQuotes)
+@@ -123,7 +134,8 @@
+ 
+         if (position == start) return null;
+ 
+-        return LiteralWhiteSpace.Trim(sb.ToString()).ToString();
++        sb.Length = significant;
++        return sb.ToString();
+     }
+ 
+     /// <summary>

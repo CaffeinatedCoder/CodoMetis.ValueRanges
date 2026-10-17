@@ -46,11 +46,30 @@ public sealed class LiteralGrammarParityTests
     [
         "[2024-01-01,2024-02-01)", "[\"2024-01-01\",\"2024-02-01\")", "[\"\",2024-02-01)", "[ ,2024-02-01)",
         @"[2024\-01\-01,2024-02-01)", "(,infinity)", "[-infinity,2024-01-01)",
-        // Whitespace around an unquoted bound is the range grammar's to skip. Inside quotes it reaches
-        // the element, where PostgreSQL's date_in trims it and the strict ISO grammar refuses it —
-        // deliberately, and loudly (TemporalLiteralGrammarTests.Date_Rejects), so it is not listed.
-        "[ 2024-01-01 , 2024-02-01 )", " [2024-01-01,2024-02-01) "
+        "[ 2024-01-01 , 2024-02-01 )", " [2024-01-01,2024-02-01) ", "[\" 2024-01-01\",2024-02-01)"
     ];
+
+    /// <summary>
+    /// Each range type with a lower and upper bound text its element parser and PostgreSQL's both
+    /// read. The server's output goes back through the same parser, so the comparison is by value.
+    /// </summary>
+    private static readonly (string Type, string Low, string High, Func<string, string> Client)[] BoundWhitespaceTypes =
+    [
+        ("int4range", "1", "5", l => Int32Range.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("int8range", "1", "5", l => Int64Range.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("numrange", "1.5", "5", l => DecimalRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("daterange", "2026-01-01", "2026-02-01", l => DateRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("daterange", "-infinity", "2026-02-01", l => DateRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("tsrange", "2026-01-01 10:00:00", "2026-02-01 00:00:00", l => DateTimeRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("tstzrange", "2026-01-01 10:00:00+00", "2026-02-01 00:00:00+00", l => DateTimeOffsetRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("timerange", "09:00:00", "17:00:00", l => TimeRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("daterange", "2026-01-01", "2026-02-01", l => LocalDateRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("tsrange", "2026-01-01 10:00:00", "2026-02-01 00:00:00", l => LocalDateTimeRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused"),
+        ("tstzrange", "2026-01-01 10:00:00+00", "2026-02-01 00:00:00+00", l => InstantRange.TryParse(l, CultureInfo.InvariantCulture, out var r) ? r.ToString() : "refused")
+    ];
+
+    /// <summary>ASCII whitespace PostgreSQL strips, and two Unicode spaces it does not.</summary>
+    private static readonly string[] BoundWhiteSpace = [" ", "\t", "\n", "\r", "\v", "\f", "\u00A0", "\u2003"];
 
     private static readonly string[] Int4MultirangeLiterals =
     [
@@ -116,27 +135,61 @@ public sealed class LiteralGrammarParityTests
 
         Assert.IsEmpty(failures, "Range literals read differently:\n" + string.Join("\n", failures));
 
-        async Task Compare(string type, string[] literals, Func<string, string> client)
-        {
-            foreach (var literal in literals)
-            {
-                string server;
-                try
-                {
-                    // Compared as values, not text: the library writes a discrete range closed
-                    // ([1,4] for PostgreSQL's [1,5)) and an infinite date as MaxValue, so the
-                    // server's canonical output goes through the same parser.
-                    server = client((await ScalarAsync<string>(connection, $"SELECT $1::{type}::text", literal))!);
-                }
-                catch (PostgresException)
-                {
-                    server = "refused";
-                }
+        Task Compare(string type, string[] literals, Func<string, string> client)
+            => CompareRangeLiterals(connection, type, literals, client, failures);
+    }
 
-                var mine = client(literal);
-                if (mine != server)
-                    failures.Add($"  {type} {Show(literal)}: library {mine}, PostgreSQL {server}");
+    /// <summary>
+    /// Whitespace at either end of a quoted or escaped bound, and a bound of only whitespace, for
+    /// every range type: PostgreSQL's <c>range_in</c> keeps it in the bound and the element input
+    /// function decides (#45). Until 9.1.0 the library refused <c>[" 2026-01-01",2026-02-01)</c>,
+    /// which PostgreSQL reads as <c>[2026-01-01,2026-02-01)</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task BoundWhitespace_ReadsAsPostgresReadsIt()
+    {
+        ContainerLifecycle.RequireDatabase();
+        await using var connection = new NpgsqlConnection(ContainerLifecycle.ConnectionString);
+        await connection.OpenAsync();
+
+        var failures = new List<string>();
+
+        foreach (var (type, lo, hi, client) in BoundWhitespaceTypes)
+        {
+            var literals = BoundWhiteSpace.SelectMany(ws => new[]
+            {
+                $"[\"{ws}{lo}\",{hi})", $"[\"{lo}{ws}\",{hi})", $"[\"{ws}{lo}{ws}\",\"{ws}{hi}{ws}\")",
+                $"[\\{ws}{lo},{hi})", $"[{lo}\\{ws},{hi})", $"[ \"{ws}{lo}\" ,{hi})",
+                $"[\"{ws}\",{hi})", $"[{lo},\"{ws}{ws}\")", $"[\\{ws},{hi})"
+            }).ToArray();
+
+            await CompareRangeLiterals(connection, type, literals, client, failures);
+        }
+
+        Assert.IsEmpty(failures, "Bound whitespace read differently:\n" + string.Join("\n", failures));
+    }
+
+    private static async Task CompareRangeLiterals(
+        NpgsqlConnection connection, string type, string[] literals, Func<string, string> client, List<string> failures)
+    {
+        foreach (var literal in literals)
+        {
+            string server;
+            try
+            {
+                // Compared as values, not text: the library writes a discrete range closed
+                // ([1,4] for PostgreSQL's [1,5)) and an infinite date as MaxValue, so the
+                // server's canonical output goes through the same parser.
+                server = client((await ScalarAsync<string>(connection, $"SELECT $1::{type}::text", literal))!);
             }
+            catch (PostgresException)
+            {
+                server = "refused";
+            }
+
+            var mine = client(literal);
+            if (mine != server)
+                failures.Add($"  {type} {Show(literal)}: library {mine}, PostgreSQL {server}");
         }
     }
 

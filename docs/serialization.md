@@ -196,7 +196,8 @@ A bound is read the way PostgreSQL's `range_in` reads it:
 - **A doubled quote** inside a quoted section is a literal `"`.
 - **A backslash** takes the next character literally, inside quotes or out, so `[\1,5)` is
   `[1,5)`.
-- **Whitespace** around the unquoted part of a bound is dropped.
+- **Whitespace at either end of a bound** is dropped, inside quotes or out. So
+  `[" 2026-01-01",2026-02-01)` is `[2026-01-01,2026-02-01)`.
 
 Good to know:
 
@@ -205,6 +206,10 @@ Good to know:
   (`FormatException`), as PostgreSQL does with `invalid input syntax for type integer: ""`.
 - **Before 9.0, an empty quoted bound read as infinite.** `["",5)` read as `(,4]`, and `("","")`
   as `(,)`.
+- **Only ASCII whitespace is dropped:** space, tab, newline, carriage return, vertical tab and form
+  feed. A no-break space stays in the bound, so the bound fails, as it does in PostgreSQL.
+- **Before 9.1, whitespace inside quotes was kept.** `[" 2026-01-01",2026-02-01)` failed
+  (`FormatException`), where PostgreSQL reads it.
 
 ### Bind a range from configuration
 
