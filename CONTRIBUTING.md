@@ -88,6 +88,27 @@ labels when triaging, and a pull request gets the same labels as the issue it cl
 - Match the surrounding style. Comments explain *why*, especially where behaviour is load-bearing
   and non-obvious.
 
+## Branches and releases
+
+`main` is the next release. `release/9.x` is the maintained 9.x line, cut from `main` before the
+first 10.0.0 change landed. Both get the same CI and the same protection, and a release is a `v*`
+tag on the branch it ships from: `v9.1.1` on `release/9.x`, `v10.0.0` on `main`. The tag must
+match `Version` in that branch's `Directory.Build.props`, or the release workflow stops before
+publishing.
+
+- **A change for both lines** goes into `main` first. Once it has merged, cherry-pick it onto a
+  branch from `release/9.x` (`git cherry-pick -x`, so the commit names the original) and open a PR
+  into `release/9.x` that links the `main` PR. Only loud fixes and additions go to 9.x. A silent
+  fix, or one that changes an answer, waits for the next major, as on `main`.
+- **A change for 9.x only**, such as its version bump or a fix to code `main` no longer has, goes
+  straight into `release/9.x`.
+- **Issues:** `Closes #n` closes an issue only when the PR merges into `main`. An issue fixed only
+  on `release/9.x` is closed by hand, with a comment linking the PR.
+- **Changelog:** a 9.x change goes under its 9.x version on both branches, never under the next
+  major too. `main`'s changelog keeps every 9.x section, so it stays the full history.
+- **GitHub's Latest release** is the highest version. The release workflow publishes a 9.x patch
+  that comes out after 10.0.0 without marking it Latest.
+
 ## Changelog
 
 A version's section of the root `CHANGELOG.md` is the GitHub release's notes, word for word, so it
