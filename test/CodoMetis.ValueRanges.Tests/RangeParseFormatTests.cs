@@ -192,6 +192,24 @@ public class RangeParseFormatTests
         => Assert.ThrowsExactly<FormatException>(
             () => Int32Range.Parse("not-a-range", CultureInfo.InvariantCulture));
 
+    /// <summary>
+    /// Each structural check of the literal on its own: the length, both brackets, and nothing after
+    /// the upper bound. A literal that fails only one of them must still be refused, by
+    /// <c>FormatException</c> and by <c>TryParse</c> answering false.
+    /// </summary>
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("[")]
+    [DataRow("{1,2)")]
+    [DataRow("[1,2}")]
+    [DataRow("[1,2,3)")]
+    [DataRow("[1,2)3)")]
+    public void Parse_MalformedLiteral_IsRefused(string literal)
+    {
+        Assert.ThrowsExactly<FormatException>(() => Int32Range.Parse(literal, CultureInfo.InvariantCulture));
+        Assert.IsFalse(Int32Range.TryParse(literal, CultureInfo.InvariantCulture, out _));
+    }
+
     [TestMethod]
     public void Parse_MissingComma_ThrowsFormatException()
         => Assert.ThrowsExactly<FormatException>(
@@ -452,4 +470,25 @@ public class RangeParseFormatTests
     [DataRow("[\\ ,2026-02-01)")]
     public void Parse_QuotedBound_NonAsciiOrOnlyWhitespace_IsRefused(string literal)
         => Assert.ThrowsExactly<FormatException>(() => DateRange.Parse(literal, CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// The other half of the provider rule: with an explicit format the caller asks for display text,
+    /// and both the format and the provider reach each bound. The literal half — no format, any
+    /// provider, the invariant literal — is swept by <c>LiteralProviderContractTests</c>; this half
+    /// was held by no test of an element type that uses the default <c>FormatValue</c> or a pinned
+    /// temporal format, which the 10.0.0 mutation run showed by dropping either with everything green.
+    /// </summary>
+    [TestMethod]
+    public void ExplicitFormat_ReachesEachBound_WithTheProvider()
+    {
+        var de = CultureInfo.GetCultureInfo("de-DE");
+
+        Assert.AreEqual("[1.000,2.000]", ((IFormattable)Int32Range.CreateFinite(1000, 2000)).ToString("N0", de));
+        Assert.AreEqual("[1.000,2.000]", ((IFormattable)Int64Range.CreateFinite(1000L, 2000L)).ToString("N0", de));
+        Assert.AreEqual("[1,50,2,00)", ((IFormattable)DecimalRange.CreateFinite(1.5m, 2m)).ToString("0.00", de)); // display text: not quoted, not parseable
+        Assert.AreEqual("[2026,2027]", ((IFormattable)DateRange.CreateFinite(new(2026, 1, 1), new(2027, 1, 1))).ToString("yyyy", de));
+        Assert.AreEqual("[2026,2027)", ((IFormattable)DateTimeRange.CreateFinite(new(2026, 1, 1), new(2027, 1, 1))).ToString("yyyy", de));
+        Assert.AreEqual("[2026,2027)", ((IFormattable)DateTimeOffsetRange.CreateFinite(new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), new(2027, 1, 1, 0, 0, 0, TimeSpan.Zero))).ToString("yyyy", de));
+        Assert.AreEqual("[09,10)", ((IFormattable)TimeRange.CreateFinite(new(9, 0), new(10, 0))).ToString("HH", de));
+    }
 }

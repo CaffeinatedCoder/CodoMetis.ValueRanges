@@ -144,6 +144,13 @@ public class SmallModelMultirangeOracleTests
                 var difference   = Difference(leftModel, rightModel);
                 bool bothNonEmpty = leftModel.Count > 0 && rightModel.Count > 0;
 
+                // Multirange adjacency is directional through the outer edges, as in PostgreSQL:
+                // one side's last element ends one step before the other side's first begins. The
+                // sentinels need no special case — a side that reaches either end of the grid is
+                // unbounded there, and Max + 1 == Min can then never hold across it.
+                bool adjacent = bothNonEmpty
+                             && (leftModel.Max() + 1 == rightModel.Min() || rightModel.Max() + 1 == leftModel.Min());
+
                 Check(failures, domain, $"{Name(leftModel)} Union {Name(rightModel)}",
                       union, left.Union(right), valueOf);
                 Check(failures, domain, $"{Name(leftModel)} Intersect {Name(rightModel)}",
@@ -163,11 +170,13 @@ public class SmallModelMultirangeOracleTests
                     Check(failures, domain, $"{Name(leftModel)} | range {Name(rightModel)}", union, left | range, valueOf);
                     Check(failures, domain, $"{Name(leftModel)} & range {Name(rightModel)}", intersection, left & range, valueOf);
                     Check(failures, domain, $"{Name(leftModel)} - range {Name(rightModel)}", difference, left - range, valueOf);
+                    Bool("IsAdjacentTo range", left.IsAdjacentTo(range), adjacent);
                 }
 
                 Bool("Contains",          left.Contains(right),          rightModel.IsSubsetOf(leftModel));
                 Bool("Overlaps",          left.Overlaps(right),          intersection.Count > 0);
                 Bool("Equals",            left.Equals(right),            leftModel.SetEquals(rightModel));
+                Bool("IsAdjacentTo",      left.IsAdjacentTo(right),      adjacent);
                 Bool("IsStrictlyLeftOf",  left.IsStrictlyLeftOf(right),  bothNonEmpty && leftModel.Max() < rightModel.Min());
                 Bool("IsStrictlyRightOf", left.IsStrictlyRightOf(right), bothNonEmpty && leftModel.Min() > rightModel.Max());
 

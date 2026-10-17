@@ -1,0 +1,18 @@
+Seed: at equal lower values an exclusive bound sorts before an inclusive one, so a merge that keeps the first start drops the shared point
+Oracles: ContinuousMultirangeParityTests, RangeAggregateParityTests
+Fails: every pair of continuous fragments starting at the same value with different inclusiveness, e.g. [1,2) and (1,2)
+History: found by the 10.0.0 mutation run; discrete types canonicalize the tie away, so only the nummultirange sweeps reach it
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs b/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs
+index 7cc3f21..5174778 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs
+@@ -32,7 +32,7 @@ internal static class RangeSetHelpers
+         if (cmp != 0) return cmp;
+         return (aInclusive, bInclusive) switch
+                {
+-                   (true, false) => -1,
++                   (true, false) => +1,
+                    (false, true) => 1,
+                    _             => 0
+                };

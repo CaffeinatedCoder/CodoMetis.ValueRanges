@@ -333,6 +333,44 @@ Alias names must not collide with the value set types (`DecimalSet`, `DateSet`, 
 test namespaces live under `CodoMetis.ValueRanges`, and namespace-member lookup beats file-level
 aliases — prefer the `*RangeSet` naming.
 
+### Mutation Testing (manual, occasional)
+
+Stryker.NET is installed as a local tool (`.config/dotnet-tools.json`) and configured in
+`test/CodoMetis.ValueRanges.Tests/stryker-config.json`. It mutates the core library and runs only the
+core unit project against each mutant, so it measures that project alone; the conventions and
+integration sweeps are not consulted. The level is Standard, string literals and exception messages
+are not mutated, coverage analysis is `perTest`, and the scope is `Internals/`, `RangeSet.cs` and
+`Sets/`. It is a manual tool, to be run occasionally and never per commit. Do not add it to CI or to
+any script that runs on every change. Write the reports outside the repository:
+
+```bash
+cd test/CodoMetis.ValueRanges.Tests
+dotnet stryker --output /tmp/stryker-$(date +%F)
+```
+
+**The first run, for 10.0.0 (#91), took 7½ minutes on a 16-core machine.** The configured scope took
+5 minutes 7 seconds and scored 74.6 %. The rest of the core, run once with the `mutate` patterns
+inverted, took 2 minutes 22 seconds and scored 82.1 %. Together that is 76.7 % (1,197 of 1,560
+mutants detected). About 230 mutants did not compile and Stryker dropped them. Its safe mode takes
+out every mutant of a method that has one, so `DiscreteEnumeration`'s walk and the range JSON
+reader were not measured at all.
+
+The surviving mutants were triaged by hand. Each one was applied to a copy of the tree and the
+conventions suite, which builds in seconds, was run against it. That gave three outcomes:
+
+- **Caught by a conventions sweep.** A seed was added where the defect was a new kind for that
+  sweep.
+- **Caught by nothing.** The missing test was added: the ISO offset grammar, structural literal
+  checks, explicit-format display text, continuous bound ties in `RangeSet`, hash codes, null
+  operands, and a value-set JSON number split across buffer segments. Two oracles also gained
+  lines. The multirange oracle now checks `IsAdjacentTo`. The value-set oracle now checks `==` and
+  `!=`, which no test had called on 18 of the 20 core set types.
+- **Unreachable.** These went to #112.
+
+A future run should be compared against this one, not against 100 %. Most of what remains is
+equivalent: buffer capacities, cache-or-recompute choices, and tie-breaks that canonical form makes
+impossible.
+
 ## What to Test
 
 - **Every public method** on range types and `RangeSet`

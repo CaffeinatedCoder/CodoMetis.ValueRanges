@@ -635,4 +635,62 @@ public class RangeSetTests
         Assert.AreEqual(Int32Range.CreateFinite(1, 3), elements[0]);
         Assert.AreEqual(Int32Range.CreateFinite(7, 9), elements[1]);
     }
+
+    // -------------------------------------------------------------------------
+    // Continuous bound ties (found by the 10.0.0 mutation run)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// At equal lower values an inclusive bound sorts before an exclusive one — it starts earlier,
+    /// by the one point it claims. Discrete types canonicalize every lower bound to inclusive, so only
+    /// a continuous type reaches this tie, and the small-model multirange oracle (discrete only)
+    /// cannot; the 10.0.0 mutation run flipped it with every unit test green.
+    /// </summary>
+    [TestMethod]
+    public void LowerBoundComparer_AtAContinuousTie_PutsTheInclusiveStartFirst()
+    {
+        var comparer  = RangeLowerBoundComparer<DecimalRange, decimal>.Instance;
+        var inclusive = DecimalRange.CreateFinite(1m, 2m, true, false);
+        var exclusive = DecimalRange.CreateFinite(1m, 2m, false, false);
+
+        Assert.IsLessThan(0, comparer.Compare(inclusive, exclusive));
+        Assert.IsGreaterThan(0, comparer.Compare(exclusive, inclusive));
+    }
+
+    /// <summary>
+    /// The merge-join behind <c>Except</c> skips the subtrahend's elements that end strictly before
+    /// the current element starts. <c>[0,1)</c> does end strictly before <c>[1,5]</c> — it leaves 1
+    /// out — and if it is not skipped it stalls the join, which stops at the first non-overlapping
+    /// element and so never reaches <c>[2,3]</c>. Discrete types cannot reach this: canonical form
+    /// makes both bounds of the meeting point inclusive.
+    /// </summary>
+    [TestMethod]
+    public void Except_ContinuousElementEndingExclusivelyAtTheStart_DoesNotStallTheJoin()
+    {
+        var set   = DecimalRangeSet.From([DecimalRange.CreateFinite(1m, 5m, true, true)]);
+        var other = DecimalRangeSet.From([DecimalRange.CreateFinite(0m, 1m, true, false), DecimalRange.CreateFinite(2m, 3m, true, true)]);
+
+        var difference = set.Except(other);
+
+        Assert.AreEqual(DecimalRangeSet.From([DecimalRange.CreateFinite(1m, 2m, true, false), DecimalRange.CreateFinite(3m, 5m, false, true)]), difference);
+    }
+
+    /// <summary>
+    /// Equal sets must hash equally, which a constant would satisfy; distinct sets should not, or every
+    /// dictionary and hash set keyed by a multirange degrades to a list. Over a handful of distinct
+    /// sets a content-blind hash collides on every pair, a content hash on essentially none.
+    /// </summary>
+    [TestMethod]
+    public void GetHashCode_DependsOnTheElements()
+    {
+        IntSet[] sets =
+        [
+            IntSet.From([Int32Range.CreateFinite(1, 5)]),
+            IntSet.From([Int32Range.CreateFinite(1, 6)]),
+            IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(7, 9)]),
+            IntSet.From([Int32Range.CreateUnboundedEnd(3)]),
+        ];
+
+        Assert.AreEqual(sets.Length, sets.Select(set => set.GetHashCode()).Distinct().Count());
+    }
 }

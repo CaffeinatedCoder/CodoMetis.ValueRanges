@@ -59,4 +59,16 @@ public class SetEqualityTests
         Assert.IsTrue(Int32Set.From(2, 1).Equals(boxed));
         Assert.IsFalse(Int32Set.From(1).Equals("not a set"));
     }
+
+    /// <summary>
+    /// Equal sets hash equally — and distinct sets hash apart, or every dictionary keyed by a value set
+    /// degrades to a list. A content-blind hash passes every equality test; this is the one that fails.
+    /// </summary>
+    [TestMethod]
+    public void GetHashCode_DependsOnTheElements()
+    {
+        Int32Set[] sets = [Int32Set.From(1), Int32Set.From(2), Int32Set.From(1, 2), Int32Set.From(1, 2, 3)];
+
+        Assert.AreEqual(sets.Length, sets.Select(set => set.GetHashCode()).Distinct().Count());
+    }
 }

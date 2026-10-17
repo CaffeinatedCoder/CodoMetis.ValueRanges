@@ -294,4 +294,29 @@ public class SetAlgebraTests
         CollectionAssert.AreEqual(new[] { "B", "a", "z" }, left.Union(right).Values.ToArray());
         CollectionAssert.AreEqual(new[] { "a" }, left.Intersect(right).Values.ToArray());
     }
+
+    /// <summary>
+    /// Every set-operand extension refuses a <see langword="null"/> operand by name rather than failing
+    /// with a <see cref="NullReferenceException"/> inside the merge.
+    /// </summary>
+    [TestMethod]
+    public void SetOperandExtensions_RefuseANullOperand()
+    {
+        var set = Int32Set.From(1, 2);
+
+        Action[] calls =
+        [
+            () => set.IsSubsetOf(null!),
+            () => set.IsSupersetOf(null!),
+            () => set.Overlaps(null!),
+            () => set.IsProperSubsetOf(null!),
+            () => set.IsProperSupersetOf(null!),
+            () => set.Union(null!),
+            () => set.Intersect(null!),
+            () => set.Except(null!),
+        ];
+
+        foreach (var call in calls)
+            Assert.AreEqual("other", Assert.ThrowsExactly<ArgumentNullException>(call).ParamName);
+    }
 }

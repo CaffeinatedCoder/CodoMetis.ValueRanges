@@ -1,0 +1,18 @@
+Seed: ValueSetCore.IsSubsetOf gives up when the superset holds a smaller element first, so {3} is not a subset of {1,3}
+Oracles: SmallModelSetOracleTests
+Fails: every ordered pair of subsets where the right side has an element below the left side's smallest, in every set family
+History: found unguarded by the unit project in the 10.0.0 mutation run
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+index 0c32ce2..0cb3b25 100644
+--- a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
++++ b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+@@ -98,7 +98,7 @@ internal static class ValueSetCore
+             if (j == right.Length) return false;
+ 
+             var comparison = comparer.Compare(left[i], right[j]);
+-            if (comparison < 0) return false;
++            if (comparison > 0) return false;
+             if (comparison == 0) i++;
+             j++;
+         }

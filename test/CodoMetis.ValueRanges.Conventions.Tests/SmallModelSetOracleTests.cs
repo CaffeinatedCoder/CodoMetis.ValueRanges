@@ -142,6 +142,10 @@ public sealed class SmallModelSetOracleTests
 
     // ---------------------------------------------------------------- per-pair
 
+    private static MethodInfo Operator<TSet>(string name)
+        => typeof(TSet).GetMethod(name, BindingFlags.Public | BindingFlags.Static, [typeof(TSet), typeof(TSet)])
+        ?? throw new AssertFailedException($"{typeof(TSet).Name} declares no {name}(TSet, TSet).");
+
     private static void SweepPairs<TSet, TElement>()
         where TSet : class, IValueSetFactory<TSet, TElement>, IValueSet<TElement>
         where TElement : IEquatable<TElement>
@@ -150,10 +154,20 @@ public sealed class SmallModelSetOracleTests
         var failures = new List<string>();
         var comparer = universe.Comparer;
 
+        // The operators are declared per type, and generic code reaches them only through reflection.
+        // Until the 10.0.0 mutation run, no test called them on 18 of the 20 core set types. A broken
+        // == compiled, and it answered at every call site that compared two sets.
+        var equality   = Operator<TSet>("op_Equality");
+        var inequality = Operator<TSet>("op_Inequality");
+
         foreach (int leftMask in Masks(universe.Probes.Length))
         {
             var leftModel = universe.Model(leftMask);
             var left      = universe.Build(leftMask);
+
+            if ((bool)equality.Invoke(null, [left, null])! || !(bool)inequality.Invoke(null, [left, null])!
+                || (bool)equality.Invoke(null, [null, left])! || !(bool)equality.Invoke(null, [null, null])!)
+                failures.Add($"  {universe.Name(leftMask)} == / != null answer as if null were a set");
 
             foreach (int rightMask in Masks(universe.Probes.Length))
             {
@@ -176,6 +190,8 @@ public sealed class SmallModelSetOracleTests
 
                 bool equal = leftModel.SetEquals(rightModel);
                 Check("Equals", left.Equals(right), equal);
+                Check("==",     (bool)equality.Invoke(null, [left, right])!,   equal);
+                Check("!=",     (bool)inequality.Invoke(null, [left, right])!, !equal);
 
                 // Equal values must hash equally, or a set used as a dictionary key goes missing.
                 if (equal && left.GetHashCode() != right.GetHashCode())

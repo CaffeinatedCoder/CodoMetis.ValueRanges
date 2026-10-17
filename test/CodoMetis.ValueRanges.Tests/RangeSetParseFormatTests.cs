@@ -96,6 +96,21 @@ public class RangeSetParseFormatTests
         => Assert.ThrowsExactly<FormatException>(
             () => RangeSet<Int32Range, int>.Parse("[1,5],[7,10]", CultureInfo.InvariantCulture));
 
+    /// <summary>
+    /// Both braces are required, not either one: each literal here has a well-formed range between
+    /// a brace and one stray character.
+    /// </summary>
+    [TestMethod]
+    [DataRow("{[1,5]x")]
+    [DataRow("x[1,5]}")]
+    [DataRow("{")]
+    [DataRow("")]
+    public void Parse_OneBraceMissing_IsRefused(string literal)
+    {
+        Assert.ThrowsExactly<FormatException>(() => RangeSet<Int32Range, int>.Parse(literal, CultureInfo.InvariantCulture));
+        Assert.IsFalse(RangeSet<Int32Range, int>.TryParse(literal, CultureInfo.InvariantCulture, out _));
+    }
+
     [TestMethod]
     public void TryParse_Valid_ReturnsTrue()
     {

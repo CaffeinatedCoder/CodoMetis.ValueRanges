@@ -325,6 +325,9 @@ public class SetParseFormatTests
     [DataRow("{,a}")]
     [DataRow("{a,,b}")]
     [DataRow("{\"a\",}")]
+    [DataRow("{\"a\"bc}")]      // text after a quoted element, with more after it than one character
+    [DataRow("{ab")]            // both braces, not either one
+    [DataRow("ab}")]
     public void Parse_MalformedArrayLiteral_IsRejected(string literal)
     {
         Assert.ThrowsExactly<FormatException>(() => StringSet.Parse(literal, null));
@@ -356,5 +359,23 @@ public class SetParseFormatTests
 
             Assert.AreEqual(original, StringSet.Parse(literal, null), $"Round trip changed {literal}");
         }
+    }
+
+    /// <summary>
+    /// With an explicit format a set renders display text: the format and the provider reach every
+    /// element. Without one it is the invariant literal whatever the provider, which
+    /// <c>LiteralProviderContractTests</c> sweeps; this is the half nothing held until the 10.0.0
+    /// mutation run dropped it.
+    /// </summary>
+    [TestMethod]
+    public void ExplicitFormat_ReachesEachElement_WithTheProvider()
+    {
+        var de = CultureInfo.GetCultureInfo("de-DE");
+
+        Assert.AreEqual("{1.000,2.000}", ((IFormattable)Int32Set.From(1000, 2000)).ToString("N0", de));
+        Assert.AreEqual("{\"1,50\"}", ((IFormattable)DecimalSet.From(1.5m)).ToString("0.00", de));
+        Assert.AreEqual("{2026}", ((IFormattable)DateSet.From(new DateOnly(2026, 1, 1))).ToString("yyyy", de));
+        Assert.AreEqual("{2026}", ((IFormattable)DateTimeSet.From(new DateTime(2026, 1, 1))).ToString("yyyy", de));
+        Assert.AreEqual("{09}", ((IFormattable)TimeSet.From(new TimeOnly(9, 0))).ToString("HH", de));
     }
 }

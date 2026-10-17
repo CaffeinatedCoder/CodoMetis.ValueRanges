@@ -1,0 +1,18 @@
+Seed: Int32Set<TElement>'s == compares nothing but nullness, so any two non-null sets are equal
+Oracles: SmallModelSetOracleTests
+Fails: every ordered pair of distinct subsets of the Int32Set<TElement> probe universe, for == and for !=
+History: found by the 10.0.0 mutation run; no test called == or != on 18 of the 20 core set types
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+index b5a960f..900c7b1 100644
+--- a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
++++ b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+@@ -248,7 +248,7 @@ public sealed class Int32Set<TElement> :
+ 
+     /// <summary>Structural equality — delegates to <see cref="Equals(Int32Set{TElement})"/>.</summary>
+     public static bool operator ==(Int32Set<TElement>? left, Int32Set<TElement>? right)
+-        => left is null ? right is null : left.Equals(right);
++        => left is null ? right is null : right is not null;
+ 
+     /// <summary>Structural inequality — the negation of <see cref="operator =="/>.</summary>
+     public static bool operator !=(Int32Set<TElement>? left, Int32Set<TElement>? right) => !(left == right);
