@@ -8,6 +8,9 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// the version and forgets the table leaves the policy pointing a reporter at a line that no longer
 /// receives fixes. That is not hypothetical — 6.2.0 shipped with the table still saying 6.1.x. A
 /// supported-versions table that is wrong is worse than none: it reads as a considered statement.
+/// It can be wrong the other way, too. Until 9.1.0 the table was compared with <c>Version</c>, which
+/// names the version being prepared, so opening 9.1.0 had to promise fixes for a line that wasn't on
+/// NuGet yet, and a reporter on 9.0.0 read that as "your version gets no fixes" (#79).
 /// </summary>
 [TestClass]
 public sealed class SecurityPolicyConventionTests
@@ -61,12 +64,19 @@ public sealed class SecurityPolicyConventionTests
           + $"{core.File.Name} targets {tfm}. Move the horizon statement with the TargetFramework.");
     }
 
+    /// <summary>
+    /// The table names the latest release, read from <c>PackageValidationBaselineVersion</c>. That
+    /// property names the release already out for as long as the next one is being prepared, and it
+    /// has to move when a version is opened, so the table moves with it. The commit that gets tagged
+    /// still names the release before it. It can't name its own version and pass this test before
+    /// its tag exists. Opening the next version straight after the tag closes that gap.
+    /// </summary>
     [TestMethod]
-    public void TheSupportedVersionsTable_NamesTheShippedMinor()
+    public void TheSupportedVersionsTable_NamesTheLatestRelease()
     {
         var text     = File.ReadAllText(SecurityPolicy.FullName);
-        var shipped  = Version.Parse(RepoLayout.ShippedVersion);
-        var expected = $"{shipped.Major}.{shipped.Minor}";
+        var released = Version.Parse(RepoLayout.LatestRelease);
+        var expected = $"{released.Major}.{released.Minor}";
 
         var supported = SupportedRow.Matches(text);
 
@@ -79,9 +89,10 @@ public sealed class SecurityPolicyConventionTests
 
         Assert.AreEqual(
             expected, supportedLine,
-            $"SECURITY.md lists {supportedLine}.x as the supported line, but Directory.Build.props ships "
-          + $"{shipped}. The table is part of the version bump: a reporter reads it to decide whether "
-          + "their version still receives fixes.");
+            $"SECURITY.md lists {supportedLine}.x as the supported line, but the latest release "
+          + $"(PackageValidationBaselineVersion) is {released}. A reporter reads the table to decide "
+          + "whether their version still receives fixes, so it names what is on NuGet, not the version "
+          + $"being prepared ({RepoLayout.ShippedVersion}). Move it when the baseline moves.");
 
         var unsupported = UnsupportedRow.Match(text);
 
