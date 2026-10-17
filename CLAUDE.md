@@ -51,6 +51,20 @@ repo-wide.
    different. The same applies to a new convention test: seed the defect it claims to catch
 5. Commit with conventional format: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `build:`
 
+## Issues
+Work is tracked as GitHub issues, not as lists in docs or memory. Open the issue before starting
+the work, and close it from the PR (`Closes #n`).
+
+- **Labels:** exactly one type (`bug`, `enhancement`, `documentation`, `test`, `chore`) and at
+  least one `area:` label. Add `silent` to a bug that answers wrongly without throwing; by the
+  release rule its fix goes in the next major, never deferred to a minor. Add `breaking` to
+  anything that changes an existing answer or signature, and `found-by: oracle` to what the
+  generated-oracle machinery finds
+- **Epics:** a release is an `epic` issue with a milestone of the same version (`9.1.0`). Its work
+  is attached as native sub-issues and carries the same milestone. A theme that spans releases is
+  an `epic` without a milestone; a finding it produces belongs to the release epic it ships in
+- **Roadmap:** the pinned `roadmap` issue (#34) holds every epic as a sub-issue
+
 ## Docs
 - `docs/architecture.md` — Discriminated union pattern, interface hierarchy, RangeSet internals
 - `docs/testing.md` — Test organization, patterns, shape-combination matrix

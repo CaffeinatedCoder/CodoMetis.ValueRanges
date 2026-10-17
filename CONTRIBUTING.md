@@ -63,6 +63,15 @@ re-reads. `test/CodoMetis.ValueRanges.Conventions.Tests` exists because the alte
 remembering — and the value set rules in CLAUDE.md are asserted there behaviourally, not merely
 written down.
 
+## Issues
+
+Use the **Bug** or **Enhancement** form. The bug form asks whether the failure is silent or loud,
+because that decides which release the fix goes in: a wrong answer without an exception is fixed
+in the next major even if it's old, and a loud failure can wait for a minor.
+
+Releases and longer themes are tracked as `epic` issues, with the work as sub-issues. The pinned
+[Roadmap](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/34) lists them all.
+
 ## Pull requests
 
 - One concern per PR, with the reasoning in the description rather than only the diff.
