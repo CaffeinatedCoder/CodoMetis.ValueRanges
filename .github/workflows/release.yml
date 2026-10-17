@@ -307,15 +307,15 @@ jobs:
             exit 1
           fi
 
-          # The section for this version: from its `## [x.y.z] — date` heading up to, not
-          # including, the next H2. The heading's brackets are a reference-style link whose
-          # target is this very release page, so they are dropped rather than left to render as
-          # literal brackets.
+          # The section for this version: the lines after its `## [x.y.z] — date` heading up to,
+          # not including, the next H2, from the first line with text. The heading is left out,
+          # as in CodoMetis.TypeKit: the release's title already names the version. The section
+          # is terse by construction (CONTRIBUTING.md, Changelog; ChangelogConventionTests).
           notes="$(awk -v version="$VERSION" '
             BEGIN { heading = "^## \\[" version "\\]" }
-            $0 ~ heading { found = 1; sub(/^## \[[^]]*\]/, "## " version); print; next }
+            $0 ~ heading { found = 1; next }
             found && /^## / { exit }
-            found { print }
+            found && (started || NF) { started = 1; print }
           ' CHANGELOG.md)"
 
           if [[ -z "$notes" ]]; then

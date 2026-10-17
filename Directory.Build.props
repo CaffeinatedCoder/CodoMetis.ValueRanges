@@ -8,6 +8,10 @@
         <PackageProjectUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</PackageProjectUrl>
         <RepositoryUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
+        <!-- Each package's own changelog, which is short enough to read on the NuGet page's link.
+             The project directory is named after the project, so this resolves for every package
+             under src/; PackagingConventionTests checks that it does. -->
+        <PackageReleaseNotes>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/src/$(MSBuildProjectName)/CHANGELOG.md</PackageReleaseNotes>
     </PropertyGroup>
 
     <!--

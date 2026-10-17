@@ -240,6 +240,45 @@ public sealed class PackagingConventionTests
           + "since the old baseline goes unvalidated.");
     }
 
+    /// <summary>
+    /// Every package's release notes link to its own changelog, and that file exists.
+    /// </summary>
+    /// <remarks>
+    /// The link is set once in <c>Directory.Build.props</c> from <c>$(MSBuildProjectName)</c>, so it
+    /// is right only while each project sits in a directory of its own name under <c>src/</c>, and
+    /// only while no project sets its own. A renamed directory or an override would point the NuGet
+    /// page's "Release notes" at a 404, which nothing else checks.
+    /// </remarks>
+    [TestMethod]
+    public void EveryPackage_LinksItsReleaseNotesToItsOwnChangelog()
+    {
+        const string prefix = "https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/";
+
+        var notes = SharedBuildProperties().GetValueOrDefault("PackageReleaseNotes");
+
+        Assert.IsNotNull(notes, "Directory.Build.props sets no PackageReleaseNotes, so the NuGet page links no release notes.");
+        Assert.IsTrue(
+            notes.StartsWith(prefix, StringComparison.Ordinal),
+            $"PackageReleaseNotes is '{notes}'; expected a link under {prefix}.");
+
+        foreach (var project in RepoLayout.PackableProjects)
+        {
+            Assert.IsNull(
+                project.Property("PackageReleaseNotes"),
+                $"{project.PackageId} sets its own PackageReleaseNotes; the shared one in Directory.Build.props already links its changelog.");
+
+            var name   = Path.GetFileNameWithoutExtension(project.File.Name);
+            var target = notes[prefix.Length..].Replace("$(MSBuildProjectName)", name, StringComparison.Ordinal);
+            var file   = new FileInfo(Path.Combine(RepoLayout.Root.FullName, target));
+
+            Assert.AreEqual(
+                Path.Combine(project.Directory.FullName, "CHANGELOG.md"), file.FullName,
+                $"{project.PackageId}'s release notes link to {target}, which is not its own changelog. "
+              + "Keep each project in a directory of its own name under src/.");
+            Assert.IsTrue(file.Exists, $"{project.PackageId}'s release notes link to {target}, which does not exist.");
+        }
+    }
+
     private static IEnumerable<Version> ChangelogVersions() =>
         Regex.Matches(File.ReadAllText(RepoLayout.RootChangelog.FullName), @"^##\s*\[(?<version>\d+\.\d+\.\d+)\]", RegexOptions.Multiline)
              .Select(match => Version.Parse(match.Groups["version"].Value));
