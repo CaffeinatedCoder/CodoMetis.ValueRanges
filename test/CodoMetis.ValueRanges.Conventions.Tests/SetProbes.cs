@@ -8,7 +8,7 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// The single source of truth for which set types exist and which elements to probe them with.
 /// </summary>
 /// <remarks>
-/// Shared by <see cref="ValueSetContractTests"/>, which checks the CLAUDE.md contract rules, and
+/// Shared by <see cref="ValueSetContractTests"/>, which checks the AGENTS.md contract rules, and
 /// <see cref="SmallModelSetOracleTests"/>, which checks every operation against set theory. Two
 /// probe tables would drift, and a family that lost its probes in one of them would go
 /// unexercised there while the other stayed green — the failure mode a discovery-driven suite has

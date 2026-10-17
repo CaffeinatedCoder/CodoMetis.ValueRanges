@@ -58,7 +58,7 @@ namespace CodoMetis.ValueRanges.Tests;
 /// <c>{[1,2],[3,4]}</c> where canonical form demands <c>{[1,4]}</c> contains exactly the right
 /// values and passes every membership check, while <c>Count</c>, <c>Equals</c>,
 /// <c>GetHashCode</c>, <c>ToString</c>, the indexer and the EF multirange literal all disagree.
-/// The invariant CLAUDE.md calls load-bearing on every code path was not asserted by any sweep.
+/// The invariant AGENTS.md calls load-bearing on every code path was not asserted by any sweep.
 /// Here each result is compared element by element against the canonical decomposition, so an
 /// unmerged neighbour, a stray empty, or elements out of order fails.
 /// </para>

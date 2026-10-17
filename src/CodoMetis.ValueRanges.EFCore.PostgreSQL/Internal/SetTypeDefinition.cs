@@ -19,7 +19,7 @@ internal sealed class SetTypeDefinition<TSet, T> : ISetTypeDefinition
 {
     /// <param name="elementStoreType">The PostgreSQL type of one element, e.g. <c>date</c>.</param>
     /// <param name="normalizeValue">
-    /// The element normalization the set type's <c>From</c> applies (CLAUDE.md: the same function as
+    /// The element normalization the set type's <c>From</c> applies (AGENTS.md: the same function as
     /// <c>NormalizeElement</c>), for parameters, literals and a bare element operand.
     /// </param>
     /// <param name="literalText">The element's SQL literal form; defaults to <see cref="SetProviderText.Of"/>.</param>

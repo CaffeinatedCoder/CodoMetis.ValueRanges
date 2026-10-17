@@ -22,7 +22,7 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 /// same probe as a parameter.
 /// </para>
 /// <para>
-/// The literal stays self-describing, which the polymorphic range operators require (CLAUDE.md: a
+/// The literal stays self-describing, which the polymorphic range operators require (AGENTS.md: a
 /// constant element operand must be typed): PostgreSQL's typed-literal keyword for the four temporal
 /// store types, as Npgsql writes them, and an explicit cast for anything else.
 /// </para>

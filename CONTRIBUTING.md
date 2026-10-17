@@ -11,7 +11,7 @@ dotnet test
 ```
 
 Shipping projects live under `src/`, test projects under `test/`.
-[CLAUDE.md](CLAUDE.md) is the architecture guide, with [docs/architecture.md](docs/architecture.md)
+[AGENTS.md](AGENTS.md) is the architecture guide, with [docs/architecture.md](docs/architecture.md)
 and [docs/testing.md](docs/testing.md) behind it — worth reading before changing a range type, a
 value set family, or the EF plugin.
 
@@ -62,7 +62,7 @@ is deliberately refused for exactly this reason.
 
 **Prefer a test to a convention.** Mechanical rules belong in the suite, not in a document nobody
 re-reads. `test/CodoMetis.ValueRanges.Conventions.Tests` exists because the alternative was
-remembering — and the value set rules in CLAUDE.md are asserted there behaviourally, not merely
+remembering — and the value set rules in AGENTS.md are asserted there behaviourally, not merely
 written down.
 
 ## Issues

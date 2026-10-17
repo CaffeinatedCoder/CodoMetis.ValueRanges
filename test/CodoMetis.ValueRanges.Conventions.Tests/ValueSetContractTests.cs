@@ -7,7 +7,7 @@ using NodaTime.Calendars;
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
 /// <summary>
-/// Turns three of the load-bearing value set rules in CLAUDE.md into tests, over every set type
+/// Turns three of the load-bearing value set rules in AGENTS.md into tests, over every set type
 /// that exists rather than a hard-coded list — so a set family added without honouring them
 /// fails here instead of shipping.
 /// </summary>
