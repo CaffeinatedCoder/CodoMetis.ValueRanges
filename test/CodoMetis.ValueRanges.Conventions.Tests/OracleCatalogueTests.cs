@@ -131,12 +131,13 @@ public sealed class OracleCatalogueTests
     public void EveryHeldClaim_IsHeldByARegisteredOracleOrATest()
     {
         // heldBy may name any test class, but the oracle registry must know every class that
-        // claims to be an oracle — a sweep over generated cases — so that it has a seed.
+        // claims to be an oracle — a sweep over generated cases, or a probe over the product of
+        // consumer settings (test/oracles/axes.md) — so that it has a seed.
         var oracles = OracleCatalogue.Oracles.Select(oracle => oracle.Class).ToHashSet(StringComparer.Ordinal);
         var unregistered = OracleCatalogue.Claims
                                           .SelectMany(claim => claim.HeldBy)
                                           .Distinct()
-                                          .Where(held => held.EndsWith("OracleTests", StringComparison.Ordinal) || held.EndsWith("ParityTests", StringComparison.Ordinal))
+                                          .Where(held => held.EndsWith("OracleTests", StringComparison.Ordinal) || held.EndsWith("ParityTests", StringComparison.Ordinal) || held.EndsWith("ProbeTests", StringComparison.Ordinal))
                                           .Where(held => !oracles.Contains(held))
                                           .ToList();
 

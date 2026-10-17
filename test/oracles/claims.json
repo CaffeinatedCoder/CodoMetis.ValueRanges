@@ -991,7 +991,8 @@
       "JsonConverterPrecedenceTests",
       "HostBindingTests",
       "RangeJsonConverterTests",
-      "NodaTimeConverterRegistrationTests"
+      "NodaTimeConverterRegistrationTests",
+      "JsonOptionsProbeTests"
     ]
   },
   {
@@ -1024,7 +1025,8 @@
     "heldBy": [
       "RangeJsonConverterTests",
       "SetJsonConverterTests",
-      "InterfaceDeclaredJsonTests"
+      "InterfaceDeclaredJsonTests",
+      "JsonOptionsProbeTests"
     ]
   },
   {
@@ -1044,7 +1046,8 @@
     "heldBy": [
       "RangeJsonConverterTests",
       "JsonDefaultContractTests",
-      "NodaTimeJsonTests"
+      "NodaTimeJsonTests",
+      "JsonOptionsProbeTests"
     ]
   },
   {
@@ -1074,7 +1077,8 @@
       "InterfaceDeclaredJsonConverter.*"
     ],
     "heldBy": [
-      "InterfaceDeclaredJsonTests"
+      "InterfaceDeclaredJsonTests",
+      "JsonOptionsProbeTests"
     ]
   },
   {
