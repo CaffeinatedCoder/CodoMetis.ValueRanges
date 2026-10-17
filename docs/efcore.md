@@ -269,6 +269,38 @@ Good to know:
   them. `YearMonthSet` stores first-of-month dates, and reading checks that each date is the first
   of its month, exactly like `YearMonthRange`.
 
+### Match a column against a list of sets
+
+```csharp
+var wanted = new List<StringSet> { StringSet.From("a", "b"), StringSet.From("c") };
+
+// b."Tags" IN (@wanted1, @wanted2)   — one parameter per set
+bookings.Where(b => wanted.Contains(b.Tags));
+
+// EXISTS (SELECT 1 FROM (VALUES (@wanted1), (@wanted2)) AS w("Value") WHERE w."Value" && b."Tags")
+bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)));
+```
+
+Each set in your list goes to PostgreSQL as its own parameter, and `Contains` runs as `IN`. `IN`
+compares the column with each set in turn. Every set is stored deduplicated and sorted, so you get
+exactly the rows whose set equals one in your list, the same rows as in memory. This works for a
+list, an array or any other collection you capture, and for every set type. `Any` and `Count` over
+the list read the sets from `VALUES`.
+
+Good to know:
+
+- **`EF.Parameter(wanted)` throws.** It asks for the whole list as one parameter. A set is already
+  a PostgreSQL array, so that parameter would be an array of arrays, which PostgreSQL doesn't have.
+  Remove `EF.Parameter`, and the list goes out one parameter per set.
+- **Your parameterized-collection setting is kept.** A context set to
+  `UseParameterizedCollectionMode(ParameterTranslationMode.Constant)`, and a list wrapped in
+  `EF.Constant`, still put the sets into the SQL as literals.
+- **Before 9.1.0 a captured list failed.** Npgsql sent it as one array parameter and threw
+  (`InvalidCastException`) because it couldn't write the array of arrays. A constant list and an
+  inline `new[] { … }` already worked.
+- **A `Union` in the database can't be matched against a list.** `IN` is equality, so
+  `wanted.Contains(b.Tags.Union(more))` throws, as the next section explains.
+
 ### Combine sets with `Union`
 
 `Union` runs as `array_cat`. It is the one operation running as SQL whose result is **not**

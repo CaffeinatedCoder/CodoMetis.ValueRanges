@@ -648,6 +648,20 @@
     ]
   },
   {
+    "id": "E36-captured-set-collection-contains",
+    "source": "docs/efcore.md#match-a-column-against-a-list-of-sets",
+    "quote": "Each set in your list goes to PostgreSQL as its own parameter, and `Contains` runs as `IN`. `IN` compares the column with each set in turn. Every set is stored deduplicated and sorted, so you get exactly the rows whose set equals one in your list, the same rows as in memory. This works for a list, an array or any other collection you capture, and for every set type. `Any` and `Count` over the list read the sets from `VALUES`.",
+    "claim": "For every value set family (closed, wrapper arity and NodaTime), wanted.Contains(column) over a captured array, List or IEnumerable of sets translates to column IN (@p1, @p2, …) — one parameter per set — and returns exactly the rows the same expression selects in memory, as does its negation and Any/Count over the collection (read from VALUES); EF.Parameter(wanted) throws InvalidOperationException in translation naming the remedy, EF.Constant and a context set to ParameterTranslationMode.Constant keep their literals, and Contains of a server-side Union stays refused.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueRangesQueryExpressionInterceptor.QueryCompilationStarting"
+    ],
+    "heldBy": [
+      "SetCollectionContainsTests",
+      "SetCollectionTranslationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
