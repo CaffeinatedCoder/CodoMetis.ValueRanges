@@ -90,11 +90,15 @@ labels when triaging, and a pull request gets the same labels as the issue it cl
 
 ## Branches and releases
 
-`main` is the next release. `release/9.x` is the maintained 9.x line, cut from `main` before the
-first 10.0.0 change landed. Both get the same CI and the same protection, and a release is a `v*`
-tag on the branch it ships from: `v9.1.1` on `release/9.x`, `v10.0.0` on `main`. The tag must
-match `Version` in that branch's `Directory.Build.props`, or the release workflow stops before
-publishing.
+One version is supported at a time: the latest release (see [SECURITY.md](SECURITY.md#supported-versions)).
+
+`main` is the next release. `release/9.x` holds 9.x patches while `main` takes 10.0.0's breaking
+changes. It was cut from `main` before the first 10.0.0 change landed, and it ends at the
+`v10.0.0` tag: from then on it takes no changes, and a fix reaches 9.x users only by upgrading.
+Until then both branches get the same CI and the same protection, and a release is a `v*` tag on
+the branch it ships from: `v9.1.1` on `release/9.x`, `v10.0.0` on `main`. The tag must match
+`Version` in that branch's `Directory.Build.props`, or the release workflow stops before
+publishing. The next major's line is cut the same way, before its first breaking change.
 
 - **A change for both lines** goes into `main` first. Once it has merged, cherry-pick it onto a
   branch from `release/9.x` (`git cherry-pick -x`, so the commit names the original) and open a PR
@@ -110,8 +114,8 @@ publishing.
   being prepared. `SecurityPolicyConventionTests` compares it with `PackageValidationBaselineVersion`,
   so move the table when you move the baseline, which happens when you open the next version right
   after a tag. The tagged commit still names the release before it.
-- **GitHub's Latest release** is the highest version. The release workflow publishes a 9.x patch
-  that comes out after 10.0.0 without marking it Latest.
+- **GitHub's Latest release** is the highest version. The release workflow checks this rather than
+  trusting the API's default, so a tag pushed out of order can't take Latest from a newer release.
 
 ## Changelog
 
