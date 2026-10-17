@@ -134,6 +134,35 @@ Good to know:
   factory methods must be compile-time constants, because they pick the bounds literal, such as
   `'[]'`. In practice they always are, because the flags take their default at the call site.
 
+### Match a column against a list of ranges
+
+```csharp
+var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(10, 20) };
+
+// b."Seats" IN (@wanted1, @wanted2)   — one parameter per range
+bookings.Where(b => wanted.Contains(b.Seats));
+```
+
+Each range in your list goes to PostgreSQL as its own parameter, and `Contains` runs as `IN`. You
+get exactly the rows whose range equals one in your list, the same rows as in memory. This works
+for a list, an array or any other collection you capture, and for every range type, `TimeRange`
+and the NodaTime ranges included.
+
+Good to know:
+
+- **`EF.Parameter(wanted).Contains(…)` throws.** It asks for the whole list as one parameter, and
+  Npgsql would send that as a multirange rather than as an array of ranges. Remove `EF.Parameter`.
+- **Before 9.1.0 a captured list failed.** PostgreSQL rejected the parameter
+  (`42809 op ANY/ALL (array) requires array on right side`), and for `TimeRange` Npgsql threw
+  (`InvalidCastException`). A constant list and an inline `new[] { … }` already worked.
+- **`Any` or `Count` alone over a captured list of ranges can return a different answer from
+  memory.** Without a `Contains` in the same query, the list still goes out as one parameter that
+  PostgreSQL reads as a multirange. A multirange merges overlapping and adjacent ranges and drops
+  empty ones. Wrap the list in `EF.Constant` until 10.0.0 fixes this:
+  `bookings.Select(b => EF.Constant(wanted).Count(w => w.Overlaps(b.Seats)))`.
+- **A list of `RangeSet` values needs nothing.** It goes out as one array of multiranges, which is
+  what it is.
+
 ## Store timestamp ranges
 
 Here is what happens to the bounds of `DateTimeRange` and `DateTimeOffsetRange` on the way to the

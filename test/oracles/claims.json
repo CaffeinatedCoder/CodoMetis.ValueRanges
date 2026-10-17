@@ -662,6 +662,34 @@
     ]
   },
   {
+    "id": "E37-captured-range-collection-contains",
+    "source": "docs/efcore.md#match-a-column-against-a-list-of-ranges",
+    "quote": "Each range in your list goes to PostgreSQL as its own parameter, and `Contains` runs as `IN`. You get exactly the rows whose range equals one in your list, the same rows as in memory. This works for a list, an array or any other collection you capture, and for every range type, `TimeRange` and the NodaTime ranges included.",
+    "claim": "For every range family (the six BCL ranges, TimeRange and the four NodaTime ranges), wanted.Contains(column) over a captured array, List or IEnumerable of ranges translates to column IN (@p1, @p2, …) — one parameter per range — and returns exactly the rows the same expression selects in memory, as does its negation; EF.Parameter(wanted).Contains(column) throws InvalidOperationException in translation naming the remedy; a captured collection of RangeSet values still binds as one multirange-array parameter and answers as in memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueRangesQueryExpressionInterceptor.QueryCompilationStarting"
+    ],
+    "heldBy": [
+      "RangeCollectionContainsTests",
+      "RangeCollectionTranslationTests"
+    ]
+  },
+  {
+    "id": "E38-captured-range-collection-any-count-workaround",
+    "source": "docs/efcore.md#match-a-column-against-a-list-of-ranges",
+    "quote": "Without a `Contains` in the same query, the list still goes out as one parameter that PostgreSQL reads as a multirange. A multirange merges overlapping and adjacent ranges and drops empty ones. Wrap the list in `EF.Constant` until 10.0.0 fixes this: `bookings.Select(b => EF.Constant(wanted).Count(w => w.Overlaps(b.Seats)))`.",
+    "claim": "Any or Count over a captured range collection with no Contains reading it in the same query still translates through unnest of the single parameter (unchanged in 9.1.0, issue #76); wrapped in EF.Constant, Count(w => w.Overlaps(column)) over overlapping ranges returns the in-memory count; beside a Contains on the same collection, the collection is read from VALUES and answers as in memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueRangesQueryExpressionInterceptor.QueryCompilationStarting"
+    ],
+    "heldBy": [
+      "RangeCollectionContainsTests",
+      "RangeCollectionTranslationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
