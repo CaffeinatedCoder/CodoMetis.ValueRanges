@@ -85,6 +85,10 @@ the work, and close it from the PR (`Closes #n`).
   is attached as native sub-issues and carries the same milestone. A theme that spans releases is
   an `epic` without a milestone; a finding it produces belongs to the release epic it ships in
 - **Roadmap:** the pinned `roadmap` issue (#34) holds every epic as a sub-issue
+- **Branches:** `main` is the next release; `release/9.x` is the maintained 9.x line. A change
+  for both merges into `main` first and is cherry-picked (`-x`) into a PR against `release/9.x`.
+  An issue fixed only on `release/9.x` is closed by hand, because `Closes #n` acts only on `main`.
+  See CONTRIBUTING.md#branches-and-releases
 
 ## Docs
 - `docs/architecture.md` — Discriminated union pattern, interface hierarchy, RangeSet internals

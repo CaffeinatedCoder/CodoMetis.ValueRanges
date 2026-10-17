@@ -334,6 +334,15 @@ jobs:
             flags+=(--prerelease)
           fi
 
+          # A patch on release/9.x published after 10.0.0 must not become the repository's Latest
+          # release, so "Latest" is decided here rather than left to the API's default. With no tag,
+          # `gh release view` shows the current Latest release; none yet means this one is.
+          latest="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+          if [[ -n "$latest" && "$(printf '%s\n' "${latest#v}" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]]; then
+            echo "Release $latest is newer; publishing $tag without marking it Latest."
+            flags+=(--latest=false)
+          fi
+
           gh release create "$tag" --verify-tag --title "$tag" --notes-file release-notes.md "${flags[@]}"
 
       - name: Attach the SBOMs
