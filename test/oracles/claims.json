@@ -1206,6 +1206,21 @@
     ]
   },
   {
+    "id": "J33-bound-whitespace-stripped",
+    "source": "docs/serialization.md#quote-a-bound",
+    "quote": "**Whitespace at either end of a bound** is dropped, inside quotes or out. So `[\" 2026-01-01\",2026-02-01)` is `[2026-01-01,2026-02-01)`.",
+    "claim": "For every range type, ASCII whitespace (space, tab, LF, CR, VT, FF) at either end of a bound is stripped whether it is quoted, backslash-escaped or bare, as PostgreSQL's element input functions strip it; a no-break or em space is kept and the bound throws, and a bound of only whitespace throws.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.TryParse"
+    ],
+    "heldBy": [
+      "RangeLiteralGrammarContractTests",
+      "LiteralGrammarParityTests"
+    ]
+  },
+  {
     "id": "M01-rangeset-invariant-on-construction",
     "source": "docs/ranges.md#rangeset--multirange-support",
     "quote": "Every way you create a set keeps three rules. The elements are sorted by lower bound, no two of them overlap, and no two are adjacent. To keep those rules, creating a set: - **Drops empty ranges.** - **Merges ranges that overlap or are adjacent.** - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**",

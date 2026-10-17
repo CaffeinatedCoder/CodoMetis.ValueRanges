@@ -13,6 +13,10 @@ has the rules.
 
 ## [9.1.0] — 2026-10-17
 
+### Fixed
+
+- Literals: whitespace at either end of a quoted or escaped range bound is dropped, as in PostgreSQL, so `[" 2026-01-01",2026-02-01)` parses, where it threw `FormatException` ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)).
+
 ## [9.0.0] — 2026-10-11
 
 Nothing was removed or renamed. What existing calls write, accept and translate changed, and the compiler can't show you where: [Migration from v8.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x).

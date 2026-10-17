@@ -413,4 +413,43 @@ public class RangeParseFormatTests
         Assert.AreEqual("(,)",    Int32Range.Infinite.ToString());
         Assert.AreEqual("empty",  Int32Range.Empty.ToString());
     }
+
+    // -----------------------------------------------------------------------
+    // Whitespace inside a quoted or escaped bound (#45)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// A quoted bound with whitespace at either end reads as the bound without it, as PostgreSQL
+    /// reads it: <c>range_in</c> keeps the whitespace and every element input function strips it.
+    /// </summary>
+    /// <remarks>
+    /// Until 9.1.0 only whitespace outside quotes was dropped, so the quoted space reached the strict
+    /// ISO grammar and the literal threw, where <c>'[" 2026-01-01",2026-02-01)'::daterange</c> is
+    /// <c>[2026-01-01,2026-02-01)</c>.
+    /// </remarks>
+    [TestMethod]
+    public void Parse_QuotedBoundWithSurroundingWhitespace_ReadsTheTrimmedBound()
+    {
+        var expected = DateRange.CreateFinite(new DateOnly(2026, 1, 1), new DateOnly(2026, 2, 1), endInclusive: false);
+
+        Assert.AreEqual(expected, DateRange.Parse("[\" 2026-01-01\",2026-02-01)", CultureInfo.InvariantCulture));
+        Assert.AreEqual(expected, DateRange.Parse("[\"2026-01-01\t\",\"\n2026-02-01 \")", CultureInfo.InvariantCulture));
+        Assert.AreEqual(expected, DateRange.Parse("[\\ 2026-01-01,2026-02-01\\ )", CultureInfo.InvariantCulture));
+        Assert.AreEqual(
+            TimeRange.CreateFinite(new TimeOnly(9, 0), new TimeOnly(17, 0), endInclusive: false),
+            TimeRange.Parse("[\" 09:00 \",17:00)", CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Only ASCII whitespace is stripped, as in PostgreSQL, and a bound that is nothing but
+    /// whitespace is still present and empty — refused, never read as unbounded.
+    /// </summary>
+    [TestMethod]
+    [DataRow("[\"\u00A02026-01-01\",2026-02-01)")]
+    [DataRow("[\"2026-01-01\u2003\",2026-02-01)")]
+    [DataRow("[\" \",2026-02-01)")]
+    [DataRow("[\"\t\n\",2026-02-01)")]
+    [DataRow("[\\ ,2026-02-01)")]
+    public void Parse_QuotedBound_NonAsciiOrOnlyWhitespace_IsRefused(string literal)
+        => Assert.ThrowsExactly<FormatException>(() => DateRange.Parse(literal, CultureInfo.InvariantCulture));
 }
