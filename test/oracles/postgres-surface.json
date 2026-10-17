@@ -1,0 +1,1541 @@
+[
+  {
+    "signature": "anyarray && anyarray",
+    "kind": "operator",
+    "since": 8.2,
+    "member": "ValueSetExtensions.Overlaps",
+    "translation": " && ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyarray < anyarray",
+    "kind": "operator",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "lexicographic sequence order over the stored array, not a set relation; a value set has no order",
+    "issue": null
+  },
+  {
+    "signature": "anyarray <= anyarray",
+    "kind": "operator",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "lexicographic sequence order over the stored array, not a set relation; a value set has no order",
+    "issue": null
+  },
+  {
+    "signature": "anyarray <> anyarray",
+    "kind": "operator",
+    "since": 8,
+    "member": "*Set.op_Inequality",
+    "translation": " <> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyarray <@ anyarray",
+    "kind": "operator",
+    "since": 8.2,
+    "member": "ValueSetExtensions.IsSubsetOf",
+    "translation": " <@ ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyarray = anyarray",
+    "kind": "operator",
+    "since": 8,
+    "member": "*Set.op_Equality",
+    "translation": " = ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyarray > anyarray",
+    "kind": "operator",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "lexicographic sequence order over the stored array, not a set relation; a value set has no order",
+    "issue": null
+  },
+  {
+    "signature": "anyarray >= anyarray",
+    "kind": "operator",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "lexicographic sequence order over the stored array, not a set relation; a value set has no order",
+    "issue": null
+  },
+  {
+    "signature": "anyarray @> anyarray",
+    "kind": "operator",
+    "since": 8.2,
+    "member": "ValueSetExtensions.IsSupersetOf",
+    "translation": " @> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anycompatible || anycompatiblearray",
+    "kind": "operator",
+    "since": 13,
+    "member": "ValueSetExtensions.Add",
+    "translation": null,
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anycompatiblearray || anycompatible",
+    "kind": "operator",
+    "since": 13,
+    "member": "ValueSetExtensions.Add",
+    "translation": null,
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anycompatiblearray || anycompatiblearray",
+    "kind": "operator",
+    "since": 13,
+    "member": "ValueSetExtensions.Union",
+    "translation": "array_cat",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyelement <@ anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": "the element has no receiver in C#; written as set.Contains(value) (anymultirange @> anyelement)",
+    "issue": null
+  },
+  {
+    "signature": "anyelement <@ anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": "the element has no receiver in C#; written as range.Contains(value) (anyrange @> anyelement)",
+    "issue": null
+  },
+  {
+    "signature": "anymultirange && anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Overlaps",
+    "translation": " && ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange && anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Overlaps",
+    "translation": " && ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange &< anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.DoesNotExtendRightOf",
+    "translation": " &< ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange &< anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.DoesNotExtendRightOf",
+    "translation": " &< ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange &> anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.DoesNotExtendLeftOf",
+    "translation": " &> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange &> anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.DoesNotExtendLeftOf",
+    "translation": " &> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange * anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Intersect",
+    "translation": " * ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange + anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Union",
+    "translation": " + ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange - anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Except",
+    "translation": " - ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange -|- anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsAdjacentTo",
+    "translation": " -|- ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange -|- anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsAdjacentTo",
+    "translation": " -|- ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange < anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anymultirange << anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsStrictlyLeftOf",
+    "translation": " << ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange << anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsStrictlyLeftOf",
+    "translation": " << ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange <= anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anymultirange <> anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.op_Inequality",
+    "translation": " <> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange <@ anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 92
+  },
+  {
+    "signature": "anymultirange <@ anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 92
+  },
+  {
+    "signature": "anymultirange = anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.op_Equality",
+    "translation": " = ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange > anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anymultirange >= anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anymultirange >> anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsStrictlyRightOf",
+    "translation": " >> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange >> anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsStrictlyRightOf",
+    "translation": " >> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange @> anyelement",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Contains",
+    "translation": " @> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange @> anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Contains",
+    "translation": " @> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anymultirange @> anyrange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Contains",
+    "translation": " @> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange && anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Overlaps",
+    "translation": " && ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange && anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.Overlaps",
+    "translation": " && ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange &< anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 92
+  },
+  {
+    "signature": "anyrange &< anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.DoesNotExtendRightOf",
+    "translation": " &< ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange &> anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 92
+  },
+  {
+    "signature": "anyrange &> anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.DoesNotExtendLeftOf",
+    "translation": " &> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange * anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.Intersect",
+    "translation": " * ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange + anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.Union",
+    "translation": " + ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange - anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.Except",
+    "translation": " - ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange -|- anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsAdjacentTo",
+    "translation": " -|- ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange -|- anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.IsAdjacentTo",
+    "translation": " -|- ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange < anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anyrange << anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsStrictlyRightOf",
+    "translation": " >> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange << anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.IsStrictlyLeftOf",
+    "translation": " << ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange <= anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anyrange <> anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "*Range.op_Inequality",
+    "translation": " <> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange <@ anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.Contains",
+    "translation": " @> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange <@ anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.IsContainedBy",
+    "translation": " <@ ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange = anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "*Range.op_Equality",
+    "translation": " = ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange > anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anyrange >= anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 39
+  },
+  {
+    "signature": "anyrange >> anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": "RangeSet.IsStrictlyLeftOf",
+    "translation": " << ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange >> anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.IsStrictlyRightOf",
+    "translation": " >> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange @> anyelement",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.Contains",
+    "translation": " @> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "anyrange @> anymultirange",
+    "kind": "operator",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 92
+  },
+  {
+    "signature": "anyrange @> anyrange",
+    "kind": "operator",
+    "since": 9.2,
+    "member": "RangeExtensions.Contains",
+    "translation": " @> ",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "array_dims(anyarray)",
+    "kind": "function",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "a value set is one-dimensional with subscripts 1..Count, so the dimension and subscript functions answer a constant",
+    "issue": null
+  },
+  {
+    "signature": "array_fill(anyelement, integer[])",
+    "kind": "function",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": "builds an array of repeated elements, which a set deduplicates to one; a set is built with From",
+    "issue": null
+  },
+  {
+    "signature": "array_fill(anyelement, integer[], integer[])",
+    "kind": "function",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": "builds a multi-dimensional array of repeated elements; a set is one-dimensional and deduplicated",
+    "issue": null
+  },
+  {
+    "signature": "array_length(anyarray, integer)",
+    "kind": "function",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": "answers NULL for the empty array where Count answers 0; cardinality is the translation (E22)",
+    "issue": null
+  },
+  {
+    "signature": "array_lower(anyarray, integer)",
+    "kind": "function",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "a value set is one-dimensional with subscripts 1..Count, so the dimension and subscript functions answer a constant",
+    "issue": null
+  },
+  {
+    "signature": "array_ndims(anyarray)",
+    "kind": "function",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "a value set is one-dimensional with subscripts 1..Count, so the dimension and subscript functions answer a constant",
+    "issue": null
+  },
+  {
+    "signature": "array_position(anycompatiblearray, anycompatible)",
+    "kind": "function",
+    "since": 13,
+    "member": null,
+    "translation": null,
+    "waiver": "a position in a set is meaningless: the stored order is canonical only for rows the plugin wrote (E21); the indexer is client-only",
+    "issue": null
+  },
+  {
+    "signature": "array_position(anycompatiblearray, anycompatible, integer)",
+    "kind": "function",
+    "since": 13,
+    "member": null,
+    "translation": null,
+    "waiver": "a position in a set is meaningless: the stored order is canonical only for rows the plugin wrote (E21); the indexer is client-only",
+    "issue": null
+  },
+  {
+    "signature": "array_positions(anycompatiblearray, anycompatible)",
+    "kind": "function",
+    "since": 13,
+    "member": null,
+    "translation": null,
+    "waiver": "a canonical set holds each element once, so the positions are at most one, and that one is meaningless (E21)",
+    "issue": null
+  },
+  {
+    "signature": "array_remove(anycompatiblearray, anycompatible)",
+    "kind": "function",
+    "since": 13,
+    "member": "ValueSetExtensions.Remove",
+    "translation": "array_remove(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "array_replace(anycompatiblearray, anycompatible, anycompatible)",
+    "kind": "function",
+    "since": 13,
+    "member": null,
+    "translation": null,
+    "waiver": "would break canonical form on the server (E17); in memory it is Remove then Add, each of which re-canonicalizes",
+    "issue": null
+  },
+  {
+    "signature": "array_reverse(anyarray)",
+    "kind": "function",
+    "since": 18,
+    "member": null,
+    "translation": null,
+    "waiver": "order-producing; a set has no order and canonicalizes on read",
+    "issue": null
+  },
+  {
+    "signature": "array_sample(anyarray, integer)",
+    "kind": "function",
+    "since": 16,
+    "member": null,
+    "translation": null,
+    "waiver": "random: the result is not a function of its input, so no in-memory member could agree with it",
+    "issue": null
+  },
+  {
+    "signature": "array_shuffle(anyarray)",
+    "kind": "function",
+    "since": 16,
+    "member": null,
+    "translation": null,
+    "waiver": "random order-producing; a set has no order and canonicalizes on read",
+    "issue": null
+  },
+  {
+    "signature": "array_sort(anyarray)",
+    "kind": "function",
+    "since": 18,
+    "member": null,
+    "translation": null,
+    "waiver": "sorts text by the database collation, not ordinally, so its order would disagree with the client's canonical order (the reason the guard never sorts in SQL)",
+    "issue": null
+  },
+  {
+    "signature": "array_sort(anyarray, boolean)",
+    "kind": "function",
+    "since": 18,
+    "member": null,
+    "translation": null,
+    "waiver": "sorts text by the database collation, not ordinally, so its order would disagree with the client's canonical order (the reason the guard never sorts in SQL)",
+    "issue": null
+  },
+  {
+    "signature": "array_sort(anyarray, boolean, boolean)",
+    "kind": "function",
+    "since": 18,
+    "member": null,
+    "translation": null,
+    "waiver": "sorts text by the database collation, not ordinally; a set holds no nulls, so nulls_first has nothing to place",
+    "issue": null
+  },
+  {
+    "signature": "array_to_json(anyarray)",
+    "kind": "function",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": "a JSON column holds the set's literal, never a JSON array (E24); the JSON wire form is the converter's, not the server's",
+    "issue": null
+  },
+  {
+    "signature": "array_to_json(anyarray, boolean)",
+    "kind": "function",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": "a JSON column holds the set's literal, never a JSON array (E24); the JSON wire form is the converter's, not the server's",
+    "issue": null
+  },
+  {
+    "signature": "array_to_string(anyarray, text)",
+    "kind": "function",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "a text rendering with a caller-chosen separator; the set's own literal is ToString and Parse, and a join is string.Join over Values in memory",
+    "issue": null
+  },
+  {
+    "signature": "array_to_string(anyarray, text, text)",
+    "kind": "function",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "a text rendering with a caller-chosen separator and null stand-in; a set holds no nulls, and a join is string.Join over Values in memory",
+    "issue": null
+  },
+  {
+    "signature": "array_upper(anyarray, integer)",
+    "kind": "function",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "a value set is one-dimensional with subscripts 1..Count, so the dimension and subscript functions answer a constant",
+    "issue": null
+  },
+  {
+    "signature": "btarraycmp(anyarray, anyarray)",
+    "kind": "function",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "cardinality(anyarray)",
+    "kind": "function",
+    "since": 9.4,
+    "member": "*Set.Count",
+    "translation": "cardinality(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "datemultirange()",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.Empty",
+    "translation": "'{}'::",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "datemultirange(VARIADIC daterange[])",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "datemultirange(daterange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "daterange(date, date)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DateRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "daterange(date, date, text)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DateRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "enum_range(anyenum)",
+    "kind": "function",
+    "since": 8.3,
+    "member": null,
+    "translation": null,
+    "waiver": "enumerates a PostgreSQL enum type; no set family is backed by an enum",
+    "issue": null
+  },
+  {
+    "signature": "enum_range(anyenum, anyenum)",
+    "kind": "function",
+    "since": 8.3,
+    "member": null,
+    "translation": null,
+    "waiver": "enumerates a PostgreSQL enum type; no set family is backed by an enum",
+    "issue": null
+  },
+  {
+    "signature": "generate_subscripts(anyarray, integer)",
+    "kind": "function",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": "a value set is one-dimensional with subscripts 1..Count, so the dimension and subscript functions answer a constant; a row set, not a value",
+    "issue": null
+  },
+  {
+    "signature": "generate_subscripts(anyarray, integer, boolean)",
+    "kind": "function",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": "a value set is one-dimensional with subscripts 1..Count, so the dimension and subscript functions answer a constant; a row set, not a value",
+    "issue": null
+  },
+  {
+    "signature": "hash_array(anyarray)",
+    "kind": "function",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "hash_array_extended(anyarray, bigint)",
+    "kind": "function",
+    "since": 11,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "hash_multirange(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "hash_multirange_extended(anymultirange, bigint)",
+    "kind": "function",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "hash_range(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "hash_range_extended(anyrange, bigint)",
+    "kind": "function",
+    "since": 11,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "int4multirange()",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.Empty",
+    "translation": "'{}'::",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int4multirange(VARIADIC int4range[])",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int4multirange(int4range)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int4range(integer, integer)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "Int32Range.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int4range(integer, integer, text)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "Int32Range.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int8multirange()",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.Empty",
+    "translation": "'{}'::",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int8multirange(VARIADIC int8range[])",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int8multirange(int8range)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int8range(bigint, bigint)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "Int64Range.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "int8range(bigint, bigint, text)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "Int64Range.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "isempty(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.IsEmpty",
+    "translation": "isempty(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "isempty(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "RangeExtensions.IsEmpty",
+    "translation": "isempty(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "lower(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.LowerBound",
+    "translation": "lower(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "lower(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "RangeExtensions.LowerBound",
+    "translation": "lower(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "lower_inc(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.LowerBoundInclusive",
+    "translation": "lower_inc(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "lower_inc(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "RangeExtensions.LowerBoundInclusive",
+    "translation": "lower_inc(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "lower_inf(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.IsUnboundedStart",
+    "translation": "lower_inf(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "lower_inf(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "RangeExtensions.IsUnboundedStart",
+    "translation": "lower_inf(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "multirange(anyrange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "multirange_cmp(anymultirange, anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "nummultirange()",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.Empty",
+    "translation": "'{}'::",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "nummultirange(VARIADIC numrange[])",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "nummultirange(numrange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "numrange(numeric, numeric)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DecimalRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "numrange(numeric, numeric, text)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DecimalRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "range_cmp(anyrange, anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": "operator-class support function: PostgreSQL's hash and compare for indexes and sorting, never called from a query",
+    "issue": null
+  },
+  {
+    "signature": "range_merge(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.Merge",
+    "translation": "range_merge(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "range_merge(anyrange, anyrange)",
+    "kind": "function",
+    "since": 9.5,
+    "member": "RangeExtensions.Merge",
+    "translation": "range_merge(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "trim_array(anyarray, integer)",
+    "kind": "function",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": "positional: drops the last n elements of the stored order, which is canonical only for rows the plugin wrote (E21)",
+    "issue": null
+  },
+  {
+    "signature": "tsmultirange()",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.Empty",
+    "translation": "'{}'::",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tsmultirange(VARIADIC tsrange[])",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tsmultirange(tsrange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tsrange(timestamp without time zone, timestamp without time zone)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DateTimeRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tsrange(timestamp without time zone, timestamp without time zone, text)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DateTimeRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tstzmultirange()",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.Empty",
+    "translation": "'{}'::",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tstzmultirange(VARIADIC tstzrange[])",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tstzmultirange(tstzrange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "multirange(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tstzrange(timestamp with time zone, timestamp with time zone)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DateTimeOffsetRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "tstzrange(timestamp with time zone, timestamp with time zone, text)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "DateTimeOffsetRange.Create*",
+    "translation": "range(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "unnest(anyarray)",
+    "kind": "function",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 95
+  },
+  {
+    "signature": "unnest(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 94
+  },
+  {
+    "signature": "upper(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.UpperBound",
+    "translation": "upper(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "upper(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "RangeExtensions.UpperBound",
+    "translation": "upper(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "upper_inc(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.UpperBoundInclusive",
+    "translation": "upper_inc(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "upper_inc(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "RangeExtensions.UpperBoundInclusive",
+    "translation": "upper_inc(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "upper_inf(anymultirange)",
+    "kind": "function",
+    "since": 14,
+    "member": "RangeSet.IsUnboundedEnd",
+    "translation": "upper_inf(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "upper_inf(anyrange)",
+    "kind": "function",
+    "since": 9.2,
+    "member": "RangeExtensions.IsUnboundedEnd",
+    "translation": "upper_inf(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "width_bucket(anycompatible, anycompatiblearray)",
+    "kind": "function",
+    "since": 13,
+    "member": null,
+    "translation": null,
+    "waiver": "a histogram lookup over sorted thresholds, not a set relation; not a value set operation",
+    "issue": null
+  },
+  {
+    "signature": "array_agg(anyarray)",
+    "kind": "aggregate",
+    "since": 11,
+    "member": null,
+    "translation": null,
+    "waiver": "aggregates arrays into a two-dimensional array; a value set is one-dimensional",
+    "issue": null
+  },
+  {
+    "signature": "array_agg(anynonarray)",
+    "kind": "aggregate",
+    "since": 8.4,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 96
+  },
+  {
+    "signature": "max(anyarray)",
+    "kind": "aggregate",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "lexicographic sequence order over the stored array, not a set relation; a value set has no order; the largest array by that order is not a set result",
+    "issue": null
+  },
+  {
+    "signature": "min(anyarray)",
+    "kind": "aggregate",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "lexicographic sequence order over the stored array, not a set relation; a value set has no order; the smallest array by that order is not a set result",
+    "issue": null
+  },
+  {
+    "signature": "percentile_disc(double precision[], anyelement)",
+    "kind": "aggregate",
+    "since": 9.4,
+    "member": null,
+    "translation": null,
+    "waiver": "an ordered-set aggregate whose array result is a list of percentiles in the caller's order, not a set",
+    "issue": null
+  },
+  {
+    "signature": "range_agg(anymultirange)",
+    "kind": "aggregate",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 93
+  },
+  {
+    "signature": "range_agg(anyrange)",
+    "kind": "aggregate",
+    "since": 14,
+    "member": "RangeAggregateExtensions.RangeAgg",
+    "translation": "range_agg(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "range_intersect_agg(anymultirange)",
+    "kind": "aggregate",
+    "since": 14,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 93
+  },
+  {
+    "signature": "range_intersect_agg(anyrange)",
+    "kind": "aggregate",
+    "since": 14,
+    "member": "RangeAggregateExtensions.RangeIntersectAgg",
+    "translation": "range_intersect_agg(",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "CAST (range AS multirange)",
+    "kind": "other",
+    "since": 14,
+    "member": "RangeSet.From",
+    "translation": "::datemultirange",
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "CREATE INDEX … USING gist (range column)",
+    "kind": "other",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": "an index, not a value operation; docs/efcore.md#indexing-a-range-column-and-preventing-overlaps shows the EF mapping, and the oracles check values, not plans",
+    "issue": null
+  },
+  {
+    "signature": "EXCLUDE USING gist (… WITH &&)",
+    "kind": "other",
+    "since": 9.2,
+    "member": null,
+    "translation": null,
+    "waiver": "a constraint, not a value operation; docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint shows the EF mapping",
+    "issue": null
+  },
+  {
+    "signature": "FOREIGN KEY (…, PERIOD range column)",
+    "kind": "other",
+    "since": 18,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 97
+  },
+  {
+    "signature": "PRIMARY KEY (…, range column WITHOUT OVERLAPS)",
+    "kind": "other",
+    "since": 18,
+    "member": null,
+    "translation": null,
+    "waiver": null,
+    "issue": 97
+  },
+  {
+    "signature": "generate_series(lower, upper)",
+    "kind": "other",
+    "since": 8,
+    "member": "*Range.Values",
+    "translation": null,
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "string_to_array(text, text)",
+    "kind": "other",
+    "since": 8,
+    "member": "*Set.Parse",
+    "translation": null,
+    "waiver": null,
+    "issue": null
+  },
+  {
+    "signature": "value = ALL (array)",
+    "kind": "other",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "true only for a set of exactly that one element; no set relation means that, and ALL has no index support",
+    "issue": null
+  },
+  {
+    "signature": "value = ANY (array)",
+    "kind": "other",
+    "since": 8,
+    "member": null,
+    "translation": null,
+    "waiver": "membership is translated as containment (@>) so a GIN index always serves it (E14); ANY is never emitted on purpose",
+    "issue": null
+  }
+]

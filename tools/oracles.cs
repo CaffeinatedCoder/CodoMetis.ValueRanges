@@ -1,8 +1,11 @@
 #:property PublishAot=false
+#:package Testcontainers.PostgreSql@4.16.0
+#:package Npgsql@10.0.0
 // The oracle machinery's local tool. Never part of CI; the convention tests hold the catalogue.
 //
 //   dotnet run tools/oracles.cs seeds [name filter]   prove that every seed is caught
 //   dotnet run tools/oracles.cs status                the catalogue's worklist
+//   dotnet run tools/oracles.cs pg-surface [image]    regenerate test/oracles/postgres-surface.catalog.txt
 //
 // `seeds`: for each test/oracles/seeds/<defect>.patch, a scratch copy of the working tree (bin/, obj/
 // and .git/ left out, so uncommitted work is included) under the OS temp directory, the patch applied,
@@ -10,6 +13,13 @@
 // oracle when at least one of its tests fails with a message that is not a known candidate; one line
 // per (seed, oracle), and exit code 1 unless every pair is CAUGHT. Oracles that need Docker are run
 // too — start Docker first, or pass a filter that leaves them out.
+//
+// `pg-surface`: starts a PostgreSQL container (default image postgres:18-alpine), lists every pg_operator
+// and pg_proc row over anyrange, anymultirange, anyarray and anycompatiblearray plus the constructors of
+// the built-in range and multirange types (minus I/O, planner, operator and aggregate implementation
+// functions, which the listing's header names), and writes it to test/oracles/postgres-surface.catalog.txt.
+// OraclePostgresSurfaceTests then requires an entry in postgres-surface.json per line, so a new server
+// major shows up as missing entries once the listing is refreshed. Never run in CI: the listing is checked in.
 
 using System.Diagnostics;
 using System.Text.Json;
@@ -21,14 +31,15 @@ var oraclesDir = Path.Combine(root, "test", "oracles");
 var command = args.Length > 0 ? args[0] : "status";
 return command switch
 {
-    "seeds"  => Seeds(args.Length > 1 ? args[1] : ""),
-    "status" => Status(),
-    _        => Usage()
+    "seeds"      => Seeds(args.Length > 1 ? args[1] : ""),
+    "status"     => Status(),
+    "pg-surface" => PgSurface(args.Length > 1 ? args[1] : "postgres:18-alpine"),
+    _            => Usage()
 };
 
 int Usage()
 {
-    Console.Error.WriteLine("usage: dotnet run tools/oracles.cs seeds [filter] | status");
+    Console.Error.WriteLine("usage: dotnet run tools/oracles.cs seeds [filter] | status | pg-surface [image]");
     return 2;
 }
 
@@ -128,6 +139,11 @@ int Status()
     foreach (var c in candidates)
         Console.WriteLine($"  {c.Oracle}: '{c.Row}' [{c.Family}] {(c.Issue.Length == 0 ? "NOT FILED" : c.Issue)}");
 
+    var surface = Json<List<PgSurfaceEntry>>("postgres-surface.json");
+    Console.WriteLine($"postgres surface: {surface.Count} entries, with a member: {surface.Count(e => e.Member is not null)}, waived: {surface.Count(e => e.Waiver is not null)}, open as issues (the worklist): {surface.Count(e => e.Member is null && e.Waiver is null)}");
+    foreach (var e in surface.Where(e => e.Member is null && e.Waiver is null))
+        Console.WriteLine($"  MISSING {e.Signature,-48} {(e.Issue is { } n ? $"#{n}" : "NOT FILED")}");
+
     Console.WriteLine("document headings with no claim (read them for promises):");
     foreach (var file in new[] { "README.md", "docs/ranges.md", "docs/value-sets.md", "docs/serialization.md", "docs/efcore.md", "docs/getting-started.md" })
     {
@@ -137,6 +153,87 @@ int Status()
     }
 
     return 0;
+}
+
+int PgSurface(string image)
+{
+    const string PgSurfaceSql = """
+        with poly as (select array['anyrange', 'anymultirange', 'anyarray', 'anycompatiblearray']::regtype[]::oid[] as t),
+             concrete as (select array['int4range', 'int8range', 'numrange', 'daterange', 'tsrange', 'tstzrange',
+                                       'int4multirange', 'int8multirange', 'nummultirange', 'datemultirange', 'tsmultirange', 'tstzmultirange']::regtype[]::oid[] as t),
+             uncallable as (select array['internal', 'cstring']::regtype[]::oid[] as t),
+             implementation as (
+                 select oprcode as f from pg_operator
+                 union select aggtransfn from pg_aggregate union select aggfinalfn from pg_aggregate
+                 union select aggcombinefn from pg_aggregate union select aggserialfn from pg_aggregate
+                 union select aggdeserialfn from pg_aggregate union select aggmtransfn from pg_aggregate
+                 union select aggminvtransfn from pg_aggregate union select aggmfinalfn from pg_aggregate
+                 union select typinput from pg_type union select typoutput from pg_type
+                 union select typreceive from pg_type union select typsend from pg_type
+                 union select typanalyze from pg_type union select typsubscript from pg_type
+                 union select rngcanonical from pg_range union select rngsubdiff from pg_range)
+        select 'operator' as kind,
+               format('%s %s %s', oprleft::regtype, oprname, oprright::regtype) as signature,
+               oprresult::regtype::text as result
+          from pg_operator, poly
+         where oprleft = any (poly.t) or oprright = any (poly.t)
+        union all
+        select case prokind when 'a' then 'aggregate' else 'function' end,
+               proname || '(' || coalesce((select string_agg(case when p.provariadic <> 0 and a.n = p.pronargs then 'VARIADIC ' else '' end || format_type(a.t, null), ', ' order by a.n)
+                                             from unnest(p.proargtypes::oid[]) with ordinality as a(t, n)), '') || ')',
+               pg_get_function_result(p.oid)
+          from pg_proc p, poly, concrete, uncallable
+         where p.pronamespace = 'pg_catalog'::regnamespace
+           and (p.proargtypes::oid[] && poly.t or p.prorettype = any (poly.t) or p.prorettype = any (concrete.t))
+           and not (p.proargtypes::oid[] && uncallable.t or p.prorettype = any (uncallable.t))
+           and p.oid not in (select f from implementation)
+        """;
+
+    var path = Path.Combine(oraclesDir, "postgres-surface.catalog.txt");
+    Console.WriteLine($"starting {image} …");
+    var container = new Testcontainers.PostgreSql.PostgreSqlBuilder(image).Build();
+    container.StartAsync().GetAwaiter().GetResult();
+    try
+    {
+        using var connection = new Npgsql.NpgsqlConnection(container.GetConnectionString());
+        connection.Open();
+
+        string version;
+        using (var cmd = new Npgsql.NpgsqlCommand("show server_version", connection))
+            version = ((string)cmd.ExecuteScalar()!).Split(' ')[0];
+
+        var rows = new List<(string Kind, string Signature, string Result)>();
+        using (var cmd = new Npgsql.NpgsqlCommand(PgSurfaceSql, connection))
+        using (var reader = cmd.ExecuteReader())
+            while (reader.Read())
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+
+        string[] kinds = ["operator", "function", "aggregate"];
+        var lines = rows.OrderBy(r => Array.IndexOf(kinds, r.Kind))
+                        .ThenBy(r => r.Signature, StringComparer.Ordinal)
+                        .Select(r => $"{r.Kind,-10} {r.Signature} -> {r.Result}");
+        string[] header =
+        [
+            $"# PostgreSQL {version}",
+            "# Every pg_operator and pg_proc row of pg_catalog over anyrange, anymultirange, anyarray and",
+            "# anycompatiblearray, plus the constructors of the six built-in range types and their multiranges.",
+            "# Regenerated by `dotnet run tools/oracles.cs pg-surface [image]` (local only, never CI); every line",
+            "# needs an entry in postgres-surface.json, which OraclePostgresSurfaceTests holds.",
+            "# Left out: functions taking or returning internal or cstring (planner and index support), a type's",
+            "# I/O functions, the function behind an operator (listed as the operator), an aggregate's transition",
+            "# and final functions (listed as the aggregate), and a range type's canonical and subtype-difference",
+            "# functions. Operator-class support functions that are plain SQL functions (hash_range, range_cmp,",
+            "# btarraycmp, …) stay in and are waived by name.",
+            ""
+        ];
+        File.WriteAllLines(path, header.Concat(lines));
+        Console.WriteLine($"PostgreSQL {version}: {rows.Count} rows ({rows.Count(r => r.Kind == "operator")} operators, {rows.Count(r => r.Kind == "function")} functions, {rows.Count(r => r.Kind == "aggregate")} aggregates) → {Path.GetRelativePath(root, path)}");
+        return 0;
+    }
+    finally
+    {
+        container.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
 }
 
 static IEnumerable<string> Headings(string path)
@@ -208,6 +305,8 @@ static void Require((int Exit, string Output) result, string step)
 }
 
 sealed record Oracle(string Class, string Project, string Kind, string Against, List<string>? Needs);
+sealed record PgSurfaceEntry(string Signature, string Kind, double Since, string? Member, string? Translation, string? Waiver, int? Issue);
 sealed record Claim(string Id, string Source, string Quote, [property: System.Text.Json.Serialization.JsonPropertyName("claim")] string Statement, string Oracle, List<string>? Surfaces, List<string>? HeldBy);
 sealed record Candidate(string Oracle, string Row, string Family, string Issue);
 sealed class SeedError(string message) : Exception(message);
+
