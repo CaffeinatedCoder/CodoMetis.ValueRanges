@@ -1,19 +1,24 @@
 # Entity Framework Core (PostgreSQL)
 
-
-The companion package **CodoMetis.ValueRanges.EFCore.PostgreSQL** maps every range type to its PostgreSQL range column and `RangeSet<TRange, T>` to the corresponding multirange column, bridging through `NpgsqlRange<T>` at the provider boundary — giving you identical semantics whether executing against an in-memory collection or a live PostgreSQL database.
+With the EF Core package you store ranges, range sets and value sets in native PostgreSQL columns,
+and your LINQ queries over them run as SQL. A query gives the same answer in the database as the
+same code gives in memory.
 
 ```bash
 dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL
 ```
 
-Enable it with one line — no value converters, comparers, or column types to configure:
+## Map ranges to PostgreSQL columns
+
+Turn the package on with one line:
 
 ```csharp
 options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
 ```
 
-Properties of the range types and of `RangeSet<TRange, T>` are then mapped by convention:
+You don't configure value converters, comparers or column types. Every range type maps to its
+PostgreSQL range column, and every `RangeSet<TRange, T>` maps to the matching multirange column,
+by convention:
 
 | Property type                    | Column type      |
 |----------------------------------|------------------|
@@ -24,7 +29,17 @@ Properties of the range types and of `RangeSet<TRange, T>` are then mapped by co
 | `TimeRange`                      | `timerange` ([custom type](#timerange-and-the-custom-timerange-type)) |
 | … and so on for all types        |                  |
 
-The full range algebra translates from LINQ to SQL:
+Good to know:
+
+- **The package bridges to Npgsql through `NpgsqlRange<T>`.** The conversion happens at the
+  provider boundary, and your properties keep the range types.
+- **Scaffolding gives you `NpgsqlRange<T>`.** `dotnet ef dbcontext scaffold` maps range columns to
+  `NpgsqlRange<T>`, not to these types, because the package provides no design-time services.
+  Change the property types by hand after scaffolding.
+
+## Query ranges with LINQ
+
+The full range algebra runs as SQL:
 
 ```csharp
 var day = new DateOnly(2024, 6, 15);
@@ -49,9 +64,25 @@ bookings.Select(b => b.BlockedDays | b.Period);
 bookings.Where(b => DateRange.CreateFinite(b.From, b.To).Contains(day));
 ```
 
-`Contains`, `Overlaps`, `IsContainedBy`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` and `IsAdjacentTo` map to `@>`, `&&`, `<@`, `<<`, `>>`, `&<`, `&>` and `-|-` — on ranges and, since v4, on `RangeSet` with range or multirange operands. `Intersect` maps to `*`; `Union` and `Except` lift both operands to multiranges (`+`/`-`), matching their `RangeSet` return type — a disjoint union is a real two-element multirange, never an error. The `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` factories translate to guarded range constructor calls with the model's inverted-bounds-yield-empty semantics.
+Each method becomes one PostgreSQL operator or function call:
 
-New in v4:
+- **`Contains`, `Overlaps` and `IsContainedBy`** become `@>`, `&&` and `<@`.
+- **`IsStrictlyLeftOf`/`RightOf`** become `<<` and `>>`.
+- **`DoesNotExtendLeftOf`/`RightOf`** become `&<` and `&>`.
+- **`IsAdjacentTo`** becomes `-|-`.
+- **`Intersect`** becomes `*`.
+- **`Union` and `Except`** turn both ranges into multiranges first, then use `+` and `-`. That
+  matches their `RangeSet` return type. A union of two ranges that don't touch is a real
+  two-element multirange, never an error.
+- **`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor
+  calls inside a guard. As in memory, a start after the end gives you an empty range.
+
+Since v4 the eight predicates above (`Contains` through `IsAdjacentTo`) also work on a `RangeSet`,
+with either a range or a multirange on the other side.
+
+### Read bounds, merge ranges and aggregate
+
+Since v4 you can also read bounds, merge ranges, aggregate per group and compare multiranges:
 
 ```csharp
 // ORDER BY lower(b."Period") — bound accessors: lower / upper / lower_inc / upper_inc
@@ -72,24 +103,57 @@ bookings.Where(b => !b.BlockedDays.IsEmpty());
 bookings.Where(b => b.BlockedDays == someSet);
 ```
 
-Notes:
+The state checks on a range become PostgreSQL functions:
 
-- Range state checks translate directly: `IsEmpty()` → `isempty`, `IsUnboundedStart()` → `lower_inf`, `IsUnboundedEnd()` → `upper_inf`, `IsInfinity()` → `lower_inf AND upper_inf`, `IsFinite()` → `NOT lower_inf AND NOT upper_inf AND NOT isempty`.
-- The same state checks exist on `RangeSet` and translate to the multirange forms of those functions — **except `IsInfinity()`**, which translates to equality against the infinite multirange (`x = '{(,)}'::datemultirange`). `lower_inf AND upper_inf` is the right translation for a range and the wrong one for a multirange, which can satisfy both and still have a gap. PostgreSQL canonicalizes multiranges the way the model does, so the equality is exact ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
-- `LowerBound()`/`UpperBound()` return `T?` because PostgreSQL's `lower`/`upper` return `NULL` for an unbounded or empty operand — the in-memory implementation matches.
-- For the discrete types (`int4range`, `int8range`, `daterange`), PostgreSQL canonicalizes to half-open `[lower, upper)` while the model canonicalizes to closed `[lower, upper]`. `UpperBound()` therefore translates to `upper(x) - 1` and `UpperBoundInclusive()` to `NOT upper_inf(x) AND NOT isempty(x)`, so server results always equal the in-memory results ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
-- The aggregates return `NULL` in SQL for zero input rows (standard PostgreSQL aggregate behavior), while the in-memory `RangeAgg()` returns the empty set. `RangeIntersectAgg()` returns `null` in both worlds.
-- The factory-method bound-inclusiveness flags must be compile-time constants to translate (they pick the bounds literal, e.g. `'[]'`); in practice they always are, because the flags default at the call site.
+- **`IsEmpty()`** becomes `isempty`.
+- **`IsUnboundedStart()`** becomes `lower_inf`.
+- **`IsUnboundedEnd()`** becomes `upper_inf`.
+- **`IsInfinity()`** becomes `lower_inf AND upper_inf`.
+- **`IsFinite()`** becomes `NOT lower_inf AND NOT upper_inf AND NOT isempty`.
 
-Timestamp semantics:
+Good to know:
 
-- `DateTimeRange` bounds are written as `timestamp` with `DateTimeKind.Unspecified` — a UTC-kinded `DateTime` is reinterpreted as wall-clock time, not converted. `DateTimeOffsetRange` bounds are normalized to UTC for `timestamptz`: the instant is preserved, but the original offset is not round-tripped (values read back carry offset `+00:00` and compare equal to what was written, since `DateTimeOffset` equality is instant-based). The same normalization applies to an element operand: `range.Contains(dto)` takes a `DateTimeOffset` with any offset, and `range.Contains(dt)` a `DateTime` of any `Kind`.
-- Npgsql by default maps `DateTime.MinValue`/`MaxValue` to PostgreSQL `-infinity`/`infinity`. A *finite* bound of `DateTime.MaxValue` therefore becomes an explicit `infinity` bound in the database — which is distinct from an *unbounded* side (`upper_inf` stays `false`), so shape checks behave consistently.
-- Reverse engineering (`dotnet ef dbcontext scaffold`) maps range columns to `NpgsqlRange<T>`, not to these types — the plugin provides no design-time services. Apply the range types manually after scaffolding.
+- **On a `RangeSet`, `IsInfinity()` is an equality check.** The other state checks use the
+  multirange forms of the same functions. `IsInfinity()` instead becomes an equality with the
+  infinite multirange: `x = '{(,)}'::datemultirange`. `lower_inf AND upper_inf` is right for a
+  range but wrong for a multirange, because a multirange can be unbounded at both ends and still
+  have a gap. PostgreSQL normalizes multiranges the same way this library does, so the equality is
+  exact ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
+- **`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL`
+  for an unbounded or empty range, and the in-memory methods match that.
+- **Discrete upper bounds are adjusted for you.** For `int4range`, `int8range` and `daterange`,
+  PostgreSQL normalizes to the half-open form `[lower, upper)`. This library normalizes to the
+  closed form `[lower, upper]`. So `UpperBound()` becomes `upper(x) - 1`, and
+  `UpperBoundInclusive()` becomes `NOT upper_inf(x) AND NOT isempty(x)`. The database always
+  returns the same results as memory
+  ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
+- **Aggregates over zero rows differ.** In SQL the aggregates return `NULL` for zero input rows,
+  which is standard PostgreSQL aggregate behaviour. The in-memory `RangeAgg()` returns the empty set.
+  `RangeIntersectAgg()` returns `null` in both.
+- **The factory flags must be constants.** To run as SQL, the bound-inclusiveness flags of the
+  factory methods must be compile-time constants, because they pick the bounds literal, such as
+  `'[]'`. In practice they always are, because the flags take their default at the call site.
+
+## Store timestamp ranges
+
+Here is what happens to the bounds of `DateTimeRange` and `DateTimeOffsetRange` on the way to the
+column:
+
+- **`DateTimeRange` keeps the wall-clock time.** Its bounds are written as `timestamp` with
+  `DateTimeKind.Unspecified`. A UTC `DateTime` is read as wall-clock time, not converted.
+- **`DateTimeOffsetRange` keeps the instant, not the offset.** Its bounds are converted to UTC for
+  `timestamptz`. Values you read back carry the offset `+00:00`. They still compare equal to what
+  you wrote, because `DateTimeOffset` equality compares instants.
+- **A single value you pass is converted the same way.** `range.Contains(dto)` takes a
+  `DateTimeOffset` with any offset, and `range.Contains(dt)` takes a `DateTime` of any `Kind`.
+- **`DateTime.MaxValue` becomes `infinity`.** By default Npgsql maps `DateTime.MinValue` and
+  `MaxValue` to PostgreSQL's `-infinity` and `infinity`. So a *finite* bound of `DateTime.MaxValue`
+  becomes an explicit `infinity` bound in the database. That is still different from an
+  *unbounded* end (`upper_inf` stays `false`), so the shape checks behave consistently.
 
 ## Indexing a range column, and preventing overlaps
 
-A GiST index over a range column is ordinary EF configuration — no package involvement:
+A GiST index over a range column is ordinary EF configuration, and the package isn't involved:
 
 ```csharp
 modelBuilder.Entity<Booking>()
@@ -97,9 +161,18 @@ modelBuilder.Entity<Booking>()
     .HasMethod("gist");
 ```
 
-That serves `&&`, `@>`, `<@` and the positional operators. What it does *not* do is stop two overlapping rows from being written, and that is a gap application code cannot close on its own: checking for an overlap and then inserting is a read-then-write race, so under concurrency two requests can both find the slot free. Only a database constraint is atomic.
+The index serves `&&`, `@>`, `<@` and the positional operators. It does *not* stop two overlapping
+rows from being written, and your application code can't close that gap on its own. Checking for an
+overlap and then inserting is a read-then-write race, so under concurrency two requests can both
+find the slot free. Only a database constraint is atomic.
 
-PostgreSQL's answer is an exclusion constraint, and [`EFCore.ComplexIndexes.PostgreSQL`](https://www.nuget.org/packages/EFCore.ComplexIndexes.PostgreSQL) declares one from the model. It accepts a range column mapped by this package exactly as it accepts an `NpgsqlRange<T>` — the constraint is expressed over the *column*, and these types map as ordinary scalars:
+### Reject overlapping rows with an exclusion constraint
+
+PostgreSQL's tool for this is an exclusion constraint.
+[`EFCore.ComplexIndexes.PostgreSQL`](https://www.nuget.org/packages/EFCore.ComplexIndexes.PostgreSQL)
+declares one from your model. It accepts a range column mapped by this package exactly as it accepts
+an `NpgsqlRange<T>`. That works because the constraint is declared over the *column*, and these
+types map as ordinary scalars:
 
 ```csharp
 modelBuilder.Entity<Booking>().HasExclusionConstraint(ex => ex
@@ -108,7 +181,7 @@ modelBuilder.Entity<Booking>().HasExclusionConstraint(ex => ex
     .HasName("ex_booking_room_period"));
 ```
 
-which migrates to:
+The migration creates this:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS btree_gist;   -- injected automatically for the scalar `=` element
@@ -116,15 +189,31 @@ ALTER TABLE "Bookings" ADD CONSTRAINT "ex_booking_room_period"
   EXCLUDE USING gist ("RoomId" WITH =, "Period" WITH &&);
 ```
 
-A second booking for the same room whose `Period` overlaps an existing one now fails with `23P01` (`exclusion_violation`), surfacing as a `DbUpdateException` wrapping a `PostgresException` that names the constraint. Different rooms are unaffected, and — because `daterange` is discrete and canonicalized — `[2024-01-01, 2024-01-10]` and `[2024-01-11, 2024-01-20]` are *adjacent, not overlapping*, so both are accepted. That is the same distinction `IsAdjacentTo` and `Overlaps` draw in memory.
+Now a second booking for the same room whose `Period` overlaps an existing one fails. PostgreSQL
+raises `23P01` (`exclusion_violation`), and you get a `DbUpdateException` wrapping a
+`PostgresException` that names the constraint.
 
-> **Exclusion constraints come from migrations, not `EnsureCreated()`.** They are emitted by a design-time service that `dotnet ef migrations add` loads automatically. `EnsureCreated()` builds its schema through the runtime differ, which does not know about them — the table is created, the constraint silently is not, and overlapping rows are accepted. Verified: an `EnsureCreated()` table carries zero exclusion constraints. Use migrations, or add the constraint with explicit SQL.
+- **Different rooms aren't affected.**
+- **Adjacent periods are accepted.** `daterange` is discrete and canonical, so
+  `[2024-01-01, 2024-01-10]` and `[2024-01-11, 2024-01-20]` are *adjacent, not overlapping*, and
+  both are saved. That is the same distinction `IsAdjacentTo` and `Overlaps` draw in memory.
 
-Everything above was executed against PostgreSQL 17 with a `DateRange` property, including the rejected overlap and the accepted adjacent pair.
+> **Exclusion constraints come from migrations, not `EnsureCreated()`.** A design-time service
+> emits them, and `dotnet ef migrations add` loads it automatically. `EnsureCreated()` builds the
+> schema through the runtime differ, which doesn't know about them. The table is created, the
+> constraint silently isn't, and overlapping rows are accepted. This was verified: a table from
+> `EnsureCreated()` carries zero exclusion constraints. Use migrations, or add the constraint with
+> explicit SQL.
 
-## Value set columns
+Everything in this section was run against PostgreSQL 17 with a `DateRange` property, including
+the rejected overlap and the accepted adjacent pair.
 
-The same package maps every [value set type](value-sets.md) to its native PostgreSQL array column — by convention, with nothing to configure. Wrapper instantiations (`StringSet<AccessRight>`) are recognized automatically from the open generic; there is no per-element registration to forget:
+## Store a value set in an array column
+
+The same package maps every [value set type](value-sets.md) to its native PostgreSQL array column,
+by convention, with nothing to configure. Versions with your own element type, such as
+`StringSet<AccessRight>`, are recognized automatically from the open generic type. There is no
+registration per element type to forget.
 
 | Property type | Column type |
 |---|---|
@@ -135,7 +224,7 @@ The same package maps every [value set type](value-sets.md) to its native Postgr
 | `YearMonthSet` (NodaTime) | `date[]` (month-aligned) |
 | … and so on for all types | |
 
-The set algebra translates to PostgreSQL's array operators:
+The set operations run as PostgreSQL array operators:
 
 ```csharp
 // b."Tags" @> ARRAY[@tag]::text[]   — containment, not = ANY: a GIN index always serves it
@@ -163,42 +252,38 @@ bookings.Where(b => b.Tags.Remove(tag).Count > 1);
 bookings.Where(b => b.Tags.Union(more).Contains(tag));
 ```
 
-`Intersect`, `Except` and `Add` are client-side only and fail query translation by design.
+`Intersect`, `Except` and `Add` run in memory only. EF Core fails to translate them, by design.
 
-`Union` is the one translated operation whose result is **not** canonical — `array_cat`
-concatenates. That is invisible to the operators above (all duplicate-insensitive) and to
-materialization (reads re-canonicalize), but anything sensitive to order or multiplicity is
-**refused** rather than translated. Array equality is sensitive to both, and the ordering half is
-the one that surprises — on the server `{a,c} ∪ {a,b} = {a,b,c}` is false for the repeated
-element, and `{a,c} ∪ {b} = {a,b,c}` is false for the ordering alone, where nothing repeats. Both
-are true in memory. Compare with `IsSubsetOf`/`IsSupersetOf` instead, which mean the same thing for
-canonical sets and ignore both, or materialize first with `AsEnumerable()` and let the in-memory
-algebra answer.
+Good to know:
 
-Since 9.0.0 the refusal is made on the **translated SQL**, just before it is sent, so it does not
-depend on how the query is written. A value derived from a union — `array_cat` itself,
-`array_remove` over one, a conditional or `??` that may yield one, a subquery or `Concat` column
-projecting one — may only feed `@>`, `<@`, `&&` (`Contains`, `Overlaps`, the subset and superset
-family), `Remove`, `IsEmpty`, a null test, or the outermost projection, which is materialized. It is
-refused under equality, `Count`, `GroupBy`, `Distinct`, `OrderBy`, `Union`/`Intersect`/`Except` of
-queries, `Contains` over a sequence of sets, and as an `ExecuteUpdate` value — which would store
-the concatenation, after which equality and `Count` on that row are wrong for good. (Before 9.0.0 a
-LINQ-level pattern caught only `==`/`Equals` in predicates and `Count` over a bare union; a
-projection, a conditional, a coalesce, a grouping key, `Distinct` and `ExecuteUpdate` all ran and
-answered wrongly.)
+- **`Remove` keeps the set canonical.** `array_remove` leaves the array sorted and deduplicated,
+  so you can combine it with anything. `Union` is different, as the next section shows.
+- **Your own element types travel as their underlying type.** An `AccessRight` parameter is bound
+  as `text`, and loading a row runs the element's validation again.
+- **An empty set and `NULL` stay different.** They are `{}` and `NULL` in the column. Whether the
+  column allows `NULL` is up to the property.
+- **Plain arrays keep their own mapping.** `T[]` and `List<T>` properties keep their native Npgsql
+  mapping, and both can sit next to value sets in one model. Scaffolding a database gives you plain
+  arrays, because choosing a set type is a decision you make in your model.
+- **The NodaTime package adds five set types.** The same `UseValueRangesNodaTime()` call registers
+  them. `YearMonthSet` stores first-of-month dates, and reading checks that each date is the first
+  of its month, exactly like `YearMonthRange`.
 
-The check runs from a decorator around the provider's `IRelationalParameterBasedSqlProcessorFactory`,
-and it **fails closed**: a translated `Union` carries the placeholder name
-`valueranges_union_without_sql_guard` until the check renames it to `array_cat`. If something
-replaces that service after `UseValueRanges()` — a `ReplaceService` call, or another extension that
-replaces rather than decorates it — every query with a server-side `Union` fails with PostgreSQL's
-`function valueranges_union_without_sql_guard(…) does not exist` instead of answering as if the
-check were not there. Decorate the registered factory rather than replacing it, and both keep
-working.
+### Combine sets with `Union`
 
-`Count` in a **projection** still works: its translator declines a union, so EF evaluates it on the
-client against the materialized set. A comparison does not get that fallback — EF translates `==`
-itself — so it is refused in a projection too:
+`Union` runs as `array_cat`. It is the one operation running as SQL whose result is **not**
+canonical, because `array_cat` only concatenates the two arrays. You can't tell in exactly two
+places: the operators above all ignore duplicates, and reading a set back puts it in canonical form
+again. Anything that depends on order or on duplicates throws instead of running.
+
+Array equality depends on both, and the order is the part that surprises people. In the database:
+
+- **`{a,c} ∪ {a,b} = {a,b,c}` is false** because of the repeated element.
+- **`{a,c} ∪ {b} = {a,b,c}` is false** because of the order alone, where nothing repeats.
+
+Both are true in memory. To compare a union, use `IsSubsetOf`/`IsSupersetOf` instead. For
+canonical sets they mean the same thing, and they ignore both order and duplicates. Or load the
+rows first with `AsEnumerable()` and compare in memory:
 
 ```csharp
 bookings.Select(b => b.Tags.Union(more));                    // fine — materialized canonical
@@ -209,18 +294,53 @@ bookings.Select(b => b.Tags.Union(more) == expected);        // throws
 bookings.AsEnumerable().Where(b => b.Tags.Union(more) == expected);  // fine — in memory
 ```
 
-There is no package-specific opt-in for the in-memory form, deliberately: `AsEnumerable()` is the
-framework's own boundary, everyone reads it the same way, and its cost — every matching row is
-fetched — is visible at the point it is paid. A marker buried inside the expression would look local
-and cheap while forcing the same full materialization.
+`Count` in a **projection** still works. Its translator declines a union, so EF runs `Count` in
+memory on the loaded set. A comparison doesn't get that fallback, because EF translates `==`
+itself. So a comparison throws in a projection too.
 
-This is deliberately not "fixed" by canonicalizing in SQL: PostgreSQL has no array_distinct, and
-sorting inside the query orders `text` by the database collation rather than ordinally — which is
-the same disagreement with the client's canonical order, one layer down.
+Since 9.0.0 the check runs on the **translated SQL**, right before it is sent, so it doesn't matter
+how you write the query. It follows every value derived from a union: `array_cat` itself,
+`array_remove` over one, a conditional or `??` that may return one, and a subquery or `Concat`
+column that projects one. Such a value may only feed:
 
-`Remove` has no such caveat: `array_remove` leaves the array sorted and deduplicated. Wrapper elements bind as their backing primitive (`AccessRight` parameters travel as `text`), and materialization re-runs the element's validation.
+- **`@>`, `<@` and `&&`**, that is `Contains`, `Overlaps`, and the subset and superset methods.
+- **`Remove` and `IsEmpty`.**
+- **A null test.**
+- **The outermost projection**, which is loaded and so put in canonical form.
 
-**Indexing** is ordinary EF configuration — no package involvement:
+Anything else throws, including:
+
+- **Equality, `Count`, `GroupBy`, `Distinct` and `OrderBy`.**
+- **`Union`, `Intersect` and `Except` of queries.**
+- **`Contains` over a sequence of sets.**
+- **An `ExecuteUpdate` value.** It would store the concatenation, and from then on equality and
+  `Count` on that row would be wrong for good.
+
+Good to know:
+
+- **Before 9.0.0 the check missed most cases.** A LINQ-level pattern caught only `==`/`Equals` in
+  predicates and `Count` over a bare union. A projection, a conditional, a coalesce, a grouping
+  key, `Distinct` and `ExecuteUpdate` all ran and returned wrong answers.
+- **Keep the SQL check in place.** The check runs from a decorator around the provider's
+  `IRelationalParameterBasedSqlProcessorFactory`, and it **fails closed**. A `Union` running as SQL
+  carries the placeholder name `valueranges_union_without_sql_guard` until the check renames it to
+  `array_cat`. Suppose something replaces that service after `UseValueRanges()`, such as a
+  `ReplaceService` call or another extension that replaces it rather than decorating it. Then every
+  query with a `Union` running as SQL fails with PostgreSQL's
+  `function valueranges_union_without_sql_guard(…) does not exist`, instead of running as if the
+  check weren't there. Decorate the registered factory rather than replacing it, and both keep
+  working.
+- **There is no package-specific switch for the in-memory form, on purpose.** `AsEnumerable()` is
+  the framework's own boundary, and everyone reads it the same way. Its cost, fetching every
+  matching row, is visible where you pay it. A marker buried inside the expression would look local
+  and cheap, and still force the same full load.
+- **Sorting in SQL wouldn't fix it.** PostgreSQL has no `array_distinct`. And sorting inside the
+  query orders `text` by the database collation rather than ordinal, so it would disagree with the
+  order your sets have in memory, one layer down.
+
+### Index a value set column
+
+A GIN index is ordinary EF configuration, and the package isn't involved:
 
 ```csharp
 modelBuilder.Entity<Booking>()
@@ -228,22 +348,32 @@ modelBuilder.Entity<Booking>()
     .HasMethod("GIN");
 ```
 
-`Contains` deliberately translates as containment (`@>`) rather than `= ANY(...)`, because only containment is GIN-servable — one code path, always indexable.
+`Contains` runs as containment (`@>`) on purpose, rather than as `= ANY(...)`, because only
+containment can use a GIN index. That gives you one code path, and it can always use the index.
 
-**Set equality** (`==`) translates to SQL `=`, which is order-sensitive on arrays: it means set equality exactly because every writer stores canonical form. Rows written by other tools in non-canonical order are still matched correctly by every *operator* above — `@>`, `<@`, `&&` and the proper-containment pairs ignore both order and duplicates — and normalize when materialized.
+### Rows written by other tools
 
-Two members carry the canonical-writers precondition, not one:
+Set equality (`==`) runs as SQL `=`, which compares arrays in order. It means set equality exactly
+because every writer stores canonical form. Rows that other tools wrote in a non-canonical order
+still match every *operator* above correctly: `@>`, `<@`, `&&` and the proper-containment pairs
+ignore both order and duplicates. Those rows are put in canonical form when you load them.
+
+Two members depend on every writer storing canonical form:
 
 - **`==`**, because SQL `=` compares arrays as sequences.
-- **`Count`**, because it translates to `cardinality`, which ignores order but *not* duplicates. A row stored as `{b,a,b}` materializes as the two-element set `{a,b}`, so `set.Count` is 2 in memory while `WHERE "Tags".cardinality = 2` does not match it and `= 3` does. `IsEmpty` is unaffected: an array is empty exactly when it has no elements, whatever its multiplicities.
+- **`Count`**, because it runs as `cardinality`, which ignores order but *not* duplicates. A row
+  stored as `{b,a,b}` loads as the two-element set `{a,b}`. So `set.Count` is 2 in memory, while
+  `WHERE "Tags".cardinality = 2` doesn't match the row and `= 3` does.
 
-That divergence is inherent to reading normalized while leaving the row as written — the alternatives are rewriting foreign rows on read, or refusing to translate `Count` at all, and neither is worth the common case. If you query `Count` against a table other tools also write, canonicalize on ingest.
+`IsEmpty` isn't affected. An array is empty exactly when it has no elements, however many times
+any of them repeats.
 
-The empty set and a NULL column stay distinct (`{}` vs `NULL`); nullability is the property's own concern.
+The difference comes from reading rows normalized while leaving them as written. The alternatives
+are rewriting other tools' rows on read, or not translating `Count` at all, and neither is worth it
+for the common case. If you query `Count` on a table that other tools also write, put the data in
+canonical form when it comes in.
 
-Two boundary notes: plain `T[]`/`List<T>` properties keep their native Npgsql mapping — both can coexist in one model — and database scaffolding produces plain arrays, since opting into a set type is a model decision. The NodaTime satellite registers its five set types via the same `UseValueRangesNodaTime()` call; `YearMonthSet` persists first-of-month dates and reads validate alignment, exactly like `YearMonthRange`.
-
-## Inside a JSON column
+## Put a range or set inside a JSON column
 
 A range, multirange or value set can sit inside a complex or owned type mapped to a `jsonb` column:
 
@@ -251,9 +381,9 @@ A range, multirange or value set can sit inside a complex or owned type mapped t
 modelBuilder.Entity<Contract>().ComplexProperty(c => c.Terms, terms => terms.ToJson());
 ```
 
-**The document holds the store's text, not the API's JSON.** Each property is written as the text of
-its PostgreSQL store type, which is what a query reaching into the document casts it to — so the
-operators translate exactly as on a plain column:
+**The document holds the column's text, not the API's JSON.** Each property is written as the text
+of its PostgreSQL store type. A query that reaches into the document casts it to that type, so the
+operators run exactly as on a plain column:
 
 ```json
 { "Period": "[2026-01-01,2026-06-30]", "Blocks": "{[2026-02-01,2026-02-28]}", "Tags": "{a,b}" }
@@ -263,7 +393,7 @@ operators translate exactly as on a plain column:
 WHERE CAST(c."Terms" ->> 'Period' AS daterange) @> @day
 ```
 
-That is a database representation, and it differs from what System.Text.Json writes for the same
+That text belongs to the database, and it differs from what System.Text.Json writes for the same
 value in an API payload:
 
 | Value | API JSON | Inside the document |
@@ -273,15 +403,14 @@ value in an API payload:
 | a temporal value | every tick (BCL) or nanosecond (NodaTime) | the store's microsecond, truncated toward 2000-01-01 as Npgsql truncates a parameter |
 | `MinValue` / `MaxValue` of `DateTime`, `DateTimeOffset`, `DateOnly`, and `Instant`, `LocalDate`, `LocalDateTime` extremes | the extreme value | `-infinity` / `infinity`, as Npgsql sends them |
 
-It is also a **persisted format**: changing it later would mean migrating stored documents, not
-recompiling. The temporal rule is what keeps the three copies of a value in agreement — a document
-materializes to what a native column would, and a query that casts out of the document compares
-the value a parameter carries. Writing every digit and letting the server round them would make
-`Doc.Period == period` miss the row it was saved from. `TemporalStoreParityTests` holds the rule
-against a live server.
+This text is also a **stored format**. Changing it later would mean migrating stored documents, not
+recompiling. The temporal rule keeps the three copies of a value in agreement:
 
-A filter that casts out of the document does not use an index on the column; if such a query is
-hot, keep the value in a plain column of its own as well.
+- **A document loads to the same value a native column would.**
+- **A query that casts out of the document compares the value a parameter carries.**
+
+If the document held every digit and let the server round them, `Doc.Period == period` would miss
+the row it was saved from. `TemporalStoreParityTests` checks the rule against a live server.
 
 **What works inside the document** (measured against PostgreSQL 17):
 
@@ -296,13 +425,18 @@ hot, keep the value in a plain column of its own as well.
 | `ExecuteUpdate` setting a property to `null` | fails for every type — a range or multirange in Npgsql (`42804`), a value set by the refusal above, before it reaches Npgsql |
 | `ExecuteUpdate` on an owned JSON type | refused by EF Core |
 
-> Before 9.0 a `ToJson()` type holding any of these could not be saved: `SaveChanges` threw a
-> `NullReferenceException` from inside EF, because the plugin's type mappings had no JSON
-> reader/writer.
+Good to know:
+
+- **A filter inside the document doesn't use the column's index.** It casts out of the document
+  first. If such a query is hot, keep the value in a plain column of its own as well.
+- **Before 9.0 these types couldn't be saved in a `ToJson()` type.** `SaveChanges` threw a
+  `NullReferenceException` from inside EF, because the package's type mappings had no JSON reader
+  or writer.
 
 ## TimeRange and the custom timerange type
 
-`timerange` is not built into PostgreSQL, so using `TimeRange` columns takes two one-line opt-ins beyond `UseValueRanges()`:
+`timerange` isn't built into PostgreSQL. To use `TimeRange` columns you need two one-line additions
+beyond `UseValueRanges()`:
 
 ```csharp
 // 1. The database needs the type — this generates
@@ -318,13 +452,33 @@ options.UseNpgsql(connectionString, npgsql => npgsql
 //  if you pass a pre-built NpgsqlDataSource to UseNpgsql)
 ```
 
-Everything else is automatic: all range and multirange operators, functions and aggregates in PostgreSQL are polymorphic (`anyrange`/`anymultirange`), so the full LINQ translation works on the custom type exactly as on the built-ins — [verified against live PostgreSQL](../README.md#verified-against-postgresql). One caveat: PostgreSQL's `time` admits the special value `24:00:00`, which `TimeOnly` cannot represent; express "until end of day" as an unbounded end or an inclusive `TimeOnly.MaxValue` bound.
+Everything else works on its own. All of PostgreSQL's range and multirange operators, functions
+and aggregates are polymorphic (`anyrange`/`anymultirange`). So every LINQ query runs as SQL on the
+custom type exactly as on the built-in ones
+([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
 
-## YearMonthRange storage
+Good to know:
 
-The NodaTime satellite stores `YearMonthRange` as a **month-aligned `daterange`** — `[2024-01, 2024-03]` becomes `[2024-01-01, 2024-04-01)` — so no custom database type is involved and every operator, bound accessor and aggregate translates and agrees with the in-memory results (`upper()` compensation lands on the last day of the end month, whose month is the model's inclusive upper bound). Reads validate month alignment: a `daterange` covering a partial month fails loudly instead of silently shifting boundaries. The one restriction: because months are coarser than the `date` subtype, the `CreateFinite`/`CreateUnbounded*` factories cannot be built *in SQL from column values* — constant and parameter ranges work as usual, and a column-dependent factory call fails translation with a clear error.
+- **`TimeOnly` has no `24:00:00`.** PostgreSQL's `time` accepts the special value `24:00:00`, which
+  `TimeOnly` can't represent. To say "until the end of the day", use an unbounded end or an
+  inclusive `TimeOnly.MaxValue` bound.
 
-In practice the restriction only bites when a query constructs the range *from a column*:
+## Store a YearMonthRange
+
+The NodaTime package stores `YearMonthRange` as a **month-aligned `daterange`**. For example,
+`[2024-01, 2024-03]` becomes `[2024-01-01, 2024-04-01)`. You need no custom database type, and
+every operator, bound accessor and aggregate runs as SQL and agrees with the in-memory results.
+The `upper()` adjustment lands on the last day of the end month, and that month is the inclusive
+upper bound in memory.
+
+Reading checks month alignment. A `daterange` that covers part of a month fails loudly, instead of
+silently shifting the boundaries.
+
+There is one restriction. Months are coarser than the `date` type underneath, so the
+`CreateFinite`/`CreateUnbounded*` factories can't build a range *in SQL from column values*.
+Constant and parameter ranges work as usual. A factory call that depends on a column fails
+translation with a clear error. In practice that only matters when a query builds the range *from
+a column*:
 
 ```csharp
 // Factories over constants and locals never reach the translator — EF evaluates
@@ -340,13 +494,18 @@ reservations.Where(r => YearMonthRange.CreateUnboundedEnd(r.Day.ToYearMonth())
                                       .Contains(month));  // ⛔ InvalidOperationException
 ```
 
-For column-driven construction, fall back to a `LocalDateRange` built from the date column — `daterange` construction in SQL is fully supported there.
+To build a range from a column, use a `LocalDateRange` built from the date column instead. Building
+a `daterange` in SQL is fully supported there.
 
 ## What runs where
 
-Most of the surface translates to SQL and gives identical answers in memory and on the server — that is the point of the library, and the [live-PostgreSQL suite](../README.md#verified-against-postgresql) holds it to that. A minority evaluates client-side, always because PostgreSQL has no operator for it rather than because the translation was not written. This table is the whole picture.
+Most of the API runs as SQL and gives the same answers in the database as in memory. That is the
+point of the library, and the [live-PostgreSQL suite](../README.md#verified-against-postgresql)
+checks it. A few operations run in memory only, always because PostgreSQL has no operator for them,
+not because nobody wrote the translation. These two tables are the whole picture.
 
-**Translated to SQL** — usable in `Where`, `OrderBy`, `Select`, on columns and on parameters:
+**Runs as SQL.** You can use these in `Where`, `OrderBy` and `Select`, on columns and on
+parameters:
 
 | Surface | Operations | PostgreSQL |
 |---|---|---|
@@ -363,7 +522,8 @@ Most of the surface translates to SQL and gives identical answers in memory and 
 | | `Union`, `Remove` | `array_cat`, `array_remove` |
 | Both families | `==`/`!=` on a column | `=`, `<>` |
 
-**Client-side only** — these compute the right answer in memory, fail translation in a predicate, and fall back to client evaluation in a projection:
+**Runs in memory only.** These compute the right answer in memory. In a predicate they fail
+translation, and in a projection EF runs them in memory instead:
 
 | Operation | Why it does not translate |
 |---|---|
@@ -374,5 +534,11 @@ Most of the surface translates to SQL and gives identical answers in memory and 
 | `Intersect`, `Except`, `Add` on value sets | PostgreSQL's array type has no intersection, difference, or sorted insert. |
 | The value set indexer, `set[0]` | Array subscripting exists, but the canonical order is the CLR comparer's, not the server's. |
 
-Two consequences worth knowing. A client-side operation inside a `Where` **fails translation loudly** rather than silently fetching the table — EF throws, and that is the intended behaviour. Inside a `Select` it evaluates on the rows already being returned, which is safe. And `Count` over a *server-computed* `Union` is refused outright rather than answered, because `array_cat` concatenates without deduplicating — see the note under [value set columns](#value-set-columns).
+Good to know:
 
+- **An in-memory operation inside a `Where` fails loudly.** EF throws rather than silently fetching
+  the whole table, and that is the intended behaviour.
+- **Inside a `Select` it is safe.** It runs on the rows that are already being returned.
+- **`Count` over a `Union` computed in the database throws.** `array_cat` concatenates without
+  deduplicating, so the query throws rather than returning a wrong count. In a projection, EF
+  counts the loaded set in memory instead. See [Combine sets with `Union`](#combine-sets-with-union).

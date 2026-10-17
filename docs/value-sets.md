@@ -1,31 +1,7 @@
 # Value sets
 
-
-A value set is an immutable, **canonical** set of scalar values: deduplicated, sorted, never containing null, with structural equality. It relates to a PostgreSQL array column exactly as `RangeSet<DateRange, DateOnly>` relates to `datemultirange` — the CLR type models the domain concept (a set), the column is its storage encoding (an array):
-
-| CLR type | Canonical set of… | PostgreSQL shape |
-|---|---|---|
-| `RangeSet<DateRange, DateOnly>` | ranges | `datemultirange` |
-| `StringSet` | values | `text[]` |
-
-| .NET type | Element type | PostgreSQL column | Wrapper arity |
-|---|---|---|---|
-| `StringSet` | `string` | `text[]` | `StringSet<TElement>` |
-| `GuidSet` | `Guid` | `uuid[]` | `GuidSet<TElement>` |
-| `Int16Set` | `short` | `smallint[]` | `Int16Set<TElement>` |
-| `Int32Set` | `int` | `integer[]` | `Int32Set<TElement>` |
-| `Int64Set` | `long` | `bigint[]` | `Int64Set<TElement>` |
-| `DecimalSet` | `decimal` | `numeric[]` | `DecimalSet<TElement>` |
-| `DateSet` | `DateOnly` | `date[]` | `DateSet<TElement>` |
-| `TimeSet` | `TimeOnly` | `time[]` | `TimeSet<TElement>` |
-| `DateTimeSet` | `DateTime` | `timestamp[]` | `DateTimeSet<TElement>` |
-| `DateTimeOffsetSet` | `DateTimeOffset` | `timestamptz[]` | `DateTimeOffsetSet<TElement>` |
-
-Since 7.0.0 every family has a wrapper arity; the six temporal and numeric ones added there carry
-one extra requirement over the original four — see [Validated wrapper
-elements](#validated-wrapper-elements).
-
-The NodaTime satellite adds `LocalDateSet` (`date[]`), `LocalDateTimeSet` (`timestamp[]`), `InstantSet` (`timestamptz[]`), `LocalTimeSet` (`time[]` — a built-in array type, so unlike `timerange` no `CREATE TYPE` is needed) and `YearMonthSet` (month-aligned `date[]`) — each with a wrapper arity of its own. `LocalDate`/`LocalDateTime` elements normalize to the ISO calendar at construction; `YearMonth` elements must already be ISO, mirroring the range types.
+A value set holds a set of tags, codes, IDs or dates, and you can store it in a native PostgreSQL
+array column. Every set is immutable and deduplicated, sorted, and free of nulls.
 
 ```csharp
 var tags = StringSet.From("beta", "alpha", "beta");   // {alpha,beta} — deduplicated, sorted
@@ -41,22 +17,93 @@ tags.Count;                  // 2
 tags.IsEmpty;                // false
 ```
 
-`Intersect`, `Except` and `Add` are also available; they evaluate client-side only (PostgreSQL has no native array intersection or difference operator, and cannot insert at a sorted position), and operations that change nothing return the same instance.
+You also get `Intersect`, `Except` and `Add`. Two sets with the same values are equal, whichever
+order you gave the values in.
 
-## Canonical form is the contract
+Good to know:
 
-Every construction path deduplicates and sorts — `From`, parsing, JSON, and materialization from the database. This is load-bearing twice: the EF `ValueComparer` collapses to a cheap equality with no false diffs in change detection, and SQL `=` on the stored array coincides with set equality.
+- **`Intersect`, `Except` and `Add` run in memory only.** PostgreSQL has no array intersection or
+  difference operator, and it cannot insert a value at its sorted position.
+- **An operation that changes nothing returns the same instance.**
 
-The order rules are deliberate:
+## Pick a set type
 
-- **String-backed sets sort ordinal** — never a culture-sensitive comparison. Canonical form is a cross-writer storage contract, not a display order; a culture sort would make two machines disagree about the same set.
-- **Everything else sorts by the element's own comparison** (numeric, chronological, `Guid.CompareTo`).
+Each set type has a matching PostgreSQL array type:
 
-PostgreSQL itself motivates the design: its array *query* algebra is already set-semantic — `@>`, `<@` and `&&` ignore both order and duplicates (`ARRAY[1,1] <@ ARRAY[1]` is true) — while only `=` compares arrays as sequences. Canonical form closes that split, the same way PostgreSQL itself canonicalizes discrete ranges and multiranges. Arrays that need to be *lists* (ordered, duplicates preserved) are a different concept — and one Npgsql already maps natively as `T[]`/`List<T>`.
+| .NET type | Element type | PostgreSQL column | With your own element type |
+|---|---|---|---|
+| `StringSet` | `string` | `text[]` | `StringSet<TElement>` |
+| `GuidSet` | `Guid` | `uuid[]` | `GuidSet<TElement>` |
+| `Int16Set` | `short` | `smallint[]` | `Int16Set<TElement>` |
+| `Int32Set` | `int` | `integer[]` | `Int32Set<TElement>` |
+| `Int64Set` | `long` | `bigint[]` | `Int64Set<TElement>` |
+| `DecimalSet` | `decimal` | `numeric[]` | `DecimalSet<TElement>` |
+| `DateSet` | `DateOnly` | `date[]` | `DateSet<TElement>` |
+| `TimeSet` | `TimeOnly` | `time[]` | `TimeSet<TElement>` |
+| `DateTimeSet` | `DateTime` | `timestamp[]` | `DateTimeSet<TElement>` |
+| `DateTimeOffsetSet` | `DateTimeOffset` | `timestamptz[]` | `DateTimeOffsetSet<TElement>` |
 
-## Validated wrapper elements
+The right-hand column holds your own element types, such as a typed key. See
+[Use your own element types](#use-your-own-element-types).
 
-The wrapper arities carry domain values — typed keys, strongly typed IDs — without the domain type referencing this package. `TElement` is constrained only on BCL interfaces, which validated-value generators emit out of the box:
+The NodaTime package adds five more, each with a version for your own element types:
+
+- **`LocalDateSet`** stores as `date[]`.
+- **`LocalDateTimeSet`** stores as `timestamp[]`.
+- **`InstantSet`** stores as `timestamptz[]`.
+- **`LocalTimeSet`** stores as `time[]`. That is a built-in array type, so unlike `timerange` you
+  don't need `CREATE TYPE`.
+- **`YearMonthSet`** stores as a `date[]` of first-of-month dates.
+
+A set relates to its array column the way `RangeSet<DateRange, DateOnly>` relates to a
+`datemultirange`. The .NET type is the idea (a set), and the column is how it is stored (an array):
+
+| .NET type | A set of… | PostgreSQL type |
+|---|---|---|
+| `RangeSet<DateRange, DateOnly>` | ranges | `datemultirange` |
+| `StringSet` | values | `text[]` |
+
+Good to know:
+
+- **NodaTime dates are converted to the ISO calendar.** `LocalDate` and `LocalDateTime` elements
+  are converted when you create the set. `YearMonth` elements must already be ISO, which matches
+  the range types.
+- **Every family has had a version for your own element types since 7.0.0.** The temporal ones
+  have one extra requirement: your `ToString` must honour the format they ask for. See
+  [Keep the text form of the underlying type](#keep-the-text-form-of-the-underlying-type).
+
+## Why every set is sorted and deduplicated
+
+Every way you create a set sorts it and removes duplicates: `From`, parsing, JSON, and loading it
+from the database. This form is called canonical, and you get two things from it:
+
+- **Change detection is cheap and exact.** EF Core's `ValueComparer` compares sets with a plain
+  equality check, and never reports a change that isn't one.
+- **SQL `=` means set equality.** Two stored arrays are equal exactly when the sets are.
+
+The sort order is chosen on purpose:
+
+- **String-backed sets sort ordinal.** They never use a culture-sensitive comparison. The order is
+  part of what gets stored, not a display order. With a culture sort, two machines could store the
+  same set in two different ways.
+- **Every other set sorts by the element's own comparison.** That is numeric, chronological, or
+  `Guid.CompareTo`.
+
+PostgreSQL's array operators already behave like set operators. `@>`, `<@` and `&&` ignore order
+and duplicates, so `ARRAY[1,1] <@ ARRAY[1]` is true. Only `=` compares arrays as sequences. Keeping
+every set in canonical form makes `=` agree with the rest. PostgreSQL does the same thing for
+discrete ranges and multiranges.
+
+Good to know:
+
+- **If you need a list, use an array.** When order matters or duplicates must stay, Npgsql already
+  maps `T[]` and `List<T>` for you.
+
+## Use your own element types
+
+A set can hold your own types, such as typed keys or strongly typed IDs. Your type doesn't need to
+reference this package. It only needs a few standard .NET interfaces, which validated-value
+generators emit out of the box:
 
 ```csharp
 // A generator-shaped wrapper: struct, IEquatable (record), IFormattable, IParsable.
@@ -74,70 +121,147 @@ public readonly record struct AccessRight : IFormattable, IParsable<AccessRight>
 StringSet<AccessRight> rights = [AccessRight.Parse("users.read", null)];
 ```
 
-Every value set family has an arity: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`, `Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>`, and in the NodaTime satellite `LocalDateSet<T>`, `LocalDateTimeSet<T>`, `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>`.
+Every set family has a version like this: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`,
+`Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`,
+`DateTimeOffsetSet<T>`. The NodaTime package adds `LocalDateSet<T>`, `LocalDateTimeSet<T>`,
+`InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>`.
 
-`IFormattable` supplies the element's backing text on the way out; `IParsable<TSelf>` **re-runs the element's validation on the way in**, so materializing corrupt data throws instead of smuggling invalid values into the domain. Every arity except `StringSet<T>` additionally requires `IComparable<TElement>` (canonical order delegates to the backing primitive; `StringSet<T>` orders ordinally over the text form and deliberately ignores the element's own comparison).
+Your type needs these interfaces:
 
-There is no private constructor to find, no source generator to integrate with and no value converter to write. Reading calls `TElement.Parse(text, invariant)` — for the temporal families after parsing the text strictly as the backing primitive and handing the element that primitive's round-trip form, so a lenient generated `Parse` never sees non-ISO text — and writing calls `element.ToString(format, invariant)` — which is why Vogen, Metalama, StronglyTypedId and hand-written wrappers all work identically, and why a wrapper that omits `IParsable` does not work at all regardless of what generated it.
+- **`IFormattable`** gives the text that is stored.
+- **`IParsable<TSelf>`** runs your validation again whenever a value is read. So if the database
+  holds bad data, loading it throws, and no invalid value gets into your code.
+- **`IComparable<TElement>`** is needed by every version except `StringSet<T>`. The sort order
+  comes from the underlying type. `StringSet<T>` sorts the text ordinal and ignores your type's
+  own comparison.
+
+You don't write a private constructor, a source generator integration or a value converter. To
+read a value, the set calls `TElement.Parse(text, invariant)`. To write one, it calls
+`element.ToString(format, invariant)`. That is why Vogen, Metalama, StronglyTypedId and
+hand-written wrappers all work the same way. A wrapper without `IParsable` doesn't work, whatever
+generated it.
+
+Good to know:
+
+- **A lenient `Parse` never sees non-ISO text.** The temporal families first parse the text
+  strictly as the underlying type. Then they pass your `Parse` that type's round-trip form.
 
 ### Why the element must be a struct
 
-Every arity constrains `TElement` to `struct`. This is stricter than the machinery needs — `IValueSet<T>` and the core are constrained only on `IEquatable<T>`, and the closed `StringSet` over `string` proves reference elements run through them — so it is a deliberate choice, for one reason:
+Every version requires `TElement` to be a `struct`. The rest of the library would accept a class:
+`IValueSet<T>` and the core only require `IEquatable<T>`, and the plain `StringSet` holds
+`string`. The struct rule is there for one reason.
 
-**A canonical array is sorted and binary-searched.** With a reference element the caller keeps a handle to what is inside that array. Mutate it and the array silently stops being sorted, and `Contains` then misses an element that is present — no exception, indistinguishable from a genuine miss. `struct` makes that unrepresentable: the array holds copies, so there is no handle to mutate.
+**A sorted set searches its array with a binary search.** If the element were a class, your code
+would keep a reference to an object inside that array. If you changed that object, the array would
+no longer be sorted. `Contains` would then miss an element that is present, with no exception, and
+the result would look like a genuine miss. With a struct, the array holds copies, so there is
+nothing for your code to change.
 
-That is the same failure this library refuses everywhere else, and the same one `CanonicalOrder` already guards against for a different cause. The alternative — relaxing to `notnull` and documenting "elements must be immutable" — would replace a type-system guarantee with a second unenforceable element contract beside the text-form one, which is exactly the kind that needs deliberately non-conforming test types to pin.
+The library prevents this kind of silent wrong answer everywhere else, and `CanonicalOrder`
+already guards against it for a different cause. The alternative was to accept any `notnull` type
+and document "elements must be immutable". That would replace a guarantee the compiler checks with
+a second rule nothing can check, next to the text-form rule below.
 
-**If your domain type is a class**, declare a `readonly record struct` for storage and convert at the boundary. The wrapper only has to carry the backing primitive's text form; it does not have to be your domain model's identity type.
+**If your type is a class**, declare a `readonly record struct` for storage and convert at the
+boundary. The struct only has to carry the underlying value's text. It doesn't have to be the type
+your domain model uses as its identity.
 
-### The text-form contract
+### Keep the text form of the underlying type
 
-One contract cannot be expressed in constraints and is convention instead: *the element's text form must be exactly the backing primitive's*. A decorative format (`"CUST-{value}"`) fails loudly at the persistence boundary with an error naming the contract.
+One rule can't be written as a constraint, so it is a convention: *your element's text must be
+exactly the text of the value inside it*. A decorative format such as `"CUST-{value}"` fails when
+the value is saved, with an error that names this rule.
 
-*Which* text form differs by family, and the difference matters:
+Each family asks your `ToString` for a particular format:
 
-| Arity | The format the family asks for |
+| Version | The format the family asks for |
 |---|---|
-| `StringSet<T>`, `GuidSet<T>`, the integer arities, `DecimalSet<T>` | the element's default (`null`) |
+| `StringSet<T>`, `GuidSet<T>`, the integer versions, `DecimalSet<T>` | the element's default (`null`) |
 | `DateSet<T>` | `"yyyy-MM-dd"` |
 | `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>` | `"O"` |
-| the five NodaTime arities | the family's ISO pattern |
+| the five NodaTime versions | the family's ISO pattern |
 
-The temporal families pin a format because the default one loses data: a `TimeOnly` renders as `09:30` and a `DateTime` as `06/15/2024 10:30:00`, so an arity that took the element's default would store every timestamp truncated to the second, and every `DateTimeKind` with it. NodaTime's null-format output is the culture's form — `Saturday, 15 June 2024` — for the same reason.
+The temporal families ask for a specific format because the default one loses data. A `TimeOnly`
+prints as `09:30`, and a `DateTime` as `06/15/2024 10:30:00`. With the default, every timestamp
+would be stored cut off at the second, and would lose its `DateTimeKind`. NodaTime's default
+output is the culture's long form, such as `Saturday, 15 June 2024`, so the NodaTime versions ask
+for a format too.
 
-In practice this asks nothing extra of a wrapper that forwards its `format` argument to the value it wraps, which is what the generators emit:
+A wrapper that passes its `format` argument on to the value inside already does this. That is what
+the generators emit:
 
 ```csharp
 public string ToString(string? format, IFormatProvider? provider)
     => _value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 ```
 
-A wrapper that swallows the argument and returns its own form is rejected rather than silently truncated.
+A wrapper that ignores the argument and returns its own form is rejected. Its values are never
+stored cut off.
 
-The reverse direction belongs to the family, not the element: every arity reads element text with its primitive sibling's grammar first — PostgreSQL's `numeric` grammar for `DecimalSet<T>`, a signed integer for the integer arities, strict ISO 8601 for the temporal and NodaTime ones — and only then hands the element the parsed primitive's invariant text, so its `Parse` still validates. Whatever a generated `Parse` accepts (`decimal.Parse` with `NumberStyles.Number` takes group separators and no exponent), `DecimalSet<Money>` reads `{"1,5"}` as a `FormatException` and `{1e3}` as 1000, exactly as `DecimalSet` does — through `Parse`, `TryParse`, JSON and configuration binding.
+Reading works the other way round, and the family decides it, not your element. Each version first
+reads the text with the grammar of its underlying type:
 
-### Ordering and JSON
+- **`DecimalSet<T>`** uses PostgreSQL's `numeric` grammar.
+- **The integer versions** read a signed integer.
+- **The temporal and NodaTime versions** read strict ISO 8601.
 
-String-backed wrappers sort ordinal over their text form — deliberately not the element's own `IComparable`, whose generated implementations typically delegate to culture-sensitive string comparison.
+Only then does your `Parse` get the parsed value's invariant text, so your validation still runs.
+Your `Parse` might accept more than that. A generated `Parse` built on `decimal.Parse` with
+`NumberStyles.Number`, for example, accepts group separators and rejects exponents. Even so,
+`DecimalSet<Money>` reads `{"1,5"}` as a `FormatException` and `{1e3}` as 1000, exactly as
+`DecimalSet` does. That holds for `Parse`, `TryParse`, JSON and configuration binding alike.
 
-That same text form carries into JSON: `StringSet<AccessRight>` writes `["users.read"]`, `Int32Set<OrderId>` writes `[1,2]`, `DecimalSet<Money>` writes `[12.50]` with the scale intact, `DateTimeSet<AuditStamp>` writes ISO 8601 strings. Reads run `Parse`, so the validation above applies to deserialized payloads too. Give the element type its own `[JsonConverter]` if you want a different shape; it takes precedence.
+### How your element types sort and serialize
 
-For the string, Guid, integer and decimal arities the payload is **byte-identical** to the primitive set it replaces, so swapping `Int32Set` for `Int32Set<OrderId>` is invisible to API consumers. The four temporal arities and the five NodaTime ones write the same token type and the same value, but not the same bytes — the round-trip format always writes seven fraction digits where System.Text.Json trims them, and the default encoder escapes `+` in a string the converter writes itself:
+String-backed versions sort ordinal over the text. They ignore your type's own `IComparable` on
+purpose, because generated implementations usually use culture-sensitive string comparison.
+
+The same text goes into JSON:
+
+- **`StringSet<AccessRight>`** writes `["users.read"]`.
+- **`Int32Set<OrderId>`** writes `[1,2]`.
+- **`DecimalSet<Money>`** writes `[12.50]`, keeping the scale.
+- **`DateTimeSet<AuditStamp>`** writes ISO 8601 strings.
+
+Reading JSON calls `Parse`, so your validation also runs on incoming payloads. If you want a
+different JSON shape, give your type its own `[JsonConverter]`. It takes precedence.
+
+For the string, Guid, integer and decimal versions, the JSON is **byte for byte the same** as for
+the plain set. You can swap `Int32Set` for `Int32Set<OrderId>` and API clients see no difference.
+
+The four temporal versions and the five NodaTime ones write the same token type and the same value,
+but not the same bytes. They always write seven fraction digits, where System.Text.Json trims them.
+And the default encoder escapes `+` in a string the converter writes itself:
 
 ```
 DateTimeOffsetSet     ["2024-06-15T10:30:00+02:00"]
 DateTimeOffsetSet<T>  ["2024-06-15T10:30:00.0000000+02:00"]
 ```
 
-Each payload still deserializes into the other's type. The round-trip form is deliberate: it is the one the array literal and the EF Core bridge already share, and it is what keeps the sub-second component from being dropped. If an existing API response shape matters, give the element its own `[JsonConverter]`.
+Each payload still reads into the other's type. The full round-trip form is deliberate. The array
+literal and the EF Core package already use it, and it keeps fractions of a second. If you need to
+keep an existing API response shape, give your type its own `[JsonConverter]`.
 
 ## Why these element types
 
-The same vetting as [for ranges](why.md#why-these-element-types) applies, with one notable difference: `Guid` is absent from ranges ("every GUID between these two" has no domain meaning) but present in sets — *membership* is exactly the question ID collections ask. Excluded, deliberately: `bool` (a set over a two-value domain), `float`/`double` (NaN breaks total order and equality — the same quiet failure as for ranges), `byte[]` (nested variable-length elements have no cheap canonical order), and `TimeSpan` (PostgreSQL `interval` is a months/days/microseconds triple that `TimeSpan` cannot represent losslessly).
+The same choices as [for ranges](why.md#why-these-element-types) apply, with one difference. Ranges
+have no `Guid`, because "every GUID between these two" means nothing. Sets do have `Guid`, because
+membership is exactly what you ask of a collection of IDs.
 
-## Literals, parsing, JSON
+These element types are left out on purpose:
 
-`ToString()` produces the PostgreSQL array literal, with the same quoting rules the server uses; `Parse`/`TryParse` accept it back, normalizing to canonical form:
+- **`bool`** would be a set over just two values.
+- **`float` and `double`** have NaN, which breaks ordering and equality. That is the same silent
+  failure as for ranges.
+- **`byte[]`** has nested elements of varying length, with no cheap canonical order.
+- **`TimeSpan`** can't represent a PostgreSQL `interval` without loss, because an `interval` is a
+  months, days and microseconds triple.
+
+## Parse and print literals
+
+`ToString()` gives you the PostgreSQL array literal, quoted the way the server quotes it. `Parse`
+and `TryParse` read it back and put the set in canonical form:
 
 ```csharp
 StringSet.From("a b", "plain").ToString();   // {"a b",plain}
@@ -147,13 +271,30 @@ StringSet.Parse(@"{a\,b}", null);            // {"a,b"} — a backslash escapes,
 StringSet.Parse("{{a,b}}", null);            // FormatException — a two-dimensional array is not a set
 ```
 
-The grammar is PostgreSQL's `array_in`: whitespace around an unquoted element is dropped and whitespace inside it kept (`{ a b }` is `{"a b"}`); an unescaped `{`, `}` or `"` inside an unquoted element is refused, as is text after a quoted one; only ASCII whitespace counts, so a no-break space is element text, as it is on the server.
+The grammar is PostgreSQL's `array_in`.
 
-JSON serialization needs no registration — every set type carries its converter, as the ranges do — and produces plain JSON arrays (`["alpha","beta"]`), delegating element serialization to System.Text.Json — element converters apply. Reads normalize and reject null elements. Element types the serializer does not know natively are covered by the family's own [element converter](serialization.md#element-converters).
+Good to know:
 
-## Converting between sets and ranges
+- **Whitespace around an unquoted element is dropped.** Whitespace inside it is kept, so `{ a b }`
+  is `{"a b"}`.
+- **Some text is rejected.** An unescaped `{`, `}` or `"` inside an unquoted element fails, and so
+  does text after a quoted element.
+- **Only ASCII whitespace counts.** A no-break space is part of the element, as it is on the
+  server.
 
-Over a discrete domain the same membership has two shapes: `{1,2,3,7}` and `{[1,3],[7,7]}` contain exactly the same values. Which one to store is a question of density, and the conversion moves between them:
+## Serialize to JSON
+
+You don't register anything. Every set type carries its own converter, as the ranges do. A set
+becomes a plain JSON array, such as `["alpha","beta"]`.
+
+The elements are serialized by System.Text.Json, so your element converters apply. Reading a set
+puts it in canonical form and rejects null elements. If the serializer doesn't know your element
+type, the family's own [element converter](serialization.md#element-converters) handles it.
+
+## Convert between sets and ranges
+
+For integers and dates, the same values can be written two ways: `{1,2,3,7}` and `{[1,3],[7,7]}`
+contain exactly the same values. You can convert between them:
 
 ```csharp
 Int32Set.From(1, 2, 3, 7).ToRangeSet();   // { [1, 3], [7, 7] }
@@ -163,11 +304,25 @@ rangeSet.ToInt32Set();   // back to individual values
 rangeSet.ToDateSet();
 ```
 
-A thousand consecutive dates are one `daterange` and a thousand-element `date[]`, and `@>` against the range column is the cheaper question by a wide margin. Sparse data goes the other way, where ranges of one value each cost more than the values do.
+Which one to store depends on how dense your data is. A thousand consecutive dates are one
+`daterange`, or a `date[]` with a thousand elements. Checking `@>` against the range column is much
+cheaper. Sparse data goes the other way: a range for every single value costs more than the values
+do.
 
-Only the discrete families convert — `Int32Set`, `Int64Set`, `DateSet`, and `LocalDateSet`/`YearMonthSet` in the NodaTime satellite. The continuous domains have no step, so there is no set of values to expand to. Both directions run client-side and neither translates: PostgreSQL converts between arrays and multiranges only through `unnest` and a custom aggregate. Expanding an unbounded range set throws rather than hanging.
+Good to know:
 
-## When not to use a set
+- **Only the discrete families convert.** That is `Int32Set`, `Int64Set` and `DateSet`, and
+  `LocalDateSet` and `YearMonthSet` in the NodaTime package. Continuous types have no step, so a
+  range of them has no list of values to expand to.
+- **Both directions run in memory only.** PostgreSQL converts between arrays and multiranges only
+  through `unnest` and a custom aggregate, so neither conversion runs as SQL.
+- **An unbounded range set throws instead of hanging.** Expanding one would never finish.
 
-A value set is for *value catalogs*: tags, codes, keys, dates — elements that are data, not entity references. If the elements are rows in another table and you need referential integrity, PostgreSQL cannot put a foreign key on array elements (a long-standing limitation); use a junction table. If you need order-as-data or duplicates, you want a list, which Npgsql's native `T[]`/`List<T>` mapping already serves.
+## When to use something else
 
+A value set is for catalogs of values: tags, codes, keys, dates. The elements are data, not
+references to other rows.
+
+- **If the elements are rows in another table, use a junction table.** PostgreSQL can't put a
+  foreign key on array elements, so a set can't give you referential integrity.
+- **If order or duplicates matter, use a list.** Npgsql already maps `T[]` and `List<T>`.

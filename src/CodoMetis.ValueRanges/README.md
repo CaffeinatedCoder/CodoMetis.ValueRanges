@@ -1,20 +1,21 @@
 # CodoMetis.ValueRanges
 
-In-memory range and set types for .NET 10 — the complete PostgreSQL interval and membership algebra
-with no database dependency.
+Range types and value sets for .NET 10 that work entirely in memory. You get PostgreSQL's complete
+range and set algebra, with no database dependency.
 
-Two type families, both immutable and canonical at construction:
+You get two families of types. Both are immutable, and both are in canonical form from the moment
+you create them:
 
-- **Range types** — the six value domains PostgreSQL ships as built-in range types, plus
-  `TimeRange`, each modelled as a discriminated union of five sealed variants, with
-  `RangeSet<TRange, T>` as their always-normalized multirange counterpart.
-- **Value sets** (v6) — canonical sets of scalar values whose PostgreSQL storage shape is a native
-  array.
+- **Range types.** The six element types PostgreSQL ships built-in range types for, plus
+  `TimeRange`. Each range type is a discriminated union of five sealed variants.
+  `RangeSet<TRange, T>` is the matching multirange, and it is always kept normalized.
+- **Value sets (v6).** Sets of scalar values, deduplicated and sorted, that PostgreSQL stores as a
+  native array.
 
-Everything executes in process. The companion package
-[CodoMetis.ValueRanges.EFCore.PostgreSQL](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL)
-maps both families to PostgreSQL columns and translates the algebra to SQL, so the same code works
-in memory and as a query.
+Everything runs in your process. The EF Core package,
+[CodoMetis.ValueRanges.EFCore.PostgreSQL](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL),
+maps both families to PostgreSQL columns and runs the same calls as SQL. So the same code works in
+memory and in a query.
 
 ```sh
 dotnet add package CodoMetis.ValueRanges
@@ -22,35 +23,42 @@ dotnet add package CodoMetis.ValueRanges
 
 > Requires .NET 10 or later.
 
-**Native AOT and trimming compatible** — no trim or AOT warnings in your publish, verified by a
-NativeAOT consumer in CI. JSON under AOT needs a source-generated context
+**Native AOT and trimming compatible.** Your publish gets no trim or AOT warnings, and a NativeAOT
+consumer in CI verifies this. For JSON under Native AOT you need a source-generated context
 ([details](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
 
 ## Why not `NpgsqlRange<T>`?
 
-Because it cannot live in a domain model. `NpgsqlRange<T>` is declared in `NpgsqlTypes`, in
-`Npgsql.dll`, so a model that uses it references the database driver — and the struct carries no
+Because you can't use it in a domain model. `NpgsqlRange<T>` is declared in `NpgsqlTypes`, in
+`Npgsql.dll`, so a model that uses it references the database driver. The struct also has no
 interval algebra of its own. `Contains`, `Overlaps`, `Union` and the rest are EF Core extension
 methods, each documented as *"only intended for use via SQL translation as part of an EF Core LINQ
-query"*; calling one from a unit test or a domain service throws. The algebra exists only inside a
-query, on a type that only exists inside the driver.
+query"*. If you call one from a unit test or a domain service, it throws. So the algebra exists only
+inside a query, on a type that exists only inside the driver.
 
-These types are the other way round. The algebra runs in process with no database dependency, and
-the [EF Core companion](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL)
-translates the same calls to the same PostgreSQL operators, verified against a live server.
+These types work the other way round. The algebra runs in your process, with no database
+dependency. The [EF Core package](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL)
+runs the same calls as the same PostgreSQL operators, and the results are verified against a live
+server.
 
-The rest of the ecosystem covers the pieces separately. NodaTime's `Interval`/`DateInterval` are
-real domain types the Npgsql plugin maps, but only two date/time shapes, and `DateInterval` is
-always closed and bounded — never half-open, unbounded or empty. In-memory range libraries such as
-[FRange](https://www.nuget.org/packages/FRange/) carry an algebra but no persistence, no discrete
-domain (`[1,10)` and `[1,9]` stay different values, so integer and date adjacency cannot be
-decided), and keep unboundedness a runtime fact — asking an unbounded range for its bound value
-throws, where here the property does not exist to be asked.
+The other options each cover only part of this:
 
-And a PostgreSQL array maps to `T[]` or `List<T>`: *mutable* references, so a caller can rewrite an
-element after load and the domain cannot defend an invariant it has already handed out — and a list
-rather than a set, with order and duplicates part of the value. These sets are immutable end to end,
-canonical on every construction path, with no mutating member to undo it.
+- **NodaTime's `Interval` and `DateInterval`** are real domain types, and the Npgsql NodaTime plugin
+  maps them. But they cover only two date/time shapes, and a `DateInterval` is always closed and
+  bounded. It can never be half-open, unbounded or empty.
+- **In-memory range libraries such as [FRange](https://www.nuget.org/packages/FRange/)** have an
+  algebra but no persistence. They have no discrete element types either: `[1,10)` and `[1,9]` stay
+  different values, so they can't decide adjacency for integers and dates. And unboundedness stays
+  a runtime fact. Asking an unbounded range for its bound value throws. Here that property doesn't
+  exist, so there is nothing to ask.
+- **A PostgreSQL array maps to `T[]` or `List<T>`.** Those are *mutable* references. Your code can
+  change an element after loading it, so the domain can't protect a rule once it has handed the
+  value out. And a list is not a set: order and duplicates are part of its value. The value sets
+  here are immutable end to end. Every way of creating one puts it in canonical form, and no member
+  can change it afterwards.
+
+The full comparison is in
+[Why this exists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/why.md).
 
 ## Range types
 
@@ -64,53 +72,71 @@ canonical on every construction path, with no mutating member to undo it.
 | `DateTimeOffsetRange` | `tstzrange`           | `DateTimeOffset` | —        |
 | `TimeRange`           | `timerange` (custom)  | `TimeOnly`       | —        |
 
-NodaTime equivalents — `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and the
-month-granularity `YearMonthRange` — live in
+The NodaTime versions are `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and
+`YearMonthRange`, which works at month granularity. They are in the NodaTime package,
 [CodoMetis.ValueRanges.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.NodaTime).
 
 ### Unboundedness is a shape, not a bound value
 
-Each range is a discriminated union of `Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange` and
-`Infinity`. The shape lives in the static type: `UnboundedEnd` has no `End` property to put a
-sentinel in, `Finite` has no flag to disown its `End`, and neither carries a nullable bound. Invalid
-states are unrepresentable, and because no external subtype can be declared, these five are the only
-ranges that can exist — so a switch over them is complete in fact, though C# cannot prove it and a
-switch expression still needs a (unreachable) discard arm.
+Each range is a discriminated union of five kinds of range: `Finite`, `UnboundedStart`,
+`UnboundedEnd`, `EmptyRange` and `Infinity`. This shape is part of the static type:
+
+- **`UnboundedEnd` has no `End` property**, so there is nowhere to put a sentinel.
+- **`Finite` has no flag** that could disown its `End`.
+- **Neither has a nullable bound.**
+
+So invalid states can't be represented. You can't declare your own subtype either, which makes these
+five the only ranges that can exist. A switch over them is therefore complete in fact. C# can't
+prove that, though, so a switch expression still needs a discard arm that is never reached
+([pattern matching](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#pattern-matching)).
 
 ```csharp
 DateTimeRange.CreateUnboundedEnd(start)               // genuinely open-ended
 DateTimeRange.CreateFinite(start, DateTime.MaxValue)  // ends at a specific instant
 ```
 
-The two are not interchangeable and the compiler will not let them be confused — a distinction a
-bounds-plus-flags representation has to reconcile at runtime, and one that still matters at the
-database boundary, where `DateTime.MaxValue` maps to PostgreSQL `infinity`.
+These two are not interchangeable, and the compiler won't let you mix them up. A representation
+built from bounds plus flags has to sort this out at runtime. The difference still matters at the
+database boundary, where `DateTime.MaxValue` maps to PostgreSQL `infinity`. See
+[Unboundedness is a shape, not a bound value](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/why.md#unboundedness-is-a-shape-not-a-bound-value)
+for the full reasoning.
 
 ### Operations
 
-Containment, overlap and adjacency (`Contains`, `Overlaps`, `IsContainedBy`, `IsAdjacentTo`),
-directional comparisons (`IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf`), set
-operations (`Intersect`, `Union`, `Except`, `Complement`, `Merge`), bound accessors
-(`LowerBound`/`UpperBound`/`LowerBoundInclusive`/`UpperBoundInclusive`, matching PostgreSQL's
-`NULL` semantics) and the `RangeAgg`/`RangeIntersectAgg` aggregates — all matching PostgreSQL's
-results exactly, including its canonicalization of discrete ranges.
+- **Containment, overlap and adjacency:** `Contains`, `Overlaps`, `IsContainedBy`, `IsAdjacentTo`.
+- **Directional comparisons:** `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf`.
+- **Set operations:** `Intersect`, `Union`, `Except`, `Complement`, `Merge`.
+- **Bound accessors:** `LowerBound`/`UpperBound`/`LowerBoundInclusive`/`UpperBoundInclusive`. They
+  return `null` exactly where PostgreSQL returns `NULL`.
+- **Aggregates:** `RangeAgg`/`RangeIntersectAgg`.
+
+Every one of them returns exactly what PostgreSQL returns, including how PostgreSQL canonicalizes
+discrete ranges.
+[Ranges and range sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)
+shows each operation with examples.
 
 ### Why these element types
 
-Interval algebra needs a total order the type's own comparisons agree with and, for adjacency, a
-defined step. `double` and `float` have neither and fail *quietly*: `double.CompareTo` reports `NaN`
-as less than every value and equal to itself, while the IEEE operators disagree, so a library
-generic over `IComparable<T>` accepts `double` and answers containment against a `NaN` bound with a
-straight face. Restricting the element types to a vetted set is what makes the algebra sound.
+Interval algebra needs two things from the element type:
+
+- **A total order** that the type's own comparisons agree with.
+- **A defined step**, for adjacency.
+
+`double` and `float` have neither, and they fail *quietly*. `double.CompareTo` treats `NaN` as less
+than every value and equal to itself, while the IEEE operators disagree. So a library generic over
+`IComparable<T>` accepts `double`. Then it returns a wrong containment result against a `NaN` bound,
+and nothing looks wrong. Limiting the element types to a checked list is what keeps the algebra
+sound. See
+[Why these element types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/why.md#why-these-element-types).
 
 ## Value sets (v6)
 
-A value set is an immutable, canonical set of scalar values — deduplicated, sorted, never
-containing null, with structural equality. It relates to a PostgreSQL array column exactly as
-`RangeSet<DateRange, DateOnly>` relates to `datemultirange`: the CLR type models the domain concept,
-the column is its storage encoding.
+A value set is an immutable set of scalar values in canonical form: deduplicated, sorted, and free
+of nulls. Two sets with the same values are equal. A set relates to a PostgreSQL array column the
+way `RangeSet<DateRange, DateOnly>` relates to a `datemultirange`. The .NET type is the idea, and the
+column is how it is stored.
 
-| .NET type           | Element type     | PostgreSQL column | Wrapper arity                 |
+| .NET type           | Element type     | PostgreSQL column | With your own element type    |
 |---------------------|------------------|-------------------|-------------------------------|
 | `StringSet`         | `string`         | `text[]`          | `StringSet<TElement>`         |
 | `GuidSet`           | `Guid`           | `uuid[]`          | `GuidSet<TElement>`           |
@@ -134,34 +160,49 @@ tags.Union(more);            // {alpha,beta,gamma}
 tags.Count;                  // 2
 ```
 
-The **wrapper arities** take generator-produced domain values — Vogen, Metalama, StronglyTypedId or
-hand-written — and are constrained only on BCL interfaces, so your domain types never reference this
-package. Every family has one: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`, `Int32Set<T>`,
-`Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>` and
-`DateTimeOffsetSet<T>`, plus five more in the NodaTime satellite.
+The full guide is
+[Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md).
 
-One contract is convention rather than constraint: the element's text form must be exactly the
-backing primitive's. A wrapper whose `ToString(format, provider)` forwards both arguments to the
-value it wraps satisfies it — which matters most for the temporal arities, since those ask for a
-round-trip format precisely because the default one drops sub-seconds.
+### Use your own element types
 
-### Canonical form is the contract
+Every set family has a version for your own element types, such as typed keys generated by Vogen,
+Metalama or StronglyTypedId, or written by hand. These versions (the wrapper arities) require only
+standard .NET interfaces, so your types never reference this package. They are `StringSet<T>`,
+`GuidSet<T>`, `Int16Set<T>`, `Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`,
+`TimeSet<T>`, `DateTimeSet<T>` and `DateTimeOffsetSet<T>`. The NodaTime package adds five more.
 
-Every construction path deduplicates and sorts: `From`, parsing, JSON, and materialization from the
-database. That is load-bearing twice — the EF `ValueComparer` collapses to a cheap equality with no
-false diffs, and SQL `=` on the stored array coincides with set equality.
+One rule is a convention, because no constraint can express it: *your element's text must be
+exactly the text of the value it wraps*. A wrapper whose `ToString(format, provider)` passes both
+arguments on to that value follows the rule. This matters most for the temporal versions. They ask
+for a round-trip format because the default format drops fractions of a second. See
+[Keep the text form of the underlying type](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#keep-the-text-form-of-the-underlying-type).
 
-String-backed sets sort **ordinal**, never culture-sensitive: canonical form is a cross-writer
-storage contract, not a display order, and a culture sort would make two machines disagree about the
-same set. Everything else sorts by the element's own comparison.
+### Why every set is sorted and deduplicated
 
-`Intersect`, `Except` and `Add` are client-side only — PostgreSQL's array type has no intersection,
-difference or sorted insert.
+Every way of creating a set sorts it and removes duplicates: `From`, parsing, JSON, and loading it
+from the database. You get two things from that:
+
+- **Change detection is cheap and exact.** EF Core's `ValueComparer` comes down to a cheap equality
+  check, and it never reports a change that isn't one.
+- **SQL `=` means set equality.** Two stored arrays are equal exactly when the sets are.
+
+The sort order is chosen on purpose:
+
+- **String-backed sets sort ordinal**, never culture-sensitive. The order is a storage rule that
+  every writer shares, not a display order. With a culture sort, two machines could disagree about
+  the same set.
+- **Every other set sorts by the element's own comparison.**
+
+Good to know:
+
+- **`Intersect`, `Except` and `Add` run in memory only.** PostgreSQL's array type has no
+  intersection, no difference and no sorted insert.
 
 ## Literals, parsing and JSON
 
-Every type implements `IParsable<T>` and `IFormattable` using PostgreSQL literal syntax, and carries
-its System.Text.Json converter, so it works in ASP.NET Core APIs with no registration:
+Every type implements `IParsable<T>` and `IFormattable` with PostgreSQL literal syntax. Every type
+also carries its own System.Text.Json converter, so it works in ASP.NET Core APIs without any
+registration:
 
 ```csharp
 Int32Range.Parse("[1,10)", null).ToString();   // [1,9] — discrete ranges canonicalize
@@ -170,11 +211,28 @@ StringSet.Parse("{alpha,beta}", null);         // {alpha,beta}
 JsonSerializer.Serialize(Int32Range.CreateFinite(1, 10));   // "[1,10]"
 ```
 
+[Literals, parsing, and JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)
+covers the parsing rules and the JSON options.
+
 ## Documentation
 
-The [full README](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/README.md)
-covers every operation with examples, the multirange operator matrix, the parsing and JSON rules,
-and the EF Core mapping. See also the
+The [project README](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/README.md)
+is the starting point. The guides go into detail:
+
+- **[Getting started](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/getting-started.md)**
+  takes you from an empty project to a first query that runs in PostgreSQL.
+- **[Ranges and range sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)**
+  covers every operation with examples, and the multirange operators.
+- **[Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)**
+  covers the set types and your own element types.
+- **[Literals, parsing, and JSON](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md)**
+  covers the parsing and JSON rules.
+- **[Entity Framework Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md)**
+  covers the EF Core mapping and which calls run as SQL.
+- **[Migration guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md)**
+  lists the source changes each major version needs.
+
+See also the
 [changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/src/CodoMetis.ValueRanges/CHANGELOG.md).
 
 ## License
