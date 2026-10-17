@@ -86,7 +86,7 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
     public static Instant ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => NodaPatterns.ParseInstant(s.ToString());
+        => NodaPatterns.ParseInstant(LiteralWhiteSpace.TrimAsInputFunction(s).ToString());
 
     /// <summary>
     /// Formats a <see cref="Instant"/> value using ISO 8601 (<c>uuuu-MM-ddTHH:mm:ssZ</c> with optional subseconds) by default.
@@ -238,7 +238,7 @@ public sealed class InstantSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(NodaPatterns.Instant.Format(NodaPatterns.ParseInstant(s.ToString())), CultureInfo.InvariantCulture);
+        => TElement.Parse(NodaPatterns.Instant.Format(NodaPatterns.ParseInstant(LiteralWhiteSpace.TrimAsInputFunction(s).ToString())), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using extended ISO 8601
     /// (<c>uuuu-MM-ddTHH:mm:ss.FFFFFFFFFZ</c>) by default — see the class remarks.</summary>

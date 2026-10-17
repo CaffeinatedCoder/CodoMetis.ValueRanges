@@ -108,7 +108,7 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
     public static YearMonth ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => NodaPatterns.ParseYearMonth(s.ToString());
+        => NodaPatterns.ParseYearMonth(LiteralWhiteSpace.TrimAsInputFunction(s).ToString());
 
     /// <summary>
     /// Formats a <see cref="YearMonth"/> value using ISO 8601 (<c>uuuu-MM</c>) by default.
@@ -288,7 +288,7 @@ public sealed class YearMonthSet<TElement> :
     /// corrupt data throws rather than materializing.
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(NodaPatterns.YearMonth.Format(NodaPatterns.ParseYearMonth(s.ToString())), CultureInfo.InvariantCulture);
+        => TElement.Parse(NodaPatterns.YearMonth.Format(NodaPatterns.ParseYearMonth(LiteralWhiteSpace.TrimAsInputFunction(s).ToString())), CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element using ISO 8601 (<c>uuuu-MM</c>) by default — see the class
     /// remarks.</summary>

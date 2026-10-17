@@ -2220,5 +2220,22 @@
       "NodaWrapperSetTranslationTests",
       "WrapperArityIntegrationTests"
     ]
+  },
+  {
+    "id": "S16-quoted-element-whitespace-by-type",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "A string keeps it, so `{\" ab\"}` is `{\" ab\"}`. A number, date or time drops it from both ends, so `DateSet.Parse(\"{\\\" 2026-01-01\\\"}\", null)` is `{2026-01-01}`. A backslash-escaped space works the same way, and so does a date or time in JSON.",
+    "claim": "For every value set type, ASCII whitespace at either end of a quoted or escaped element is kept by the string families, as textin keeps it, and stripped by the numeric and temporal families, as their PostgreSQL input functions strip it, through Parse, TryParse, the TypeConverter and (temporal) a JSON element; a no-break space or an element of only whitespace is rejected by every non-string family.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse",
+      "*Set.ParseValue"
+    ],
+    "heldBy": [
+      "SetElementWhiteSpaceContractTests",
+      "LiteralGrammarParityTests",
+      "SetParseFormatTests"
+    ]
   }
 ]

@@ -1,4 +1,5 @@
 using System.Globalization;
+using CodoMetis.ValueRanges.Oracles;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -169,6 +170,82 @@ public sealed class LiteralGrammarParityTests
         Assert.IsEmpty(failures, "Bound whitespace read differently:\n" + string.Join("\n", failures));
     }
 
+    /// <summary>
+    /// Each array type with a set family that reads it and an element text both read. The server's
+    /// output goes back through the same parser, so the comparison is by value.
+    /// </summary>
+    private static readonly (string Type, string Family, string Element, Func<string, string> Client)[] ElementWhitespaceTypes =
+    [
+        ("int2[]", "Int16Set", "1", l => Int16Set.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("int4[]", "Int32Set", "1", l => Int32Set.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("int8[]", "Int64Set", "1", l => Int64Set.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("numeric[]", "DecimalSet", "1.5", l => DecimalSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("text[]", "StringSet", "ab", l => StringSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("uuid[]", "GuidSet", "6f9619ff-8b86-d011-b42d-00c04fc964ff", l => GuidSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("date[]", "DateSet", "2026-01-01", l => DateSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("date[]", "DateSet", "infinity", l => DateSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("timestamp[]", "DateTimeSet", "2026-01-01 10:00:00", l => DateTimeSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("timestamptz[]", "DateTimeOffsetSet", "2026-01-01 10:00:00+00", l => DateTimeOffsetSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("time[]", "TimeSet", "09:00:00", l => TimeSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("date[]", "LocalDateSet", "2026-01-01", l => LocalDateSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("timestamp[]", "LocalDateTimeSet", "2026-01-01 10:00:00", l => LocalDateTimeSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("timestamptz[]", "InstantSet", "2026-01-01 10:00:00+00", l => InstantSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused"),
+        ("time[]", "LocalTimeSet", "09:00:00", l => LocalTimeSet.TryParse(l, CultureInfo.InvariantCulture, out var s) ? s.ToString() : "refused")
+    ];
+
+    /// <summary>
+    /// Whitespace at either end of a quoted or escaped array element, and an element of only
+    /// whitespace, for every set family: PostgreSQL's <c>array_in</c> hands it to the element's input
+    /// function, which strips it (numeric, temporal), keeps it (<c>text</c>) or rejects it
+    /// (<c>uuid</c>) (#70). Until 9.1.0 the temporal sets rejected <c>{" 2026-01-01"}</c>, which
+    /// PostgreSQL reads as <c>{2026-01-01}</c>. <c>GuidSet</c> accepting what <c>uuid_in</c> rejects
+    /// is a known candidate (#78).
+    /// </summary>
+    [TestMethod]
+    public async Task ElementWhitespace_ReadsAsPostgresReadsIt()
+    {
+        ContainerLifecycle.RequireDatabase();
+        await using var connection = new NpgsqlConnection(ContainerLifecycle.ConnectionString);
+        await connection.OpenAsync();
+
+        var failures = new List<string>();
+
+        foreach (var (type, family, element, client) in ElementWhitespaceTypes)
+        {
+            foreach (var ws in BoundWhiteSpace)
+            {
+                foreach (var literal in new[]
+                         {
+                             $"{{\"{ws}{element}\"}}", $"{{\"{element}{ws}\"}}", $"{{\"{ws}{element}{ws}\"}}",
+                             $"{{\\{ws}{element}}}", $"{{{element}\\{ws}}}", $"{{ \"{ws}{element}\" }}",
+                             $"{{\"{ws}\"}}", $"{{\"{ws}{ws}\"}}", $"{{\\{ws}}}"
+                         })
+                {
+                    string server;
+                    try
+                    {
+                        // Text is read element by element: reparsing the server's array output with
+                        // the parser under test would hide a space it dropped on both sides.
+                        server = type == "text[]"
+                            ? StringSet.From(await ElementsAsync(connection, literal)).ToString()
+                            : client((await ScalarAsync<string>(connection, $"SELECT $1::{type}::text", literal))!);
+                    }
+                    catch (PostgresException)
+                    {
+                        server = "refused";
+                    }
+
+                    var mine = client(literal);
+                    if (mine != server)
+                        failures.Add($"  {type} {family} {Show(literal)}: library {mine}, PostgreSQL {server}");
+                }
+            }
+        }
+
+        Candidates.Verdict(nameof(LiteralGrammarParityTests), failures, "Array element whitespace read differently",
+                           method: nameof(ElementWhitespace_ReadsAsPostgresReadsIt));
+    }
+
     private static async Task CompareRangeLiterals(
         NpgsqlConnection connection, string type, string[] literals, Func<string, string> client, List<string> failures)
     {
@@ -191,6 +268,16 @@ public sealed class LiteralGrammarParityTests
             if (mine != server)
                 failures.Add($"  {type} {Show(literal)}: library {mine}, PostgreSQL {server}");
         }
+    }
+
+    private static async Task<List<string>> ElementsAsync(NpgsqlConnection connection, string literal)
+    {
+        var elements = new List<string>();
+        await using var command = Command(connection, "SELECT e FROM unnest($1::text[]) AS e", literal);
+        await using var reader  = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            elements.Add(reader.GetString(0));
+        return elements;
     }
 
     private static NpgsqlCommand Command(NpgsqlConnection connection, string sql, string literal)
