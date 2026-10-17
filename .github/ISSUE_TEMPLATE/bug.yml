@@ -1,0 +1,65 @@
+name: Bug
+description: Something answers wrongly, throws when it shouldn't, or doesn't throw when it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The bugs that matter most here don't crash. A value looks right, compares equal and
+        round-trips, and still means something different from what you declared. If that's what
+        you found, please say so below. It decides which release the fix goes in.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      multiple: true
+      options:
+        - CodoMetis.ValueRanges
+        - CodoMetis.ValueRanges.NodaTime
+        - CodoMetis.ValueRanges.EFCore.PostgreSQL
+        - CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "9.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: failure
+    attributes:
+      label: How does it fail?
+      options:
+        - Silently. It returns a plausible value that is wrong
+        - Loudly. It throws, or refuses to translate, where it should work
+        - I'm not sure
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: What you ran
+      description: The smallest code that shows it. For EF, include the query and the SQL it translated to.
+      render: csharp
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What you got
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If PostgreSQL has an answer for the same values, paste it. PostgreSQL is the specification.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: .NET version, OS, PostgreSQL and Npgsql versions if EF is involved, and the current culture if it isn't en-US.
