@@ -106,6 +106,10 @@ publishing.
   on `release/9.x` is closed by hand, with a comment linking the PR.
 - **Changelog:** a 9.x change goes under its 9.x version on both branches, never under the next
   major too. `main`'s changelog keeps every 9.x section, so it stays the full history.
+- **SECURITY.md's supported-versions table** names the latest release on NuGet, never the version
+  being prepared. `SecurityPolicyConventionTests` compares it with `PackageValidationBaselineVersion`,
+  so move the table when you move the baseline, which happens when you open the next version right
+  after a tag. The tagged commit still names the release before it.
 - **GitHub's Latest release** is the highest version. The release workflow publishes a 9.x patch
   that comes out after 10.0.0 without marking it Latest.
 

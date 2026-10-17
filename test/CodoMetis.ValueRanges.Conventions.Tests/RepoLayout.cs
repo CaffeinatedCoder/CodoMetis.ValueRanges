@@ -21,6 +21,14 @@ internal static class RepoLayout
     /// <summary>The single source of truth for the version all packages ship at.</summary>
     internal static string ShippedVersion { get; } = ReadShippedVersion();
 
+    /// <summary>
+    /// The latest release on nuget.org, read from <c>PackageValidationBaselineVersion</c>. Between a
+    /// version bump and its tag, <see cref="ShippedVersion"/> names the release being prepared and
+    /// the baseline names the one already out. <c>PackagingConventionTests</c> keeps the baseline
+    /// equal to that release.
+    /// </summary>
+    internal static string LatestRelease { get; } = ReadSharedProperty("PackageValidationBaselineVersion");
+
     internal static FileInfo RootChangelog => new(Path.Combine(Root.FullName, "CHANGELOG.md"));
 
     private static DirectoryInfo FindRoot()
@@ -57,18 +65,20 @@ internal static class RepoLayout
         return projects;
     }
 
-    private static string ReadShippedVersion()
+    private static string ReadShippedVersion() => ReadSharedProperty("Version");
+
+    private static string ReadSharedProperty(string name)
     {
         var propsPath = Path.Combine(Root.FullName, "Directory.Build.props");
-        var version   = XDocument.Load(propsPath)
-                                 .Descendants("Version")
+        var value     = XDocument.Load(propsPath)
+                                 .Descendants(name)
                                  .FirstOrDefault()
                                 ?.Value
                                  .Trim();
 
-        return string.IsNullOrEmpty(version)
-                   ? throw new InvalidOperationException($"No <Version> property in '{propsPath}'.")
-                   : version;
+        return string.IsNullOrEmpty(value)
+                   ? throw new InvalidOperationException($"No <{name}> property in '{propsPath}'.")
+                   : value;
     }
 }
 
