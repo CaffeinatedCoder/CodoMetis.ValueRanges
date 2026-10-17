@@ -229,5 +229,14 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "CapturedCollectionProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "the same projection in memory, for every discovered range and value set type × a captured array, List, HashSet and IEnumerable × six lists (empty, overlapping, adjacent, with an empty value, duplicate, every shape) × Contains, Any and Count, alone and beside a Contains (test/oracles/axes.md)",
+    "needs": [
+      "docker"
+    ]
   }
 ]
