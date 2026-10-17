@@ -11,6 +11,8 @@ A version's section is the GitHub release's notes. Each line is one change: what
 to do about it, and a link to the guide with the detail. [CONTRIBUTING.md](CONTRIBUTING.md#changelog)
 has the rules.
 
+## [9.1.0] — 2026-10-17
+
 ## [9.0.0] — 2026-10-11
 
 Nothing was removed or renamed. What existing calls write, accept and translate changed, and the compiler can't show you where: [Migration from v8.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v8x).
