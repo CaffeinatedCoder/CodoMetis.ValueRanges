@@ -11,6 +11,8 @@ A version's section is the GitHub release's notes. Each line is one change: what
 to do about it, and a link to the guide with the detail. [CONTRIBUTING.md](CONTRIBUTING.md#changelog)
 has the rules.
 
+## [10.0.0] — 2026-10-17
+
 ## [9.1.0] — 2026-10-17
 
 ### Added
