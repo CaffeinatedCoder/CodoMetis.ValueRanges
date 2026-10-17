@@ -1,0 +1,26 @@
+Seed: a null element is dropped on construction instead of refused, so a set silently holds fewer values than it was given
+Oracles: ValueSetNullContractTests
+Fails: every construction entry point of every reference-element set type
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+index 0c32ce2..0b69a08 100644
+--- a/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
++++ b/src/CodoMetis.ValueRanges/Internals/ValueSetCore.cs
+@@ -27,7 +27,7 @@ internal static class ValueSetCore
+         foreach (var value in values)
+         {
+             if (value is null)
+-                throw new ArgumentException("Value sets cannot contain null elements.", nameof(values));
++                continue;
+             list.Add(value);
+         }
+ 
+@@ -42,7 +42,7 @@ internal static class ValueSetCore
+         foreach (var value in values)
+         {
+             if (value is null)
+-                throw new ArgumentException("Value sets cannot contain null elements.", nameof(values));
++                continue;
+             list.Add(value);
+         }
+ 

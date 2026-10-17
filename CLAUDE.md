@@ -24,6 +24,8 @@ so moving a project cannot silently retarget a test.
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.InfinityDisabled.IntegrationTests/` — The same live layer for configuration that is per process: its runtimeconfig sets `Npgsql.DisableDateTimeInfinityConversions`, which Npgsql and the plugin each read once, so it cannot be flipped inside the other project's run. Holds the temporal store rule at the extremes with the conversion off. Own container; CI's integration job runs every `test/*IntegrationTests/`
 - `test/CodoMetis.ValueRanges.AspNetCore.Tests/` — Host-level behaviour with no ValueRanges registration: configuration binding (`TypeConverter`), MVC and minimal-API binding and JSON bodies via `TestServer`, and the documented OpenAPI schema transformer (`ValueRangesSchemaTransformer.cs`), which `docs/serialization.md` must carry verbatim — edit the test copy, then the doc
 - `test/CodoMetis.ValueRanges.Conventions.Tests/` — Repo-level conventions: changelog consistency, packaging metadata, release wiring, the SECURITY.md supported-versions table, value set contract compliance, EF mapping parity, the default JSON contract. Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
+- `test/oracles/` — The bug-finding system (`docs/oracles.md`): `claims.json` quotes every promise the consumer-facing docs make and names the test that holds it (empty `heldBy` is the worklist); `oracles.json` registers the sweep classes; `seeds/*.patch` plant one defect each in `src/` that the named oracles were shown to catch; `surface-waivers.json` names the public members no claim covers, with the reason; `candidates.json` holds disagreements found but not fixed, keyed to issues. `Oracle*Tests` in the conventions project hold all of it consistent in CI without building; `dotnet run tools/oracles.cs seeds` re-proves locally that every seed is caught, `… status` prints the worklist
+- `tools/oracles.cs` — The local prover and status report for `test/oracles/`; file-based app, never run in CI
 - `test/consumer-smoke-test.sh` — The only check of *delivery* rather than code: packs the four packages, restores them into throwaway projects created outside the repository (inside it, `Directory.Build.props` would apply), compiles and runs real code against them, and asserts on printed output and translated SQL — never on the exit code alone. Three consumers: core only; a Native AOT publish of core + NodaTime, run as a native binary (extra linker paths via `SMOKE_AOT_LINKER_ARGS`, e.g. for Homebrew's dotnet); and the NodaTime EF satellite, which pulls in all four through the nuspec chain. `NUGET_PACKAGES` is redirected to a private folder because NuGet resolves id+version from the global cache before any source, so a locally built package is otherwise shadowed by whatever build of that version was restored before; the generated `nuget.config` uses package source mapping so this repo's ids come from the local feed only and everything else from nuget.org. Runs on every PR in both modes (own feed; the pre-built `dist` the release workflow passes). Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
 - `docs/` — Agent docs (read relevant doc before starting work)
 
@@ -48,12 +50,24 @@ repo-wide.
 4. **Prove every fix by reverting it.** Strip only the fix, confirm the new test fails for the
    expected reason, restore. A test that passes with and without the fix is not a regression
    test — and one written against broken code can assert nothing at all without looking any
-   different. The same applies to a new convention test: seed the defect it claims to catch
+   different. The same applies to a new convention test: seed the defect it claims to catch. For an
+   oracle sweep, keep the revert as `test/oracles/seeds/<defect>.patch` naming the oracles it fails
+   (`OracleSeedTests` requires one per registered oracle), and run `dotnet run tools/oracles.cs
+   seeds` before a release
+6. **Finding bugs is systematic, not one-off.** Start from `dotnet run tools/oracles.cs status`: an
+   unheld claim or an unwaived public member is the next oracle to write, and a new sweep goes into
+   `oracles.json` with a seed. A new public member fails `OracleSurfaceCoverageTests` until a claim
+   names it or `surface-waivers.json` says why none should; a reworded doc sentence fails
+   `OracleCatalogueTests` until its claim follows. A disagreement a sweep finds goes through
+   `Candidates.Verdict` into `candidates.json` with its issue, never into an `Assert.Inconclusive`
+   or a deleted row; the entry fails as `candidate fixed` once the defect is gone. A fix commit
+   carries `Found-By:` and `Defect-Class:` trailers (CONTRIBUTING.md)
 5. Commit with conventional format: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `build:`
 
 ## Docs
 - `docs/architecture.md` — Discriminated union pattern, interface hierarchy, RangeSet internals
 - `docs/testing.md` — Test organization, patterns, shape-combination matrix
+- `docs/oracles.md` — The claim catalogue, API-surface coverage, seeds and candidate registry: how bug-finding is run as a system
 
 ## Critical Rules
 - **NEVER** create external subtypes of range base records — the private constructor is what makes the five variants the only ranges that can exist, so a switch over them is complete *in fact*. C# never proved it (exhaustiveness analysis ignores a closed class hierarchy, so a switch expression still warns CS8509 and needs a throwing discard — see `docs/ranges.md#pattern-matching`), which is exactly why breaking the rule is unrecoverable: the guarantee is entirely a runtime one, and nothing would fail at compile time

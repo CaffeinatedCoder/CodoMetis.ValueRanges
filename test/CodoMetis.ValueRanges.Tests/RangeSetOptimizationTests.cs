@@ -617,6 +617,13 @@ public class RangeSetOptimizationTests
     // -------------------------------------------------------------------------
 
     [TestMethod]
+    public void LowerBoundComparer_IsTheSameInstanceAsRangeLowerBoundComparer()
+    {
+        Assert.AreSame(RangeLowerBoundComparer<Int32Range, int>.Instance, RangeSet<Int32Range, int>.LowerBoundComparer);
+        Assert.AreSame(RangeLowerBoundComparer<DateRange, DateOnly>.Instance, RangeSet<DateRange, DateOnly>.LowerBoundComparer);
+    }
+
+    [TestMethod]
     public void LowerBoundComparer_SortsRangesByLowerBound()
     {
         var unsorted = new List<Int32Range>

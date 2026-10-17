@@ -1,0 +1,23 @@
+Seed: the lower-bound comparer ignores inclusiveness, so (2,3] may sort before [2,2] and the greedy merge, which assumes order, leaves adjacent continuous fragments unmerged
+Oracles: ContinuousMultirangeParityTests
+Fails: the nummultirange sweep over every subset and ordered pair of six fragments
+History: the seed named in docs/testing.md: the one the whole core suite notices only through the comparer's own unit test
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs b/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs
+index 7cc3f21..33731e9 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeSetHelpers.cs
+@@ -30,12 +30,7 @@ internal static class RangeSetHelpers
+ 
+         int cmp = aValue.CompareTo(bValue);
+         if (cmp != 0) return cmp;
+-        return (aInclusive, bInclusive) switch
+-               {
+-                   (true, false) => -1,
+-                   (false, true) => 1,
+-                   _             => 0
+-               };
++        return 0;
+     }
+ 
+     // Returns the lower bound of any non-empty range shape as (Value, Inclusive, Infinite).

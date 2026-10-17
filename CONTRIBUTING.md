@@ -40,6 +40,8 @@ it fail, apply the fix, watch it pass — then *revert the fix and confirm the t
 test that passes both with and without the fix is not a regression test. This has caught vacuous
 tests in this repository more than once, including two written during the hardening pass that added
 the convention suite. See [`.claude/skills/verify-the-guard`](.claude/skills/verify-the-guard/SKILL.md).
+For an oracle sweep the revert is kept as a seed patch under `test/oracles/seeds/`, so the proof is
+repeated rather than remembered — see [Oracle tests](#oracle-tests).
 
 **Changes to a range type, a value set family, the canonical form, a type mapping, or a translator
 get a value-semantics review.** The lens is written down in
@@ -74,6 +76,47 @@ written down.
   they are not.
 - Match the surrounding style. Comments explain *why*, especially where behaviour is load-bearing
   and non-obvious.
+
+## Oracle tests
+
+An oracle test checks the library against an independent answer over generated cases instead of a
+hand-written expectation: set theory over every representable range of a small universe
+(`SmallModelOracleTests`), PostgreSQL over every ordered pair of shapes (`ShapeMatrixParityTests`),
+the invariant literal under five cultures for every discovered type (`LiteralCultureContractTests`).
+[docs/oracles.md](docs/oracles.md) describes the machinery around them, which lives under
+`test/oracles/`:
+
+- **Claims.** `claims.json` lists what the consumer-facing documents promise, each quoting its sentence
+  verbatim and naming the tests that hold it. An empty `heldBy` is the worklist. A reworded document
+  fails the catalogue test until the claim follows.
+- **Surface.** Every public member of the four packages is named by a claim or waived with a reason in
+  `surface-waivers.json`. A new public member needs one or the other.
+- **Seeds.** Every registered oracle (`oracles.json`) ships a seed under `seeds/`: a patch to `src/`
+  that plants a defect the oracle was shown to catch. `OracleSeedTests` keeps the seeds present and
+  applicable in CI; `dotnet run tools/oracles.cs seeds` re-proves locally that each is caught. Run it
+  before a release, and refresh a seed a refactor has stranded.
+- **Candidates.** A disagreement an oracle finds goes into `candidates.json` with its family and the
+  issue that tracks it. It fails labelled until the issue is filed, is reported as skipped while the
+  issue is open, and fails as `candidate fixed` once the fix lands, so the entry is removed in the same
+  PR.
+
+## Commit trailers
+
+A fix commit says how the defect was found and what kind it is, as git trailers after the body:
+
+```
+Found-By: OT
+Defect-Class: ALG
+```
+
+- `Found-By:` — `OT` oracle test, `RV` code review, `IS` issue report, `US` user, `CA` analyst,
+  `SM` the consumer smoke test. An issue an oracle found carries the `found-by: oracle` label, so
+  the trailer and the label count the same finds from either side.
+- `Defect-Class:` — `ALG` range or set algebra answering wrongly, `CAN` canonical form, `LIT` literal
+  parsing or formatting, `JSON` System.Text.Json or TypeConverter, `SQL` translation or type mapping,
+  `STORE` the value stored differs from the value declared, `PKG` packaging or release wiring.
+
+`git log --format='%(trailers:key=Found-By,valueonly)' | grep . | sort | uniq -c` counts the finders.
 
 ## AI-assisted development
 

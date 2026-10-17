@@ -1,0 +1,191 @@
+[
+  {
+    "class": "SmallModelOracleTests",
+    "project": "CodoMetis.ValueRanges.Tests",
+    "kind": "metamorphic",
+    "against": "set theory over every representable range of a small universe, Int32Range and DecimalRange"
+  },
+  {
+    "class": "SmallModelMultirangeOracleTests",
+    "project": "CodoMetis.ValueRanges.Tests",
+    "kind": "metamorphic",
+    "against": "set theory over every subset of an eight-point universe, as a multirange"
+  },
+  {
+    "class": "SmallModelSetOracleTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "set theory over every subset of each value set family's probe universe"
+  },
+  {
+    "class": "DomainParityOracleTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the Int32Range and DecimalRange models, through an order-preserving embedding, for every discovered range type"
+  },
+  {
+    "class": "JsonDefaultContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the same value serialized under AddRangeConverters(), for every discovered type and shape"
+  },
+  {
+    "class": "TypeConverterContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "Parse and ToString, through TypeDescriptor, for every discovered type and shape"
+  },
+  {
+    "class": "LiteralCultureContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the invariant literal under five current cultures, for every discovered type and shape"
+  },
+  {
+    "class": "LiteralProviderContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the invariant literal with five explicit providers, for every discovered type and shape"
+  },
+  {
+    "class": "TemporalLiteralStrictnessContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "exception",
+    "against": "strict ISO 8601: a non-ISO element refused through every entry point of every discovered temporal type"
+  },
+  {
+    "class": "RangeLiteralGrammarContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "claim",
+    "against": "PostgreSQL's range_in grammar, for every discovered range type"
+  },
+  {
+    "class": "WrapperGrammarContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the primitive sibling's element grammar, for every wrapper arity"
+  },
+  {
+    "class": "ValueSetContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "silent-default",
+    "against": "the NormalizeElement, CanonicalOrder and ElementJsonConverter rules, behaviourally, for every discovered set type"
+  },
+  {
+    "class": "ValueSetNullContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "exception",
+    "against": "a null element refused, never dropped, through every entry point of every reference-element set type"
+  },
+  {
+    "class": "MappingParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "claim",
+    "against": "IRelationalTypeMappingSource resolving every discovered range, multirange and set type"
+  },
+  {
+    "class": "DiscreteDomainBoundaryTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "claim",
+    "against": "the empty range at the domain's edge, for every discovered discrete type"
+  },
+  {
+    "class": "RangeFactoryContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "claim",
+    "against": "IsDiscrete agreeing with NextValueAfter and PreviousValueBefore, for every discovered range type"
+  },
+  {
+    "class": "VariantDeconstructContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "construct(deconstruct(x)) == x, for every bounded variant of every discovered range type"
+  },
+  {
+    "class": "ShapeMatrixParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "PostgreSQL, over every ordered pair of range shapes, eight predicates and four operations",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "SetOperatorParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "PostgreSQL, over every ordered pair of subsets of a four-element universe",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "ContinuousMultirangeParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "nummultirange, over every subset and ordered pair of six fragments",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "RangeAggregateParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "range_agg and range_intersect_agg over every subset of an eight-range universe",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "TemporalStoreParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "the column, for every temporal value written as text (JSON document, literal, element operand)",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "LiteralGrammarParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "PostgreSQL's range_in and array_in on the same text: refused by both, or the same value",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "UnionCanonicalityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "exception",
+    "against": "the SQL guard: every composition on a translated Union refused by execution, every legal one agreeing with memory",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "WrapperArityIntegrationTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "the stored column text and a near-miss Contains, for every wrapper arity",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "InfinityConversionsDisabledTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.InfinityDisabled.IntegrationTests",
+    "kind": "differential",
+    "against": "the column at the temporal extremes with Npgsql.DisableDateTimeInfinityConversions set",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "DecorativeElementContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "exception",
+    "against": "the documented text-form contract: a decorated wrapper element refused naming the contract at the JSON write, the SQL literal and the bound parameter, string and integer arities"
+  }
+]

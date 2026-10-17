@@ -1,0 +1,18 @@
+Seed: a quoted empty bound or a whitespace-only bound is read as absent, so ["",5) parses as (,4] where PostgreSQL's range_in refuses it
+Oracles: RangeLiteralGrammarContractTests, LiteralGrammarParityTests
+Fails: the range_in grammar sweep for every range type; the parity sweep against PostgreSQL on the same text
+History: shipped before 9.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
+index 6eabbdf..848710a 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
+@@ -130,7 +130,7 @@ internal static class RangeFormat
+         if (inQuotes)
+             throw new FormatException($"The input string '{LiteralExcerpt.Of(literal)}' is not a valid range literal: unterminated quoted bound.");
+ 
+-        if (position == start) return null;
++        if (significant == 0) return null;
+ 
+         sb.Length = significant;
+         return sb.ToString();

@@ -487,6 +487,33 @@ public sealed class QueryTranslationTests
         StringAssert.Contains(sql, "ELSE 'empty'::numrange");
     }
 
+    public static IEnumerable<object[]> NonConstantFlagFactories
+    {
+        get
+        {
+            // A captured local is a parameter, a comparison is a column expression: neither can
+            // pick a bounds literal, so the factory must not translate rather than guess one.
+            var inclusive = false;
+            return
+            [
+                ["CreateFinite, parameter flag", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => DateRange.CreateFinite(b.Day, b.OtherDay, inclusive, true).Contains(Day)))],
+                ["CreateFinite, column flag", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => DateRange.CreateFinite(b.Day, b.OtherDay, true, b.Id > 3).Contains(Day)))],
+                ["CreateUnboundedStart, parameter flag", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => DateRange.CreateUnboundedStart(b.Day, inclusive).Contains(Day)))],
+                ["CreateUnboundedEnd, column flag", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => DecimalRange.CreateUnboundedEnd(b.Amount, b.Id > 3).Overlaps(b.Price)))],
+            ];
+        }
+    }
+
+    [TestMethod]
+    [DynamicData(nameof(NonConstantFlagFactories))]
+    public void Factory_NonConstantInclusivenessFlag_FailsTranslation(string factory, Func<TestDbContext, IQueryable<Booking>> query)
+    {
+        using var context = new TestDbContext();
+
+        var error = Assert.ThrowsExactly<InvalidOperationException>(() => query(context).ToQueryString(), factory);
+        StringAssert.Contains(error.Message, "could not be translated", factory);
+    }
+
     [TestMethod]
     public void CreateFinite_FullyConstant_IsParameterized()
     {

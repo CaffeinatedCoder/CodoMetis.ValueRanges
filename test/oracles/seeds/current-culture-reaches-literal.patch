@@ -1,0 +1,31 @@
+Seed: formatting without a format string hands the current culture, or an explicit provider, to the element: de-DE turns [1.5,2) into [1,5,2) and sv-SE writes U+2212 for the minus sign
+Oracles: LiteralCultureContractTests, LiteralProviderContractTests
+Fails: the invariant-literal sweeps under de-DE, sv-SE and th-TH, and with an explicit non-invariant provider, for ranges and sets
+History: shipped before 9.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/Core/IRangeFactory.cs b/src/CodoMetis.ValueRanges/Core/IRangeFactory.cs
+index 831b15b..7a4df06 100644
+--- a/src/CodoMetis.ValueRanges/Core/IRangeFactory.cs
++++ b/src/CodoMetis.ValueRanges/Core/IRangeFactory.cs
+@@ -153,7 +153,7 @@ public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
+         // An empty format is the general format, exactly as null is — .NET reads the two alike — so
+         // it asks for the literal too. Normalized here so FormatValue sees one spelling of "none".
+         if (string.IsNullOrEmpty(format)) format = null;
+-        var effective = format is null ? CultureInfo.InvariantCulture : provider;
++        var effective = provider ?? CultureInfo.CurrentCulture;
+         string Fmt(T v) => TRange.FormatValue(v, format, effective);
+         return this switch
+         {
+diff --git a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+index 2bcea7f..64694f6 100644
+--- a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+@@ -21,7 +21,7 @@ internal static class SetFormat
+         // applies only alongside an explicit format, which asks for display text. An empty format
+         // is no format — .NET reads "" as the general format, exactly like null.
+         if (string.IsNullOrEmpty(format)) format = null;
+-        provider = format is null ? CultureInfo.InvariantCulture : provider ?? CultureInfo.InvariantCulture;
++        provider ??= CultureInfo.CurrentCulture;
+ 
+         var sb = new StringBuilder(elements.Length * 8).Append('{');
+         for (var i = 0; i < elements.Length; i++)

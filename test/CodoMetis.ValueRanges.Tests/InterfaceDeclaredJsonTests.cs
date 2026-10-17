@@ -106,8 +106,9 @@ public class InterfaceDeclaredJsonTests
 
         Assert.AreEqual("""{"Range":"[1,2]"}""", JsonSerializer.Serialize(new RangeHolder(OneTwo), ctx.RangeHolder));
         Assert.AreEqual("""{"Tags":["a","b"]}""", JsonSerializer.Serialize(new SetHolder(StringSet.From("b", "a")), ctx.SetHolder));
-        Assert.ThrowsExactly<NotSupportedException>(
+        var unlisted = Assert.ThrowsExactly<NotSupportedException>(
             () => JsonSerializer.Serialize(new RangeHolder(Int32Range.Empty), ctx.RangeHolder));
+        StringAssert.Contains(unlisted.Message, "EmptyRange");
     }
 
     internal sealed record RangeHolder(IRange<int>? Range);

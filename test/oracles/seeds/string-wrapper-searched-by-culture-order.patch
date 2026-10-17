@@ -1,0 +1,17 @@
+Seed: StringSet<TElement> no longer overrides IValueSet.CanonicalOrder, so Contains, Add and Remove binary-search the ordinal-sorted array with the element's own culture-sensitive comparison
+Oracles: ValueSetContractTests
+Fails: the CanonicalOrder rule: a wrapper set does not find an element it was built from
+History: the CLAUDE.md rule, seeded when the conventions suite was written
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/StringSet.cs b/src/CodoMetis.ValueRanges/Sets/StringSet.cs
+index 644b175..380c44b 100644
+--- a/src/CodoMetis.ValueRanges/Sets/StringSet.cs
++++ b/src/CodoMetis.ValueRanges/Sets/StringSet.cs
+@@ -201,7 +201,6 @@ public sealed class StringSet<TElement> :
+             x.ToString(null, CultureInfo.InvariantCulture),
+             y.ToString(null, CultureInfo.InvariantCulture)));
+ 
+-    IComparer<TElement> IValueSet<TElement>.CanonicalOrder => CanonicalComparer;
+ 
+     /// <summary>The canonical elements: deduplicated, sorted ordinal over the invariant text form.</summary>
+     public ImmutableArray<TElement> Values => _elements;

@@ -1,0 +1,20 @@
+[
+  {
+    "oracle": "DecorativeElementContractTests",
+    "row": "StringSet<DecoratedText>: JSON write accepted",
+    "family": "string arity writes a decorated element",
+    "issue": "#53"
+  },
+  {
+    "oracle": "DecorativeElementContractTests",
+    "row": "StringSet<DecoratedText>: SQL literal accepted",
+    "family": "string arity writes a decorated element",
+    "issue": "#53"
+  },
+  {
+    "oracle": "DecorativeElementContractTests",
+    "row": "StringSet<DecoratedText>: bound parameter accepted",
+    "family": "string arity writes a decorated element",
+    "issue": "#53"
+  }
+]

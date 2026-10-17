@@ -62,6 +62,52 @@ public class CalendarBoundaryTests
         }
     }
 
+    /// <summary>
+    /// The other direction: every calendar's own extremes lie inside the ISO range, so normalizing a
+    /// non-ISO bound or element to ISO cannot fail. The documents once promised an
+    /// <see cref="ArgumentOutOfRangeException"/> for "far-future non-ISO dates"; no such date exists,
+    /// and this is what says so if a NodaTime release adds a calendar that reaches further.
+    /// The extremes are found by walking to the last day <c>PlusDays</c> reaches, because year 1,
+    /// month 1, day 1 is not the first day of every calendar (Hebrew Scriptural starts its year in
+    /// month 7) and the last month's length is not uniform (Badi).
+    /// </summary>
+    [TestMethod]
+    public void EveryCalendarsExtremes_NormalizeToIso_AtEveryEntryPoint()
+    {
+        foreach (var calendar in CalendarSystem.Ids.Select(CalendarSystem.ForId))
+        {
+            var first = Walk(new LocalDate(calendar.MinYear, 1, 1, calendar), -1);
+            var last  = Walk(new LocalDate(calendar.MaxYear, 1, 1, calendar), +1);
+            var noon  = new LocalTime(12, 0);
+
+            var dates = (LocalDateRange.Finite)LocalDateRange.CreateFinite(first, last);
+            Assert.AreEqual(first.WithCalendar(CalendarSystem.Iso), dates.Start, calendar.Id);
+            Assert.AreEqual(last.WithCalendar(CalendarSystem.Iso), dates.End, calendar.Id);
+
+            var wallClock = (LocalDateTimeRange.Finite)LocalDateTimeRange.CreateFinite(first + noon, last + noon);
+            Assert.AreEqual(CalendarSystem.Iso, wallClock.Start.Calendar, calendar.Id);
+            Assert.AreEqual(CalendarSystem.Iso, wallClock.End.Calendar, calendar.Id);
+
+            Assert.AreEqual(2, LocalDateSet.From([first, last]).Count, calendar.Id);
+            Assert.AreEqual(2, LocalDateTimeSet.From([first + noon, last + noon]).Count, calendar.Id);
+        }
+
+        static LocalDate Walk(LocalDate date, int step)
+        {
+            while (true)
+            {
+                try
+                {
+                    date = date.PlusDays(step);
+                }
+                catch (Exception e) when (e is ArgumentOutOfRangeException or OverflowException)
+                {
+                    return date;
+                }
+            }
+        }
+    }
+
     [TestMethod]
     public void LocalDateRange_StepFunctions_RecogniseTheGregorianExtremes()
     {

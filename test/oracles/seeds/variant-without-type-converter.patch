@@ -1,0 +1,16 @@
+Seed: TimeRange.Finite carries no [TypeConverter]: the attribute is inherited, so the variant silently uses the union's converter and answers with whatever shape the literal has
+Oracles: TypeConverterContractTests
+Fails: the TypeDescriptor sweep for TimeRange's Finite shape (a wrong-shape literal is accepted)
+
+diff --git a/src/CodoMetis.ValueRanges/TimeRange.cs b/src/CodoMetis.ValueRanges/TimeRange.cs
+index 7370988..471439c 100644
+--- a/src/CodoMetis.ValueRanges/TimeRange.cs
++++ b/src/CodoMetis.ValueRanges/TimeRange.cs
+@@ -49,7 +49,6 @@ public abstract record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeRange, Ti
+     /// Represents a <see cref="TimeRange"/> bounded on both sides.
+     /// </summary>
+     [JsonConverter(typeof(RangeVariantJsonConverter<Finite, TimeRange, TimeOnly>))]
+-    [TypeConverter(typeof(RangeVariantTypeConverter<Finite, TimeRange, TimeOnly>))]
+     public sealed record Finite : TimeRange, IFiniteRange<TimeOnly>
+     {
+         internal Finite(TimeOnly start, TimeOnly end, bool startInclusive, bool endInclusive)

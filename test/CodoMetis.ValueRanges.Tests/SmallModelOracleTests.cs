@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Oracles;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -490,10 +491,7 @@ public class SmallModelOracleTests
                       $"{domain}: expected the sweep to make well over 100,000 checks, made {checks}. "
                     + "Has the enumeration stopped producing ranges?");
 
-        Assert.AreEqual(0, failures.Count,
-                        $"{domain}: {failures.Count} of {checks} checks disagree with set theory:"
-                      + Environment.NewLine + string.Join(Environment.NewLine, failures.Take(25))
-                      + (failures.Count > 25 ? $"{Environment.NewLine}  … and {failures.Count - 25} more" : ""));
+        Candidates.Verdict(nameof(SmallModelOracleTests), failures, $"{domain}: of {checks} checks, these disagree with set theory");
 
         HashSet<int> ModelOfRange(TRange range) =>
             [.. Enumerable.Range(0, gridMax + 1).Where(k => range.Contains(valueOf(k)))];

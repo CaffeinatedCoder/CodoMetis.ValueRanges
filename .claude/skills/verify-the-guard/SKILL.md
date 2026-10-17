@@ -67,6 +67,15 @@ tree partially restored.
   fix — restructure it to exercise behaviour that exists either way, or accept that it is a feature
   test rather than a regression test and say so.
 
+## When the guard is an oracle sweep
+
+Keep the revert. A registered oracle (`test/oracles/oracles.json`) must have a seed under
+`test/oracles/seeds/<defect>.patch`: the `git diff -- src/` of the planted defect, headed by `Seed:`
+(what is broken), `Oracles:` (the classes it was shown to fail) and `Fails:` lines. `OracleSeedTests`
+checks in CI that every oracle has one and that each still applies; `dotnet run tools/oracles.cs
+seeds <defect>` re-proves that it is caught. A seed that fails the class for a *different* reason
+(compile error, a harness exception) is not a seed. See `docs/oracles.md`.
+
 ## When the guard's subject is packaging or release wiring
 
 There is no one-line source fix to revert. The counterfactual is to **seed the defect** — bump the

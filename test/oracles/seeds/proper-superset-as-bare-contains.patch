@@ -1,0 +1,20 @@
+Seed: IsProperSupersetOf translates to a bare @>, so a set is a proper superset of itself on the server and not in memory
+Oracles: SetOperatorParityTests
+Fails: the every-ordered-pair sweep against PostgreSQL, on every equal pair
+History: the seed named in docs/testing.md for this sweep
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
+index b76d055..aadb57a 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
+@@ -105,9 +105,7 @@ internal sealed class ValueSetsMethodCallTranslator(
+                     sqlExpressionFactory.Not(sqlExpressionFactory.Contains(Set(0), Set(1))));
+ 
+             case nameof(ValueSetExtensions.IsProperSupersetOf) when arguments.Count == 2:
+-                return sqlExpressionFactory.AndAlso(
+-                    sqlExpressionFactory.Contains(Set(0), Set(1)),
+-                    sqlExpressionFactory.Not(sqlExpressionFactory.ContainedBy(Set(0), Set(1))));
++                return sqlExpressionFactory.Contains(Set(0), Set(1));
+ 
+             // array_remove preserves canonical form — a sorted, deduplicated array stays sorted
+             // and deduplicated once an element is dropped — so unlike Union this composes

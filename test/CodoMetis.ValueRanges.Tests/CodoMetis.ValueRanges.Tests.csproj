@@ -20,4 +20,12 @@
       <ProjectReference Include="..\..\src\CodoMetis.ValueRanges\CodoMetis.ValueRanges.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!--
+            The candidate registry of the oracle sweeps, shared by every project that holds one
+            (see test/oracles/README.md). Linked, not referenced, so the projects stay independent.
+        -->
+        <Compile Include="..\oracles\Candidates.cs" Link="Candidates.cs" />
+    </ItemGroup>
+
 </Project>

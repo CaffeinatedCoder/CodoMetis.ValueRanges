@@ -1,0 +1,18 @@
+Seed: a date element that is not ISO 8601 falls back to the lenient BCL parse, so [01.02.2027,05.03.2027) reads month first instead of being refused
+Oracles: TemporalLiteralStrictnessContractTests
+Fails: the strictness sweep for every entry point of every type over DateOnly
+History: shipped before 9.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/IsoTemporal.cs b/src/CodoMetis.ValueRanges/Internals/IsoTemporal.cs
+index be4e9da..e0bca74 100644
+--- a/src/CodoMetis.ValueRanges/Internals/IsoTemporal.cs
++++ b/src/CodoMetis.ValueRanges/Internals/IsoTemporal.cs
+@@ -56,7 +56,7 @@ internal static class IsoTemporal
+ 
+         return DateOnly.TryParseExact(s, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
+             ? value
+-            : throw new FormatException("Expected an ISO 8601 date, yyyy-MM-dd, or infinity / -infinity.");
++            : DateOnly.Parse(s, CultureInfo.InvariantCulture);
+     }
+ 
+     internal static TimeOnly ParseTime(ReadOnlySpan<char> s)
