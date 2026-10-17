@@ -36,6 +36,18 @@ internal static partial class OracleCatalogue
 
     internal static IReadOnlyList<Seed> Seeds { get; } = LoadSeeds();
 
+    /// <summary>PostgreSQL's range, multirange and array surface, one entry per catalogue row, each with the member, the waiver or the issue.</summary>
+    internal static IReadOnlyList<PostgresSurfaceEntry> PostgresSurface { get; } = Load<List<PostgresSurfaceEntry>>("postgres-surface.json");
+
+    /// <summary>The raw <c>pg_operator</c>/<c>pg_proc</c> listing <c>tools/oracles.cs pg-surface</c> wrote, one line per row.</summary>
+    internal static PostgresListing PostgresSurfaceListing { get; } = PostgresListing.Read(Path.Combine(Directory.FullName, "postgres-surface.catalog.txt"));
+
+    /// <summary>
+    /// The no-database EF translation test projects: every <c>.cs</c> file of each, concatenated. A
+    /// surface entry's <c>translation</c> must occur in it, so a dropped assertion fails the entry.
+    /// </summary>
+    internal static string TranslationTestSources { get; } = ReadTranslationTestSources();
+
     /// <summary>The documents that make promises to consumers; every one must carry at least one claim.</summary>
     internal static readonly string[] PromiseDocuments =
     [
@@ -84,6 +96,29 @@ internal static partial class OracleCatalogue
         using var stream = File.OpenRead(path);
         return JsonSerializer.Deserialize<T>(stream, s_json)
             ?? throw new InvalidOperationException($"'{path}' is empty.");
+    }
+
+    private static string ReadTranslationTestSources()
+    {
+        var testRoot = new DirectoryInfo(Path.Combine(RepoLayout.Root.FullName, "test"));
+        var projects = testRoot.EnumerateDirectories("*EFCore.PostgreSQL*.Tests")
+                               .Where(project => !project.Name.EndsWith("IntegrationTests", StringComparison.Ordinal))
+                               .OrderBy(project => project.Name, StringComparer.Ordinal)
+                               .ToList();
+        if (projects.Count == 0)
+            throw new InvalidOperationException($"No EF translation test project under '{testRoot.FullName}'.");
+
+        var text = new System.Text.StringBuilder();
+        foreach (var project in projects)
+        foreach (var file in project.EnumerateFiles("*.cs", SearchOption.AllDirectories))
+        {
+            if (file.FullName.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+             || file.FullName.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+            text.Append(File.ReadAllText(file.FullName)).Append('\n');
+        }
+
+        return text.ToString();
     }
 
     private static List<Seed> LoadSeeds()
@@ -152,6 +187,57 @@ internal static partial class OracleCatalogue
 
         /// <summary>The heading slug after the <c>#</c>, or null for a claim about the whole file.</summary>
         internal string? Heading => Source.Contains('#') ? Source[(Source.IndexOf('#') + 1)..] : null;
+    }
+
+    /// <summary>One row of PostgreSQL's surface, keyed by its catalogue signature, and what the library does about it.</summary>
+    internal sealed class PostgresSurfaceEntry
+    {
+        /// <summary><c>left op right</c> for an operator, <c>name(argtypes)</c> for a function or aggregate, free text for <c>other</c>.</summary>
+        public string Signature { get; init; } = "";
+
+        /// <summary>operator, function, aggregate (listed rows) or other (SQL syntax and concrete-typed functions no listing query reaches).</summary>
+        public string Kind { get; init; } = "";
+
+        /// <summary>The PostgreSQL major the row first appeared in; 8 stands for anything older than 8.4.</summary>
+        public double Since { get; init; }
+
+        /// <summary>The <see cref="ApiSurface"/> key of the member that mirrors the row, or null.</summary>
+        public string? Member { get; init; }
+
+        /// <summary>The SQL fragment the no-database translation tests assert for the member, or null when it is in-memory only.</summary>
+        public string? Translation { get; init; }
+
+        /// <summary>Why there is no member, or null.</summary>
+        public string? Waiver { get; init; }
+
+        /// <summary>The issue that will add the member; required when there is neither a member nor a waiver.</summary>
+        public int? Issue { get; init; }
+    }
+
+    /// <summary>The checked-in listing: its server version and one (kind, signature, result) per line.</summary>
+    internal sealed record PostgresListing(string Version, IReadOnlyList<PostgresListing.Line> Lines)
+    {
+        internal sealed record Line(string Kind, string Signature, string Result);
+
+        internal int Major => int.Parse(Version.Split('.')[0], System.Globalization.CultureInfo.InvariantCulture);
+
+        internal static PostgresListing Read(string path)
+        {
+            var version = "";
+            var lines   = new List<Line>();
+            foreach (var raw in System.IO.File.ReadLines(path))
+            {
+                if (raw.Length == 0) continue;
+                if (raw.StartsWith("# PostgreSQL ", StringComparison.Ordinal)) { version = raw["# PostgreSQL ".Length..].Trim(); continue; }
+                if (raw.StartsWith('#')) continue;
+                var match = Regex.Match(raw, @"^(?<kind>operator|function|aggregate)\s+(?<signature>.+?) -> (?<result>.+)$");
+                if (!match.Success) throw new InvalidOperationException($"'{path}' has a line the listing format does not allow: '{raw}'");
+                lines.Add(new Line(match.Groups["kind"].Value, match.Groups["signature"].Value, match.Groups["result"].Value));
+            }
+
+            if (version.Length == 0) throw new InvalidOperationException($"'{path}' has no '# PostgreSQL <version>' header line.");
+            return new PostgresListing(version, lines);
+        }
     }
 
     /// <summary>A test class that checks the library against an independent answer over many cases.</summary>
