@@ -1,6 +1,6 @@
 # Build and test on every push to main or a release branch, and every PR into either. A release
-# branch (release/9.x) is the maintained previous major, so its PRs need the same checks as main's
-# (CONTRIBUTING.md#branches-and-releases).
+# branch (release/9.x) holds patches for the current release until the next major ships, so its PRs
+# need the same checks as main's (CONTRIBUTING.md#branches-and-releases).
 #
 # Linux only, deliberately. Nothing in the four shipping packages reads the environment — no
 # TimeZoneInfo, no DateTime.Now, no CurrentCulture, no file or path access anywhere in src/ — so
