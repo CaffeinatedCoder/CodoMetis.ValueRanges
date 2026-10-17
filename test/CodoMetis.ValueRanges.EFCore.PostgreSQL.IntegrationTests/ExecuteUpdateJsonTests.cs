@@ -102,9 +102,107 @@ public sealed class ExecuteUpdateJsonTests
                 () => update.JsonDocuments.Where(r => r.Id == 9602)
                             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Doc.Tags, StringSet.From("c"))));
             StringAssert.Contains(refusal.Message, "'Doc.Tags'");
+            StringAssert.Contains(refusal.Message, "JSON array");
+            Assert.IsFalse(refusal.Message.Contains("writes NULL as the whole document"), refusal.Message);
         }
 
         Assert.AreEqual(seeded.Doc.Tags, (await Reload(9602)).Tags);
+    }
+
+    // -- Null: refused, with a message of its own (#57) --
+    //
+    // Measured against PostgreSQL 17 with the refusal disabled: a constant null and a null parameter
+    // both reach the server as jsonb_set("Doc", '{MaybeTags}', to_jsonb(NULL)) — the provider inlines
+    // a null parameter — and fail with 42804, the untyped NULL. A value that may be null on some rows
+    // is typed (to_jsonb(CASE … THEN NULL ELSE @p END)), and jsonb_set returns NULL for a NULL value:
+    // the UPDATE wrote NULL as the whole document and failed only because "Doc" is NOT NULL (23502).
+    // The non-null branch would write the JSON array, so it keeps the to_jsonb message and adds this.
+
+    [TestMethod]
+    public async Task ANullValueSetInsideTheDocument_IsRefusedForWhatNullDoes_AndTheRowStillLoads()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        // The parameter first: it compiles to the same SQL as the constant, and a refusal is never cached.
+        StringSet? none = null;
+        await AssertNullRefused(9641, s => s.SetProperty(r => r.Doc.MaybeTags, none));
+        await AssertNullRefused(9642, s => s.SetProperty(r => r.Doc.MaybeTags, (StringSet?)null));
+
+        async Task AssertNullRefused(int id, Action<Microsoft.EntityFrameworkCore.Query.UpdateSettersBuilder<JsonDocumentRow>> setter)
+        {
+            await SeedWithMaybeTags(id);
+            await using (var update = new IntegrationDbContext())
+            {
+                var refusal = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+                    () => update.JsonDocuments.Where(r => r.Id == id).ExecuteUpdateAsync(setter));
+                StringAssert.Contains(refusal.Message, "'Doc.MaybeTags' inside a JSON column to null");
+                StringAssert.Contains(refusal.Message, "writes NULL as the whole document");
+                StringAssert.Contains(refusal.Message, "SaveChanges, which writes JSON null");
+                Assert.IsFalse(refusal.Message.Contains("JSON array"), refusal.Message);
+            }
+
+            Assert.AreEqual(MaybeSeeded, (await Reload(id)).MaybeTags);
+        }
+    }
+
+    [TestMethod]
+    public async Task AValueSetThatMayBeNull_IsRefusedForBothOutcomes_AndTheRowStillLoads()
+    {
+        ContainerLifecycle.RequireDatabase();
+        await SeedWithMaybeTags(9643);
+
+        var some = StringSet.From("p");
+        await using (var update = new IntegrationDbContext())
+        {
+            var refusal = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+                () => update.JsonDocuments.Where(r => r.Id == 9643)
+                            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Doc.MaybeTags, r => r.Id > 0 ? null : some)));
+            StringAssert.Contains(refusal.Message, "'Doc.MaybeTags' inside a JSON column.");
+            StringAssert.Contains(refusal.Message, "JSON array");
+            StringAssert.Contains(refusal.Message, "writes NULL as the whole document");
+        }
+
+        Assert.AreEqual(MaybeSeeded, (await Reload(9643)).MaybeTags);
+    }
+
+    /// <summary>The two ways the null refusal names, run against the server.</summary>
+    [TestMethod]
+    public async Task ANullValueSetInsideTheDocument_IsWrittenBySaveChanges_OrByTheWholeDocument()
+    {
+        ContainerLifecycle.RequireDatabase();
+        await SeedWithMaybeTags(9644);
+        await SeedWithMaybeTags(9645);
+
+        await using (var tracked = new IntegrationDbContext())
+        {
+            var row = await tracked.JsonDocuments.SingleAsync(r => r.Id == 9644);
+            row.Doc.MaybeTags = null;
+            await tracked.SaveChangesAsync();
+        }
+
+        var cleared = await Reload(9645);
+        cleared.MaybeTags = null;
+        await using (var update = new IntegrationDbContext())
+            await update.JsonDocuments.Where(r => r.Id == 9645).ExecuteUpdateAsync(s => s.SetProperty(r => r.Doc, cleared));
+
+        await using var read = new IntegrationDbContext();
+        foreach (var id in new[] { 9644, 9645 })
+        {
+            var doc = (await read.JsonDocuments.AsNoTracking().SingleAsync(r => r.Id == id)).Doc;
+            Assert.IsNull(doc.MaybeTags, $"row {id}");
+            Assert.AreEqual(StringSet.From("kept"), doc.Tags, $"row {id}");
+        }
+
+        Assert.AreEqual(2, await read.JsonDocuments.CountAsync(r => (r.Id == 9644 || r.Id == 9645) && r.Doc.MaybeTags == null));
+    }
+
+    private static readonly StringSet MaybeSeeded = StringSet.From("seed");
+
+    private static async Task SeedWithMaybeTags(int id)
+    {
+        await using var write = new IntegrationDbContext();
+        write.JsonDocuments.Add(new JsonDocumentRow { Id = id, Doc = new JsonDocument { MaybeTags = MaybeSeeded, Tags = StringSet.From("kept") } });
+        await write.SaveChangesAsync();
     }
 
     [TestMethod]
