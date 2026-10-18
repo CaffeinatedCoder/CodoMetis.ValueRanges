@@ -190,6 +190,11 @@ public sealed class QueryTranslationTests
         StringAssert.Contains(sql, "NOT (isempty(b.\"Period\"))");
     }
 
+    /// <summary>
+    /// <c>lower_inf</c> and <c>upper_inf</c> are the agreed meaning: both are <see langword="true"/>
+    /// for <c>(,)</c>, and since 10.0.0 the in-memory methods answer the same (#109). The translation
+    /// must not narrow to <c>lower_inf AND NOT upper_inf</c>, which was the other way to agree.
+    /// </summary>
     [TestMethod]
     public void Range_StateChecks_TranslateToRangeFunctions()
     {
@@ -201,6 +206,8 @@ public sealed class QueryTranslationTests
         StringAssert.Contains(sql, "isempty(b.\"Period\")");
         StringAssert.Contains(sql, "lower_inf(b.\"Period\")");
         StringAssert.Contains(sql, "upper_inf(b.\"Period\")");
+        Assert.IsFalse(sql.Contains("NOT (upper_inf", StringComparison.Ordinal), $"IsUnboundedStart must stay lower_inf, not exclude (,):\n{sql}");
+        Assert.IsFalse(sql.Contains("NOT (lower_inf", StringComparison.Ordinal), $"IsUnboundedEnd must stay upper_inf, not exclude (,):\n{sql}");
     }
 
     /// <summary>
