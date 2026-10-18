@@ -96,6 +96,15 @@ bookings.OrderBy(b => b.Period.LowerBound());
 bookings.Select(b => b.Period.Merge(other));
 bookings.Select(b => b.BlockedDays.Merge());
 
+// range_merge((datemultirange(range_merge(b."Period", @other)) - datemultirange(b."Period"))
+//             - datemultirange(@other))                          (the gap between them)
+bookings.Where(b => !b.Period.Gap(other).IsEmpty());
+
+// datemultirange(range_merge(b."BlockedDays")) - b."BlockedDays"   and
+// datemultirange(@month) - b."BlockedDays"                         (the free slots)
+bookings.Select(b => b.BlockedDays.Gaps());
+bookings.Select(b => b.BlockedDays.Gaps(month));
+
 // range_agg(b."Period") / range_intersect_agg(b."Period") per group
 bookings.GroupBy(b => b.CustomerId)
         .Select(g => g.Select(b => b.Period).RangeAgg());
@@ -110,6 +119,14 @@ bookings.Where(b => !b.BlockedDays.IsEmpty());
 // Value equality on multirange columns — b."BlockedDays" = @set
 bookings.Where(b => b.BlockedDays == someSet);
 ```
+
+Merging ranges and finding gaps run as functions over multiranges:
+
+- **`Merge`** becomes `range_merge`.
+- **`Gap`** becomes `range_merge` of the hull minus both ranges, computed on multiranges. PostgreSQL
+  has no gap function, and subtracting one range from another fails when two ranges would remain.
+- **`Gaps()` and `Gaps(window)`** on a `RangeSet` become the hull minus the set, and the window
+  minus the set.
 
 The state checks on a range become PostgreSQL functions:
 
@@ -665,11 +682,13 @@ parameters:
 | | `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` | `<<`, `>>`, `&<`, `&>` |
 | | `CompareTo` against 0, `OrderBy` | `<`, `<=`, `>`, `>=`, `=`, `ORDER BY` |
 | | `Intersect`, `Union`, `Except`, `Merge` | `*`, `+`, `-`, `range_merge` |
+| | `Gap` | `range_merge` over the multirange difference of the hull and both ranges |
 | | `IsEmpty`, `IsUnboundedStart`/`End`, `IsInfinity`, `IsFinite` | `isempty`, `lower_inf`, `upper_inf`, and combinations |
 | | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |
 | | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
 | | `RangeAgg`, `RangeIntersectAgg`, over ranges or sets | `range_agg`, `range_intersect_agg` |
 | `RangeSet` | the same operations over multirange columns, plus `Complement` and `IsContainedBy` | the multirange forms, and `'{(,)}' - x` |
+| | `Gaps()`, `Gaps(window)` | `multirange(range_merge(x)) - x`, `multirange(window) - x` |
 | Value sets | `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, and the proper variants | `@>`, `&&`, `<@` |
 | | `Count`, `IsEmpty` | `cardinality` |
 | | `Union`, `Remove` | `array_cat`, `array_remove` |

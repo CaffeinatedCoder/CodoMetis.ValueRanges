@@ -329,6 +329,29 @@ public sealed class QueryTranslationTests
     }
 
     [TestMethod]
+    public void Gap_TranslatesToTheHullMinusBothOperands()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.Period.Gap(Range)));
+        StringAssert.Contains(
+            sql,
+            $"range_merge((datemultirange(range_merge(b.\"Period\", {RangeLiteral})) - datemultirange(b.\"Period\")) - datemultirange({RangeLiteral}))");
+    }
+
+    [TestMethod]
+    public void RangeSet_Gaps_TranslatesToTheHullMinusTheSet()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.BlockedDays.Gaps()));
+        StringAssert.Contains(sql, "datemultirange(range_merge(b.\"BlockedDays\")) - b.\"BlockedDays\"");
+    }
+
+    [TestMethod]
+    public void RangeSet_GapsInAWindow_TranslatesToTheWindowMinusTheSet()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.BlockedDays.Gaps(b.Period)));
+        StringAssert.Contains(sql, "datemultirange(b.\"Period\") - b.\"BlockedDays\"");
+    }
+
+    [TestMethod]
     public void RangeSet_Merge_TranslatesToRangeMergeFunction()
     {
         var sql = Sql(db => db.Bookings.Select(b => b.BlockedDays.Merge()));

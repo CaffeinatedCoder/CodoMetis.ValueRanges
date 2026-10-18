@@ -16,7 +16,7 @@ NodaTime types for [CodoMetis.ValueRanges](https://www.nuget.org/packages/CodoMe
 Each type is the same discriminated union of five sealed variants as in the core package: `Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange` and `Infinity`. Every operation of the core algebra works unchanged:
 
 - **Queries:** `Contains`, `Overlaps`, `IsAdjacentTo` and the directional comparisons.
-- **Set operations:** `Intersect`, `Union`, `Except` and `Merge`.
+- **Set operations:** `Intersect`, `Union`, `Except`, `Merge`, `Gap` and `Gaps`.
 - **Bounds and aggregates:** the bound accessors, and `RangeAgg`/`RangeIntersectAgg`.
 - **Multiranges:** `RangeSet<TRange, T>`.
 - **Text and JSON:** PostgreSQL literal parsing and formatting, and `System.Text.Json` serialization.

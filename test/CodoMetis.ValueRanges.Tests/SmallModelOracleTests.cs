@@ -456,6 +456,10 @@ public class SmallModelOracleTests
                 CheckSet("Union",     ModelOfSet(a.Range.Union(b.Range)),       union);
                 CheckSet("Except",    ModelOfSet(a.Range.Except(b.Range)),      difference);
 
+                // The gap is what the hull adds to the union: a ∪ gap ∪ b = merge(a, b) and the gap
+                // shares nothing with either operand, which is all a gap is.
+                CheckSet("Gap",       ModelOfRange(a.Range.Gap(b.Range)),       Difference(Hull(union), union));
+
                 // --- the same questions at the set arities. Two of the four bugs were the
                 //     single-range overload and a set overload disagreeing, so an operation
                 //     lifted through RangeSet.From([r]) must give the lifted answer.
@@ -507,6 +511,9 @@ public class SmallModelOracleTests
 
     private static HashSet<int> Hull(HashSet<int> values) =>
         values.Count == 0 ? [] : [.. Enumerable.Range(values.Min(), values.Max() - values.Min() + 1)];
+
+    private static HashSet<int> Difference(HashSet<int> left, HashSet<int> right) =>
+        [.. left.Where(value => !right.Contains(value))];
 
     private static string Join(HashSet<int> values) => string.Join(",", values.Order());
 }
