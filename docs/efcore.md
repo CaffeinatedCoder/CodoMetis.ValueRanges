@@ -179,6 +179,13 @@ column:
   `MaxValue` to PostgreSQL's `-infinity` and `infinity`. So a *finite* bound of `DateTime.MaxValue`
   becomes an explicit `infinity` bound in the database. That is still different from an
   *unbounded* end (`upper_inf` stays `false`), so the shape checks behave consistently.
+- **A date at the extreme is adjacent to nothing in the database.** Npgsql also writes
+  `DateOnly.MinValue` and `MaxValue`, and `LocalDate.MinIsoValue` and `MaxIsoValue`, as
+  `-infinity` and `infinity`, and no date is next to those. So `IsAdjacentTo` returns `false` in
+  SQL for `[0001-01-01,0001-01-01]` and `[0001-01-02,)`, and `true` in memory, where 0001-01-01 is
+  a day like any other. One day inside the extremes the two sides agree. If you set
+  `Npgsql.DisableDateTimeInfinityConversions`, the extremes stay dates and the two sides agree
+  there too.
 
 ## Indexing a range column, and preventing overlaps
 

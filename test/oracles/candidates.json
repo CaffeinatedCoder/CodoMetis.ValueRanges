@@ -54,20 +54,6 @@
     "method": "ElementWhitespace_ReadsAsPostgresReadsIt"
   },
   {
-    "oracle": "DifferentialFuzzParityTests",
-    "row": "DateRange IsAdjacentTo at the domain edge ",
-    "family": "date extremes are ±infinity on the server, which no finite date is adjacent to",
-    "issue": "#110",
-    "method": "Ranges_AgreeWithPostgres"
-  },
-  {
-    "oracle": "DifferentialFuzzParityTests",
-    "row": "DateRange> IsAdjacentTo(set) at the domain edge ",
-    "family": "date extremes are ±infinity on the server, which no finite date is adjacent to",
-    "issue": "#110",
-    "method": "Ranges_AgreeWithPostgres"
-  },
-  {
     "oracle": "HostCultureProbeTests",
     "row": "DateRange variant minimal TryParse ",
     "family": "minimal API binds a variant-typed parameter through the union's TryParse: 200 with null for a valid literal and for another shape",

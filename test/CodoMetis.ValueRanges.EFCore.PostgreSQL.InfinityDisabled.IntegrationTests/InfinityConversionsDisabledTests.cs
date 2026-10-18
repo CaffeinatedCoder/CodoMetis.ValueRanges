@@ -262,6 +262,53 @@ public sealed class InfinityConversionsDisabledTests
         return failures;
     }
 
+    /// <summary>
+    /// With the switch set, <see cref="DateOnly.MinValue"/> and <see cref="DateOnly.MaxValue"/> reach the
+    /// server as the dates they are, so a range bounded at an extreme is adjacent to its neighbour there
+    /// as it is in memory. With the switch off the same pair diverges
+    /// (<c>DomainBoundaryDivergenceTests</c>): the extreme is <c>-infinity</c> / <c>infinity</c> on the
+    /// server, which no finite date is next to. This is what keeps the in-memory answer as it is — a
+    /// range that stopped being adjacent at the extreme would disagree here instead.
+    /// </summary>
+    [TestMethod]
+    public async Task AtTheDateExtremes_AdjacencyAgrees_BecauseTheExtremesStayDates()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var first      = DateRange.CreateFinite(DateOnly.MinValue, DateOnly.MinValue);
+        var rest       = DateRange.CreateUnboundedEnd(new DateOnly(1, 1, 2));
+        var beforeLast = DateRange.CreateFinite(new DateOnly(9999, 12, 30), new DateOnly(9999, 12, 30));
+        var last       = DateRange.CreateUnboundedEnd(DateOnly.MaxValue);
+
+        Assert.IsTrue(first.IsAdjacentTo(rest));
+        Assert.IsTrue(beforeLast.IsAdjacentTo(last));
+
+        await using (var write = new InfinityDisabledDbContext())
+        {
+            write.Rows.AddRange(
+                new ExtremesRow { Id = 31, Native = new ExtremesValues { Day = rest },       Doc = new ExtremesValues() },
+                new ExtremesRow { Id = 32, Native = new ExtremesValues { Day = beforeLast }, Doc = new ExtremesValues() });
+            await write.SaveChangesAsync();
+        }
+
+        Assert.AreEqual(1, await Count(31, r => r.Native.Day.IsAdjacentTo(first)), "[0001-01-02,) -|- [0001-01-01,0001-01-01] as a parameter");
+        Assert.AreEqual(1, await Count(31, r => r.Native.Day.IsAdjacentTo(EF.Constant(first))), "… and as a constant");
+        Assert.AreEqual(1, await Count(32, r => r.Native.Day.IsAdjacentTo(last)), "[9999-12-30,9999-12-30] -|- [9999-12-31,) as a parameter");
+        Assert.AreEqual(1, await Count(32, r => r.Native.Day.IsAdjacentTo(EF.Constant(last))), "… and as a constant");
+
+        await using var connection = new NpgsqlConnection(ContainerLifecycle.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("SELECT @first -|- @rest, @beforeLast -|- @last", connection);
+        command.Parameters.AddWithValue("first", new NpgsqlTypes.NpgsqlRange<DateOnly>(DateOnly.MinValue, true, DateOnly.MinValue, true));
+        command.Parameters.AddWithValue("rest", new NpgsqlTypes.NpgsqlRange<DateOnly>(new DateOnly(1, 1, 2), true, false, default, false, true));
+        command.Parameters.AddWithValue("beforeLast", new NpgsqlTypes.NpgsqlRange<DateOnly>(new DateOnly(9999, 12, 30), true, new DateOnly(9999, 12, 30), true));
+        command.Parameters.AddWithValue("last", new NpgsqlTypes.NpgsqlRange<DateOnly>(DateOnly.MaxValue, true, false, default, false, true));
+        await using var reader = await command.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        Assert.IsTrue(reader.GetBoolean(0), "Npgsql sends 0001-01-01 as a date, so the server finds 0001-01-02 next to it");
+        Assert.IsTrue(reader.GetBoolean(1), "Npgsql sends 9999-12-31 as a date, so the server finds 9999-12-30 next to it");
+    }
+
     private static async Task<ExtremesRow> Insert(int id)
     {
         await using (var write = new InfinityDisabledDbContext())
