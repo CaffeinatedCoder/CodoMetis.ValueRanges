@@ -113,6 +113,7 @@ public sealed class RangeSetLiftParityTests
             Unary("UpperBoundInclusive", a.UpperBoundInclusive().ToString(), lifted.UpperBoundInclusive().ToString());
             Unary("Merge",               Outcome(() => Show(a)),             Outcome(() => Show(lifted.Merge())));
             Unary("Complement",          Outcome(() => TRange.Infinite.Except(a).ToString()), Outcome(() => lifted.Complement().ToString()));
+            Unary("Gaps",                "{}",                               Outcome(() => lifted.Gaps().ToString()));
             Unary("ToString",            a.IsEmpty() ? "{}" : "{" + Show(a) + "}",       Outcome(() => lifted.ToString()));
 
             foreach (var point in points)
@@ -148,9 +149,12 @@ public sealed class RangeSetLiftParityTests
                       ("| set", () => setA | setB), ("| range", () => setA | b));
             Operation("Except", () => a.Except(b),
                       ("Except(set)", () => setA.Except(setB)), ("Except(range)", () => setA.Except(b)),
-                      ("- set", () => setA - setB), ("- range", () => setA - b));
+                      ("- set", () => setA - setB), ("- range", () => setA - b),
+                      ("operand.Gaps(window)", () => setB.Gaps(a)));
             Operation("Merge", () => RangeSet<TRange, T>.From([a.Merge(b)]),
                       ("Union(set).Merge()", () => RangeSet<TRange, T>.From([setA.Union(setB).Merge()])));
+            Operation("Gap", () => RangeSet<TRange, T>.From([a.Gap(b)]),
+                      ("Union(set).Gaps()", () => setA.Union(setB).Gaps()));
 
             void Predicate(string operation, Func<bool> range, Func<bool> setSet, Func<bool> setRange)
             {

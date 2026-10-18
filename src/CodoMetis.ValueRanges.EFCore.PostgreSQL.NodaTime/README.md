@@ -75,6 +75,7 @@ The full range algebra runs in the database, exactly as in the base package:
 - **The operators**: `@>`, `&&`, `<<`, `-|-`, and the rest.
 - **The bound accessors**: `lower`, `upper`, `lower_inc`, `upper_inc`.
 - **`Merge`**, as `range_merge`.
+- **`Gap` and `Gaps`**, as multirange differences.
 - **The aggregates** `RangeAgg` and `RangeIntersectAgg`.
 - **`Intersect`, `Union` and `Except`.**
 - **Multirange operations**, including `==` equality.

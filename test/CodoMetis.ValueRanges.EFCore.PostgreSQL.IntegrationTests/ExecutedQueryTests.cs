@@ -68,6 +68,56 @@ public class ExecutedQueryTests
     }
 
     [TestMethod]
+    public async Task GapAndGaps_MatchInMemory()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        DateOnly June(int day) => new(2025, 6, day);
+
+        var period  = DateRange.CreateFinite(June(1), June(8));
+        var blocked = RangeSet<DateRange, DateOnly>.From(
+            [DateRange.CreateFinite(June(3), June(5)), DateRange.CreateFinite(June(20), June(25))]);
+        await Seed(new Reservation { Id = 2025, Period = period, BlockedDays = blocked });
+
+        var later    = DateRange.CreateFinite(June(12), June(15));
+        var touching = DateRange.CreateFinite(June(9), June(10));
+        var window   = DateRange.CreateFinite(June(1), June(30));
+
+        await using var context = new IntegrationDbContext();
+
+        var server = await context.Reservations
+            .Where(r => r.Id == 2025)
+            .Select(r => new
+            {
+                Gap          = r.Period.Gap(later),
+                Reversed     = later.Gap(r.Period),
+                Adjacent     = r.Period.Gap(touching),
+                Gaps         = r.BlockedDays.Gaps(),
+                InWindow     = r.BlockedDays.Gaps(window),
+                FreeInPeriod = r.BlockedDays.Gaps(r.Period),
+                HasGapLater  = r.Period.Gap(later).IsEmpty()
+            })
+            .SingleAsync();
+
+        Assert.AreEqual(period.Gap(later), server.Gap);
+        Assert.AreEqual(DateRange.CreateFinite(June(9), June(11)), server.Gap);
+        Assert.AreEqual(later.Gap(period), server.Reversed);
+        Assert.AreEqual(DateRange.Empty, server.Adjacent);
+        Assert.AreEqual(blocked.Gaps(), server.Gaps);
+        Assert.AreEqual(blocked.Gaps(window), server.InWindow);
+        Assert.AreEqual(blocked.Gaps(period), server.FreeInPeriod);
+        Assert.IsFalse(server.HasGapLater);
+
+        // As a predicate too: the rows with a free stretch between the stay and a later one.
+        var withGap = await context.Reservations
+            .Where(r => r.Id == 2025 && !r.Period.Gap(later).IsEmpty())
+            .Select(r => r.Id)
+            .ToListAsync();
+
+        CollectionAssert.AreEqual(new[] { 2025 }, withGap);
+    }
+
+    [TestMethod]
     public async Task MergeAndBoundAccessors_MatchInMemory()
     {
         ContainerLifecycle.RequireDatabase();
