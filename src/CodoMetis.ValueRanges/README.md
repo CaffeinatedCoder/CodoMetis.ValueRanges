@@ -109,6 +109,7 @@ for the full reasoning.
 - **Bound accessors:** `LowerBound`/`UpperBound`/`LowerBoundInclusive`/`UpperBoundInclusive`. They
   return `null` exactly where PostgreSQL returns `NULL`.
 - **Aggregates:** `RangeAgg`/`RangeIntersectAgg`.
+- **Calendar ranges:** `DateRange.Month`, `Quarter`, `Year` and `IsoWeek`. Weeks are ISO 8601, Monday to Sunday.
 
 Every one of them returns exactly what PostgreSQL returns, including how PostgreSQL canonicalizes
 discrete ranges.

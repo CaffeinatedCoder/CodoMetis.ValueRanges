@@ -17,6 +17,8 @@ public sealed class ClientSideOnlyTranslationTests
         ["Length", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Length > 3))],
         ["Values()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Values().Contains(5)))],
         ["Clamp", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Clamp(5) == 5))],
+        ["DateRange.Month(column)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => DateRange.Month(b.Period.LowerBound()!.Value).Contains(new DateOnly(2026, 6, 1))))],
+        ["DateRange.IsoWeek(column)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => DateRange.IsoWeek(b.Period.LowerBound()!.Value).Contains(new DateOnly(2026, 6, 1))))],
         ["ToRangeSet()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Codes.ToRangeSet().Contains(5)))],
         ["ToInt32Set()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.SeatBlocks.ToInt32Set().Contains(5)))],
         ["set[0]", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Tags[0] == "a"))],

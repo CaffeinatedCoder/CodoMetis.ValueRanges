@@ -24,6 +24,12 @@
     "against": "the Int32Range and DecimalRange models, through an order-preserving embedding, for every discovered range type"
   },
   {
+    "class": "CalendarRangeParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": ".NET's ISOWeek and the NodaTime package's WeekYearRules.Iso and YearMonth arithmetic, for every day of 1999-2031 and both domain ends, under five current cultures"
+  },
+  {
     "class": "JsonDefaultContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "differential",

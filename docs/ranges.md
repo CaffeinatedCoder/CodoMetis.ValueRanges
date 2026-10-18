@@ -51,6 +51,45 @@ Good to know:
   exclusive. Parsing is stricter: an inverted literal such as `[5,1)` fails, as it does in
   PostgreSQL ([Parse a literal](serialization.md#parse-a-literal)).
 
+### Create a month, a quarter, a year or a week
+
+The date ranges have factories for the calendar ranges you would otherwise build by hand:
+
+```csharp
+DateRange.Month(2026, 10);    // [2026-10-01,2026-10-31]
+DateRange.Quarter(2026, 4);   // [2026-10-01,2026-12-31]
+DateRange.Year(2026);         // [2026-01-01,2026-12-31]
+DateRange.IsoWeek(2026, 1);   // [2025-12-29,2026-01-04] — Monday to Sunday
+
+var today = new DateOnly(2026, 8, 15);
+DateRange.Month(today);       // [2026-08-01,2026-08-31] — the month that holds today
+DateRange.IsoWeek(today);     // [2026-08-10,2026-08-16]
+```
+
+Each factory takes either the numbers of the period or any day inside it. You get a `DateRange`
+like any other, so you can pass it to `Overlaps`, `Except` or `Gaps`.
+
+`LocalDateRange` in the NodaTime package has the same factories, taking a `LocalDate`.
+`YearMonthRange` has `Quarter` and `Year`: `YearMonthRange.Quarter(2026, 4)` is `[2026-10,2026-12]`.
+
+Good to know:
+
+- **Weeks are always ISO 8601, never your culture's.** A week starts on Monday, and week 1 is the
+  week that holds the year's first Thursday. The current culture's first day of the week plays no
+  part, the same way it plays no part in a literal.
+- **The week-year can differ from the calendar year.** January 1, 2027 is in week 53 of 2026, so
+  `DateRange.IsoWeek(new DateOnly(2027, 1, 1))` is `DateRange.IsoWeek(2026, 53)`. A week-year has
+  52 or 53 weeks.
+- **A number out of range throws.** A month outside 1 to 12, a quarter outside 1 to 4, or a week
+  past the last of its week-year throws `ArgumentOutOfRangeException`. So does a week that runs past
+  the last date the type can hold, such as week 52 of 9999.
+- **A `LocalDate` in another calendar is read as its ISO day.** `LocalDateRange.Month` returns the
+  ISO month that holds that day, as every bound of this type is ISO.
+- **In an EF Core query, pass values your code already has.** `b.Period.Overlaps(DateRange.Month(2026, 10))`
+  runs as SQL with the month as one constant. A factory that reads a column, such as
+  `DateRange.Month(b.Day)`, runs in memory only
+  ([What runs where](efcore.md#what-runs-where)).
+
 ## Pattern matching
 
 Every range is one of five kinds, which this page calls its *shape*: `Finite`, `UnboundedStart`,

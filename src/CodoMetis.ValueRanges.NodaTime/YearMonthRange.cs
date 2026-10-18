@@ -245,6 +245,55 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     public static YearMonth? PreviousValueBefore(YearMonth value)
         => RequireIso(value) == MinIso ? null : value.PlusMonths(-1);
 
+    // -------------------------------------------------------------------------
+    // Calendar ranges
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns quarter <paramref name="quarter"/> of <paramref name="year"/>: three months starting in
+    /// January, April, July or October. <c>YearMonthRange.Quarter(2026, 4)</c> is
+    /// <c>[2026-10,2026-12]</c>.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <param name="quarter">The quarter, 1 to 4.</param>
+    /// <returns>The quarter as a closed range of months.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year or the quarter is out of range.</exception>
+    public static YearMonthRange Quarter(int year, int quarter)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(quarter, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(quarter, 4);
+
+        return new Finite(new YearMonth(year, quarter * 3 - 2), new YearMonth(year, quarter * 3));
+    }
+
+    /// <summary>
+    /// Returns the quarter that contains <paramref name="month"/>.
+    /// </summary>
+    /// <param name="month">Any month of the quarter, in the ISO calendar.</param>
+    /// <returns>The quarter as a closed range of months.</returns>
+    /// <exception cref="ArgumentException"><paramref name="month"/> is not in the ISO calendar.</exception>
+    public static YearMonthRange Quarter(YearMonth month)
+    {
+        month = RequireIso(month);
+        return Quarter(month.Year, (month.Month + 2) / 3);
+    }
+
+    /// <summary>
+    /// Returns the twelve months of <paramref name="year"/>: <c>[2026-01,2026-12]</c>.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <returns>The year as a closed range of months.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year is out of range.</exception>
+    public static YearMonthRange Year(int year) => new Finite(new YearMonth(year, 1), new YearMonth(year, 12));
+
+    /// <summary>
+    /// Returns the year that contains <paramref name="month"/>.
+    /// </summary>
+    /// <param name="month">Any month of the year, in the ISO calendar.</param>
+    /// <returns>The year as a closed range of months.</returns>
+    /// <exception cref="ArgumentException"><paramref name="month"/> is not in the ISO calendar.</exception>
+    public static YearMonthRange Year(YearMonth month) => Year(RequireIso(month).Year);
+
     /// <summary>
     /// Enumerates the months the range contains, ascending and inclusive of both bounds.
     /// </summary>

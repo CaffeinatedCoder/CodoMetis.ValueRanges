@@ -52,6 +52,17 @@ public sealed class InlineRangeConstantTests
     }
 
     [TestMethod]
+    public void ACalendarRange_IsInlinedAsItsDays()
+    {
+        Assert.AreEqual(
+            "WHERE b.\"Period\" && '[2026-10-01,2026-10-31]'::daterange",
+            Where(db => db.Bookings.Where(b => b.Period.Overlaps(DateRange.Month(2026, 10)))));
+        Assert.AreEqual(
+            "WHERE b.\"Period\" <@ '[2025-12-29,2026-01-04]'::daterange",
+            Where(db => db.Bookings.Where(b => b.Period.IsContainedBy(DateRange.IsoWeek(2026, 1)))));
+    }
+
+    [TestMethod]
     public void ADateRange_FromLiteralDates()
         => Assert.AreEqual(
             "WHERE b.\"Period\" = '[2026-01-01,2026-01-31]'::daterange",

@@ -184,6 +184,112 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     /// <inheritdoc />
     public static DateOnly? PreviousValueBefore(DateOnly value) => value == DateOnly.MinValue ? null : value.AddDays(-1);
 
+    // -------------------------------------------------------------------------
+    // Calendar ranges
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the calendar month <paramref name="month"/> of <paramref name="year"/>, from its
+    /// first day to its last: <c>DateRange.Month(2026, 2)</c> is <c>[2026-02-01,2026-02-28]</c>.
+    /// </summary>
+    /// <param name="year">The year, 1 to 9999.</param>
+    /// <param name="month">The month, 1 to 12.</param>
+    /// <returns>The month as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year or the month is out of range.</exception>
+    public static DateRange Month(int year, int month)
+        => new Finite(new DateOnly(year, month, 1), new DateOnly(year, month, DateTime.DaysInMonth(year, month)));
+
+    /// <summary>
+    /// Returns the calendar month that contains <paramref name="date"/>.
+    /// </summary>
+    /// <param name="date">Any day of the month.</param>
+    /// <returns>The month as a closed range of days.</returns>
+    public static DateRange Month(DateOnly date) => Month(date.Year, date.Month);
+
+    /// <summary>
+    /// Returns quarter <paramref name="quarter"/> of <paramref name="year"/>: three calendar months
+    /// starting in January, April, July or October. <c>DateRange.Quarter(2026, 4)</c> is
+    /// <c>[2026-10-01,2026-12-31]</c>.
+    /// </summary>
+    /// <param name="year">The year, 1 to 9999.</param>
+    /// <param name="quarter">The quarter, 1 to 4.</param>
+    /// <returns>The quarter as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year or the quarter is out of range.</exception>
+    public static DateRange Quarter(int year, int quarter)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(quarter, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(quarter, 4);
+
+        return new Finite(new DateOnly(year, quarter * 3 - 2, 1), new DateOnly(year, quarter * 3, DateTime.DaysInMonth(year, quarter * 3)));
+    }
+
+    /// <summary>
+    /// Returns the quarter that contains <paramref name="date"/>.
+    /// </summary>
+    /// <param name="date">Any day of the quarter.</param>
+    /// <returns>The quarter as a closed range of days.</returns>
+    public static DateRange Quarter(DateOnly date) => Quarter(date.Year, (date.Month + 2) / 3);
+
+    /// <summary>
+    /// Returns the calendar year <paramref name="year"/>, from January 1 to December 31.
+    /// </summary>
+    /// <param name="year">The year, 1 to 9999.</param>
+    /// <returns>The year as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year is out of range.</exception>
+    public static DateRange Year(int year) => new Finite(new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
+
+    /// <summary>
+    /// Returns the calendar year that contains <paramref name="date"/>.
+    /// </summary>
+    /// <param name="date">Any day of the year.</param>
+    /// <returns>The year as a closed range of days.</returns>
+    public static DateRange Year(DateOnly date) => Year(date.Year);
+
+    /// <summary>
+    /// Returns ISO 8601 week <paramref name="week"/> of the ISO week-year <paramref name="weekYear"/>:
+    /// Monday to Sunday. <c>DateRange.IsoWeek(2026, 1)</c> is <c>[2025-12-29,2026-01-04]</c>.
+    /// </summary>
+    /// <remarks>
+    /// Weeks are always ISO 8601, never the current culture's: a week starts on Monday, and week 1
+    /// is the week that holds the year's first Thursday. So the week-year can differ from the
+    /// calendar year near January 1, and a week-year has 52 or 53 weeks
+    /// (<see cref="System.Globalization.ISOWeek.GetWeeksInYear"/>).
+    /// </remarks>
+    /// <param name="weekYear">The ISO week-year, 1 to 9999.</param>
+    /// <param name="week">The week, 1 to 52, or 53 in a long week-year.</param>
+    /// <returns>The week as a closed range of seven days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The week-year or the week is out of range, or the week runs past <see cref="DateOnly.MaxValue"/>,
+    /// as week 52 of 9999 does.
+    /// </exception>
+    public static DateRange IsoWeek(int weekYear, int week)
+    {
+        // ISOWeek.ToDateTime accepts week 53 of a 52-week year and answers with week 1 of the next.
+        ArgumentOutOfRangeException.ThrowIfLessThan(week, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(week, ISOWeek.GetWeeksInYear(weekYear));
+
+        return IsoWeekStartingOn(DateOnly.FromDateTime(ISOWeek.ToDateTime(weekYear, week, DayOfWeek.Monday)));
+    }
+
+    /// <summary>
+    /// Returns the ISO 8601 week that contains <paramref name="date"/>: the Monday on or before it to
+    /// the Sunday after that Monday.
+    /// </summary>
+    /// <remarks>
+    /// Weeks are always ISO 8601, never the current culture's; see <see cref="IsoWeek(int, int)"/>.
+    /// </remarks>
+    /// <param name="date">Any day of the week.</param>
+    /// <returns>The week as a closed range of seven days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The week runs past <see cref="DateOnly.MaxValue"/>.</exception>
+    public static DateRange IsoWeek(DateOnly date)
+        => IsoWeekStartingOn(date.AddDays(-(((int)date.DayOfWeek + 6) % 7)));
+
+    private static DateRange IsoWeekStartingOn(DateOnly monday)
+        => monday.DayNumber > DateOnly.MaxValue.DayNumber - 6
+               ? throw new ArgumentOutOfRangeException(
+                   nameof(monday), monday, "The ISO week starting on this Monday runs past DateOnly.MaxValue.")
+               : new Finite(monday, monday.AddDays(6));
+
     /// <summary>
     /// Enumerates the dates the range contains, ascending and inclusive of both bounds.
     /// </summary>

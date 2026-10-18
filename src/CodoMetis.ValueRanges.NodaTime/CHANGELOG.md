@@ -12,6 +12,7 @@ covers all four packages, which share one version number and release together.
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`LocalDateRange.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **`LocalDateRange.Month`**, **`Quarter`**, **`Year`** and **`IsoWeek`**, and **`YearMonthRange.Quarter`** and **`Year`**. Weeks are ISO 8601 only, as `WeekYearRules.Iso` numbers them, and a date in another calendar is read as its ISO day ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week)).
 
 ## [9.1.0] — 2026-10-17
 
