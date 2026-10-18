@@ -194,6 +194,31 @@ public sealed class ReleaseWiringConventionTests
                .Select(reference => reference.Attribute("Include")?.Value)
                .Where(id => !string.IsNullOrEmpty(id))!;
 
+    /// <summary>
+    /// A stacked PR targets another PR's branch, so a <c>branches</c> filter on the
+    /// <c>pull_request</c> trigger left it unbuilt until it was retargeted (#146). <c>edited</c>
+    /// stays out: a body edit would start a run whose skipped jobs pass the required checks.
+    /// </summary>
+    [TestMethod]
+    public void PullRequests_AreBuiltWhateverTheirBase()
+    {
+        var trigger = Regex.Match(
+            BuildWorkflowText(), @"^  pull_request:[^\n]*\n((?:    [^\n]*\n)*)", RegexOptions.Multiline);
+
+        Assert.IsTrue(trigger.Success, "The .NET workflow has no pull_request trigger.");
+
+        var settings = trigger.Groups[1].Value;
+
+        Assert.IsFalse(
+            settings.Contains("branches", StringComparison.Ordinal),
+            "The .NET workflow's pull_request trigger filters on the base branch, so a stacked PR "
+          + "(one opened against another PR's branch) is never built while it is stacked (#146).");
+        Assert.IsFalse(
+            settings.Contains("edited", StringComparison.Ordinal),
+            "The .NET workflow runs on `edited`. A body edit would start a run whose skipped jobs "
+          + "pass the required checks and cancel a real run in the same concurrency group.");
+    }
+
     private static string BuildWorkflowText() =>
         File.ReadAllText(Path.Combine(RepoLayout.Root.FullName, ".github", "workflows", "dotnet.yml"));
 
