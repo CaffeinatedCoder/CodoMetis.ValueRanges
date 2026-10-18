@@ -235,6 +235,34 @@ public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<Ins
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out InstantRange result)
         => RangeFormat.TryParse<InstantRange, Instant>(s, provider, out result);
 
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[09:00Z,10:00Z).Shift(Duration.FromHours(1))</c> is <c>[10:00Z,11:00Z)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="Instant"/> can hold.</exception>
+    public InstantRange Shift(Duration delta) => RangeArithmetic.Move<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[09:00Z,10:00Z).Expand(Duration.FromMinutes(15))</c> is <c>[08:45Z,10:15Z)</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="Instant"/> can hold.</exception>
+    public InstantRange Expand(Duration amount) => RangeArithmetic.Move<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);

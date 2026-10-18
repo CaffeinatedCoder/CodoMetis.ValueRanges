@@ -229,6 +229,34 @@ public abstract partial record DateTimeOffsetRange : IRange<DateTimeOffset>, IRa
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DateTimeOffsetRange result)
         => RangeFormat.TryParse<DateTimeOffsetRange, DateTimeOffset>(s, provider, out result);
 
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[09:00,10:00).Shift(TimeSpan.FromDays(7))</c> is the same hour a week later, at the same offset.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateTimeOffset"/> can hold.</exception>
+    public DateTimeOffsetRange Shift(TimeSpan delta) => RangeArithmetic.Move<DateTimeOffsetRange, DateTimeOffset>(this, value => RangeArithmetic.Checked(() => value.Add(delta)), value => RangeArithmetic.Checked(() => value.Add(delta)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[09:00,10:00).Expand(TimeSpan.FromMinutes(15))</c> is <c>[08:45,10:15)</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateTimeOffset"/> can hold.</exception>
+    public DateTimeOffsetRange Expand(TimeSpan amount) => RangeArithmetic.Move<DateTimeOffsetRange, DateTimeOffset>(this, value => RangeArithmetic.Checked(() => value.Subtract(amount)), value => RangeArithmetic.Checked(() => value.Add(amount)));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);

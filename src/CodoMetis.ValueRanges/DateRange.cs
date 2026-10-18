@@ -256,6 +256,34 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DateRange result)
         => RangeFormat.TryParse<DateRange, DateOnly>(s, provider, out result);
 
+    /// <summary>
+    /// Returns the range moved by <paramref name="days"/>, in days: both bounds move together and keep their
+    /// inclusiveness, so <c>[2026-06-01,2026-06-08].Shift(7)</c> is <c>[2026-06-08,2026-06-15]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="days"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="days">How far to move the range, in days.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateOnly"/> can hold.</exception>
+    public DateRange Shift(int days) => RangeArithmetic.Move<DateRange, DateOnly>(this, value => RangeArithmetic.Checked(() => value.AddDays(days)), value => RangeArithmetic.Checked(() => value.AddDays(days)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="days"/>, in days on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[2026-06-10,2026-06-12].Expand(1)</c> is <c>[2026-06-09,2026-06-13]</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="days"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="days">How far to move each bound outward, in days.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateOnly"/> can hold.</exception>
+    public DateRange Expand(int days) => RangeArithmetic.Move<DateRange, DateOnly>(this, value => RangeArithmetic.Checked(() => value.AddDays(checked(-days))), value => RangeArithmetic.Checked(() => value.AddDays(days)));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);

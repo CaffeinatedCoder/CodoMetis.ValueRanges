@@ -22,6 +22,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **`Shift`** and **`Expand`** on every range type move a range by a step, or grow it on both sides, keeping each bound's inclusiveness. A bound moved past the element type's last value throws `OverflowException`. They run in memory only ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
 
 ### Fixed
 

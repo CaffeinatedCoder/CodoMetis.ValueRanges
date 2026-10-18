@@ -12,6 +12,7 @@ covers all four packages, which share one version number and release together.
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`LocalDateRange.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **`Shift`** and **`Expand`** on the four NodaTime range types, by a `Period`, a `Duration` or a number of months. A period of months follows the calendar and clips to the end of a shorter month ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
 
 ## [9.1.0] — 2026-10-17
 

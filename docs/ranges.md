@@ -321,6 +321,53 @@ set.UpperBound();  // 9
 On a `RangeSet`, `LowerBound()` is the first element's lower bound, and `UpperBound()` the last
 element's upper bound.
 
+## Move or widen a range
+
+`Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the
+inclusiveness of each bound:
+
+```csharp
+var week = DateRange.CreateFinite(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 7));
+week.Shift(7);    // [2026-06-08,2026-06-14] — the same week, one week later
+week.Shift(-7);   // [2026-05-25,2026-05-31]
+
+var meeting = DateTimeRange.CreateFinite(nineAm, tenAm);           // [09:00, 10:00)
+meeting.Expand(TimeSpan.FromMinutes(15));                         // [08:45, 10:15) — a buffer on each side
+
+Int32Range.CreateFinite(1, 10).Expand(-2);                        // [3, 8] — a negative amount shrinks
+```
+
+Each range type takes the step its element type uses:
+
+| Range type | `Shift` and `Expand` take |
+|---|---|
+| `Int32Range`, `Int64Range`, `DecimalRange` | an `int`, a `long`, a `decimal` |
+| `DateRange` | a number of days |
+| `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange` | a `TimeSpan` |
+| `LocalDateRange`, `LocalDateTimeRange` | a NodaTime `Period` |
+| `InstantRange` | a NodaTime `Duration` |
+| `YearMonthRange` | a number of months |
+
+Good to know:
+
+- **An empty or infinite range comes back as it is.** It has no bound to move. An unbounded side
+  stays unbounded.
+- **Shrinking past the width gives you `Empty`.** `Expand` with a negative amount moves the bounds
+  inward, and bounds that cross make the empty range, as `CreateFinite` does.
+- **A bound moved past the last value throws.** `Shift` and `Expand` throw `OverflowException` when
+  a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They
+  never wrap around.
+- **A `TimeRange` can't cross midnight.** Moving a bound past the end of the day throws
+  `OverflowException`, where `TimeOnly.Add` would wrap to the next morning.
+- **A `DateTimeOffsetRange` keeps its offsets.** A day is exactly 24 hours, whatever a time zone
+  does that night.
+- **A period of months follows the calendar.** `LocalDateRange` and `LocalDateTimeRange` move by
+  NodaTime's calendar arithmetic, which clips to the end of a shorter month. So
+  `[2026-01-01,2026-01-31]` moved by one month is `[2026-02-01,2026-02-28]`, and moving it back
+  gives `[2026-01-01,2026-01-28]`. A period of days or weeks moves back exactly.
+- **They run in memory only.** PostgreSQL has no range arithmetic. See
+  [What runs where](efcore.md#what-runs-where).
+
 ## Combine two ranges
 
 The set operations are extension methods on the range types. They are written against

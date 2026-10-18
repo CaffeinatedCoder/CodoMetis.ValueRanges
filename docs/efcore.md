@@ -618,6 +618,7 @@ translation, and in a projection EF runs them in memory instead:
 | `Length` on any range | The finite case would be `upper(x) - lower(x)`, but the empty range measures 0 where PostgreSQL's subtraction yields `NULL`, and `int4range` overflows `int4` before a cast can widen it. |
 | `Values()` on a discrete range | Enumeration is `generate_series`, whose result is a set of rows rather than a value — it cannot appear where a scalar is expected. |
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | PostgreSQL converts between arrays and multiranges only through `unnest` and a custom aggregate. |
+| `Shift`, `Expand` on any range | PostgreSQL has no range arithmetic, and rebuilding the range from `lower(x) + d` gives answers that differ from memory: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, `timestamptz + interval '1 day'` follows the session time zone across a daylight-saving change, and an `infinity` date absorbs the step where `DateOnly.MaxValue` overflows. |
 | `Clamp(value)` on any range | Expressible as `GREATEST`/`LEAST` over `lower`/`upper`, but the empty and unbounded cases have no bound to clamp to and would need a `CASE` per shape. |
 | `Intersect`, `Except`, `Add` on value sets | PostgreSQL's array type has no intersection, difference, or sorted insert. |
 | The value set indexer, `set[0]` | Array subscripting exists, but the canonical order is the CLR comparer's, not the server's. |

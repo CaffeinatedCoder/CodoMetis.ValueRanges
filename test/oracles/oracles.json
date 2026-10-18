@@ -24,6 +24,12 @@
     "against": "the Int32Range and DecimalRange models, through an order-preserving embedding, for every discovered range type"
   },
   {
+    "class": "RangeArithmeticOracleTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the shape matrix moved by whole grid steps, the round trip, the hull and overlap laws between Shift and Expand, and OverflowException at the domain extremes, for every discovered range type"
+  },
+  {
     "class": "JsonDefaultContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "differential",
