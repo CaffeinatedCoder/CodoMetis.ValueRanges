@@ -1,0 +1,15 @@
+<Project>
+    <!--
+        tools/oracles.cs is a file-based app, which can name packages and properties but not a second
+        source file. The clone-divergence sweep's engine lives in test/oracles/CloneSweep.cs beside
+        Candidates.cs and is linked into the conventions test project; this props file compiles the same
+        file into the tool, so there is one engine and `dotnet run tools/oracles.cs clones` cannot
+        disagree with CloneDivergenceTests. The repository's own props are imported first, as they
+        would be without this file.
+    -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+    <ItemGroup>
+        <Compile Include="$(MSBuildThisFileDirectory)../test/oracles/CloneSweep.cs" Link="CloneSweep.cs" />
+    </ItemGroup>
+</Project>

@@ -11,13 +11,16 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 [TestClass]
 public sealed class ChangelogConventionTests
 {
-    /// <summary>Matches a version heading: <c>## [6.1.0] — 2026-08-15</c>.</summary>
+    /// <summary>
+    /// Matches a version heading: <c>## [6.1.0] — 2026-08-15</c>, or a preview's,
+    /// <c>## [11.0.0-preview.1] — 2026-11-11</c>.
+    /// </summary>
     private static readonly Regex VersionHeading =
-        new(@"^##\s*\[(?<version>\d+\.\d+\.\d+)\]", RegexOptions.Multiline);
+        new($@"^##\s*\[(?<version>{ReleaseVersion.Pattern})\]", RegexOptions.Multiline);
 
-    private static IReadOnlyList<Version> VersionsIn(FileInfo changelog) =>
+    private static IReadOnlyList<ReleaseVersion> VersionsIn(FileInfo changelog) =>
         [.. VersionHeading.Matches(File.ReadAllText(changelog.FullName))
-                          .Select(match => Version.Parse(match.Groups["version"].Value))];
+                          .Select(match => ReleaseVersion.Parse(match.Groups["version"].Value))];
 
     private static FileInfo ChangelogOf(PackableProject project) =>
         new(Path.Combine(project.Directory.FullName, "CHANGELOG.md"));
@@ -25,9 +28,12 @@ public sealed class ChangelogConventionTests
     private static IEnumerable<FileInfo> AllChangelogs() =>
         [RepoLayout.RootChangelog, .. RepoLayout.PackableProjects.Select(ChangelogOf)];
 
-    /// <summary>Matches a floating heading like <c>## [Unreleased]</c>.</summary>
+    /// <summary>
+    /// Matches a floating heading like <c>## [Unreleased]</c>: any bracketed heading that is not a
+    /// version, a preview's included.
+    /// </summary>
     private static readonly Regex UnversionedHeading =
-        new(@"^##\s*\[(?<label>[^\]]*[A-Za-z][^\]]*)\]", RegexOptions.Multiline);
+        new($@"^##\s*\[(?!{ReleaseVersion.Pattern}\])(?<label>[^\]]*)\]", RegexOptions.Multiline);
 
     /// <summary>
     /// No changelog may park entries under a floating heading such as <c>## [Unreleased]</c>.
@@ -70,7 +76,7 @@ public sealed class ChangelogConventionTests
     [TestMethod]
     public void RootChangelog_DocumentsTheShippedVersion()
     {
-        var shipped = Version.Parse(RepoLayout.ShippedVersion);
+        var shipped = ReleaseVersion.Parse(RepoLayout.ShippedVersion);
 
         CollectionAssert.Contains(
             VersionsIn(RepoLayout.RootChangelog).ToList(),
@@ -95,7 +101,7 @@ public sealed class ChangelogConventionTests
     [TestMethod]
     public void EveryPackageChangelog_DocumentsTheShippedVersion()
     {
-        var shipped = Version.Parse(RepoLayout.ShippedVersion);
+        var shipped = ReleaseVersion.Parse(RepoLayout.ShippedVersion);
 
         var undocumented = RepoLayout.PackableProjects
                                      .Where(project => ChangelogOf(project).Exists)
@@ -130,7 +136,7 @@ public sealed class ChangelogConventionTests
     [TestMethod]
     public void NoChangelog_RunsAheadOfTheShippedVersion()
     {
-        var shipped = Version.Parse(RepoLayout.ShippedVersion);
+        var shipped = ReleaseVersion.Parse(RepoLayout.ShippedVersion);
 
         foreach (var changelog in AllChangelogs().Where(file => file.Exists))
         {
@@ -145,7 +151,13 @@ public sealed class ChangelogConventionTests
     }
 
     /// <summary>The sections a version may have, in the order they must appear.</summary>
-    private static readonly string[] SectionOrder = ["Breaking", "Added", "Changed", "Fixed"];
+    private static readonly string[] SectionOrder = [ChangedAnswers, "Breaking", "Added", "Changed", "Fixed"];
+
+    /// <summary>
+    /// The section a minor opens with when it changes an answer: a call that returned one value and
+    /// now returns another, without throwing either time (CONTRIBUTING.md, Branches and releases).
+    /// </summary>
+    private const string ChangedAnswers = "Changed answers";
 
     /// <summary>
     /// The longest a change may be, in words, not counting link targets. TypeKit's terse entries
@@ -274,6 +286,155 @@ public sealed class ChangelogConventionTests
             "These changelog links are relative, and break on the GitHub release page. Use the "
           + "https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/… form:"
           + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// The last version of the old rule. Up to and including 10.0.0 a silent fix waited for the next
+    /// major and was listed under Breaking; every version after it may change an answer in a minor,
+    /// and then says so under <see cref="ChangedAnswers"/>.
+    /// </summary>
+    private static readonly ReleaseVersion LastMajorOnlyRelease = ReleaseVersion.Parse("10.0.0");
+
+    /// <summary>
+    /// <c>### Changed answers</c> appears only in a minor. A major lists a changed answer under
+    /// Breaking, a patch may not change one at all, and a preview is a major's.
+    /// </summary>
+    /// <remarks>
+    /// The section exists so that a silent fix can ship on the LTS line, which has no major number
+    /// left to spend on it. A patch carrying one would be read as "nothing to check" by every
+    /// consumer who upgrades patches unattended, which is the reason the rule says minor.
+    /// </remarks>
+    [TestMethod]
+    public void ChangedAnswers_AppearOnlyInAMinor()
+    {
+        var offenders = VersionSections()
+                       .Where(section => section.Lines.Any(entry => IsSectionHeading(entry.Line, ChangedAnswers)))
+                       .Where(section => !ReleaseVersion.Parse(section.Version).IsMinor)
+                       .Select(section => $"{RepoPath(section.Changelog)} ({section.Version})")
+                       .ToList();
+
+        Assert.AreEqual(
+            0, offenders.Count,
+            $"These versions have a '### {ChangedAnswers}' section but are not a minor (x.y.0, y > 0): "
+          + $"{string.Join(", ", offenders)}. A major lists a changed answer under Breaking, and a patch "
+          + "may not change one: bump the minor (CONTRIBUTING.md, Branches and releases).");
+    }
+
+    /// <summary>
+    /// Every row under <c>### Changed answers</c> links the issue it closes and its entry in
+    /// <c>docs/migration.md</c>, and that entry exists.
+    /// </summary>
+    /// <remarks>
+    /// The issue link is what ties the row to the <c>silent</c> label: <c>.github/scripts/pr-hygiene.sh</c>
+    /// fails a <c>silent</c> PR into a minor whose closing issue has no row here, and it finds the row
+    /// by this link. The migration entry is where the consumer learns how to find the calls whose
+    /// answer changed, which a one-line row cannot say.
+    /// </remarks>
+    [TestMethod]
+    public void EveryChangedAnswer_LinksItsIssueAndItsMigrationEntry()
+    {
+        var anchors   = OracleCatalogue.HeadingSlugs("docs/migration.md").ToHashSet(StringComparer.Ordinal);
+        var offenders = new List<string>();
+
+        foreach (var (changelog, version, lines) in VersionSections())
+        {
+            foreach (var (number, line) in ChangesUnder(lines, ChangedAnswers))
+            {
+                var where = $"{RepoPath(changelog)}:{number} ({version})";
+
+                if (!IssueLink.IsMatch(line))
+                    offenders.Add($"{where}: no link to the issue it closes ({IssuesPrefix}n)");
+
+                var migration = MigrationLink.Match(line);
+
+                if (!migration.Success)
+                    offenders.Add($"{where}: no link to its entry in docs/migration.md");
+                else if (!anchors.Contains(migration.Groups["anchor"].Value))
+                    offenders.Add($"{where}: docs/migration.md has no heading '#{migration.Groups["anchor"].Value}'");
+            }
+        }
+
+        Assert.AreEqual(
+            0, offenders.Count,
+            $"These '### {ChangedAnswers}' rows do not lead a reader to the issue and the migration entry:"
+          + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// After 10.0.0, a change that says it used to produce a value — "where it returned …", "where
+    /// they wrote …" — sits under <c>### Changed answers</c>, in a minor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The changelog form already makes every fix say what happened before. A fix whose "before" was
+    /// an exception is loud and belongs under Fixed; one whose "before" was a value is a changed
+    /// answer, the kind a consumer cannot find by running their tests, and filed under Fixed it
+    /// reads as harmless. Before 11.0.0 that was the major's Breaking section; from then on, with two
+    /// lines and majors that name the platform, it is this section of a minor.
+    /// </para>
+    /// <para>
+    /// The limit: this reads the wording, not the label. A changed answer phrased without the
+    /// "where it …" clause the form prescribes passes here. The <c>silent</c> label is not
+    /// reachable from a test; <c>.github/scripts/pr-hygiene.sh</c>, which sees the PR's labels,
+    /// holds the other half by requiring the row for a <c>silent</c> PR's issue.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void AfterTenZero_AChangedAnswerIsUnderChangedAnswers()
+    {
+        var offenders = new List<string>();
+
+        foreach (var (changelog, version, lines) in VersionSections())
+        {
+            var parsed = ReleaseVersion.Parse(version);
+
+            if (parsed <= LastMajorOnlyRelease || parsed.IsPrerelease || parsed is { Minor: 0, Patch: 0 }) continue;
+
+            var section = "";
+
+            foreach (var (number, line) in lines)
+            {
+                if (line.StartsWith("### ", StringComparison.Ordinal)) section = line[4..].Trim();
+                else if (section != ChangedAnswers && line.StartsWith("- ", StringComparison.Ordinal) && PriorValue.Match(line) is { Success: true } clause)
+                    offenders.Add($"{RepoPath(changelog)}:{number} ({version}, ### {section}): '{clause.Value}'");
+            }
+        }
+
+        Assert.AreEqual(
+            0, offenders.Count,
+            $"These changes say the call used to produce a value, so they changed an answer. Move each "
+          + $"under '### {ChangedAnswers}' (a patch cannot carry one: bump the minor), link its issue and "
+          + "its docs/migration.md entry (CONTRIBUTING.md, Branches and releases):"
+          + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// The "before" clause of a change whose previous behaviour was a value: "where it returned",
+    /// "where they wrote". The loud verbs — the call threw, failed or was refused — are left out.
+    /// </summary>
+    private static readonly Regex PriorValue =
+        new(@"\bwhere (?:it|they) (?!threw\b|failed\b|refused\b|was refused\b|were refused\b)[a-z]+(?: [a-z]+)?", RegexOptions.IgnoreCase);
+
+    private const string IssuesPrefix = "https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/";
+
+    private static readonly Regex IssueLink = new($@"\]\({Regex.Escape(IssuesPrefix)}\d+\)");
+
+    private static readonly Regex MigrationLink =
+        new(@"\]\(https://github\.com/CaffeinatedCoder/CodoMetis\.ValueRanges/blob/main/docs/migration\.md#(?<anchor>[^)\s]+)\)");
+
+    private static bool IsSectionHeading(string line, string name) =>
+        line.StartsWith("### ", StringComparison.Ordinal) && line[4..].Trim() == name;
+
+    /// <summary>The change lines under one <c>###</c> section of a version.</summary>
+    private static IEnumerable<(int Number, string Line)> ChangesUnder(List<(int Number, string Line)> lines, string name)
+    {
+        var inside = false;
+
+        foreach (var (number, line) in lines)
+        {
+            if (line.StartsWith("### ", StringComparison.Ordinal)) inside = IsSectionHeading(line, name);
+            else if (inside && line.StartsWith("- ", StringComparison.Ordinal)) yield return (number, line);
+        }
     }
 
     /// <summary>Matches a reference-style link definition: <c>[9.0.0]: https://…</c>.</summary>

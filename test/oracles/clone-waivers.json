@@ -1,0 +1,429 @@
+[
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "CanonicalComparer",
+    "kind": "extra",
+    "reason": "text sorts ordinal, never by culture: StringSet exposes the comparer the other families leave to Comparer<T>.Default (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "DateSet",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "yyyy-MM-dd is DateOnly's ISO 8601 round-trip form; a date has no time part, where the other temporals use the round-trip O"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "canonicalizes with the ordinal comparer: Comparer<string>.Default is culture order, and the stored array must sort as text does (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "canonicalizes with the ordinal comparer: Comparer<string>.Default is culture order, and the stored array must sort as text does (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "From<TElement>(ReadOnlySpan<TElement>)",
+    "kind": "lone body",
+    "reason": "the string arity orders by its elements' ordinal text, so TElement need not be IComparable; every other arity sorts by the element's own order"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "IValueSet<$T>.CanonicalOrder",
+    "kind": "extra",
+    "reason": "the ordinal comparer must also be the search order, or Contains misses present elements (AGENTS.md); the other families search by the element's own order"
+  },
+  {
+    "family": "core value sets",
+    "unit": "DecimalSet",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "numeric reads a decimal point and an exponent (NumberStyles.Float); the integer siblings refuse both (NumberStyles.Integer)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "GuidSet",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "Guid.Parse reads its own grammar and trims its own whitespace, where the integer siblings go through NumberStyles; the mismatch with uuid_in is #78 and #129, both scheduled for 10.0.0"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "text is its own literal: textin keeps an element's whitespace and applies no grammar, so nothing is trimmed and nothing is parsed"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "<type>",
+    "kind": "lone body",
+    "reason": "the string arity orders by its elements' ordinal text, so TElement need not be IComparable; every other arity constrains it"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "CanonicalComparer",
+    "kind": "extra",
+    "reason": "ordinal order over the element's invariant text; the other arities use Comparer<TElement>.Default, which for a generated wrapper delegates to the backing primitive"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "canonicalizes with the ordinal comparer: Comparer<string>.Default is culture order, and the stored array must sort as text does (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "canonicalizes with the ordinal comparer: Comparer<string>.Default is culture order, and the stored array must sort as text does (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "IValueSet<$T>.CanonicalOrder",
+    "kind": "extra",
+    "reason": "the search order must be the sort order (AGENTS.md); only the string arity sorts by anything but the element's own order"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DecimalSet<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "a decimal-backed wrapper writes a JSON number keeping its scale, not a string (AGENTS.md, ElementJsonConverter); the integer arities have their own number converter and the rest write text"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DateSet<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "yyyy-MM-dd is DateOnly's ISO 8601 round-trip form; a date has no time part, where the other temporals use the round-trip O"
+  },
+  {
+    "family": "nodatime value sets",
+    "unit": "YearMonthSet",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "a non-ISO year-month spans parts of two ISO months and has no lossless ISO form, so it is refused (RequireIso) where a date or date-time converts (ToIso)"
+  },
+  {
+    "family": "nodatime value sets",
+    "unit": "YearMonthSet",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "a non-ISO year-month spans parts of two ISO months and has no lossless ISO form, so it is refused (RequireIso) where a date or date-time converts (ToIso)"
+  },
+  {
+    "family": "nodatime value sets",
+    "unit": "InstantSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "missing",
+    "reason": "an Instant carries no calendar; there is nothing to normalize to ISO, so the hook the calendar-bearing families implement does not apply"
+  },
+  {
+    "family": "nodatime value sets",
+    "unit": "LocalTimeSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "missing",
+    "reason": "a LocalTime carries no calendar; there is nothing to normalize to ISO, so the hook the calendar-bearing families implement does not apply"
+  },
+  {
+    "family": "nodatime value sets",
+    "unit": "YearMonthSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "lone body",
+    "reason": "a non-ISO year-month spans parts of two ISO months and has no lossless ISO form, so it is refused (RequireIso) where a date or date-time converts (ToIso)"
+  },
+  {
+    "family": "nodatime value sets",
+    "unit": "YearMonthSet",
+    "member": "RequireIso($T)",
+    "kind": "extra",
+    "reason": "a non-ISO year-month spans parts of two ISO months and has no lossless ISO form, so it is refused (RequireIso) where a date or date-time converts (ToIso)"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "InstantSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "missing",
+    "reason": "an Instant carries no calendar; there is nothing to normalize to ISO, so the hook the calendar-bearing families implement does not apply"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "LocalTimeSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "missing",
+    "reason": "a LocalTime carries no calendar; there is nothing to normalize to ISO, so the hook the calendar-bearing families implement does not apply"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "InstantSet<TElement>",
+    "member": "RequireIso($T)",
+    "kind": "missing",
+    "reason": "an Instant carries no calendar; there is nothing to normalize to ISO, so the hook the calendar-bearing families implement does not apply"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "LocalTimeSet<TElement>",
+    "member": "RequireIso($T)",
+    "kind": "missing",
+    "reason": "a LocalTime carries no calendar; there is nothing to normalize to ISO, so the hook the calendar-bearing families implement does not apply"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "yyyy-MM-dd is DateOnly's ISO 8601 round-trip form; a date has no time part, where the other temporals use the round-trip O"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Length",
+    "kind": "lone body",
+    "reason": "Length is typed per domain: a count of days for DateOnly, where the clock types yield a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DecimalRange",
+    "member": "Length",
+    "kind": "lone body",
+    "reason": "Length is typed per domain: a decimal difference, computed overflow-safe by FiniteLength, where the clock types yield a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range",
+    "member": "Length",
+    "kind": "lone body",
+    "reason": "Length is typed per domain: a long count, since the span of an int4range does not fit an int, where the clock types yield a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int64Range",
+    "member": "Length",
+    "kind": "lone body",
+    "reason": "Length is typed per domain: a long count computed overflow-safe by FiniteLength, where the clock types yield a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "NextValueAfter($T)",
+    "kind": "lone body",
+    "reason": "DateOnly steps by AddDays(1); the integer siblings step by + 1"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DecimalRange",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "numeric reads a decimal point and an exponent (NumberStyles.Float); the integer siblings refuse both (NumberStyles.Integer)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "PreviousValueBefore($T)",
+    "kind": "lone body",
+    "reason": "DateOnly steps by AddDays(-1); the integer siblings step by - 1"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "CreateUnboundedEnd($T, bool)",
+    "kind": "lone body",
+    "reason": "LocalDateRange is discrete: an exclusive bound canonicalizes to the next value and the bound normalizes to ISO; InstantRange and LocalDateTimeRange are continuous and keep the bound as given"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "CreateUnboundedEnd($T, bool)",
+    "kind": "lone body",
+    "reason": "YearMonthRange is discrete: an exclusive bound canonicalizes to the next value, and a non-ISO bound is refused (RequireIso) because a non-ISO month has no lossless ISO form"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "CreateUnboundedStart($T, bool)",
+    "kind": "lone body",
+    "reason": "LocalDateRange is discrete: an exclusive bound canonicalizes to the next value and the bound normalizes to ISO; InstantRange and LocalDateTimeRange are continuous and keep the bound as given"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "CreateUnboundedStart($T, bool)",
+    "kind": "lone body",
+    "reason": "YearMonthRange is discrete: an exclusive bound canonicalizes to the next value, and a non-ISO bound is refused (RequireIso) because a non-ISO month has no lossless ISO form"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "NodaPatterns.Date is the LocalDate pattern; in the siblings the pattern property is named after the element itself, which the sweep reads as the element placeholder"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateTimeRange",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "NodaPatterns.DateTime is the LocalDateTime pattern; in the siblings the pattern property is named after the element itself, which the sweep reads as the element placeholder"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "MaxIso",
+    "kind": "extra",
+    "reason": "YearMonth has no MaxIsoValue of its own; the domain edge is derived from LocalDate's"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "MinIso",
+    "kind": "extra",
+    "reason": "YearMonth has no MinIsoValue of its own; the domain edge is derived from LocalDate's"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "RequireIso($T)",
+    "kind": "extra",
+    "reason": "a non-ISO year-month has no lossless ISO form, so a bound is refused where the date siblings convert"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateTimeRange",
+    "member": "UnboundedEnd..ctor($T, bool)",
+    "kind": "extra",
+    "reason": "LocalDateTime carries a calendar: the continuous variant normalizes its bound to ISO in an explicit constructor, which InstantRange's positional record has no need for and the discrete siblings do in the factory"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "UnboundedEnd.<type>",
+    "kind": "lone body",
+    "reason": "InstantRange is the one continuous NodaTime range without a calendar, so its variant stays a positional record; LocalDateTimeRange normalizes its bound in an explicit constructor and the discrete siblings pin the inclusivity after canonicalization"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateTimeRange",
+    "member": "UnboundedEnd.Deconstruct($T, bool)",
+    "kind": "extra",
+    "reason": "the explicit record (see the constructor waiver) restores the Deconstruct a positional record gets for free, so VariantDeconstructContractTests holds for it too"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "UnboundedEnd.Start",
+    "kind": "missing",
+    "reason": "declared by InstantRange's positional record rather than as a member; see the <type> waiver of the same variant"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "UnboundedEnd.StartInclusive",
+    "kind": "missing",
+    "reason": "declared by InstantRange's positional record rather than as a member; see the <type> waiver of the same variant"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateTimeRange",
+    "member": "UnboundedEnd.StartInclusive",
+    "kind": "lone body",
+    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateTimeRange",
+    "member": "UnboundedStart..ctor($T, bool)",
+    "kind": "extra",
+    "reason": "LocalDateTime carries a calendar: the continuous variant normalizes its bound to ISO in an explicit constructor, which InstantRange's positional record has no need for and the discrete siblings do in the factory"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "UnboundedStart.<type>",
+    "kind": "lone body",
+    "reason": "InstantRange is the one continuous NodaTime range without a calendar, so its variant stays a positional record; LocalDateTimeRange normalizes its bound in an explicit constructor and the discrete siblings pin the inclusivity after canonicalization"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateTimeRange",
+    "member": "UnboundedStart.Deconstruct($T, bool)",
+    "kind": "extra",
+    "reason": "the explicit record (see the constructor waiver) restores the Deconstruct a positional record gets for free, so VariantDeconstructContractTests holds for it too"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "UnboundedStart.End",
+    "kind": "missing",
+    "reason": "declared by InstantRange's positional record rather than as a member; see the <type> waiver of the same variant"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "UnboundedStart.EndInclusive",
+    "kind": "missing",
+    "reason": "declared by InstantRange's positional record rather than as a member; see the <type> waiver of the same variant"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateTimeRange",
+    "member": "UnboundedStart.EndInclusive",
+    "kind": "lone body",
+    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "DateSet<>",
+    "member": "formatPrimitive",
+    "kind": "lone body",
+    "reason": "yyyy-MM-dd is DateOnly's ISO 8601 round-trip form; a date has no time part, where the other temporals use the round-trip O"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "GuidSet<>",
+    "member": "parsePrimitive",
+    "kind": "lone body",
+    "reason": "calls Guid.Parse directly instead of GuidSet.ParseValue, which is the same call today; a third site for #129's uuid_in grammar, named there so the fix reaches all of them"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "DateSet<>",
+    "member": "parsePrimitive",
+    "kind": "lone body",
+    "reason": "a temporal bridge reads the pinned format with ParseExact, so an element that ignored the format specifier fails loudly instead of binding truncated; the numeric bridges read with the family's own ParseValue because the default text form of their primitive already round-trips"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "TimeSet<>",
+    "member": "parsePrimitive",
+    "kind": "lone body",
+    "reason": "a temporal bridge reads the pinned format with ParseExact, so an element that ignored the format specifier fails loudly instead of binding truncated; the numeric bridges read with the family's own ParseValue because the default text form of their primitive already round-trips"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "DateTimeOffsetSet<>",
+    "member": "parsePrimitive",
+    "kind": "lone body",
+    "reason": "a temporal bridge reads the pinned format with ParseExact, so an element that ignored the format specifier fails loudly instead of binding truncated; the numeric bridges read with the family's own ParseValue because the default text form of their primitive already round-trips; timestamptz stores an instant, so the offset is read as UTC and normalized"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "YearMonthSet<>",
+    "member": "parseStoreText",
+    "kind": "extra",
+    "reason": "the one family whose element text (2024-06) differs from its store text (2024-06-01): a JSON document holds the dates and is read back through LocalDateSet"
+  }
+]
