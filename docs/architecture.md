@@ -61,12 +61,31 @@ in memory, .123457 on the server read from that text, .123456 stored — at most
 Rounding on parse would remove the second gap and break the first promise; it would also disagree
 with every parameter. `DomainBoundaryDivergenceTests` pins the three values.
 
-**The date extremes stand for the infinities.** Npgsql writes `DateOnly.MaxValue` and
-`LocalDate.MaxIsoValue` as `infinity`, and the minima as `-infinity`, and reads them back the same
-way; the plugin's store text does the same (`StoreTemporal`). So the server's real 9999-12-31 and
-0001-01-01 have no value of their own here: the extreme *is* the infinity. An exclusive infinite bound
-therefore excludes the extreme, and every path reads it alike — a column, the server's text through
-`Parse`, and the literal as written:
+**The date extremes are sentinels on the server.** Npgsql writes `DateOnly.MinValue` / `MaxValue` and
+`LocalDate.MinIsoValue` / `MaxIsoValue` as `-infinity` / `infinity` (the store rule, `StoreTemporal`),
+so a `daterange` bounded at an extreme holds a sentinel where the model holds a date. Every operator
+that compares the sentinel with itself still agrees — equality, containment, the bound accessors, and
+anything read back, since the reader turns the sentinel into the extreme again. Adjacency is the one
+that does not: no finite date is next to `-infinity`, so the model's step from `0001-01-01` to
+`0001-01-02` has no counterpart there.
+
+| Construction | This model | PostgreSQL (`Npgsql.DisableDateTimeInfinityConversions` off) |
+|---|---|---|
+| `[0001-01-01,0001-01-01] -\|- [0001-01-02,)` | adjacent | `[-infinity,-infinity] -\|- [0001-01-02,)` — **not** adjacent |
+| `[9999-12-30,9999-12-30] -\|- [9999-12-31,)` | adjacent | `[9999-12-30,9999-12-31) -\|- [infinity,)` — **not** adjacent |
+| the same pairs one day inside the extremes | adjacent | adjacent |
+
+The model keeps its answer on purpose: with the switch set, the extremes reach the server as dates
+and `-|-` answers `true` there (`InfinityConversionsDisabledTests`), so a model that stopped
+stepping across an extreme would disagree with that configuration instead. `DifferentialFuzzParityTests`
+sets an adjacency row at a date extreme aside only when it disagrees in exactly this shape — memory
+`true`, both database legs `false` — and counts it; `RangeSet` merges across the extreme on both
+sides because the reader canonicalizes what it loads.
+
+**An exclusive infinite bound excludes the extreme.** The same store rule means the server's real
+9999-12-31 and 0001-01-01 have no value of their own here: the extreme *is* the infinity. So an
+exclusive infinite bound excludes the extreme, and every path reads it alike — a column, the
+server's text through `Parse`, and the literal as written:
 
 | PostgreSQL value | This model | The server's range also holds |
 |---|---|---|

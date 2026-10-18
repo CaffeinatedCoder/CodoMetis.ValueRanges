@@ -173,6 +173,26 @@ public sealed class RangeCollectionContainsTests
         Assert.AreEqual(0, await Rows(context).CountAsync(r => wanted.Contains(r.Seats)));
     }
 
+    /// <summary>
+    /// With no ranges in the list and a <c>Contains</c> reading it, the list goes out one parameter per
+    /// range — none — and <c>Any</c>/<c>Count</c> read a <c>VALUES</c> with no rows, which EF Core could
+    /// not write (#137). They read no rows now: <see langword="false"/> and <c>0</c>, as in memory.
+    /// </summary>
+    [TestMethod]
+    public async Task AnEmptyCollectionBesideContains_AnyAndCountAnswerAsInMemory()
+    {
+        await using var context = await Context();
+        var wanted = new List<Int32Range>();
+
+        CollectionAssert.AreEqual(
+            Array.Empty<int>(),
+            await Rows(context).Where(r => wanted.Contains(r.Seats) || wanted.Any(w => w.Overlaps(r.Seats))).Select(r => r.Id).ToListAsync());
+
+        var counts = await Rows(context).Select(r => new { Found = wanted.Contains(r.Seats), Overlapping = wanted.Count(w => w.Overlaps(r.Seats)) }).ToListAsync();
+        Assert.AreEqual(2, counts.Count);
+        Assert.IsTrue(counts.All(c => !c.Found && c.Overlapping == 0));
+    }
+
     [TestMethod]
     public async Task AnyBesideContainsOverTheCollection_AnswersAsInMemory()
     {
@@ -188,11 +208,91 @@ public sealed class RangeCollectionContainsTests
             await Rows(context).Where(r => wanted.Contains(r.Seats) && wanted.Count(w => w.Overlaps(r.Seats)) == 2).Select(r => r.Id).ToListAsync());
     }
 
+    /// <summary>
+    /// With no <c>Contains</c> reading it, the list went out as one parameter until 10.0.0, which Npgsql
+    /// typed as a multirange: <c>unnest</c> of it merged overlapping and adjacent ranges and dropped
+    /// empty ones, so these counts were 1, 1 and <see langword="false"/> on the server (#76). Read from
+    /// <c>VALUES</c>, one parameter per range, the list is the list.
+    /// </summary>
+    [TestMethod]
+    public async Task AnyAndCountAloneOverTheCollection_AnswerAsInMemory()
+    {
+        await using var context = await Context();
+        var loaded = await Rows(context).AsNoTracking().ToListAsync();
+
+        var overlapping = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8) };
+        var adjacent    = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(6, 8) };
+        var duplicate   = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(1, 5) };
+        var withEmpty   = new List<Int32Range> { Int32Range.Empty, Int32Range.CreateFinite(1, 5) };
+
+        var expected = loaded.OrderBy(r => r.Id).Select(r => new
+        {
+            r.Id,
+            Overlapping = overlapping.Count(w => w.Overlaps(r.Seats)),
+            Adjacent    = adjacent.Count(w => w.Overlaps(r.Seats)),
+            Duplicate   = duplicate.Count(w => w == r.Seats),
+            AnyEqual    = duplicate.Any(w => w == r.Seats),
+            AnyEmpty    = withEmpty.Any(w => w.IsEmpty()),
+            Touching    = adjacent.Count(w => w.IsAdjacentTo(r.Seats))
+        }).ToList();
+        Assert.IsTrue(expected.Any(e => e is { Overlapping: 2, Adjacent: 1, Duplicate: 2, AnyEqual: true, AnyEmpty: true, Touching: 1 }),
+                      "the data must hold the row that tells a list from its multirange");
+
+        var server = await Rows(context).OrderBy(r => r.Id).Select(r => new
+        {
+            r.Id,
+            Overlapping = overlapping.Count(w => w.Overlaps(r.Seats)),
+            Adjacent    = adjacent.Count(w => w.Overlaps(r.Seats)),
+            Duplicate   = duplicate.Count(w => w == r.Seats),
+            AnyEqual    = duplicate.Any(w => w == r.Seats),
+            AnyEmpty    = withEmpty.Any(w => w.IsEmpty()),
+            Touching    = adjacent.Count(w => w.IsAdjacentTo(r.Seats))
+        }).ToListAsync();
+
+        CollectionAssert.AreEqual(expected, server);
+    }
+
+    [TestMethod]
+    public async Task AnEmptyCollectionAlone_AnyAndCountAnswerAsInMemory()
+    {
+        await using var context = await Context();
+        var wanted = new List<Int32Range>();
+
+        CollectionAssert.AreEqual(Array.Empty<int>(), await Rows(context).Where(r => wanted.Any(w => w.Overlaps(r.Seats))).Select(r => r.Id).ToListAsync());
+        Assert.IsTrue((await Rows(context).Select(r => wanted.Count(w => w.Overlaps(r.Seats))).ToListAsync()).All(n => n == 0));
+    }
+
+    [TestMethod]
+    public async Task AnyAloneOverTheCustomTimeRange_AnswersAsInMemory()
+    {
+        // Until 10.0.0 every Any or Count alone over a TimeRange list threw InvalidCastException: an
+        // untyped NpgsqlRange<TimeOnly>[] has no type Npgsql can infer. One parameter per range is typed.
+        await using var context = await Context();
+        var wanted = new List<TimeRange> { TimeRange.CreateFinite(new TimeOnly(8, 0), new TimeOnly(9, 30)) };
+        var loaded = await Rows(context).AsNoTracking().ToListAsync();
+
+        CollectionAssert.AreEqual(
+            loaded.Where(r => wanted.Any(w => w.Overlaps(r.OpeningHours))).Select(r => r.Id).Order().ToList(),
+            await Rows(context).Where(r => wanted.Any(w => w.Overlaps(r.OpeningHours))).Select(r => r.Id).OrderBy(id => id).ToListAsync());
+    }
+
+    [TestMethod]
+    public async Task AnyAloneOverEFParameter_IsRefusedWithWhatToWriteInstead()
+    {
+        await using var context = await Context();
+        var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5) };
+
+        var refusal = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => Rows(context).CountAsync(r => EF.Parameter(wanted).Any(w => w.Overlaps(r.Seats))));
+
+        StringAssert.Contains(refusal.Message, "Remove 'EF.Parameter'");
+    }
+
     [TestMethod]
     public async Task AnyAloneOverEFConstant_AnswersAsInMemory()
     {
-        // The workaround docs/efcore.md gives for #76 until 10.0.0: EF.Constant writes each range as a
-        // literal into VALUES, so overlapping ranges stay apart. Pins behaviour that held before 9.1.0.
+        // EF.Constant writes each range as a literal into VALUES; it was the documented workaround for
+        // #76 until 10.0.0 and still answers as in memory.
         await using var context = await Context();
         var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8) };
         var loaded = await Rows(context).AsNoTracking().ToListAsync();

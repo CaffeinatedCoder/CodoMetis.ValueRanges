@@ -303,6 +303,73 @@ public class ExecutedQueryTests
     }
 
     /// <summary>
+    /// The shape predicates over a range column, for every shape, against the server that defines
+    /// <c>lower_inf</c> and <c>upper_inf</c>. The row that matters is the infinite one: until 10.0.0
+    /// <c>IsUnboundedStart()</c> and <c>IsUnboundedEnd()</c> tested the variant and answered
+    /// <see langword="false"/> for <c>(,)</c>, while the translation, <c>lower_inf</c>, answered
+    /// <see langword="true"/> (#109). The memory answer is asserted against the server's row by row,
+    /// and the infinite row is pinned to <see langword="true"/> so the two sides cannot agree by both
+    /// being wrong.
+    /// </summary>
+    [TestMethod]
+    public async Task RangeShapePredicates_MatchInMemory()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var shapes = new Dictionary<int, Int32Range>
+        {
+            [2111] = Int32Range.Empty,
+            [2112] = Int32Range.Infinite,
+            [2113] = Int32Range.CreateFinite(1, 5),
+            [2114] = Int32Range.CreateUnboundedStart(5),
+            [2115] = Int32Range.CreateUnboundedEnd(10)
+        };
+
+        await Seed([.. shapes.Select(pair => new Reservation { Id = pair.Key, Seats = pair.Value })]);
+
+        await using var context = new IntegrationDbContext();
+
+        var rows = await context.Reservations
+            .Where(r => r.Id >= 2111 && r.Id <= 2115)
+            .Select(r => new
+            {
+                r.Id,
+                Empty          = r.Seats.IsEmpty(),
+                UnboundedStart = r.Seats.IsUnboundedStart(),
+                UnboundedEnd   = r.Seats.IsUnboundedEnd(),
+                Infinity       = r.Seats.IsInfinity(),
+                Finite         = r.Seats.IsFinite()
+            })
+            .ToListAsync();
+
+        Assert.AreEqual(shapes.Count, rows.Count);
+        foreach (var row in rows)
+        {
+            var range = shapes[row.Id];
+            Assert.AreEqual(range.IsEmpty(),          row.Empty,          $"IsEmpty on {range}");
+            Assert.AreEqual(range.IsUnboundedStart(), row.UnboundedStart, $"IsUnboundedStart on {range}");
+            Assert.AreEqual(range.IsUnboundedEnd(),   row.UnboundedEnd,   $"IsUnboundedEnd on {range}");
+            Assert.AreEqual(range.IsInfinity(),       row.Infinity,       $"IsInfinity on {range}");
+            Assert.AreEqual(range.IsFinite(),         row.Finite,         $"IsFinite on {range}");
+        }
+
+        var infinite = rows.Single(row => row.Id == 2112);
+        Assert.IsTrue(infinite.UnboundedStart, "lower_inf('(,)') is true");
+        Assert.IsTrue(infinite.UnboundedEnd, "upper_inf('(,)') is true");
+
+        var unboundedStartRows = await context.Reservations
+            .Where(r => r.Id >= 2111 && r.Id <= 2115 && r.Seats.IsUnboundedStart())
+            .Select(r => r.Id)
+            .OrderBy(id => id)
+            .ToListAsync();
+        CollectionAssert.AreEqual(
+            shapes.Where(pair => pair.Value.IsUnboundedStart()).Select(pair => pair.Key).Order().ToList(),
+            unboundedStartRows,
+            "the rows a Where(IsUnboundedStart) returns are the rows memory selects");
+        CollectionAssert.AreEqual(new[] { 2112, 2114 }, unboundedStartRows);
+    }
+
+    /// <summary>
     /// The shape predicates over a multirange column, against the server that defines them.
     /// The row that matters is 2072: unbounded at both ends with a gap in the middle, so
     /// <c>lower_inf AND upper_inf</c> — the translation that is correct for a single range —

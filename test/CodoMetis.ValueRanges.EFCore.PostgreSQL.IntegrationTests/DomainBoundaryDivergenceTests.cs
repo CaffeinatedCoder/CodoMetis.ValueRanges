@@ -186,6 +186,63 @@ public sealed class DomainBoundaryDivergenceTests
         Assert.AreEqual("[\"2026-01-01 10:00:00.123456\",)", (await Evaluate($"({constant})::text")).Value);
     }
 
+    /// <summary>
+    /// The date extremes. Npgsql writes <see cref="DateOnly.MinValue"/> / <see cref="DateOnly.MaxValue"/>
+    /// and <see cref="LocalDate.MinIsoValue"/> / <see cref="LocalDate.MaxIsoValue"/> as <c>-infinity</c>
+    /// / <c>infinity</c>, so a range bounded at an extreme holds a sentinel on the server where it holds
+    /// a date in memory. No finite date is next to a sentinel, so adjacency across an extreme is the
+    /// visible disagreement: <c>[0001-01-01,0001-01-01]</c> and <c>[0001-01-02,)</c> are adjacent in
+    /// memory and <c>[-infinity,-infinity] -|- [0001-01-02,)</c> is <see langword="false"/>. The pair one
+    /// day inside the extremes agrees, and so does this pair when
+    /// <c>Npgsql.DisableDateTimeInfinityConversions</c> is set (<c>InfinityConversionsDisabledTests</c>),
+    /// which is why the in-memory answer stays: changing it would disagree with the configuration where
+    /// the extremes are dates.
+    /// </summary>
+    [TestMethod]
+    public async Task DateRange_AtTheDomainEdge_IsNotAdjacentAcrossAnExtremeOnTheServer()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var first      = DateRange.CreateFinite(DateOnly.MinValue, DateOnly.MinValue);            // [0001-01-01,0001-01-01]
+        var rest       = DateRange.CreateUnboundedEnd(new DateOnly(1, 1, 2));                      // [0001-01-02,)
+        var beforeLast = DateRange.CreateFinite(new DateOnly(9999, 12, 30), new DateOnly(9999, 12, 30));
+        var last       = DateRange.CreateUnboundedEnd(DateOnly.MaxValue);                          // [9999-12-31,)
+        var inside     = DateRange.CreateFinite(new DateOnly(1, 1, 2), new DateOnly(1, 1, 2));
+        var afterIt    = DateRange.CreateUnboundedEnd(new DateOnly(1, 1, 3));
+        var nodaBefore = LocalDateRange.CreateFinite(new LocalDate(9999, 12, 30), new LocalDate(9999, 12, 30));
+        var nodaLast   = LocalDateRange.CreateUnboundedEnd(LocalDate.MaxIsoValue);
+
+        Assert.IsTrue(first.IsAdjacentTo(rest), "in memory 0001-01-01 is one day before 0001-01-02");
+        Assert.IsTrue(beforeLast.IsAdjacentTo(last), "in memory 9999-12-30 is one day before 9999-12-31");
+        Assert.IsTrue(nodaBefore.IsAdjacentTo(nodaLast));
+        Assert.IsTrue(inside.IsAdjacentTo(afterIt));
+
+        // The literals EF Core writes for the pairs above.
+        Assert.AreEqual(false, (await Evaluate("daterange('-infinity','-infinity','[]') -|- '[0001-01-02,)'::daterange")).Value,
+                        "no finite date is next to -infinity on the server");
+        Assert.AreEqual(false, (await Evaluate("'[9999-12-30,9999-12-31)'::daterange -|- '[infinity,)'::daterange")).Value,
+                        "no finite date is next to infinity on the server");
+        Assert.AreEqual(true,  (await Evaluate("'[0001-01-02,0001-01-03)'::daterange -|- '[0001-01-03,)'::daterange")).Value,
+                        "one day inside the extreme the two sides agree");
+
+        // The same through EF Core, column against parameter.
+        await using var context = new IntegrationDbContext();
+        context.Reservations.AddRange(
+            new Reservation { Id = 2121, Period = rest, NodaPeriod = nodaBefore },
+            new Reservation { Id = 2122, Period = beforeLast },
+            new Reservation { Id = 2123, Period = afterIt });
+        await context.SaveChangesAsync();
+
+        Assert.AreEqual(0, await context.Reservations.CountAsync(r => r.Id == 2121 && r.Period.IsAdjacentTo(first)),
+                        "EF Core: [0001-01-02,) -|- [-infinity,-infinity] is false on the server, true in memory");
+        Assert.AreEqual(0, await context.Reservations.CountAsync(r => r.Id == 2122 && r.Period.IsAdjacentTo(last)),
+                        "EF Core: [9999-12-30,9999-12-31) -|- [infinity,) is false on the server, true in memory");
+        Assert.AreEqual(0, await context.Reservations.CountAsync(r => r.Id == 2121 && r.NodaPeriod.IsAdjacentTo(nodaLast)),
+                        "EF Core: the NodaTime date range diverges the same way at LocalDate.MaxIsoValue");
+        Assert.AreEqual(1, await context.Reservations.CountAsync(r => r.Id == 2123 && r.Period.IsAdjacentTo(inside)),
+                        "EF Core: one day inside the extreme the two sides agree");
+    }
+
     /// <summary>Evaluates one expression, returning either its value or the SQLSTATE it raised.</summary>
     private static async Task<(object? Value, string? SqlState)> Evaluate(string expression)
     {

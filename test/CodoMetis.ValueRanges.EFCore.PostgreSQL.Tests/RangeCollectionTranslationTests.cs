@@ -59,16 +59,39 @@ public sealed class RangeCollectionTranslationTests
         Assert.AreEqual("WHERE b.\"Price\" NOT IN (@wanted1, @wanted2)", Where(db => db.Bookings.Where(b => !wanted.Contains(b.Price))));
     }
 
+    /// <summary>
+    /// Until 10.0.0 <c>Any</c> without a <c>Contains</c> went out as one parameter, read through
+    /// <c>unnest</c> of the multirange Npgsql typed it as — which merged overlapping and adjacent
+    /// ranges and dropped empty ones (#76). It reads the list from <c>VALUES</c> now, like a value set
+    /// collection and like a range collection beside a <c>Contains</c>.
+    /// </summary>
     [TestMethod]
-    public void AnyAlone_OverACapturedList_IsUnchanged()
+    public void AnyAlone_OverACapturedList_ReadsTheRangesFromValues()
     {
-        // Any without a Contains ran before 9.1.0 (unnest of the parameter Npgsql types as a multirange,
-        // which merges overlapping ranges: issue #76). Switching it would change an answer, so 9.1.0
-        // leaves it as it was.
         var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(10, 20) };
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM unnest(@wanted) AS w(value)     WHERE w.value && b.\"Seats\")",
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\")",
+            Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
+    }
+
+    [TestMethod]
+    public void CountAlone_OverACapturedList_ReadsTheRangesFromValues()
+    {
+        var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8) };
+
+        StringAssert.Contains(
+            Where(db => db.Bookings.Where(b => wanted.Count(w => w.Overlaps(b.Seats)) == 2)),
+            "FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\") = 2");
+    }
+
+    [TestMethod]
+    public void AnyAlone_OverAnEmptyCapturedList_ReadsNoRows()
+    {
+        var wanted = new List<Int32Range>();
+
+        Assert.AreEqual(
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::int4range)) AS w(\"Value\")     WHERE FALSE)",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -80,6 +103,22 @@ public sealed class RangeCollectionTranslationTests
 
         Assert.AreEqual(
             "WHERE b.\"Seats\" IN (@wanted1, @wanted2) OR EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\")",
+            Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
+    }
+
+    /// <summary>
+    /// An empty captured collection sent one parameter per range expands to a <c>VALUES</c> with no
+    /// rows, which EF Core's SQL generator refuses (#137). It reads no rows instead: one row of typed
+    /// <c>NULL</c>s under <c>FALSE</c>, with the predicate folded away under it. <c>Contains</c> over it
+    /// is EF Core's own <c>FALSE</c>, folded out of the <c>OR</c>.
+    /// </summary>
+    [TestMethod]
+    public void AnyBesideContains_OverAnEmptyCapturedList_ReadsNoRows()
+    {
+        var wanted = new List<Int32Range>();
+
+        Assert.AreEqual(
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::int4range)) AS w(\"Value\")     WHERE FALSE)",
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -98,14 +137,18 @@ public sealed class RangeCollectionTranslationTests
     }
 
     [TestMethod]
-    public void AnyAlone_OverEFParameter_IsUnchanged()
+    public void AnyAlone_OverEFParameter_IsRefusedWithWhatToWriteInstead()
     {
-        // Only Contains over a range collection failed; EF.Parameter elsewhere ran, so it is not refused.
+        // Until 10.0.0 only Contains over a range collection was refused; Any ran, through the merging
+        // multirange (#76). One parameter is wrong everywhere, so it is refused everywhere.
         var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5) };
+        using var context = new TestDbContext();
 
-        StringAssert.Contains(
-            Where(db => db.Bookings.Where(b => EF.Parameter(wanted).Any(w => w.Overlaps(b.Seats)))),
-            "FROM unnest(@wanted) AS w(value)");
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Where(b => EF.Parameter(wanted).Any(w => w.Overlaps(b.Seats))).ToQueryString());
+
+        StringAssert.Contains(refusal.Message, "merges overlapping and adjacent ranges and drops empty ones");
+        StringAssert.Contains(refusal.Message, "Any or Count read it from VALUES");
     }
 
     [TestMethod]
