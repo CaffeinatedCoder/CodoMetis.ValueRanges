@@ -25,6 +25,15 @@ dotnet test --filter "FullyQualifiedName!~IntegrationTests"
 On CI they **fail** rather than skip. An unreachable container must not quietly
 retire the layer that is the authority on PostgreSQL semantics while the build reports green.
 
+The container runs PostgreSQL 16, the oldest version 10.x supports. CI also runs both projects on 18.
+To run them on another version, name its image:
+
+```bash
+VALUERANGES_POSTGRES_IMAGE=postgres:18-alpine dotnet test test/CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests
+```
+
+A server older than 16 fails every test that needs it, with the server's version in the message.
+
 ## The quality bar
 
 This package's characteristic failure is not a crash. It is a value that looks right, compares

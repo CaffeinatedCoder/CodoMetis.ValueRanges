@@ -21,7 +21,7 @@ dotnet add package CodoMetis.ValueRanges
 ```
 
 You need .NET 10 or later. To run your LINQ queries as SQL, add the EF Core package,
-[`CodoMetis.ValueRanges.EFCore.PostgreSQL`](docs/efcore.md). For NodaTime types, add the
+[`CodoMetis.ValueRanges.EFCore.PostgreSQL`](docs/efcore.md). It needs PostgreSQL 16 or later. For NodaTime types, add the
 [NodaTime packages](#nodatime).
 
 Good to know:
@@ -208,7 +208,8 @@ The library promises you identical results in memory and as SQL. Three test laye
 2. **Translation suite.** It checks the exact SQL that every LINQ construct generates, through
    `ToQueryString()`, without a database.
 3. **Live-PostgreSQL parity suite.** A Testcontainers-based project runs the translated SQL against
-   a real PostgreSQL instance and checks that the results agree with the in-memory ones. It covers
+   a real PostgreSQL instance and checks that the results agree with the in-memory ones. CI runs it on
+   PostgreSQL 16, the oldest supported version, and 18 for every change. It covers
    round-trips for every range and multirange column type, the timestamp normalization and precision
    rules at the Npgsql boundary, and operation-level parity for the full algebra.
 

@@ -72,7 +72,7 @@ in the next preview.
 There is no fixed end-of-support date. Each line is tied to the .NET release it targets:
 
 - **9.x** targets **.NET 10** (`net10.0`, EF Core 10) and receives fixes until 10.0.0 ships.
-- **10.x**, the LTS line, targets **.NET 10** (`net10.0`, EF Core 10, PostgreSQL 14+). The intention
+- **10.x**, the LTS line, targets **.NET 10** (`net10.0`, EF Core 10, PostgreSQL 16+). The intention
   is to maintain it for as long as Microsoft supports .NET 10 (LTS, until November 2028).
 - **11.x** targets **.NET 11** (`net11.0`, EF Core 11, Npgsql 11, PostgreSQL 16+), as previews until
   .NET 11 is released. The intention is to maintain it for as long as Microsoft supports .NET 11.

@@ -10,7 +10,8 @@ the database as SQL, and they return the same results as the same code in memory
 dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL
 ```
 
-You turn it on with one line. You don't configure value converters, comparers or column types:
+It needs PostgreSQL 16 or later. You turn it on with one line. You don't configure value converters,
+comparers or column types:
 
 ```csharp
 options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
