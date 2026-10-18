@@ -243,7 +243,9 @@ stored and queried as the empty range, and nothing threw. It now throws.
 ## Migration from v9.x
 
 No signature changed. Some calls return a different value, and each one now matches PostgreSQL
-where the two sides disagreed before. The compiler can't show you where, so check these:
+where the two sides disagreed before. Text that PostgreSQL rejects is now rejected here too. The
+compiler can't show you where, so check these in order, starting with the most likely to affect
+you:
 
 - **`IsUnboundedStart()` and `IsUnboundedEnd()` return `true` for the infinite range.** A query
   and the same call in memory already disagreed on it
@@ -251,6 +253,19 @@ where the two sides disagreed before. The compiler can't show you where, so chec
 - **`RangeSet.Overlaps` on a continuous element type returns `true` for more inputs.** A query and
   the same call in memory already disagreed on them
   ([details](#check-rangesetoverlaps-on-a-continuous-element-type)).
+- **UUID text that `Guid.Parse` accepts and PostgreSQL rejects now throws `FormatException`.** This
+  covers the `(…)` form and whitespace inside a quoted element
+  ([details](#read-uuids-as-postgresql-reads-them)).
+- **A string element holding a NUL character now throws.** `From` and `Add` throw
+  `ArgumentException`, and parsing it fails ([details](#keep-nul-out-of-string-elements)).
+- **A wrapper set reads only the JSON its plain set reads.** A quoted number needs
+  `AllowReadingFromString`, and a wrapper Guid is the hyphenated form
+  ([details](#send-a-wrapper-set-the-json-you-send-the-plain-set)).
+- **A wrapper element whose text form doesn't round-trip now throws**, on every write and read,
+  where it was stored or read back as a different value
+  ([details](#check-that-your-elements-text-form-round-trips)).
+- **Decimal text with more precision than `decimal` holds now throws**, where it was rounded
+  ([details](#decimal-text-is-read-exactly-or-refused)).
 
 ### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
 
@@ -299,6 +314,119 @@ set.Intersect(DecimalRange.CreateFinite(3, 5));             // {[3,4)} in both, 
 
 Discrete types (`Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange`) are
 unaffected: their closed canonical form has no exclusive end to stop on.
+
+### Read UUIDs as PostgreSQL reads them
+
+`GuidSet` and `GuidSet<T>` parse an element with PostgreSQL's `uuid_in` grammar: 32 hex digits, a
+hyphen allowed after any group of four, optionally in braces. Before, they used `Guid.Parse`, which
+reads more and trims whitespace, so a set could parse in memory and then fail as a literal on the
+server.
+
+| Element | 9.x | 10.0 | PostgreSQL |
+|---|---|---|---|
+| `(6f9619ff-8b86-d011-b42d-00c04fc964ff)` | parses | `FormatException` | rejects |
+| `" 6f9619ff-8b86-d011-b42d-00c04fc964ff"` (quoted, with a space) | parses, trimmed | `FormatException` | rejects |
+| `6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff` | `FormatException` | parses | reads |
+| `{6f9619ff-8b86-d011-b42d-00c04fc964ff}` (quoted) | parses | parses | reads |
+
+If you build a literal from text in another format, format the value first:
+
+```csharp
+GuidSet.From(Guid.Parse(text));   // any format Guid.Parse reads
+```
+
+A `GuidSet<T>` hands your element's `Parse` the `D` form, whatever spelling the literal used. An
+element whose `Parse` only accepts another form now throws on every read.
+
+### Keep NUL out of string elements
+
+PostgreSQL `text` cannot hold U+0000. Before, `StringSet.From("a\0b")` built the set and the
+failure came from the server when the row was saved: `invalid byte sequence for encoding "UTF8":
+0x00`. Now the set refuses the element where the text comes in, with a message naming the rule:
+
+```csharp
+StringSet.From("a\0b");                 // ArgumentException
+StringSet.Parse("{a\0b}", null);        // FormatException
+StringSet.TryParse("{a\0b}", null, out _);   // false
+```
+
+`StringSet<T>` applies the rule to the element's text form, in `From`, `Add` and on every read. If
+your data carries NUL as a delimiter, split it before building the set. Every other character,
+including control characters and non-ASCII whitespace, is text as before.
+
+### Send a wrapper set the JSON you send the plain set
+
+`Int32Set<OrderId>` and `Int32Set` have always written the same JSON. Now they read the same JSON
+too. Before, a wrapper read a quoted number under any options and with the array literal's grammar,
+and a wrapper Guid with the literal's `uuid_in` grammar:
+
+| Payload | `Int32Set` | `Int32Set<OrderId>` 9.x | 10.0 |
+|---|---|---|---|
+| `["7"]`, default options | `JsonException` | `{7}` | `JsonException` |
+| `["7"]`, `AllowReadingFromString` | `{7}` | `{7}` | `{7}` |
+| `[" 7 "]`, `AllowReadingFromString` | `JsonException` | `{7}` | `JsonException` |
+| `["{6f9619ff-8b86-d011-b42d-00c04fc964ff}"]` (`GuidSet` / `GuidSet<T>`) | `JsonException` | reads | `JsonException` |
+
+ASP.NET Core's web defaults set `AllowReadingFromString`, so an API that received `["7"]` keeps
+working. One that received padded or undashed text was relying on the wrapper alone, and now
+rejects the request with the same error the plain set gave.
+
+`WriteAsString` alone no longer round-trips a wrapper set, as it never did a plain one: set
+`AllowReadingFromString` too, or read the payload with the options that wrote it.
+
+### Check that your element's text form round-trips
+
+Every core wrapper set (`StringSet<T>`, `GuidSet<T>`, the integer versions, `DecimalSet<T>` and the
+four temporal ones) now checks that the text your element's `ToString` gives reads back, through
+the family's own parser and your `Parse`, as the same element. The NodaTime versions already did.
+Before, only the backing type's grammar was checked, so a wrong value that still parsed went through:
+
+| Element | 9.x | 10.0 |
+|---|---|---|
+| `Int32Set<T>`, `ToString` gives `V + 1` | wrote `{124}` for 123, read it back as 124 | throws on write and on read |
+| `StringSet<T>`, `ToString` adds `CUST-`, `Parse` keeps any text | wrote `{CUST-123}`, read back `CUST-CUST-123` | throws on write and on read |
+| `StringSet<T>`, `ToString` adds `CUST-`, `Parse` refuses it | wrote `{CUST-123}`, failed on read with your message | throws on write naming the rule |
+| `DateTimeSet<T>`, `ToString` ignores the format | wrote `{"06/15/2024 10:30:00"}`, failed on read | throws on write naming the rule |
+
+Where it throws: `ToString` and the SQL literal or parameter with `InvalidOperationException` (the
+EF Core bridge throws `ArgumentException` for the Guid, integer, decimal and temporal versions), the
+JSON write with `JsonException`, `Parse` with `FormatException`, `TryParse` with `false`, and
+loading a column with `FormatException`. The message names the element type, the text and the rule.
+
+A generated wrapper that forwards `format` and `provider` to the value inside, and parses with
+that value's `Parse`, passes without a change. So does one that normalizes on parse, such as one
+that trims or lowercases: the check compares values, not text. What fails is a `ToString` that
+decorates, pads or computes, and a `Parse` that doesn't undo it. Move the decoration to a display
+property and keep the text form the backing value's.
+
+One case the check reaches that the grammar never did: a `DateTime` element with `Kind` `Local`,
+at a wall clock the machine's time zone skips. Its `"O"` text carries the zone's offset, which
+`DateTime.Parse` applies through the zone, so your `Parse` reads another wall clock. `ToString` and
+JSON now refuse it; the EF Core bridge still stores the wall clock, as it did since 9.0, because the
+column holds no offset.
+
+### Decimal text is read exactly or refused
+
+`DecimalRange`, `RangeSet<DecimalRange>`, `DecimalSet` and `DecimalSet<T>` refuse decimal text whose
+number `decimal` can't hold exactly, through every entry point: `Parse`, `TryParse`, JSON (a number
+token, or a quoted one under `AllowReadingFromString`), the `TypeConverter` and configuration
+binding, and an EF Core JSON column. Before, `decimal.Parse` rounded it to the nearest value,
+silently, and the value in memory was a different number from what PostgreSQL holds for the same
+text:
+
+| Text | 9.x | 10.0 | PostgreSQL |
+|---|---|---|---|
+| `[1.00000000000000000000000000001,2)` | `[1.0000000000000000000000000000,2)`, contains 1 | `FormatException` | doesn't contain 1 |
+| `{1.00000000000000000000000000001,1}` | one element | `FormatException` | two elements |
+| `[1e-30]` (JSON) | `0.0000000000000000000000000000` | `JsonException` | `1e-30` |
+| `{1e30}` | `OverflowException` | `OverflowException` | reads |
+
+The check is on the value, not the text: `1e3`, `+1.5`, `007.50`, a trailing zero beyond the 28th
+decimal place and every other spelling of a number `decimal` holds still read, with the text's scale.
+A column holding more precision was already loud: Npgsql throws `OverflowException` reading it.
+
+If you receive such text, decide what to keep before parsing: round it yourself with
+`decimal.Round`, or store it as `numeric` text.
 
 ## Migration from v8.x
 

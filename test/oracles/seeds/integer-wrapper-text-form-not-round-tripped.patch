@@ -1,0 +1,25 @@
+Seed: Int32Set<TElement> no longer checks that an element's text form reads back as the same element, on write nor on read, so an element whose ToString gives V + 1 is written as the next number and read back as it
+Oracles: DecorativeElementContractTests
+Fails: Int32Set<OffByOne>: literal round trip changed the set
+History: the 10.0.0 fix for #53, reverted for the integer arity
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+index f7466a0..5d476dc 100644
+--- a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
++++ b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+@@ -209,13 +209,11 @@ public sealed class Int32Set<TElement> :
+     /// element, or the read fails (<see cref="WrapperElement"/>, <c>FormatException</c>).
+     /// </summary>
+     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+-        => WrapperElement.Parsed(ParseElement(s.ToString()), RoundTripFormat, ParseElement);
++        => ParseElement(s.ToString());
+ 
+     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text form.</summary>
+     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
+-        => string.IsNullOrEmpty(format)
+-               ? WrapperElement.Formatted(value, RoundTripFormat, ParseElement, provider)
+-               : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
++        => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+ 
+     /// <summary>
+     /// The JSON fallback for elements that carry no converter of their own: a JSON number holding

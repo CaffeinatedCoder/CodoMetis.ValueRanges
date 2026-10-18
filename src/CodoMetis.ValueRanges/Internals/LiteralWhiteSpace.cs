@@ -21,7 +21,7 @@ internal static class LiteralWhiteSpace
     /// </summary>
     /// <remarks>
     /// Used by the temporal families' <c>ParseValue</c> only. <c>textin</c> keeps the whitespace, so a
-    /// string family must not trim; <c>uuid_in</c> rejects it (#78); the numeric families already
+    /// string family must not trim; <c>uuid_in</c> rejects it, and so does <see cref="UuidLiteral"/> (#78); the numeric families already
     /// trim exactly these characters through the BCL number parsers. Until 9.1.0 the temporal
     /// families handed it to the strict ISO grammar, so <c>{" 2026-01-01"}</c> threw.
     /// </remarks>

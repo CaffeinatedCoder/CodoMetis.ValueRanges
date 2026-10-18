@@ -178,6 +178,109 @@ public class SetParseFormatTests
         Assert.AreEqual(instants, DateTimeOffsetSet.Parse(instants.ToString(), null));
     }
 
+    // -----------------------------------------------------------------------
+    // Guid elements — PostgreSQL's uuid_in grammar, not Guid.Parse's (#78, #129)
+    // -----------------------------------------------------------------------
+
+    private static readonly Guid Uuid = Guid.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff");
+
+    /// <summary>
+    /// The spellings <c>uuid_in</c> reads: hyphens after any group of four or none at all, braces,
+    /// either case. <c>Guid.Parse</c> refuses the hyphen-group form; PostgreSQL reads it.
+    /// </summary>
+    [TestMethod]
+    [DataRow("6f9619ff-8b86-d011-b42d-00c04fc964ff")]
+    [DataRow("6F9619FF-8B86-D011-B42D-00C04FC964FF")]
+    [DataRow("6f9619ff8b86d011b42d00c04fc964ff")]
+    [DataRow("6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff")]
+    [DataRow("6f9619ff8b86-d011b42d00c04fc964ff")]
+    [DataRow("{6f9619ff-8b86-d011-b42d-00c04fc964ff}")]
+    [DataRow("{6f9619ff8b86d011b42d00c04fc964ff}")]
+    public void GuidElement_ReadsEverySpellingUuidInReads(string element)
+    {
+        var expected = GuidSet.From(Uuid);
+
+        Assert.AreEqual(expected, GuidSet.Parse($"{{\"{element}\"}}", null));
+        Assert.AreEqual(GuidSet<TestId>.From(TestId.FromGuid(Uuid)), GuidSet<TestId>.Parse($"{{\"{element}\"}}", null));
+    }
+
+    /// <summary>
+    /// What <c>uuid_in</c> refuses and <c>Guid.Parse</c> would read: the <c>P</c> and <c>X</c>
+    /// formats, whitespace at either end (which <c>Guid.Parse</c> trims, even a no-break space), a
+    /// hyphen after two digits or after the last group, an unclosed brace, and <c>urn:uuid:</c>.
+    /// </summary>
+    [TestMethod]
+    [DataRow("(6f9619ff-8b86-d011-b42d-00c04fc964ff)")]
+    [DataRow("{0x6f9619ff,0x8b86,0xd011,{0xb4,0x2d,0x00,0xc0,0x4f,0xc9,0x64,0xff}}")]
+    [DataRow(" 6f9619ff-8b86-d011-b42d-00c04fc964ff")]
+    [DataRow("6f9619ff-8b86-d011-b42d-00c04fc964ff ")]
+    [DataRow("\u00A06f9619ff-8b86-d011-b42d-00c04fc964ff")]
+    [DataRow("6f-9619ff-8b86-d011-b42d-00c04fc964ff")]
+    [DataRow("6f9619ff-8b86-d011-b42d-00c04fc964ff-")]
+    [DataRow("{6f9619ff-8b86-d011-b42d-00c04fc964ff")]
+    [DataRow("6f9619ff-8b86-d011-b42d-00c04fc964f")]
+    [DataRow("6f9619ff-8b86-d011-b42d-00c04fc964ffa")]
+    [DataRow("urn:uuid:6f9619ff-8b86-d011-b42d-00c04fc964ff")]
+    [DataRow("")]
+    public void GuidElement_RefusesWhatUuidInRefuses(string element)
+    {
+        var literal = $"{{\"{element.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"}}";
+
+        var error = Assert.ThrowsExactly<FormatException>(() => GuidSet.Parse(literal, null));
+        StringAssert.Contains(error.Message, "Not a valid uuid");
+        Assert.IsFalse(GuidSet.TryParse(literal, null, out _));
+        Assert.ThrowsExactly<FormatException>(() => GuidSet<TestId>.Parse(literal, null));
+    }
+
+    /// <summary>The literal written is the <c>D</c> form, which is what <c>uuid_out</c> prints.</summary>
+    [TestMethod]
+    public void GuidElement_WritesTheDForm()
+        => Assert.AreEqual("{6f9619ff-8b86-d011-b42d-00c04fc964ff}", GuidSet.From(Uuid).ToString());
+
+    // -----------------------------------------------------------------------
+    // String elements — a NUL character, which PostgreSQL text cannot hold (#133)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Every construction path refuses U+0000 naming the rule: the literal (bare, quoted, escaped),
+    /// <c>TryParse</c>, <c>From</c> (both overloads), <c>Add</c>, JSON, and the wrapper arity through
+    /// its element's text form. Before 10.0.0 the set parsed and failed at save time.
+    /// </summary>
+    [TestMethod]
+    [DataRow("{a\0b}")]
+    [DataRow("{\"a\0b\"}")]
+    [DataRow("{a\\\0b}")]
+    [DataRow("{\0}")]
+    public void StringElement_WithANulCharacter_IsRefusedByTheLiteral(string literal)
+    {
+        var error = Assert.ThrowsExactly<FormatException>(() => StringSet.Parse(literal, null));
+        StringAssert.Contains(error.Message, "NUL");
+        Assert.IsFalse(StringSet.TryParse(literal, null, out _));
+        Assert.ThrowsExactly<FormatException>(() => StringSet<TestPermission>.Parse(literal.Replace("a", "a."), null));
+    }
+
+    [TestMethod]
+    public void StringElement_WithANulCharacter_IsRefusedAtConstruction()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => StringSet.From(["a\0b"]));
+        StringAssert.Contains(error.Message, "NUL");
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet.From("a", "\0"));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet.From("a").Add("a\0b"));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet.From("a").Contains("\0"));
+        Assert.ThrowsExactly<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<StringSet>("[\"a\\u0000b\"]"));
+
+        var element = TestPermission.Parse("a.\0b", null);
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet<TestPermission>.From([element]));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet<TestPermission>.From(element));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet<TestPermission>.Empty.Add(element));
+        Assert.ThrowsExactly<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<StringSet<TestPermission>>("[\"a.\\u0000b\"]"));
+    }
+
+    /// <summary>Only NUL: every other character, including a no-break space or a control character, is text.</summary>
+    [TestMethod]
+    public void StringElement_EveryOtherCharacter_IsText()
+        => Assert.AreEqual(StringSet.From("a\u0001b", "\u00A0", "é"), StringSet.Parse("{a\u0001b,\"\u00A0\",é}", null));
+
     /// <summary>Decimal elements parse with PostgreSQL's numeric grammar; a group separator is not part of it.</summary>
     [TestMethod]
     public void DecimalElement_WithAGroupSeparator_IsRejected()

@@ -4,12 +4,12 @@ Fails: the wrapper-vs-primitive grammar sweep for TimeSet<T>; the stored column 
 History: the 7.0.0 arity defect, re-seeded in both halves the CLAUDE.md rule names
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs
-index 67a19ad..5f7f972 100644
+index f1c48f6..0aaf1f8 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeRegistry.cs
-@@ -74,9 +74,9 @@ internal static class SetTypeRegistry
+@@ -80,9 +80,9 @@ internal static class SetTypeRegistry
                  static value => value.ToString("yyyy-MM-dd", Invariant),
-                 storeText: true),
+                 storeText: true, requireRoundTrip: true),
              [typeof(TimeSet<>)] = Bridged<TimeOnly>(
 -                "time without time zone", "O",
 -                static text => TimeOnly.ParseExact(text, "O", Invariant),
@@ -17,18 +17,20 @@ index 67a19ad..5f7f972 100644
 +                "time without time zone", null,
 +                static text => TimeOnly.Parse(text, Invariant),
 +                static value => value.ToString(null, Invariant),
-                 storeValue: StoreTemporal.Truncate, storeText: true),
+                 storeValue: StoreTemporal.Truncate, storeText: true, requireRoundTrip: true),
  
              // The same store-side normalization the closed siblings apply: PostgreSQL
 diff --git a/src/CodoMetis.ValueRanges/Sets/TimeSet.cs b/src/CodoMetis.ValueRanges/Sets/TimeSet.cs
-index 87f1bc6..e3e8d08 100644
+index 04247d4..ea984e6 100644
 --- a/src/CodoMetis.ValueRanges/Sets/TimeSet.cs
 +++ b/src/CodoMetis.ValueRanges/Sets/TimeSet.cs
-@@ -215,7 +215,7 @@ public sealed class TimeSet<TElement> :
+@@ -223,9 +223,7 @@ public sealed class TimeSet<TElement> :
      /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
      /// — see the class remarks.</summary>
      public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
--        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
+-        => string.IsNullOrEmpty(format)
+-               ? WrapperElement.Formatted(value, RoundTripFormat, ParseElement, provider)
+-               : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 +        => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
  
      /// <summary>
