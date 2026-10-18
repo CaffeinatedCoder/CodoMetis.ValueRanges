@@ -68,7 +68,12 @@ public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, 
     public ImmutableArray<Guid>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
-    public static Guid ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider) => Guid.Parse(s);
+    /// <remarks>
+    /// PostgreSQL's <c>uuid_in</c> grammar — 32 hexadecimal digits, optionally in braces, with a hyphen
+    /// allowed after any group of four — never <see cref="Guid.Parse(string)"/>, which reads <c>(…)</c>
+    /// and trims whitespace the server refuses; the provider is ignored. See <see cref="UuidLiteral"/>.
+    /// </remarks>
+    public static Guid ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider) => UuidLiteral.Parse(s);
 
     /// <summary>
     /// Parses a PostgreSQL array literal of UUIDs into a <see cref="GuidSet"/>,
@@ -143,6 +148,12 @@ public sealed class GuidSet<TElement> :
         static () => new ValueSetJsonConverter<GuidSet<TElement>, TElement>(),
         static () => new ValueSetTypeConverter<GuidSet<TElement>, TElement>());
 
+    /// <summary>
+    /// The format the family asks its elements for: their default, which is the backing primitive's
+    /// own text form — the contract <see cref="WrapperElement"/> checks.
+    /// </summary>
+    private const string? RoundTripFormat = null;
+
     private readonly ImmutableArray<TElement> _elements;
 
     private GuidSet(ImmutableArray<TElement> elements) => _elements = elements;
@@ -181,25 +192,46 @@ public sealed class GuidSet<TElement> :
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <summary>
-    /// Parses an element via <see cref="IParsable{TSelf}"/>, which re-runs the element's
-    /// validation — corrupt data throws rather than materializing.
+    /// Parses an element with the family's grammar — PostgreSQL's <c>uuid_in</c>, exactly as
+    /// <see cref="GuidSet.ParseValue"/> reads it — and hands the element the parsed
+    /// <see cref="Guid"/>'s <c>D</c> text via <see cref="IParsable{TSelf}"/>, which re-runs
+    /// its validation: corrupt data throws rather than materializing.
+    /// </summary>
+    /// <remarks>
+    /// The element's own <c>Parse</c> never sees the raw text. A generated wrapper's
+    /// <c>Parse</c> is typically <see cref="Guid.Parse(string)"/>, which would otherwise decide the
+    /// grammar — until 10.0.0 <c>{(6f9619ff-…)}</c> and <c>{" 6f9619ff-…"}</c> read here while
+    /// PostgreSQL refuses them, and <c>{6f96-19ff-…}</c> was refused while PostgreSQL reads it.
+    /// </remarks>
+    /// <summary>The family's element parser, unchecked: the grammar, then the element's own <c>Parse</c>. See <see cref="WrapperElement"/>.</summary>
+    private static TElement ParseElement(string s)
+        => TElement.Parse(
+            GuidSet.ParseValue(s, CultureInfo.InvariantCulture).ToString("D", CultureInfo.InvariantCulture),
+            CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Checked: the element the text parsed to must format back to text that reads as the same
+    /// element, or the read fails (<see cref="WrapperElement"/>, <c>FormatException</c>).
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(s.ToString(), provider ?? CultureInfo.InvariantCulture);
+        => WrapperElement.Parsed(ParseElement(s.ToString()), RoundTripFormat, ParseElement);
 
     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text form.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+        => string.IsNullOrEmpty(format)
+               ? WrapperElement.Formatted(value, RoundTripFormat, ParseElement, provider)
+               : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string holding
-    /// the same text form as <see cref="FormatValue"/>, so the wrapper serializes exactly like the
-    /// primitive it wraps and <see cref="ParseValue"/> re-runs its validation on the way in.
-    /// Consulted only when nothing else has claimed <typeparamref name="TElement"/> — see
+    /// the same text form as <see cref="FormatValue"/>, read as System.Text.Json reads a
+    /// <see cref="Guid"/> (the hyphenated form only), so the wrapper serializes and deserializes
+    /// exactly like the primitive it wraps and <see cref="ParseValue"/> re-runs its validation on
+    /// the way in. Consulted only when nothing else has claimed <typeparamref name="TElement"/> — see
     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
     /// </summary>
     static JsonConverter<TElement>? IValueSetFactory<GuidSet<TElement>, TElement>.ElementJsonConverter
-        => ValueSetTextElementJsonConverter<GuidSet<TElement>, TElement>.Instance;
+        => ValueSetGuidElementJsonConverter<GuidSet<TElement>, TElement>.Instance;
 
     /// <summary>
     /// Parses a PostgreSQL array literal into a <see cref="GuidSet{TElement}"/>, re-validating

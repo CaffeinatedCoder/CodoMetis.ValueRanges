@@ -199,6 +199,22 @@ public string ToString(string? format, IFormatProvider? provider)
 A wrapper that ignores the argument and returns its own form is rejected. Its values are never
 stored cut off.
 
+The set checks the whole round trip, not only the grammar: your `Parse` must read the text your
+`ToString` gives back as the same value. The check runs whenever a set is written (`ToString`,
+JSON, the SQL literal and the bound parameter in EF Core) and whenever one is read (`Parse`,
+`TryParse`, JSON, a column). A failure throws, and the message names the element type, its text
+and this rule:
+
+- **On write**, `InvalidOperationException` (`JsonException` from the JSON converter). An
+  `Int32Set<T>` whose element formats `V + 1` is refused instead of stored as the next number.
+- **On read**, `FormatException`, so `TryParse` returns `false`. That also catches data written
+  before the check existed: a `StringSet<T>` whose `Parse` keeps a `CUST-` prefix reads `{CUST-123}`
+  as a value that would format as `CUST-CUST-123`, and is refused.
+- **Normalizing is fine.** The check compares values, not text, so an element that trims or
+  lowercases in `Parse`, as `AccessRight` does, passes: `{" Users.Read "}` reads as `users.read`.
+- **Before 10.0, only the grammar was checked.** `Int32Set<T>` with a `V + 1` text form wrote
+  `{124}` for 123 and read it back as 124, and the `CUST-` prefix grew on every round trip, silently.
+
 Reading works the other way round, and the family decides it, not your element. Each version first
 reads the text with the grammar of its underlying type:
 
@@ -229,6 +245,17 @@ different JSON shape, give your type its own `[JsonConverter]`. It takes precede
 
 For the string, Guid, integer and decimal versions, the JSON is **byte for byte the same** as for
 the plain set. You can swap `Int32Set` for `Int32Set<OrderId>` and API clients see no difference.
+
+Reading is the same too. A wrapper accepts exactly the payloads the plain set accepts:
+
+- **A quoted number** such as `["7"]` is read only when the options set
+  `JsonNumberHandling.AllowReadingFromString`, as ASP.NET Core's web defaults do, and then with
+  System.Text.Json's grammar for the number: a sign and digits for an integer, sign, digits, point
+  and exponent for a decimal, never whitespace.
+- **A Guid** is the hyphenated form, in either case. Braces, the undashed form and padding fail.
+- **Before 10.0, a wrapper read more.** `Int32Set<OrderId>` read `["7"]`, `[" 7 "]` and `["+7"]`
+  under any options, and `GuidSet<TenantId>` read braces and the undashed form, where the plain
+  set threw `JsonException`.
 
 The four temporal versions and the five NodaTime ones write the same token type and the same value,
 but not the same bytes. They always write seven fraction digits, where System.Text.Json trims them.
@@ -286,6 +313,20 @@ Good to know:
   `DateSet.Parse("{\" 2026-01-01\"}", null)` is `{2026-01-01}`. A backslash-escaped space works
   the same way, and so does a date or time in JSON.
 - **Before 9.1, a date or time set kept it.** `{" 2026-01-01"}` failed (`FormatException`).
+- **A UUID follows PostgreSQL's `uuid_in` grammar.** That is 32 hex digits, with a hyphen allowed
+  after any group of four, optionally in braces. `{6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff}` parses,
+  and so does `{"{6f9619ff-8b86-d011-b42d-00c04fc964ff}"}`. Parentheses, and whitespace inside a
+  quoted element, fail (`FormatException`), as they do on the server. `GuidSet<T>` reads the same
+  grammar and hands your `Parse` the `D` form.
+- **A decimal is read exactly or refused.** `{1.00000000000000000000000000001}` fails
+  (`FormatException`) rather than reading as `{1.0000000000000000000000000000}`, because PostgreSQL
+  keeps every digit and the set would hold a different number. Before 10.0 it was rounded silently.
+- **A NUL character is refused.** PostgreSQL `text` can't hold U+0000, so `StringSet.From("a\0b")`
+  throws `ArgumentException` and `{a\0b}` fails (`FormatException`), through `Parse`, `TryParse`,
+  JSON and `Add` alike, and `StringSet<T>` checks the element's text form. Before 10.0 the set
+  parsed and failed when it was saved.
+- **Before 10.0, `GuidSet` read `Guid.Parse`'s grammar.** `{(6f9619ff-8b86-d011-b42d-00c04fc964ff)}`
+  parsed, `{" 6f9619ff-8b86-d011-b42d-00c04fc964ff"}` was trimmed, and the hyphen-group form failed.
 
 ## Serialize to JSON
 

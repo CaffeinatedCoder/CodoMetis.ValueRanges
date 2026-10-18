@@ -359,3 +359,56 @@ internal readonly record struct TestCultureLeakingMoney : IFormattable, IParsabl
 
     public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
 }
+
+/// <summary>
+/// A deliberately non-conforming int element: its text form is a different number — <c>ToString</c>
+/// gives <c>V + 1</c>, <c>Parse</c> gives <c>V</c>. The integer grammar passes it, so only the
+/// round-trip check (<c>WrapperElement</c>) can tell; until 10.0.0 it was stored as the next number.
+/// </summary>
+internal readonly record struct TestOffByOne : IFormattable, IParsable<TestOffByOne>, IComparable<TestOffByOne>
+{
+    private readonly int _value;
+
+    public TestOffByOne(int value) => _value = value;
+
+    public static TestOffByOne Parse(string s, IFormatProvider? provider)
+        => new(int.Parse(s, NumberStyles.Integer, CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestOffByOne result)
+    {
+        var ok = int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value);
+        result = new TestOffByOne(value);
+        return ok;
+    }
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => (_value + 1).ToString(CultureInfo.InvariantCulture);
+
+    public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+
+    public int CompareTo(TestOffByOne other) => _value.CompareTo(other._value);
+}
+
+/// <summary>
+/// A deliberately non-conforming string element: it decorates on write (<c>CUST-</c>) and keeps
+/// any text on read, so a round trip grows the prefix. Every text is a valid string, so only the
+/// round-trip check can tell.
+/// </summary>
+internal readonly record struct TestLenientKey : IFormattable, IParsable<TestLenientKey>
+{
+    private readonly string _value;
+
+    public TestLenientKey(string value) => _value = value;
+
+    public static TestLenientKey Parse(string s, IFormatProvider? provider) => new(s);
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestLenientKey result)
+    {
+        result = new TestLenientKey(s ?? "");
+        return s is not null;
+    }
+
+    public string ToString(string? format, IFormatProvider? formatProvider) => $"CUST-{_value}";
+
+    public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+}

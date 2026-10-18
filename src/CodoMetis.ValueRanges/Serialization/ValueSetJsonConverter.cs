@@ -37,9 +37,11 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
                 throw new JsonException($"{typeof(TSet).Name} cannot contain null elements.");
 
             var element = strict
-                              ? reader.TokenType == JsonTokenType.String
-                                    ? ValueSetElementJson.Parse<TSet, T>(reader.GetString()!)
-                                    : throw new JsonException($"Expected a JSON string for a {typeof(T).Name} element of {typeof(TSet).Name}.")
+                              ? typeof(T) == typeof(decimal)
+                                    ? ValueSetElementJson.Parse<TSet, T>(ValueSetElementJson.ReadDecimalText<T>(ref reader, options))
+                                    : reader.TokenType == JsonTokenType.String
+                                        ? ValueSetElementJson.Parse<TSet, T>(reader.GetString()!)
+                                        : throw new JsonException($"Expected a JSON string for a {typeof(T).Name} element of {typeof(TSet).Name}.")
                               : fallback is null
                                   ? JsonSerializer.Deserialize(ref reader, ElementTypeInfo(options))
                                   : fallback.Read(ref reader, typeof(T), options);
@@ -95,21 +97,24 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     /// fallback, which would property-dump the element, hands over.
     /// </summary>
     /// <summary>
-    /// Whether a BCL temporal element would be read by System.Text.Json's own converter — in which case
-    /// it is read through the family's strict <see cref="IValueSetFactory{TSet,T}.ParseValue"/>
-    /// instead, the grammar its literal uses.
+    /// Whether a BCL temporal or <see cref="decimal"/> element would be read by System.Text.Json's own
+    /// converter — in which case it is read through the family's strict
+    /// <see cref="IValueSetFactory{TSet,T}.ParseValue"/> instead, the grammar its literal uses.
     /// </summary>
     /// <remarks>
     /// System.Text.Json's <see cref="DateTimeOffset"/> converter reads an ISO timestamp without an
     /// offset — or a bare date — in the parsing machine's offset, so a <c>DateTimeOffsetSet</c> from the
-    /// same JSON held different instants on different servers, while its literal refused the text. The
-    /// write side is unchanged: System.Text.Json's output is ISO 8601 that the literal grammar reads.
-    /// Compared by converter type, so a converter registered on the options — or one a source-generated
-    /// context substitutes — still reads, as for every other element type.
+    /// same JSON held different instants on different servers, while its literal refused the text. Its
+    /// <see cref="decimal"/> converter rounds a number beyond 28 significant digits without a word, where
+    /// the literal refuses it (#115); a decimal is read from the token's own text, a quoted one only under
+    /// <see cref="JsonNumberHandling.AllowReadingFromString"/> as the converter would. The write side is
+    /// unchanged: System.Text.Json's output is text the literal grammar reads. Compared by converter type,
+    /// so a converter registered on the options — or one a source-generated context substitutes — still
+    /// reads, as for every other element type.
     /// </remarks>
     private static bool ReadsThroughTheLiteralGrammar(JsonSerializerOptions options)
     {
-        if (BuiltInTemporalConverter is not { } builtIn) return false;
+        if (BuiltInConverter is not { } builtIn) return false;
 
         try
         {
@@ -121,11 +126,12 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
         }
     }
 
-    private static readonly Type? BuiltInTemporalConverter =
+    private static readonly Type? BuiltInConverter =
         typeof(T) == typeof(DateTimeOffset) ? JsonMetadataServices.DateTimeOffsetConverter.GetType()
       : typeof(T) == typeof(DateTime)       ? JsonMetadataServices.DateTimeConverter.GetType()
       : typeof(T) == typeof(DateOnly)       ? JsonMetadataServices.DateOnlyConverter.GetType()
       : typeof(T) == typeof(TimeOnly)       ? JsonMetadataServices.TimeOnlyConverter.GetType()
+      : typeof(T) == typeof(decimal)        ? JsonMetadataServices.DecimalConverter.GetType()
       : null;
 
     private static JsonConverter<T>? ResolveElementConverter(JsonSerializerOptions options)

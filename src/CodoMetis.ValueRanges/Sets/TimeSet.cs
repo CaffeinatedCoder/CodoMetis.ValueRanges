@@ -209,13 +209,23 @@ public sealed class TimeSet<TElement> :
     /// the element's validation. A lenient element parser cannot misread non-ISO text that way, and
     /// corrupt data throws rather than materializing.
     /// </summary>
-    public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+    /// <summary>The family's element parser, unchecked: the grammar, then the element's own <c>Parse</c>. See <see cref="WrapperElement"/>.</summary>
+    private static TElement ParseElement(string s)
         => TElement.Parse(IsoTemporal.ParseTime(LiteralWhiteSpace.TrimAsInputFunction(s)).ToString(RoundTripFormat, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Checked: the element the text parsed to must format back to text that reads as the same
+    /// element, or the read fails (<see cref="WrapperElement"/>, <c>FormatException</c>).
+    /// </summary>
+    public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => WrapperElement.Parsed(ParseElement(s.ToString()), RoundTripFormat, ParseElement);
 
     /// <summary>Formats an element using the round-trip format specifier (<c>O</c>) by default
     /// — see the class remarks.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(string.IsNullOrEmpty(format) ? RoundTripFormat : format, provider ?? CultureInfo.InvariantCulture);
+        => string.IsNullOrEmpty(format)
+               ? WrapperElement.Formatted(value, RoundTripFormat, ParseElement, provider)
+               : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string
