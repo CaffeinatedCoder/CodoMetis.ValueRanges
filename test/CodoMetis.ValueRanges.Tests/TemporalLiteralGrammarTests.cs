@@ -83,6 +83,8 @@ public class TemporalLiteralGrammarTests
     [DataRow("2026-01-01 09:30:00-12")]
     [DataRow("2026-01-01 09:30:00+05:53:28")]        // tstzrange output, local mean time
     [DataRow("2026-01-01T09:30+14:00")]
+    [DataRow("2026-01-01 09:30:00+15")]              // up to ±15:59:59, as PostgreSQL reads it (#131)
+    [DataRow("2026-01-01 09:30:00-15:59:59")]
     public void DateTime_Accepts_AnOffset_KeepingTheWallClock(string text)
     {
         var value = DateTimeRange.ParseValue(text, null);
@@ -147,7 +149,8 @@ public class TemporalLiteralGrammarTests
     [DataRow("2027-02-01T09:30:00 BC")]
     [DataRow("2027-02-01T09:30:00+0530")]           // offsets are ±HH, ±HH:mm or ±HH:mm:ss
     [DataRow("2027-02-01T09:30:00+5:30")]
-    [DataRow("2027-02-01T09:30:00+15:00")]          // no such offset
+    [DataRow("2027-02-01T09:30:00+16:00")]          // PostgreSQL stops at ±15:59:59
+    [DataRow("2027-02-01T09:30:00-16")]
     [DataRow("2027-02-01T09:30:00z")]
     [DataRow("2027-02-01T09:30:00+05:99")]          // each offset field is range-checked,
     [DataRow("2027-02-01T09:30:00+05:30:99")]       // the minutes and the seconds too,
@@ -189,6 +192,28 @@ public class TemporalLiteralGrammarTests
                         DateTimeOffsetRange.ParseValue("1850-01-01T00:00:00-05:53:28", null));
     }
 
+    /// <summary>
+    /// PostgreSQL reads an offset up to <c>±15:59:59</c>; <c>DateTimeOffset</c> holds <c>±14:00</c>, so an
+    /// offset beyond it is the instant at offset zero, as a seconds offset is. Until 10.0.0 it threw (#131).
+    /// Each expected instant is PostgreSQL's <c>::timestamptz</c> answer, measured on 16 and 18.
+    /// </summary>
+    [TestMethod]
+    [DataRow("2026-01-01 10:00:00+15:00", "2025-12-31T19:00:00")]
+    [DataRow("2026-01-01 10:00:00+15:59", "2025-12-31T18:01:00")]
+    [DataRow("2026-01-01 10:00:00+15:59:59", "2025-12-31T18:00:01")]
+    [DataRow("2026-01-01 10:00:00-15:59", "2026-01-02T01:59:00")]
+    [DataRow("2026-01-01 10:00:00+15", "2025-12-31T19:00:00")]
+    [DataRow("2026-01-01 10:00:00+14:30", "2025-12-31T19:30:00")]
+    [DataRow("2026-01-01T10:00+15:30", "2025-12-31T18:30:00")]
+    [DataRow("2026-01-01 10:00:00.123456+15:00", "2025-12-31T19:00:00.123456")]
+    public void DateTimeOffset_Accepts_AnOffsetBeyondFourteenHours_AsTheInstantAtUtc(string text, string utc)
+    {
+        var value = DateTimeOffsetRange.ParseValue(text, null);
+
+        Assert.AreEqual(TimeSpan.Zero, value.Offset);
+        Assert.AreEqual(DateTime.ParseExact(utc, "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture), value.UtcDateTime);
+    }
+
     [TestMethod]
     public void DateTimeOffset_Accepts_NineFractionDigits_Truncated()
         => Assert.AreEqual(
@@ -207,7 +232,10 @@ public class TemporalLiteralGrammarTests
     [DataRow("2026-01-01 09:30:00")]
     [DataRow("01.01.2026 09:30:00 +01:00")]
     [DataRow("2026-01-01")]
-    [DataRow("2026-01-01T09:30:00+15:00:00")]       // no such offset
+    [DataRow("2026-01-01T09:30:00+16:00:00")]       // PostgreSQL stops at ±15:59:59
+    [DataRow("2026-01-01T09:30:00+16:00")]
+    [DataRow("2026-01-01 09:30:00-16")]
+    [DataRow("2026-01-01T09:30:00+15:60")]
     [DataRow("2026-01-01T09:30:00+05:30:60")]
     [DataRow("2026-01-01T09:30:00x05:30:00")]       // a seconds offset needs its sign
     [DataRow("2026-01-01T09:30:00+05x30:00")]       // and both colons

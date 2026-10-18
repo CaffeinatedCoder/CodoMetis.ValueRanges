@@ -145,6 +145,9 @@ and the forms PostgreSQL prints in its default ISO `DateStyle`, and nothing else
   `±HH:mm:ss`, read as `Local`. The wall clock is kept as written, and the offset is never applied.
 - **A `DateTimeOffset`** needs a `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss`. The last form is how
   PostgreSQL writes its historical local-mean-time offsets. You get that instant at offset zero.
+- **An offset goes up to ±15:59:59,** as in PostgreSQL. A `DateTimeOffset` holds at most ±14:00, so
+  for an offset beyond that you also get the instant at offset zero. `+16:00` fails
+  (`FormatException`).
 - **`infinity` and `-infinity`** read as `MaxValue` and `MinValue`. That is what Npgsql gives you
   when it reads them.
 - **An exclusive `infinity` excludes the extreme.** `[2026-01-01,infinity)` reads as
@@ -161,7 +164,7 @@ The `DateTime` rule is PostgreSQL's own rule for `timestamp` input, and it is wh
 stores. So one literal is one value on every machine, and a local value round-trips with its kind.
 
 The NodaTime types follow the same grammar, `HH:mm` included. An `Instant` still needs its offset
-or `Z`.
+or `Z`. A `LocalDateTime` takes a `Z` or an offset and keeps the wall clock, as a `DateTime` does.
 
 A closed temporal set reads its JSON array with this grammar too. A converter you register for the
 element type still wins. Writing is unchanged: the set writes the elements in System.Text.Json's
