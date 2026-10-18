@@ -17,6 +17,12 @@
             Neither shipping package references the other.
         -->
         <PackageReference Include="EFCore.ComplexIndexes.PostgreSQL" Version="5.4.0" />
+        <!--
+            The design-time services and C# compiled-model generator `dotnet ef dbcontext optimize` runs, at
+            the EF Core version the provider resolves, and the Roslyn they bring, which compiles the generated
+            model in-process (CompiledModelJsonTests). Test-only: the shipping package never references it.
+        -->
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
     </ItemGroup>
 
     <ItemGroup>
