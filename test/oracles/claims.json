@@ -2546,5 +2546,21 @@
       "SetDimensionDecorationTests",
       "LiteralCorpusProbeTests"
     ]
+  },
+  {
+    "id": "S21-nested-empty-arrays-version-split",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "`{{}}` and `{{},{}}` are `{}`. PostgreSQL 17 and later read them as `{}`, and PostgreSQL 16 rejects them.",
+    "claim": "Every value set reads empty arrays nested to one depth as the empty set and rejects a nested array holding an element; PostgreSQL 17 and 18 read the nested empties as {} and PostgreSQL 16 rejects them, which a live test asks each version.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetDimensionDecorationTests",
+      "LiteralGrammarParityTests",
+      "LiteralCorpusProbeTests"
+    ]
   }
 ]
