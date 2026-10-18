@@ -18,6 +18,7 @@ Nothing was removed or renamed. Text that parsed is refused where PostgreSQL ref
 ### Breaking
 
 - Literals: `GuidSet` and `GuidSet<T>` read PostgreSQL's `uuid_in` grammar: 32 hex digits, a hyphen allowed after any group of four, optional braces. `{6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff}` parses, where it threw; `{(6f9619ff-…)}` and whitespace inside a quoted element throw `FormatException`, where they parsed ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#parse-and-print-literals)).
+- Literals: `StringSet` and `StringSet<T>` refuse an element holding a NUL character (U+0000), which PostgreSQL `text` cannot hold: `From` and `Add` throw `ArgumentException`, `Parse`, the `TypeConverter` and JSON throw, and `TryParse` returns `false`, where the set was built and failed when saved ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#parse-and-print-literals)).
 
 ## [9.1.0] — 2026-10-17
 

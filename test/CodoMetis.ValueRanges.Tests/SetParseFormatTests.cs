@@ -237,6 +237,50 @@ public class SetParseFormatTests
     public void GuidElement_WritesTheDForm()
         => Assert.AreEqual("{6f9619ff-8b86-d011-b42d-00c04fc964ff}", GuidSet.From(Uuid).ToString());
 
+    // -----------------------------------------------------------------------
+    // String elements — a NUL character, which PostgreSQL text cannot hold (#133)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Every construction path refuses U+0000 naming the rule: the literal (bare, quoted, escaped),
+    /// <c>TryParse</c>, <c>From</c> (both overloads), <c>Add</c>, JSON, and the wrapper arity through
+    /// its element's text form. Before 10.0.0 the set parsed and failed at save time.
+    /// </summary>
+    [TestMethod]
+    [DataRow("{a\0b}")]
+    [DataRow("{\"a\0b\"}")]
+    [DataRow("{a\\\0b}")]
+    [DataRow("{\0}")]
+    public void StringElement_WithANulCharacter_IsRefusedByTheLiteral(string literal)
+    {
+        var error = Assert.ThrowsExactly<FormatException>(() => StringSet.Parse(literal, null));
+        StringAssert.Contains(error.Message, "NUL");
+        Assert.IsFalse(StringSet.TryParse(literal, null, out _));
+        Assert.ThrowsExactly<FormatException>(() => StringSet<TestPermission>.Parse(literal.Replace("a", "a."), null));
+    }
+
+    [TestMethod]
+    public void StringElement_WithANulCharacter_IsRefusedAtConstruction()
+    {
+        var error = Assert.ThrowsExactly<ArgumentException>(() => StringSet.From(["a\0b"]));
+        StringAssert.Contains(error.Message, "NUL");
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet.From("a", "\0"));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet.From("a").Add("a\0b"));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet.From("a").Contains("\0"));
+        Assert.ThrowsExactly<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<StringSet>("[\"a\\u0000b\"]"));
+
+        var element = TestPermission.Parse("a.\0b", null);
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet<TestPermission>.From([element]));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet<TestPermission>.From(element));
+        Assert.ThrowsExactly<ArgumentException>(() => StringSet<TestPermission>.Empty.Add(element));
+        Assert.ThrowsExactly<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<StringSet<TestPermission>>("[\"a.\\u0000b\"]"));
+    }
+
+    /// <summary>Only NUL: every other character, including a no-break space or a control character, is text.</summary>
+    [TestMethod]
+    public void StringElement_EveryOtherCharacter_IsText()
+        => Assert.AreEqual(StringSet.From("a\u0001b", "\u00A0", "é"), StringSet.Parse("{a\u0001b,\"\u00A0\",é}", null));
+
     /// <summary>Decimal elements parse with PostgreSQL's numeric grammar; a group separator is not part of it.</summary>
     [TestMethod]
     public void DecimalElement_WithAGroupSeparator_IsRejected()

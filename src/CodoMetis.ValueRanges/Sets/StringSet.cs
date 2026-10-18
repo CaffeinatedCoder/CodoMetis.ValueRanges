@@ -34,12 +34,23 @@ public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, s
     public static StringSet Empty { get; } = new([]);
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element holds a NUL character, which PostgreSQL <c>text</c> cannot.</exception>
     public static StringSet From(IEnumerable<string> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, CanonicalComparer));
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return FromTrusted(ValueSetCore.Canonicalize(values.Select(TextElement.Require), CanonicalComparer));
+    }
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element holds a NUL character, which PostgreSQL <c>text</c> cannot.</exception>
     public static StringSet From(params ReadOnlySpan<string> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, CanonicalComparer));
+    {
+        foreach (var value in values) TextElement.Require(value);
+        return FromTrusted(ValueSetCore.Canonicalize(values, CanonicalComparer));
+    }
+
+    // Contains, Add and Remove refuse the element From would refuse — see TextElement.
+    string IValueSet<string>.NormalizeElement(string value) => TextElement.Require(value);
 
     /// <summary>Collection-expression builder for <see cref="StringSet{TElement}"/>.</summary>
     public static StringSet<TElement> From<TElement>(ReadOnlySpan<TElement> values)
@@ -77,7 +88,10 @@ public sealed class StringSet : IValueSet<string>, IValueSetFactory<StringSet, s
     public ImmutableArray<string>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
-    public static string ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider) => s.ToString();
+    /// <remarks>Text is its own literal — <c>textin</c> applies no grammar and trims nothing — except that a
+    /// NUL character is refused, which <c>text</c> cannot hold; see <see cref="TextElement"/>.</remarks>
+    public static string ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => TextElement.RequireParsable(s).ToString();
 
     /// <summary>Formats an element — the identity function for strings.</summary>
     public static string FormatValue(string value, string? format, IFormatProvider? provider) => value;
@@ -180,12 +194,30 @@ public sealed class StringSet<TElement> :
     public static StringSet<TElement> Empty { get; } = new([]);
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element's text form holds a NUL character, which PostgreSQL <c>text</c> cannot.</exception>
     public static StringSet<TElement> From(IEnumerable<TElement> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, CanonicalComparer));
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return FromTrusted(ValueSetCore.Canonicalize(values.Select(RequireText), CanonicalComparer));
+    }
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.From(IEnumerable{T})"/>
+    /// <exception cref="ArgumentException">An element's text form holds a NUL character, which PostgreSQL <c>text</c> cannot.</exception>
     public static StringSet<TElement> From(params ReadOnlySpan<TElement> values)
-        => FromTrusted(ValueSetCore.Canonicalize(values, CanonicalComparer));
+    {
+        foreach (var value in values) RequireText(value);
+        return FromTrusted(ValueSetCore.Canonicalize(values, CanonicalComparer));
+    }
+
+    // The element's text form is what the column holds, so the text rule applies to it — see TextElement.
+    private static TElement RequireText(TElement value)
+    {
+        TextElement.Require(value.ToString(null, CultureInfo.InvariantCulture));
+        return value;
+    }
+
+    // Contains, Add and Remove refuse the element From would refuse.
+    TElement IValueSet<TElement>.NormalizeElement(TElement value) => RequireText(value);
 
     internal static StringSet<TElement> FromTrusted(ImmutableArray<TElement> elements)
         => elements.IsEmpty ? Empty : new(elements);
@@ -221,10 +253,11 @@ public sealed class StringSet<TElement> :
 
     /// <summary>
     /// Parses an element via <see cref="IParsable{TSelf}"/>, which re-runs the element's
-    /// validation — corrupt data throws rather than materializing.
+    /// validation — corrupt data throws rather than materializing. The raw text reaches it, as
+    /// <c>textin</c> applies no grammar; only a NUL character is refused first (<see cref="TextElement"/>).
     /// </summary>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(s.ToString(), provider ?? CultureInfo.InvariantCulture);
+        => TElement.Parse(TextElement.RequireParsable(s).ToString(), provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text form.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
