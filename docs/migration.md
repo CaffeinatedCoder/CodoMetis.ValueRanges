@@ -245,9 +245,38 @@ stored and queried as the empty range, and nothing threw. It now throws.
 No signature changed. Some calls answer differently, and each one now agrees with PostgreSQL where
 the two sides disagreed before. The compiler can't show you where, so check these:
 
+- **`IsUnboundedStart()` and `IsUnboundedEnd()` answer `true` for the infinite range.** A query
+  and the same predicate in memory already disagreed on it
+  ([details](#check-isunboundedstart-and-isunboundedend-on-the-infinite-range)).
 - **`RangeSet.Overlaps` on a continuous domain answers `true` for more operands.** A query and the
   same predicate in memory already disagreed on them
   ([details](#check-rangesetoverlaps-on-a-continuous-domain)).
+
+### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
+
+Check code that calls `IsUnboundedStart()` or `IsUnboundedEnd()` on a single range to pick out the
+`(-∞, end]` or `[start, +∞)` shape, and could meet the infinite range `(,)`.
+
+Before 10.0.0 the two methods tested the variant, so `(,)` answered `false` to both. PostgreSQL's
+`lower_inf` and `upper_inf`, which they translate to, answer `true` for it, and so does a
+`RangeSet` holding it. A query through EF Core therefore matched every row holding `(,)` where the
+same predicate in memory did not. Now the range answers as the server does:
+
+```csharp
+Int32Range.Infinite.IsUnboundedStart();   // v9: false   v10: true
+Int32Range.Infinite.IsUnboundedEnd();     // v9: false   v10: true
+Int32Range.CreateUnboundedStart(5).IsUnboundedEnd();   // false in both
+```
+
+If you meant the shape, pattern-match on it. The variant interfaces are exact, and the compiler
+checks them:
+
+```csharp
+if (range is IUnboundedStartRange<int> s) { … s.End … }   // (-∞, end] only, never (,)
+```
+
+`IsInfinity()` and `IsFinite()` are unchanged: `(,)` is the only range that answers `IsInfinity()`,
+and it never answered `IsFinite()`.
 
 ### Check `RangeSet.Overlaps` on a continuous domain
 
