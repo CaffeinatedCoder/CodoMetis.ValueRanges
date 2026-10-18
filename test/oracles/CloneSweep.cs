@@ -42,10 +42,10 @@ namespace CodoMetis.ValueRanges.Oracles;
 /// <para>
 /// <b>Three rules</b>, per family of <c>N</c> units and per member key. A member present in at least
 /// <c>max(3, N − 2)</c> siblings is <i>missing</i> from the rest. A member only a minority has — one
-/// sibling, or a group smaller than a third of the family — is <i>extra</i>. A body only such a minority
-/// shares is a <i>lone body</i> when a body more siblings share is near it — at least half similar by
-/// token sequence, or behind an identical non-empty signature — which is the near miss a copy that
-/// drifted leaves. A member whose body and signature are both bespoke (a <c>Length</c> typed per range)
+/// sibling, or fewer than half the family — is <i>extra</i>. A body that fewer siblings share than the
+/// family's largest body cluster is a <i>lone body</i> when a body more siblings share is near it — at
+/// least half similar by token sequence, or behind an identical non-empty signature — which is the near
+/// miss a copy that drifted leaves. A member whose body and signature are both bespoke (a <c>Length</c> typed per range)
 /// is near nothing and stays silent, which keeps the waiver list short.
 /// </para>
 /// <para>
@@ -53,7 +53,10 @@ namespace CodoMetis.ValueRanges.Oracles;
 /// with <c> + </c> in ordinal order (<c>Float32Range + Float64Range</c>), and waived once under that
 /// name. Until 10.0.0 only a single sibling counted, so two siblings that drifted together — a pair added
 /// in one change, or a defect copied into two files — went quiet, and the second float family silenced
-/// every divergence the first had been waived for (#200).
+/// every divergence the first had been waived for (#200). The first minority was "fewer than a third of
+/// the family", which never holds for a pair in the four- and five-member NodaTime families: a hash
+/// copied into two of the five NodaTime sets passed (#236). A minority is now measured against half the
+/// family for a member and against the largest body cluster for a body.
 /// </para>
 /// <para>
 /// Every divergence is either waived in <c>test/oracles/clone-waivers.json</c> with a reason or fails
@@ -76,8 +79,8 @@ internal static class CloneSweep
     /// <summary>Beyond this many ambiguous alias occurrences in one member, only the all-or-nothing readings are tried.</summary>
     private const int MaxAliasVariants = 6;
 
-    /// <summary>A group of siblings smaller than a third of its family is a minority, and its shared divergence is reported.</summary>
-    public const int MinorityDivisor = 3;
+    /// <summary>A member fewer than half its family has is a minority, and its shared divergence is reported.</summary>
+    public const int MinorityDivisor = 2;
 
     /// <summary>Joins the units of a group divergence, and of the waiver that covers it.</summary>
     public const string GroupSeparator = " + ";
@@ -690,7 +693,10 @@ internal static class CloneSweep
             // A body a minority shares, near a body more siblings share: a drifted copy, alone or in
             // company. The cluster it is compared with must be larger than the group, or neither side
             // is the family's consensus.
-            foreach (var group in byBody.Where(g => IsMinority(g.Count, n)))
+            // Measured against the largest cluster rather than the family's size: in a family of four or
+            // five a pair is never a third, yet two of five sharing a body against three is a drift (#236).
+            var largest = byBody.Max(g => g.Count);
+            foreach (var group in byBody.Where(g => g.Count < largest))
             {
                 var mine = group[0].Members[key];
                 var near = clusters.Where(c => c.Count > group.Count)
@@ -716,7 +722,7 @@ internal static class CloneSweep
 
     /// <summary>
     /// Whether <paramref name="count"/> of <paramref name="n"/> siblings is a minority the rules report:
-    /// fewer than a third of the family, or one sibling in any family.
+    /// fewer than half the family, or one sibling in any family.
     /// </summary>
     public static bool IsMinority(int count, int n) => count == 1 || count * MinorityDivisor < n;
 

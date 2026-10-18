@@ -1,0 +1,31 @@
+Seed: InstantSet and LocalTimeSet hash the canonical array by reference instead of by its elements, the same line copied into both, so two equal sets hash differently and a dictionary keyed by either misses
+Oracles: CloneDivergenceTests
+Fails: a lone body two of the five NodaTime value sets share, reported as InstantSet + LocalTimeSet; under the one-third rule of #200 a pair in a family of five was never a minority (#236)
+History: #236, found by the pre-tag analysis (#179, part B)
+
+diff --git a/src/CodoMetis.ValueRanges.NodaTime/Sets/InstantSet.cs b/src/CodoMetis.ValueRanges.NodaTime/Sets/InstantSet.cs
+index 9f25d3e..6d17708 100644
+--- a/src/CodoMetis.ValueRanges.NodaTime/Sets/InstantSet.cs
++++ b/src/CodoMetis.ValueRanges.NodaTime/Sets/InstantSet.cs
+@@ -138,7 +138,7 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
+     public override bool Equals(object? obj) => Equals(obj as InstantSet);
+ 
+     /// <inheritdoc />
+-    public override int GetHashCode() => ValueSetCore.SetHashCode(_elements);
++    public override int GetHashCode() => _elements.GetHashCode();
+ 
+     /// <summary>Structural equality — delegates to <see cref="Equals(InstantSet)"/>.</summary>
+     public static bool operator ==(InstantSet? left, InstantSet? right)
+diff --git a/src/CodoMetis.ValueRanges.NodaTime/Sets/LocalTimeSet.cs b/src/CodoMetis.ValueRanges.NodaTime/Sets/LocalTimeSet.cs
+index f5331c2..5827c8d 100644
+--- a/src/CodoMetis.ValueRanges.NodaTime/Sets/LocalTimeSet.cs
++++ b/src/CodoMetis.ValueRanges.NodaTime/Sets/LocalTimeSet.cs
+@@ -138,7 +138,7 @@ public sealed class LocalTimeSet : IValueSet<LocalTime>, IValueSetFactory<LocalT
+     public override bool Equals(object? obj) => Equals(obj as LocalTimeSet);
+ 
+     /// <inheritdoc />
+-    public override int GetHashCode() => ValueSetCore.SetHashCode(_elements);
++    public override int GetHashCode() => _elements.GetHashCode();
+ 
+     /// <summary>Structural equality — delegates to <see cref="Equals(LocalTimeSet)"/>.</summary>
+     public static bool operator ==(LocalTimeSet? left, LocalTimeSet? right)
