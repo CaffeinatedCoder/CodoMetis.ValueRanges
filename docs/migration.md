@@ -262,7 +262,8 @@ in order, starting with the most likely to affect you:
   covers the `(…)` form and whitespace inside a quoted element
   ([details](#read-uuids-as-postgresql-reads-them)).
 - **A string element holding a NUL character now throws.** `From` and `Add` throw
-  `ArgumentException`, and parsing it fails ([details](#keep-nul-out-of-string-elements)).
+  `ArgumentException`, and parsing it fails. So does integer text with a trailing NUL, which read as
+  the number before ([details](#keep-nul-out-of-string-elements)).
 - **A wrapper set reads only the JSON its plain set reads.** A quoted number needs
   `AllowReadingFromString`, and a wrapper Guid is the hyphenated form
   ([details](#send-a-wrapper-set-the-json-you-send-the-plain-set)).
@@ -389,6 +390,9 @@ StringSet.TryParse("{a\0b}", null, out _);   // false
 `StringSet<T>` applies the rule to the element's text form, in `From`, `Add` and on every read. If
 your data carries NUL as a delimiter, split it before building the set. Every other character,
 including control characters and non-ASCII whitespace, is text as before.
+
+An integer bound or element with a NUL fails too (`FormatException`). Before, `31\0` read as 31,
+in a literal, a set element and JSON alike, because .NET's integer parsers ignore trailing NULs.
 
 ### Send a wrapper set the JSON you send the plain set
 
