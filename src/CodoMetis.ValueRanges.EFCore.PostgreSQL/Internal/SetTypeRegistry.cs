@@ -49,9 +49,10 @@ internal static class SetTypeRegistry
             // decimal — and false of every temporal below, whose default form silently drops
             // sub-seconds (and, for DateTime, the Kind). The numeric families read the element's text
             // with their own element parser, so a group separator is refused here exactly as it is by
-            // DecimalSet.Parse: NumberStyles.Number read a culture-leaking "1,5" as fifteen.
+            // DecimalSet.Parse: NumberStyles.Number read a culture-leaking "1,5" as fifteen. The Guid
+            // bridge reads uuid_in's grammar through GuidSet.ParseValue for the same reason (#129).
             [typeof(GuidSet<>)] = Bridged<Guid>(
-                "uuid", null, static text => Guid.Parse(text, Invariant), Text),
+                "uuid", null, static text => GuidSet.ParseValue(text, Invariant), Text),
             [typeof(Int16Set<>)] = Bridged<short>(
                 "smallint", null, static text => Int16Set.ParseValue(text, Invariant), Text),
             [typeof(Int32Set<>)] = Bridged<int>(

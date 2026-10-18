@@ -35,25 +35,6 @@
     "method": "StringArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip"
   },
   {
-    "oracle": "SetElementWhiteSpaceContractTests",
-    "row": "GuidSet: accepts whitespace uuid_in rejects",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78"
-  },
-  {
-    "oracle": "SetElementWhiteSpaceContractTests",
-    "row": "GuidSet<TenantId>: accepts whitespace uuid_in rejects",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78"
-  },
-  {
-    "oracle": "LiteralGrammarParityTests",
-    "row": "uuid[] GuidSet ",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78",
-    "method": "ElementWhitespace_ReadsAsPostgresReadsIt"
-  },
-  {
     "oracle": "DifferentialFuzzParityTests",
     "row": " IsUnboundedStart Infinite×",
     "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
@@ -171,20 +152,6 @@
     "family": "minimal API binds a variant-typed parameter through the union's TryParse: 200 with null for a valid literal and for another shape",
     "issue": "#116",
     "method": "EveryHostEntryPoint_BindsTheInvariantValue_UnderEveryRequestCulture"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet whitespace ",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet<TenantId> whitespace ",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
   },
   {
     "oracle": "LiteralCorpusProbeTests",
@@ -839,34 +806,6 @@
   },
   {
     "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet hyphen groups ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet parentheses ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet<TenantId> hyphen groups ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet<TenantId> parentheses ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
     "row": "LocalDateTimeRange offset ",
     "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
     "issue": "#130",
@@ -1014,13 +953,6 @@
   {
     "oracle": "SetWrapperParityTests",
     "row": "Int64Set JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "GuidSet JSON read [\" ",
     "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
     "issue": "#141",
     "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
