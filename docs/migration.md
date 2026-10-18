@@ -261,6 +261,9 @@ in order, starting with the most likely to affect you:
 - **UUID text that `Guid.Parse` accepts and PostgreSQL rejects now throws `FormatException`.** This
   covers the `(…)` form and whitespace inside a quoted element
   ([details](#read-uuids-as-postgresql-reads-them)).
+- **A `DateTimeOffset` offset written `+0530` or `+5:30` now throws `FormatException`.** It was
+  read, although the grammar and the other temporal types reject it. Write `+05:30`
+  ([details](#write-temporal-text-as-strict-iso-8601)).
 - **A string element holding a NUL character now throws.** `From` and `Add` throw
   `ArgumentException`, and parsing it fails. So does integer text with a trailing NUL, which read as
   the number before ([details](#keep-nul-out-of-string-elements)).

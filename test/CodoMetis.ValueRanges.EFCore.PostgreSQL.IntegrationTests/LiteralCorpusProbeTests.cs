@@ -604,6 +604,10 @@ public sealed class LiteralCorpusProbeTests
             ("2026-01-01 10:00+15:30", "offset range"), ("2026-01-01 10:00:00+14:30", "offset range"), ("2026-01-01 10:00:00-00", "offset"),
             ("2026-01-01 10:00:00+16:00", "offset beyond range"), ("2026-01-01 10:00:00-16", "offset beyond range"), ("2026-01-01 10:00:00+18:00", "offset beyond range"),
             ("2026-01-01 10:00:00+15:59:60", "malformed offset"), ("2026-01-01 10:00:00+05:60", "malformed offset"),
+            // Offsets PostgreSQL reads that the strict grammar refuses, as for a DateTime (J07, #234).
+            ("2026-01-01 10:00:00+0530", "non-ISO temporal"), ("2026-01-01 10:00:00-0530", "non-ISO temporal"),
+            ("2026-01-01 10:00:00+5:30", "non-ISO temporal"), ("2026-01-01 10:00:00+1430", "non-ISO temporal"),
+            ("2026-01-01 10:00:00+1530", "non-ISO temporal"),
             ("2026-01-01 10:00:00.123456+00", "fraction"), ("2026-01-01 10:00:00.1234567+00", "sub-microsecond"),
             ("2026-01-01 10:00:00", "timestamptz without offset"), ("2026-01-01 10:00:00 UTC", "zone name"), ("2026-01-01 10:00:00 Europe/Berlin", "zone name"),
             ("2026-01-01 24:00:00+00", "hour 24 in a timestamp"), ("0001-01-01 00:00:00+00", "extreme"),
