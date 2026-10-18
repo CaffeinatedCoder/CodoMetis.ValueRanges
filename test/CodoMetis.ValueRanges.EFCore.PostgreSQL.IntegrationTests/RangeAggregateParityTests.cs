@@ -1,5 +1,6 @@
 using CodoMetis.ValueRanges.Core;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 using Npgsql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
@@ -301,23 +302,31 @@ public sealed class RangeAggregateParityTests
 
         for (var mask = 1; mask < Subsets; mask++)
         {
-            var inputs = Indices(mask).Select(index => universe[index].Range).ToArray();
-            var row    = server[block + mask];
+            var row = server[block + mask];
 
-            var expectedAgg       = inMemoryAgg(inputs);
-            var expectedIntersect = inMemoryIntersect(inputs);
-
-            if (!row.Aggregated.Equals(expectedAgg))
+            // Both orders, as for the multirange sweep below: the universe lists the empty range
+            // first, so a fold that mishandled it only after another input passed in one order.
+            foreach (var (order, inputs) in new[]
+                     {
+                         ("", Indices(mask).Select(index => universe[index].Range).ToArray()),
+                         (" reversed", Indices(mask).Reverse().Select(index => universe[index].Range).ToArray())
+                     })
             {
-                disagreements.Add(
-                    $"  range_agg{Name(mask)} = {row.Aggregated}, in memory {expectedAgg}");
-            }
+                var expectedAgg       = inMemoryAgg(inputs);
+                var expectedIntersect = inMemoryIntersect(inputs);
 
-            if (!Equals(row.Intersected, expectedIntersect))
-            {
-                disagreements.Add(
-                    $"  range_intersect_agg{Name(mask)} = {Show(row.Intersected)}, "
-                  + $"in memory {Show(expectedIntersect)}");
+                if (!row.Aggregated.Equals(expectedAgg))
+                {
+                    disagreements.Add(
+                        $"  range_agg{Name(mask)}{order} = {row.Aggregated}, in memory {expectedAgg}");
+                }
+
+                if (!Equals(row.Intersected, expectedIntersect))
+                {
+                    disagreements.Add(
+                        $"  range_intersect_agg{Name(mask)}{order} = {Show(row.Intersected)}, "
+                      + $"in memory {Show(expectedIntersect)}");
+                }
             }
         }
 
@@ -330,6 +339,175 @@ public sealed class RangeAggregateParityTests
         string Name(int mask) => $"({string.Join(", ", Indices(mask).Select(index => universe[index].Name))})";
 
         static string Show(TRange? range) => range?.ToString() ?? "NULL";
+
+        static IEnumerable<int> Indices(int mask) =>
+            Enumerable.Range(0, UniverseSize).Where(index => (mask & (1 << index)) != 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // The same aggregates over a multirange column: range_agg(anymultirange) and
+    // range_intersect_agg(anymultirange)
+    // -------------------------------------------------------------------------
+
+    private sealed class SetAggregateRow<TRange, T>
+        where TRange : class, IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        public int Key { get; set; }
+
+        public RangeSet<TRange, T> Aggregated { get; set; } = RangeSet<TRange, T>.Empty;
+
+        public RangeSet<TRange, T>? Intersected { get; set; }
+    }
+
+    /// <summary>
+    /// Both aggregates over a multirange column, one group per non-empty subset of eight sets:
+    /// the empty set, the infinite one, unbounded sets, and two-element sets whose elements are
+    /// merged, intersected or left apart by the others.
+    /// </summary>
+    [TestMethod]
+    public async Task Int32MultirangeAggregates_EverySubsetOfInputs_AgreeWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        static RangeSet<Int32Range, int> Set(params Int32Range[] ranges) => RangeSet<Int32Range, int>.From(ranges);
+
+        (string Name, RangeSet<Int32Range, int> Set)[] universe =
+        [
+            ("{}",                 RangeSet<Int32Range, int>.Empty),
+            ("{[1,5]}",            Set(Int32Range.CreateFinite(1, 5))),
+            ("{[1,5],[20,30]}",    Set(Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(20, 30))),
+            ("{[3,8]}",            Set(Int32Range.CreateFinite(3, 8))),
+            ("{[6,10],[40,50]}",   Set(Int32Range.CreateFinite(6, 10), Int32Range.CreateFinite(40, 50))), // [6,10] meets [1,5]
+            ("{(,0]}",             Set(Int32Range.CreateUnboundedStart(0, true))),
+            ("{[25,)}",            Set(Int32Range.CreateUnboundedEnd(25))),
+            ("{(,)}",              RangeSet<Int32Range, int>.Infinite)
+        ];
+
+        await SweepEverySubsetOfSets<Int32Range, int>(
+            "RangeSet<Int32Range>", 93_000, universe,
+            static (row, set) => row.SeatBlocks = set,
+            rows => rows.GroupBy(r => r.GroupKey)
+                        .Select(g => new SetAggregateRow<Int32Range, int>
+                        {
+                            Key         = g.Key,
+                            Aggregated  = g.Select(r => r.SeatBlocks).RangeAgg(),
+                            Intersected = g.Select(r => r.SeatBlocks).RangeIntersectAgg()
+                        }));
+    }
+
+    /// <summary>The same over a NodaTime multirange column, which the generic overloads also serve.</summary>
+    [TestMethod]
+    public async Task LocalDateMultirangeAggregates_EverySubsetOfInputs_AgreeWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        static LocalDate D(int month, int day) => new(2026, month, day);
+        static RangeSet<LocalDateRange, LocalDate> Set(params LocalDateRange[] ranges) => RangeSet<LocalDateRange, LocalDate>.From(ranges);
+
+        (string Name, RangeSet<LocalDateRange, LocalDate> Set)[] universe =
+        [
+            ("{}",                RangeSet<LocalDateRange, LocalDate>.Empty),
+            ("{[Jan,Mar]}",       Set(LocalDateRange.CreateFinite(D(1, 1), D(3, 31)))),
+            ("{[Jan,Feb],[Jun]}", Set(LocalDateRange.CreateFinite(D(1, 1), D(2, 28)), LocalDateRange.CreateFinite(D(6, 1), D(6, 30)))),
+            ("{[Mar,May]}",       Set(LocalDateRange.CreateFinite(D(3, 1), D(5, 31)))),
+            ("{[Apr],[Nov,Dec]}", Set(LocalDateRange.CreateFinite(D(4, 1), D(4, 30)), LocalDateRange.CreateFinite(D(11, 1), D(12, 31)))),
+            ("{(,Jan]}",          Set(LocalDateRange.CreateUnboundedStart(D(1, 31), true))),
+            ("{[Oct,)}",          Set(LocalDateRange.CreateUnboundedEnd(D(10, 1)))),
+            ("{(,)}",             RangeSet<LocalDateRange, LocalDate>.Infinite)
+        ];
+
+        await SweepEverySubsetOfSets<LocalDateRange, LocalDate>(
+            "RangeSet<LocalDateRange>", 94_000, universe,
+            static (row, set) => row.NodaBlockedDays = set,
+            rows => rows.GroupBy(r => r.GroupKey)
+                        .Select(g => new SetAggregateRow<LocalDateRange, LocalDate>
+                        {
+                            Key         = g.Key,
+                            Aggregated  = g.Select(r => r.NodaBlockedDays).RangeAgg(),
+                            Intersected = g.Select(r => r.NodaBlockedDays).RangeIntersectAgg()
+                        }));
+    }
+
+    /// <summary>
+    /// <see cref="SweepEverySubsetOfInputs{TRange,T}"/> for a multirange column. The expected values
+    /// come from the shipped generic aggregates, called here on the same subsets in both orders.
+    /// </summary>
+    private static async Task SweepEverySubsetOfSets<TRange, T>(
+        string                                                                family,
+        int                                                                   block,
+        (string Name, RangeSet<TRange, T> Set)[]                              universe,
+        Action<Reservation, RangeSet<TRange, T>>                              assign,
+        Func<IQueryable<Reservation>, IQueryable<SetAggregateRow<TRange, T>>> project
+    )
+        where TRange : class, IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        Assert.AreEqual(UniverseSize, universe.Length, $"{family}: the input universe is fixed at eight sets");
+
+        await using (var seed = new IntegrationDbContext())
+        {
+            var id = block * 100;
+
+            for (var mask = 1; mask < Subsets; mask++)
+            {
+                foreach (var index in Indices(mask))
+                {
+                    var row = new Reservation { Id = id++, GroupKey = block + mask };
+                    assign(row, universe[index].Set);
+                    seed.Reservations.Add(row);
+                }
+            }
+
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = new IntegrationDbContext();
+
+        var query = project(context.Reservations.Where(r => r.GroupKey > block && r.GroupKey < block + Subsets));
+        var sql   = query.ToQueryString();
+
+        StringAssert.Contains(sql, "range_agg(", $"{family}: RangeAgg did not translate:\n{sql}");
+        StringAssert.Contains(sql, "range_intersect_agg(", $"{family}: RangeIntersectAgg did not translate:\n{sql}");
+
+        var server = await query.ToDictionaryAsync(row => row.Key);
+
+        Assert.AreEqual(Subsets - 1, server.Count, $"{family}: the sweep read {server.Count} of {Subsets - 1} groups");
+
+        var disagreements = new List<string>();
+
+        for (var mask = 1; mask < Subsets; mask++)
+        {
+            var row = server[block + mask];
+
+            // Both aggregates ignore the order of their rows, so the fold runs both ways: an input
+            // the in-memory fold mishandles only after another (an empty set reached last) would
+            // otherwise hide behind the order the subset happens to list it in.
+            foreach (var (order, inputs) in new[]
+                     {
+                         ("", Indices(mask).Select(index => universe[index].Set).ToArray()),
+                         (" reversed", Indices(mask).Reverse().Select(index => universe[index].Set).ToArray())
+                     })
+            {
+                var expectedAgg       = inputs.RangeAgg();
+                var expectedIntersect = inputs.RangeIntersectAgg();
+
+                if (!row.Aggregated.Equals(expectedAgg))
+                    disagreements.Add($"  range_agg{Name(mask)}{order} = {row.Aggregated}, in memory {expectedAgg}");
+
+                if (!Equals(row.Intersected, expectedIntersect))
+                    disagreements.Add($"  range_intersect_agg{Name(mask)}{order} = {row.Intersected?.ToString() ?? "NULL"}, "
+                                    + $"in memory {expectedIntersect?.ToString() ?? "NULL"}");
+            }
+        }
+
+        Assert.AreEqual(
+            0, disagreements.Count,
+            $"{disagreements.Count} of {(Subsets - 1) * 2} {family} aggregate results disagree with PostgreSQL:\n"
+          + string.Join("\n", disagreements.Take(20))
+          + (disagreements.Count > 20 ? $"\n  … and {disagreements.Count - 20} more" : ""));
+
+        string Name(int mask) => $"({string.Join(", ", Indices(mask).Select(index => universe[index].Name))})";
 
         static IEnumerable<int> Indices(int mask) =>
             Enumerable.Range(0, UniverseSize).Where(index => (mask & (1 << index)) != 0);

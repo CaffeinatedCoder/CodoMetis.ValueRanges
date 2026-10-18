@@ -17,6 +17,8 @@ public sealed class ClientSideOnlyTranslationTests
         ["Length", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Length > 3))],
         ["Values()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Values().Contains(5)))],
         ["Clamp", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Clamp(5) == 5))],
+        ["Shift", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Shift(10).Contains(15)))],
+        ["Expand", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Period.Expand(1).Contains(new DateOnly(2026, 6, 1))))],
         ["Values(step)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Values(2).Contains(5)))],
         ["Split(step)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Split(2).Count() > 1))],
         ["Split(period)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Period.Split(DateRange.Month).Count() > 1))],

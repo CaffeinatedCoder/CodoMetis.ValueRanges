@@ -1,0 +1,17 @@
+Seed: a range against a multirange decides &< by the set's first element instead of its last
+Oracles: ShapeMatrixParityTests, ContinuousMultirangeParityTests
+Fails: DoesNotExtendRightOf with a range on the left and a set of two or more elements whose first element ends before the range does
+
+diff --git a/src/CodoMetis.ValueRanges/RangeExtensions.cs b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+index f9c492c..d6796dd 100644
+--- a/src/CodoMetis.ValueRanges/RangeExtensions.cs
++++ b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+@@ -618,7 +618,7 @@ public static class RangeExtensions
+         /// always <see langword="false"/> when either is empty.
+         /// </returns>
+         public bool DoesNotExtendRightOf(RangeSet<TRange, T> other) =>
+-            !other.IsEmpty() && range.DoesNotExtendRightOf(other[^1]);
++            !other.IsEmpty() && range.DoesNotExtendRightOf(other[0]);
+ 
+         /// <summary>
+         /// Determines whether this range does not extend to the left of <paramref name="other"/> —

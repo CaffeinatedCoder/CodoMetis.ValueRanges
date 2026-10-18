@@ -138,7 +138,7 @@ RangeType (abstract, private ctor)
 └── Infinity       : IInfinityRange<T>    — (-∞, +∞)
 ```
 
-The private base constructor prevents external subtyping, so these five are the only ranges that can exist and a switch over them is complete in fact. C# does not prove it — exhaustiveness analysis ignores the closed hierarchy, so a switch expression still warns `CS8509` without a discard arm, which is why the discard must throw rather than answer (see [pattern matching](ranges.md#pattern-matching)). Invalid ranges (inverted bounds, degenerate half-open) normalize to `EmptyRange` at construction time.
+These five are the only ranges that can exist, so a switch over them is complete in fact. The private constructor is not what guarantees it: a record's copy constructor cannot be private (CS8878), so a record declared anywhere can chain to it and become a sixth variant — before 10.0.0 one did, implementing no shape interface, and `IsEmpty()`, `Contains` and `Overlaps` answered it `false` (#206). Since 10.0.0 every union declares the copy constructor itself and calls `Internals/ClosedUnion.cs`, which throws for any runtime type not nested in the union, at construction and before the value can reach a switch; `with` on a real variant passes. `ClosedUnionContractTests` plays the consumer against every discovered union. C# does not prove it — exhaustiveness analysis ignores the closed hierarchy, so a switch expression still warns `CS8509` without a discard arm, which is why the discard must throw rather than answer (see [pattern matching](ranges.md#pattern-matching)). Invalid ranges (inverted bounds, degenerate half-open) normalize to `EmptyRange` at construction time.
 
 ## Interface Hierarchy (`Core/`)
 
@@ -161,13 +161,13 @@ rather than by the compiler, which outside implementations of `IRange<T>` meet a
 Uses the C# 14 `extension` keyword. Two `extension<T>` blocks:
 
 1. **Query operations** on `IRange<T>` — state checks (`IsEmpty`, `IsInfinity`, etc.), bound accessors (`LowerBound`/`UpperBound` returning `T?`, `LowerBoundInclusive`/`UpperBoundInclusive` — PostgreSQL `lower`/`upper`/`lower_inc`/`upper_inc`), containment, overlap, adjacency, directional comparisons
-2. **Set operations** on `IRangeFactory<TRange, T>` — `Intersect` (returns `TRange`), `Merge` (convex hull, `range_merge`, returns `TRange`), `Union`/`Except` (return `RangeSet<TRange, T>`)
+2. **Set operations** on `IRangeFactory<TRange, T>` — `Intersect` (returns `TRange`), `Merge` (convex hull, `range_merge`, returns `TRange`), `Gap` (the hull minus both operands, returns `TRange`), `Union`/`Except` (return `RangeSet<TRange, T>`)
 
 See `src/CodoMetis.ValueRanges/RangeExtensions.cs` for the full implementation.
 
 ## Aggregates (`RangeAggregateExtensions.cs`)
 
-`RangeAgg()` (→ `RangeSet`, PostgreSQL `range_agg`) and `RangeIntersectAgg()` (→ `TRange?`, `null` on empty source, PostgreSQL `range_intersect_agg`) over `IEnumerable<TRange>`. Declared as **per-type overloads** (six each) because C# cannot infer the element type `T` from `TRange` alone — constraints do not participate in type inference. A generic private core holds the intersect-fold logic.
+`RangeAgg()` (→ `RangeSet`, PostgreSQL `range_agg`) and `RangeIntersectAgg()` (→ `TRange?`, `null` on empty source, PostgreSQL `range_intersect_agg`) over `IEnumerable<TRange>`. Declared as **per-type overloads** (six each) because C# cannot infer the element type `T` from `TRange` alone — constraints do not participate in type inference. A generic private core holds the intersect-fold logic. The overloads over `IEnumerable<RangeSet<TRange, T>>` (`range_agg(anymultirange)`, `range_intersect_agg(anymultirange)`) are generic instead, because the set type names both type arguments, so they serve the NodaTime types too; the aggregate translator tells the two sources apart by the method's parameter type, since `RangeAgg` returns a set either way.
 
 ## RangeSet<TRange, T> (`RangeSet.cs`)
 
@@ -182,7 +182,7 @@ Key methods:
 - `From(IEnumerable<TRange>)` — normalizes (filter → sort via `Internals/RangeSetHelpers.CompareByLowerBound` → greedy merge)
 - Bulk ops (`Union`, `Intersect`, `Except`) use O(n+m) merge-join instead of nested loops
 - Operators: `\|` for union, `&` for intersect, `-` for except; `==`/`!=` are structural equality (delegating to `Equals`)
-- State checks `IsEmpty()`/`IsUnboundedStart()`/`IsUnboundedEnd()`, bound accessors (`LowerBound` = first element's lower, `UpperBound` = last element's upper), and `Merge()` (convex hull of first + last element)
+- State checks `IsEmpty()`/`IsUnboundedStart()`/`IsUnboundedEnd()`, bound accessors (`LowerBound` = first element's lower, `UpperBound` = last element's upper), `Merge()` (convex hull of first + last element), and `Gaps()` / `Gaps(window)` (the hull or the window minus the set)
 - Set-operand comparisons `Contains(RangeSet)`/`Overlaps(RangeSet)` delegate per element (O(m log n))
 - Positional comparisons (`IsAdjacentTo`, `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf`) mirror PostgreSQL exactly: they consult the **outermost elements only**, and adjacency is **directional through the outer edges** — the operand must end where the set begins or begin where the set ends; interior boundaries (even the inner side of the first/last element) never count. Verified against live PostgreSQL in the integration suite.
 - `LowerBoundComparer` — static `IComparer<TRange>` for external sorting
@@ -406,6 +406,7 @@ they format themselves.
 - `IntersectEngine.cs`, `MergeEngine.cs` — per-shape intersection and merge logic
 - `ExceptEngine.cs` — set difference with boundary inversion at cut points
 - `DiscreteCanonical.cs` — canonicalizes discrete ranges to closed form
+- `RangeOrder.cs` — PostgreSQL's range order (`range_cmp`) behind every range type's `CompareTo` and, element by element, `RangeSet.CompareTo` (`multirange_cmp`); separate from `RangeSetHelpers.CompareByLowerBound`, which orders by lower bound only so `From` can merge neighbours
 - `RangeBoundHelpers.cs`, `RangeFormat.cs`, `RangeSetHelpers.cs` — shared utilities
 - `ValueSetCore.cs` — the value set engine: canonicalization, membership (binary search over the canonical order — `IValueSet<T>.CanonicalOrder` is the instance-side view of `CanonicalComparer` that `Contains` needs and cannot reach statically), equality, merge-scan algebra. `Union` keeps the **left** operand's representative among comparer-equal elements, the same "first in input order survives" tie-break `Canonicalize` applies; only the left-hand identity shortcut is sound, since a count matching the right operand merely means the left was a subset
 - `SetFormat.cs` — PostgreSQL array-literal parse/format for value sets (sibling of `RangeFormat`)

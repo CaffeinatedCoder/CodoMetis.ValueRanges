@@ -523,9 +523,10 @@ public sealed class LiteralCorpusProbeTests
 
     private static ElementCorpus Elements(Kind kind) => kind switch
     {
-        Kind.Int2 => Integers("32767", "-32768", "32768", "-32769"),
-        Kind.Int4 => Integers("2147483647", "-2147483648", "2147483648", "-2147483649"),
-        Kind.Int8 => Integers("9223372036854775807", "-9223372036854775808", "9223372036854775808", "-9223372036854775809"),
+        Kind.Int2 => Integers("32767", "-32768", "32768", "-32769", "0x7FFF", "-0x8000", "0x8000"),
+        Kind.Int4 => Integers("2147483647", "-2147483648", "2147483648", "-2147483649", "0x7FFFFFFF", "-0x80000000", "0x80000000"),
+        Kind.Int8 => Integers("9223372036854775807", "-9223372036854775808", "9223372036854775808", "-9223372036854775809",
+                              "0x7FFFFFFFFFFFFFFF", "-0x8000000000000000", "0x8000000000000000"),
         Kind.Numeric => new(["1.5", "2", "5.25", "9"],
         [
             ("1.5", "element"), ("+1.5", "sign"), ("-1.5", "sign"), ("-0", "sign"), (".5", "point"), ("5.", "point"),
@@ -553,6 +554,11 @@ public sealed class LiteralCorpusProbeTests
             ("2026-01-01 10:00:00", "element"), ("2026-01-01T10:00:00", "T separator"), ("2026-01-01 10:00", "HH:mm"),
             ("2026-01-01 10:00:00.123456", "fraction"), ("2026-01-01 10:00:00.1234567", "sub-microsecond"), ("2026-01-01 10:00:00.0000015", "sub-microsecond"),
             ("2026-01-01 10:00:00+02", "offset"), ("2026-01-01 10:00:00Z", "offset"), ("2026-01-01 10:00:00+05:30", "offset"),
+            // PostgreSQL's offset grammar at its edges (#130, #131), measured on 16 and 18: up to ±15:59:59, dropped by timestamp.
+            ("2026-01-01T10:00Z", "offset"), ("2026-01-01 10:00:00.123456+02", "offset"), ("2026-01-01 10:00:00-00", "offset"),
+            ("2026-01-01 10:00:00+05:53:28", "seconds offset"), ("2026-01-01 10:00:00+15:00", "offset range"), ("2026-01-01 10:00:00-15:59:59", "offset range"),
+            ("2026-01-01 10:00:00+16:00", "offset beyond range"), ("2026-01-01 10:00:00+05:60", "malformed offset"),
+            ("2026-01-01 10:00:00+0530", "non-ISO temporal"), ("2026-01-01 10:00:00+1", "non-ISO temporal"),
             ("0001-01-01 00:00:00", "extreme"), ("9999-12-31 23:59:59.999999", "extreme"), ("10000-01-01 00:00:00", "beyond the CLR domain"),
             ("2026-01-01 24:00:00", "hour 24 in a timestamp"), ("2026-01-01 23:59:60", "leap second"), ("2026-01-01", "timestamp without time"),
             ("infinity", "infinity"), ("-infinity", "infinity"), ("Infinity", "infinity spelling"), ("+infinity", "infinity spelling"),
@@ -565,6 +571,10 @@ public sealed class LiteralCorpusProbeTests
             ("2026-01-01 10:00:00+00", "element"), ("2026-01-01 10:00:00+05:30", "offset"), ("2026-01-01 10:00:00Z", "offset"),
             ("2026-01-01T10:00:00+00", "T separator"), ("2026-01-01 10:00:00-03", "offset"), ("2026-01-01 10:00:00+05:53:28", "seconds offset"),
             ("2026-01-01 10:00:00+14:00", "offset"), ("2026-01-01 10:00:00+15:00", "offset range"), ("2026-01-01 10:00:00+15:59", "offset range"),
+            ("2026-01-01 10:00:00+15:59:59", "offset range"), ("2026-01-01 10:00:00-15:59", "offset range"), ("2026-01-01 10:00:00+15", "offset range"),
+            ("2026-01-01 10:00+15:30", "offset range"), ("2026-01-01 10:00:00+14:30", "offset range"), ("2026-01-01 10:00:00-00", "offset"),
+            ("2026-01-01 10:00:00+16:00", "offset beyond range"), ("2026-01-01 10:00:00-16", "offset beyond range"), ("2026-01-01 10:00:00+18:00", "offset beyond range"),
+            ("2026-01-01 10:00:00+15:59:60", "malformed offset"), ("2026-01-01 10:00:00+05:60", "malformed offset"),
             ("2026-01-01 10:00:00.123456+00", "fraction"), ("2026-01-01 10:00:00.1234567+00", "sub-microsecond"),
             ("2026-01-01 10:00:00", "timestamptz without offset"), ("2026-01-01 10:00:00 UTC", "zone name"), ("2026-01-01 10:00:00 Europe/Berlin", "zone name"),
             ("2026-01-01 24:00:00+00", "hour 24 in a timestamp"), ("0001-01-01 00:00:00+00", "extreme"),
@@ -597,11 +607,20 @@ public sealed class LiteralCorpusProbeTests
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
-    private static ElementCorpus Integers(string max, string min, string aboveMax, string belowMin) => new(["1", "2", "5", "9"],
+    private static ElementCorpus Integers(string max, string min, string aboveMax, string belowMin, string hexMax, string hexMin, string hexAboveMax) => new(["1", "2", "5", "9"],
     [
         ("1", "element"), ("+1", "sign"), ("-1", "sign"), ("-0", "sign"), ("007", "leading zeros"), ("1e3", "exponent"), ("1.0", "fraction"),
         ("1.5", "fraction"), (max, "extreme"), (min, "extreme"), (aboveMax, "overflow"), (belowMin, "overflow"),
         ("0x1F", "non-decimal integer"), ("0o17", "non-decimal integer"), ("0b101", "non-decimal integer"), ("1_000", "digit separator integer"),
+        // PostgreSQL 16's integer grammar at its edges (#127), measured on 16 and 18: a prefix in either
+        // case, a sign before it, one underscore after it, the extremes in hex with the sign applied last.
+        ("0X1F", "non-decimal integer"), ("-0x1F", "non-decimal integer"), ("+0b101", "non-decimal integer"), ("0x_1F", "non-decimal integer"),
+        ("0o_17", "non-decimal integer"), ("0x000000000000001F", "non-decimal integer"), (hexMax, "non-decimal extreme"), (hexMin, "non-decimal extreme"),
+        (hexAboveMax, "non-decimal overflow"), ("0_1", "digit separator integer"), ("1_000_0", "digit separator integer"),
+        ("0x", "malformed non-decimal integer"), ("0x1__F", "malformed non-decimal integer"), ("0x1F_", "malformed non-decimal integer"),
+        ("00x1", "malformed non-decimal integer"), ("0x-1", "malformed non-decimal integer"), ("0o8", "malformed non-decimal integer"),
+        ("0b2", "malformed non-decimal integer"), ("0x 1F", "malformed non-decimal integer"), ("0_x1", "malformed non-decimal integer"),
+        ("_1", "malformed digit separator"), ("1_", "malformed digit separator"), ("1__000", "malformed digit separator"), ("-_1", "malformed digit separator"),
         ("\uFF11", "unicode digit"), ("\u0663", "unicode digit"), ("1 2", "malformed element"), ("- 1", "malformed element"),
         ("NaN", "numeric special"), ("infinity", "numeric special")
     ]);
@@ -722,6 +741,17 @@ public sealed class LiteralCorpusProbeTests
             yield return ("dimensions", literal);
         foreach (var literal in new[] { $"[1:1]={{{a}}}", $"[0:1]={{{a},{b}}}", $"[1:2]={{{a}}}", "{{}}", "{{},{}}" })
             yield return ("dimension decoration", literal);
+        // array_in's decoration at its edges (#128), measured on PostgreSQL 16 and 18: bounds as signed
+        // decimal int4 with upper + 1 representable, the count as written (duplicates included), and
+        // empty arrays nested to one depth, which 17 and later read as {} (16 refuses them).
+        foreach (var literal in new[] { $"[-5:-4]={{{a},{b}}}", $"[1]={{{a}}}", $"[+1:+1]={{{a}}}", $"[01:01]={{{a}}}", $" [1:1] = {{{a}}}",
+                                        $"[1:2]={{{a},{a}}}", $"[2147483646:2147483646]={{{a}}}", "{ {} }", "{{{},{}}}", "{{{}},{{}}}" })
+            yield return ("dimension decoration", literal);
+        foreach (var literal in new[] { $"[2]={{{a}}}", $"[1:1]={{{a},{a}}}", "[1:0]={}", "[1:1]={}", "[1:1]={{}}", $"[ 1:1]={{{a}}}",
+                                        $"[2147483647:2147483647]={{{a}}}", $"[-2147483649:-2147483649]={{{a}}}", $"[0x1:0x1]={{{a}}}",
+                                        $"[1:1]=={{{a}}}", $"[1:1]{{{a}}}", $"[:1]={{{a}}}", $"[]={{{a}}}", $"[1:1]={{{a}}}x", $"[1:1]=\u00A0{{{a}}}",
+                                        "{{},{{}}}", "{{},}", $"{{{{}},{{{a}}}}}" })
+            yield return ("malformed dimension decoration", literal);
         foreach (var literal in new[] { $"{{{a}}}x", $"{{{a}", a, $"{{{a},}}", $"{{,{a}}}", $"{{{a},,{b}}}", $"{{{a}}}}}", $"{{{{{a}}}", $"{{{a}}};", $"x{{{a}}}", $"{{{a}}}{{{b}}}" })
             yield return ("junk", literal);
         foreach (var literal in new[] { $" {{{a}}} ", $"{{ {a} }}", $"{{ {a} , {b} }}", $"{{\" {a}\"}}", $"{{\"{a} \"}}", $"{{\\ {a}}}", $"\u00A0{{{a}}}", $"{{{a}}}\u2003", $"\t{{{a}}}\n", $"{{{a}\u00A0}}" })

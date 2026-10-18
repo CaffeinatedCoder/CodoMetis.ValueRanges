@@ -121,6 +121,7 @@ public sealed class DomainParityOracleTests
             CheckSet("Merge",     ModelOfRange(a.Range.Merge(b.Range)),     Hull(union));
             CheckSet("Union",     ModelOfSet(a.Range.Union(b.Range)),       union);
             CheckSet("Except",    ModelOfSet(a.Range.Except(b.Range)),      difference);
+            CheckSet("Gap",       ModelOfRange(a.Range.Gap(b.Range)),       [.. Hull(union).Where(k => !union.Contains(k))]);
 
             var liftedA = RangeSet<TRange, T>.From([a.Range]);
             var liftedB = RangeSet<TRange, T>.From([b.Range]);
