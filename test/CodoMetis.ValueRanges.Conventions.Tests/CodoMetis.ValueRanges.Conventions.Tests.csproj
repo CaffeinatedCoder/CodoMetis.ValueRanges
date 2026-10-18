@@ -41,6 +41,8 @@
             tool run the same code.
         -->
         <Compile Include="..\oracles\CloneSweep.cs" Link="CloneSweep.cs" />
+        <!-- The rule `tools/oracles.cs seeds` judges a failed test by, compiled into it the same way (#55). -->
+        <Compile Include="..\oracles\SeedVerdict.cs" Link="SeedVerdict.cs" />
         <Compile Include="..\oracles\StringOverloads.cs" Link="StringOverloads.cs" />
     </ItemGroup>
 
