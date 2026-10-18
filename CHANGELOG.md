@@ -13,6 +13,12 @@ has the rules.
 
 ## [10.0.0] — 2026-10-17
 
+Nothing was removed or renamed. Some calls answer differently, and the compiler can't show you where: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).
+
+### Breaking
+
+- Ranges: `RangeSet.Overlaps` with a range or a set answers `true` on a continuous domain when the operand stops exactly where a later element starts and an earlier element shares values with it, as PostgreSQL's `&&` does. `{[1,4),[5,8)}.Overlaps([3,5))` answered `false` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x)).
+
 ## [9.1.0] — 2026-10-17
 
 ### Added

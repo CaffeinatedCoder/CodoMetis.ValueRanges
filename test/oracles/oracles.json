@@ -156,7 +156,7 @@
     "class": "ContinuousMultirangeParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
-    "against": "nummultirange, over every subset and ordered pair of six fragments",
+    "against": "nummultirange, over every subset and ordered pair of six fragments, through the algebra and the seven multirange predicates",
     "needs": [
       "docker"
     ]

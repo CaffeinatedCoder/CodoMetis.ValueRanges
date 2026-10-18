@@ -240,6 +240,37 @@ One change still matters here. `IRangeFactory.ToString` used to format a range i
 as `"empty"`. That is the literal PostgreSQL reads back as the empty range. So such a value was
 stored and queried as the empty range, and nothing threw. It now throws.
 
+## Migration from v9.x
+
+No signature changed. Some calls answer differently, and each one now agrees with PostgreSQL where
+the two sides disagreed before. The compiler can't show you where, so check these:
+
+- **`RangeSet.Overlaps` on a continuous domain answers `true` for more operands.** A query and the
+  same predicate in memory already disagreed on them
+  ([details](#check-rangesetoverlaps-on-a-continuous-domain)).
+
+### Check `RangeSet.Overlaps` on a continuous domain
+
+Check code that calls `Overlaps` on a `RangeSet` over `decimal`, `DateTime`, `DateTimeOffset`,
+`TimeOnly`, `LocalDateTime` or `Instant` with a range or set operand, and acts on `false`.
+
+Before 10.0.0, `Overlaps` answered `false` when the operand stopped exactly where a later element
+started, with one side exclusive, although an earlier element shared values with it. It tested only
+the element that starts where the operand stops. PostgreSQL's `&&` answered `true` for the same
+values, so a query through EF Core and the same call in memory disagreed on those rows.
+
+```csharp
+var set = RangeSet<DecimalRange, decimal>.From([DecimalRange.CreateFinite(1, 4), DecimalRange.CreateFinite(5, 8)]);
+// {[1,4),[5,8)}
+
+set.Overlaps(DecimalRange.CreateFinite(3, 5));              // v9: false   v10: true — shares [3,4)
+set.Overlaps(DecimalRange.CreateUnboundedStart(5, false));  // v9: false   v10: true — (,5) covers [1,4)
+set.Intersect(DecimalRange.CreateFinite(3, 5));             // {[3,4)} in both, which is why true is right
+```
+
+Discrete types (`Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange`) are
+unaffected: their closed canonical form has no exclusive end to stop on.
+
 ## Migration from v8.x
 
 No signature changed. What changed is what existing calls write, accept and run as SQL. Check these

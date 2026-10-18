@@ -69,20 +69,6 @@
   },
   {
     "oracle": "DifferentialFuzzParityTests",
-    "row": "> Overlaps(range) ",
-    "family": "RangeSet.Overlaps skips the element before the candidate",
-    "issue": "#106",
-    "method": "Ranges_AgreeWithPostgres"
-  },
-  {
-    "oracle": "DifferentialFuzzParityTests",
-    "row": "> Overlaps(set) ",
-    "family": "RangeSet.Overlaps skips the element before the candidate",
-    "issue": "#106",
-    "method": "Ranges_AgreeWithPostgres"
-  },
-  {
-    "oracle": "DifferentialFuzzParityTests",
     "row": "DateRange IsAdjacentTo at the domain edge ",
     "family": "date extremes are ±infinity on the server, which no finite date is adjacent to",
     "issue": "#110",

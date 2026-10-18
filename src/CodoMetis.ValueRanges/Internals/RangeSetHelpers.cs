@@ -137,6 +137,48 @@ internal static class RangeSetHelpers
         return infinite || v.CompareTo(value) <= 0;
     }
 
+    // Binary search: returns the index of the last element that starts before an operand ending at
+    // (`upperValue`, `upperInclusive`) stops — its lower bound is below `upperValue`, or at it when
+    // both bounds are inclusive, so the element's first value is one the operand still holds. Any
+    // later element starts at or past the operand's end without sharing a value, and cannot
+    // overlap it; if this element does not overlap the operand either, it ends before the operand
+    // starts, and so does every earlier one. Searching by the value alone (LastIndexWithLowerBoundAtOrBelow)
+    // is right for Contains, whose candidate is chosen by the operand's *lower* bound, but for
+    // Overlaps it picked [5,8) as the candidate for [3,5) on a continuous domain and answered false
+    // while [1,4) before it overlapped (#106). Returns -1 if no element starts before the end.
+    internal static int LastIndexStartingBefore<TRange, T>(
+        ImmutableArray<TRange> elements,
+        T                      upperValue,
+        bool                   upperInclusive)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        int lo = 0, hi = elements.Length - 1, result = -1;
+        while (lo <= hi)
+        {
+            int mid = lo + ((hi - lo) >> 1);
+            if (StartsBefore(elements[mid], upperValue, upperInclusive))
+            {
+                result = mid;
+                lo = mid + 1; // keep looking for a later candidate
+            }
+            else
+            {
+                hi = mid - 1;
+            }
+        }
+        return result;
+    }
+
+    private static bool StartsBefore<T>(IRange<T> range, T upperValue, bool upperInclusive)
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var (v, inclusive, infinite) = RangeLowerBound<T>(range);
+        if (infinite) return true;
+        int cmp = v.CompareTo(upperValue);
+        return cmp < 0 || (cmp == 0 && inclusive && upperInclusive);
+    }
+
     // Used only by CompareByLowerBound after IUnboundedStartRange has been handled separately.
     private static (T Value, bool Inclusive) FiniteLowerBoundOf<T>(IRange<T> range)
         where T : struct, IComparable<T>, IEquatable<T> =>
