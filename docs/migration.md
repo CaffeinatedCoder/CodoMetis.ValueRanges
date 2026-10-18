@@ -258,6 +258,8 @@ most likely to affect you:
   ([details](#check-that-your-elements-text-form-round-trips)).
 - **Decimal text with more precision than `decimal` holds now throws**, where it was rounded
   ([details](#decimal-text-is-read-exactly-or-refused)).
+- **A range literal whose lower bound is greater than its upper bound now throws**, where it read as
+  `empty` ([details](#write-range-literals-with-the-lower-bound-first)).
 
 ### Read UUIDs as PostgreSQL reads them
 
@@ -371,6 +373,25 @@ A column holding more precision was already loud: Npgsql throws `OverflowExcepti
 
 If you receive such text, decide what to keep before parsing: round it yourself with
 `decimal.Round`, or store it as `numeric` text.
+
+### Write range literals with the lower bound first
+
+Every range type and `RangeSet` reject a literal whose lower bound is greater than its upper bound,
+as PostgreSQL does. This holds for `Parse`, `TryParse`, JSON, the `TypeConverter` and configuration
+binding, and an EF Core JSON column. Before, the literal read as `empty`, so a swapped period in a
+query string or a JSON body matched nothing, silently:
+
+| Literal | 9.x | 10.0 | PostgreSQL |
+|---|---|---|---|
+| `[5,1)` | `empty` | `FormatException` | rejects |
+| `[2026-06-30,2026-01-01]` | `empty` | `FormatException` | rejects |
+| `{[5,1),[7,9]}` | `{[7,9]}`, the inverted range dropped | `FormatException` | rejects |
+| `[5,5)`, `(5,5)` | `empty` | `empty` | `empty` |
+
+`TryParse` returns `false`, a minimal API or MVC binding answers 400, and a JSON body fails with
+`JsonException`. `CreateFinite(5, 1)` still returns `Empty`: a factory call has computed bounds, and
+that rule hasn't changed. If your input can arrive swapped, order the bounds before you build the
+literal, or call `CreateFinite` with the parsed bounds.
 
 ## Migration from v8.x
 
