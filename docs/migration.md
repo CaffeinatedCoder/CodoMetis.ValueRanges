@@ -242,9 +242,14 @@ stored and queried as the empty range, and nothing threw. It now throws.
 
 ## Migration from v9.x
 
-No signature changed. What changed is which text parses. Check these in order, starting with the
-most likely to affect you:
+No signature changed. Some calls return a different value, and each one now matches PostgreSQL
+where the two sides disagreed before. Text that PostgreSQL rejects is now rejected here too. The
+compiler can't show you where, so check these in order, starting with the most likely to affect
+you:
 
+- **`RangeSet.Overlaps` on a continuous element type returns `true` for more inputs.** A query and
+  the same call in memory already disagreed on them
+  ([details](#check-rangesetoverlaps-on-a-continuous-element-type)).
 - **UUID text that `Guid.Parse` accepts and PostgreSQL rejects now throws `FormatException`.** This
   covers the `(…)` form and whitespace inside a quoted element
   ([details](#read-uuids-as-postgresql-reads-them)).
@@ -258,6 +263,28 @@ most likely to affect you:
   ([details](#check-that-your-elements-text-form-round-trips)).
 - **Decimal text with more precision than `decimal` holds now throws**, where it was rounded
   ([details](#decimal-text-is-read-exactly-or-refused)).
+
+### Check `RangeSet.Overlaps` on a continuous element type
+
+Check code that calls `Overlaps` on a `RangeSet` over `decimal`, `DateTime`, `DateTimeOffset`,
+`TimeOnly`, `LocalDateTime` or `Instant`, passes a range or a set, and acts on `false`.
+
+Before 10.0.0, `Overlaps` returned `false` when the range you passed stopped exactly where a later
+element started, with one side exclusive, although an earlier element shared values with it. It
+tested only the element that starts where your range stops. PostgreSQL's `&&` returns `true` for
+the same values, so a query through EF Core and the same call in memory disagreed on those rows.
+
+```csharp
+var set = RangeSet<DecimalRange, decimal>.From([DecimalRange.CreateFinite(1, 4), DecimalRange.CreateFinite(5, 8)]);
+// {[1,4),[5,8)}
+
+set.Overlaps(DecimalRange.CreateFinite(3, 5));              // v9: false   v10: true — shares [3,4)
+set.Overlaps(DecimalRange.CreateUnboundedStart(5, false));  // v9: false   v10: true — (,5) covers [1,4)
+set.Intersect(DecimalRange.CreateFinite(3, 5));             // {[3,4)} in both, which is why true is right
+```
+
+Discrete types (`Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange`) are
+unaffected: their closed canonical form has no exclusive end to stop on.
 
 ### Read UUIDs as PostgreSQL reads them
 
