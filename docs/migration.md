@@ -240,6 +240,38 @@ One change still matters here. `IRangeFactory.ToString` used to format a range i
 as `"empty"`. That is the literal PostgreSQL reads back as the empty range. So such a value was
 stored and queried as the empty range, and nothing threw. It now throws.
 
+## Migration from v9.x
+
+No signature changed. What changed is which text parses. Check these in order, starting with the
+most likely to affect you:
+
+- **UUID text that `Guid.Parse` accepts and PostgreSQL rejects now throws `FormatException`.** This
+  covers the `(…)` form and whitespace inside a quoted element
+  ([details](#read-uuids-as-postgresql-reads-them)).
+
+### Read UUIDs as PostgreSQL reads them
+
+`GuidSet` and `GuidSet<T>` parse an element with PostgreSQL's `uuid_in` grammar: 32 hex digits, a
+hyphen allowed after any group of four, optionally in braces. Before, they used `Guid.Parse`, which
+reads more and trims whitespace, so a set could parse in memory and then fail as a literal on the
+server.
+
+| Element | 9.x | 10.0 | PostgreSQL |
+|---|---|---|---|
+| `(6f9619ff-8b86-d011-b42d-00c04fc964ff)` | parses | `FormatException` | rejects |
+| `" 6f9619ff-8b86-d011-b42d-00c04fc964ff"` (quoted, with a space) | parses, trimmed | `FormatException` | rejects |
+| `6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff` | `FormatException` | parses | reads |
+| `{6f9619ff-8b86-d011-b42d-00c04fc964ff}` (quoted) | parses | parses | reads |
+
+If you build a literal from text in another format, format the value first:
+
+```csharp
+GuidSet.From(Guid.Parse(text));   // any format Guid.Parse reads
+```
+
+A `GuidSet<T>` hands your element's `Parse` the `D` form, whatever spelling the literal used. An
+element whose `Parse` only accepts another form now throws on every read.
+
 ## Migration from v8.x
 
 No signature changed. What changed is what existing calls write, accept and run as SQL. Check these

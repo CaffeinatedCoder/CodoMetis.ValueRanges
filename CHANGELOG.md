@@ -13,6 +13,12 @@ has the rules.
 
 ## [10.0.0] — 2026-10-17
 
+Nothing was removed or renamed. Text that parsed is refused where PostgreSQL refuses it, and a wrapper element's text form is checked, so some calls that answered now throw: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).
+
+### Breaking
+
+- Literals: `GuidSet` and `GuidSet<T>` read PostgreSQL's `uuid_in` grammar: 32 hex digits, a hyphen allowed after any group of four, optional braces. `{6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff}` parses, where it threw; `{(6f9619ff-…)}` and whitespace inside a quoted element throw `FormatException`, where they parsed ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#parse-and-print-literals)).
+
 ## [9.1.0] — 2026-10-17
 
 ### Added

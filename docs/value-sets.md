@@ -286,6 +286,13 @@ Good to know:
   `DateSet.Parse("{\" 2026-01-01\"}", null)` is `{2026-01-01}`. A backslash-escaped space works
   the same way, and so does a date or time in JSON.
 - **Before 9.1, a date or time set kept it.** `{" 2026-01-01"}` failed (`FormatException`).
+- **A UUID follows PostgreSQL's `uuid_in` grammar.** That is 32 hex digits, with a hyphen allowed
+  after any group of four, optionally in braces. `{6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff}` parses,
+  and so does `{"{6f9619ff-8b86-d011-b42d-00c04fc964ff}"}`. Parentheses, and whitespace inside a
+  quoted element, fail (`FormatException`), as they do on the server. `GuidSet<T>` reads the same
+  grammar and hands your `Parse` the `D` form.
+- **Before 10.0, `GuidSet` read `Guid.Parse`'s grammar.** `{(6f9619ff-8b86-d011-b42d-00c04fc964ff)}`
+  parsed, `{" 6f9619ff-8b86-d011-b42d-00c04fc964ff"}` was trimmed, and the hyphen-group form failed.
 
 ## Serialize to JSON
 

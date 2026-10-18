@@ -25,8 +25,8 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// </para>
 /// <para>
 /// A trim in the shared array parser would strip a <c>text[]</c> element's own spaces, silently — the
-/// string rows are what catch that. <c>GuidSet</c> accepts whitespace <c>uuid_in</c> rejects; that is
-/// a known candidate (#78), fixed in 10.0.0 because rejecting it changes an existing answer.
+/// string rows are what catch that. Until 10.0.0 <c>GuidSet</c> accepted whitespace <c>uuid_in</c>
+/// rejects, because <c>Guid.Parse</c> trims it (#78); the Guid rows are what hold the fix.
 /// </para>
 /// </remarks>
 [TestClass]

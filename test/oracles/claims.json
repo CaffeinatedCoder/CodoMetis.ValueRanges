@@ -2368,5 +2368,22 @@
       "LiteralGrammarParityTests",
       "SetParseFormatTests"
     ]
+  },
+  {
+    "id": "S17-uuid-in-grammar",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "**A UUID follows PostgreSQL's `uuid_in` grammar.** That is 32 hex digits, with a hyphen allowed\n  after any group of four, optionally in braces. `{6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff}` parses,\n  and so does `{\"{6f9619ff-8b86-d011-b42d-00c04fc964ff}\"}`. Parentheses, and whitespace inside a\n  quoted element, fail (`FormatException`), as they do on the server. `GuidSet<T>` reads the same\n  grammar and hands your `Parse` the `D` form.",
+    "claim": "GuidSet.Parse and GuidSet<T>.Parse read 32 hex digits with a hyphen after any group of four or none, in either case, optionally in braces, as one value; they refuse the (…) and X forms, a hyphen after two digits or after the last group, whitespace at either end of a quoted or escaped element and urn:uuid:, with FormatException, through Parse, TryParse, the span overloads and the TypeConverter, agreeing with PostgreSQL's uuid_in; the wrapper's element Parse receives the D form.",
+    "oracle": "exception",
+    "surfaces": [
+      "GuidSet.ParseValue",
+      "GuidSet.Parse",
+      "GuidSet.TryParse"
+    ],
+    "heldBy": [
+      "SetParseFormatTests",
+      "SetElementWhiteSpaceContractTests",
+      "LiteralCorpusProbeTests"
+    ]
   }
 ]

@@ -68,7 +68,12 @@ public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, 
     public ImmutableArray<Guid>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
-    public static Guid ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider) => Guid.Parse(s);
+    /// <remarks>
+    /// PostgreSQL's <c>uuid_in</c> grammar — 32 hexadecimal digits, optionally in braces, with a hyphen
+    /// allowed after any group of four — never <see cref="Guid.Parse(string)"/>, which reads <c>(…)</c>
+    /// and trims whitespace the server refuses; the provider is ignored. See <see cref="UuidLiteral"/>.
+    /// </remarks>
+    public static Guid ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider) => UuidLiteral.Parse(s);
 
     /// <summary>
     /// Parses a PostgreSQL array literal of UUIDs into a <see cref="GuidSet"/>,
@@ -181,11 +186,21 @@ public sealed class GuidSet<TElement> :
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <summary>
-    /// Parses an element via <see cref="IParsable{TSelf}"/>, which re-runs the element's
-    /// validation — corrupt data throws rather than materializing.
+    /// Parses an element with the family's grammar — PostgreSQL's <c>uuid_in</c>, exactly as
+    /// <see cref="GuidSet.ParseValue"/> reads it — and hands the element the parsed
+    /// <see cref="Guid"/>'s <c>D</c> text via <see cref="IParsable{TSelf}"/>, which re-runs
+    /// its validation: corrupt data throws rather than materializing.
     /// </summary>
+    /// <remarks>
+    /// The element's own <c>Parse</c> never sees the raw text. A generated wrapper's
+    /// <c>Parse</c> is typically <see cref="Guid.Parse(string)"/>, which would otherwise decide the
+    /// grammar — until 10.0.0 <c>{(6f9619ff-…)}</c> and <c>{" 6f9619ff-…"}</c> read here while
+    /// PostgreSQL refuses them, and <c>{6f96-19ff-…}</c> was refused while PostgreSQL reads it.
+    /// </remarks>
     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => TElement.Parse(s.ToString(), provider ?? CultureInfo.InvariantCulture);
+        => TElement.Parse(
+            GuidSet.ParseValue(s, CultureInfo.InvariantCulture).ToString("D", CultureInfo.InvariantCulture),
+            CultureInfo.InvariantCulture);
 
     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text form.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
