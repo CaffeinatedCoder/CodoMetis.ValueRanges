@@ -118,6 +118,23 @@ public class NodaTimeRangeSetTests
     }
 
     [TestMethod]
+    public void ARangeWithASetOperand_ReadsTheSetsOuterElements()
+    {
+        var blocked = DateSet.From([LocalDateRange.CreateFinite(D(2025, 1, 10), D(2025, 1, 12)),
+                                    LocalDateRange.CreateFinite(D(2025, 1, 20), D(2025, 1, 22))]);
+        var january = LocalDateRange.CreateFinite(D(2025, 1, 1), D(2025, 1, 31));
+
+        Assert.IsTrue(january.Contains(blocked));
+        Assert.IsTrue(blocked.IsContainedBy(january));
+        Assert.IsFalse(LocalDateRange.CreateFinite(D(2025, 1, 1), D(2025, 1, 15)).Contains(blocked));
+        Assert.IsTrue(LocalDateRange.CreateFinite(D(2025, 1, 15), D(2025, 1, 21)).DoesNotExtendRightOf(blocked));
+        Assert.IsTrue(LocalDateRange.CreateFinite(D(2025, 1, 1), D(2025, 1, 9)).IsAdjacentTo(blocked));
+
+        var window = InstantRange.CreateFinite(I(2025, 1, 1), I(2025, 2, 1));
+        Assert.IsTrue(window.Overlaps(InstantRangeSet.From([InstantRange.CreateUnboundedStart(I(2025, 1, 2))])));
+    }
+
+    [TestMethod]
     public void TheSetAggregates_ServeNodaTimeSets()
     {
         DateSet[] sets =

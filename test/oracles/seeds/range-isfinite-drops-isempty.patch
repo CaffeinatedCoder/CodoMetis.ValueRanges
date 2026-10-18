@@ -1,0 +1,20 @@
+Seed: IsFinite() on a range column drops NOT isempty, so the empty range answers true on the server and false in memory
+Oracles: ExecutedQueryTests
+Fails: RangeShapePredicates_MatchInMemory — IsFinite on the empty row disagrees with memory
+History: the second state predicate that was only ever checked as SQL fragments (#118)
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index d7e38da..b829fbb 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -181,9 +181,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+         if (generic == IsFiniteMethod)
+             return sqlExpressionFactory.AndAlso(
+                 sqlExpressionFactory.Not(BoolFunction("lower_inf", Range(0))),
+-                sqlExpressionFactory.AndAlso(
+-                    sqlExpressionFactory.Not(BoolFunction("upper_inf", Range(0))),
+-                    sqlExpressionFactory.Not(BoolFunction("isempty", Range(0)))));
++                sqlExpressionFactory.Not(BoolFunction("upper_inf", Range(0))));
+ 
+         if (generic == LowerBoundMethod)
+             return BoundFunction("lower", Range(0), definition);

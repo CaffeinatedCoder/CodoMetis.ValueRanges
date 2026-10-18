@@ -52,5 +52,8 @@ public class UnknownRangeVariantTests
 
         public static int ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider) =>
             int.Parse(s, provider);
+
+        // Only a range's own type is accepted by CompareTo, so no shipped range compares with this one.
+        public int CompareTo(RogueRange? other) => throw new NotSupportedException();
     }
 }

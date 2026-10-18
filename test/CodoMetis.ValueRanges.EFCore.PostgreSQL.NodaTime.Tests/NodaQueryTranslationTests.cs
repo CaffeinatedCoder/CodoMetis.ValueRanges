@@ -311,6 +311,14 @@ public sealed class NodaQueryTranslationTests
     }
 
     [TestMethod]
+    public void NodaRangeWithAMultirangeOperand_IsTheOperatorWithTheRangeOnTheLeft()
+    {
+        StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Period.Contains(r.BlockedDays))), "r.\"Period\" @> r.\"BlockedDays\"");
+        StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Window.DoesNotExtendLeftOf(r.Windows))), "r.\"Window\" &> r.\"Windows\"");
+        StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Windows.IsContainedBy(r.Window))), "r.\"Windows\" <@ r.\"Window\"");
+    }
+
+    [TestMethod]
     public void NodaMultirangeAggregates_TranslateOverTheMultirange()
     {
         var sql = Sql(db => db.Reservations

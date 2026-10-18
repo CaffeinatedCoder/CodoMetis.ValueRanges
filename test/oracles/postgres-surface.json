@@ -228,10 +228,10 @@
     "signature": "anymultirange < anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " < ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange << anymultirange",
@@ -255,10 +255,10 @@
     "signature": "anymultirange <= anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " <= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange <> anymultirange",
@@ -273,19 +273,19 @@
     "signature": "anymultirange <@ anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.IsContainedBy",
+    "translation": " <@ ",
     "waiver": null,
-    "issue": 92
+    "issue": null
   },
   {
     "signature": "anymultirange <@ anyrange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.IsContainedBy",
+    "translation": " <@ ",
     "waiver": null,
-    "issue": 92
+    "issue": null
   },
   {
     "signature": "anymultirange = anymultirange",
@@ -300,19 +300,19 @@
     "signature": "anymultirange > anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " > ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange >= anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " >= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange >> anymultirange",
@@ -363,7 +363,7 @@
     "signature": "anyrange && anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": "RangeSet.Overlaps",
+    "member": "RangeExtensions.Overlaps",
     "translation": " && ",
     "waiver": null,
     "issue": null
@@ -381,10 +381,10 @@
     "signature": "anyrange &< anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeExtensions.DoesNotExtendRightOf",
+    "translation": " &< ",
     "waiver": null,
-    "issue": 92
+    "issue": null
   },
   {
     "signature": "anyrange &< anyrange",
@@ -399,10 +399,10 @@
     "signature": "anyrange &> anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeExtensions.DoesNotExtendLeftOf",
+    "translation": " &> ",
     "waiver": null,
-    "issue": 92
+    "issue": null
   },
   {
     "signature": "anyrange &> anyrange",
@@ -444,7 +444,7 @@
     "signature": "anyrange -|- anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": "RangeSet.IsAdjacentTo",
+    "member": "RangeExtensions.IsAdjacentTo",
     "translation": " -|- ",
     "waiver": null,
     "issue": null
@@ -462,17 +462,17 @@
     "signature": "anyrange < anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " < ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange << anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": "RangeSet.IsStrictlyRightOf",
-    "translation": " >> ",
+    "member": "RangeExtensions.IsStrictlyLeftOf",
+    "translation": " << ",
     "waiver": null,
     "issue": null
   },
@@ -489,10 +489,10 @@
     "signature": "anyrange <= anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " <= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange <> anyrange",
@@ -507,8 +507,8 @@
     "signature": "anyrange <@ anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": "RangeSet.Contains",
-    "translation": " @> ",
+    "member": "RangeExtensions.IsContainedBy",
+    "translation": " <@ ",
     "waiver": null,
     "issue": null
   },
@@ -534,26 +534,26 @@
     "signature": "anyrange > anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " > ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange >= anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " >= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange >> anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": "RangeSet.IsStrictlyLeftOf",
-    "translation": " << ",
+    "member": "RangeExtensions.IsStrictlyRightOf",
+    "translation": " >> ",
     "waiver": null,
     "issue": null
   },
@@ -579,10 +579,10 @@
     "signature": "anyrange @> anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeExtensions.Contains",
+    "translation": " @> ",
     "waiver": null,
-    "issue": 92
+    "issue": null
   },
   {
     "signature": "anyrange @> anyrange",

@@ -158,12 +158,13 @@ public sealed class ContinuousMultirangeParityTests
     }
 
     /// <summary>
-    /// The eight multirange predicates, paired with the method that must agree with each. Both
+    /// The eight multirange predicates (seven operators and <c>&lt;@</c>), paired with the method that must agree with each. Both
     /// operand orders are generated, so a one-directional method is exercised from both sides.
     /// </summary>
     private static readonly (string Name, string Operator)[] Predicates =
     [
         ("Contains",             "@>"),
+        ("IsContainedBy",        "<@"),
         ("Overlaps",             "&&"),
         ("IsStrictlyLeftOf",     "<<"),
         ("IsStrictlyRightOf",    ">>"),
@@ -176,6 +177,7 @@ public sealed class ContinuousMultirangeParityTests
         => predicate switch
         {
             "Contains"             => set.Contains(other),
+            "IsContainedBy"        => set.IsContainedBy(other),
             "Overlaps"             => set.Overlaps(other),
             "IsStrictlyLeftOf"     => set.IsStrictlyLeftOf(other),
             "IsStrictlyRightOf"    => set.IsStrictlyRightOf(other),
@@ -185,10 +187,26 @@ public sealed class ContinuousMultirangeParityTests
             _                      => throw new ArgumentOutOfRangeException(nameof(predicate))
         };
 
+    // The range-receiver half: a range on the left and a multirange on the right.
+    private static bool InMemory(string predicate, DecimalRange range, RangeSet<DecimalRange, decimal> other)
+        => predicate switch
+        {
+            "Contains"             => range.Contains(other),
+            "IsContainedBy"        => range.IsContainedBy(other),
+            "Overlaps"             => range.Overlaps(other),
+            "IsStrictlyLeftOf"     => range.IsStrictlyLeftOf(other),
+            "IsStrictlyRightOf"    => range.IsStrictlyRightOf(other),
+            "DoesNotExtendRightOf" => range.DoesNotExtendRightOf(other),
+            "DoesNotExtendLeftOf"  => range.DoesNotExtendLeftOf(other),
+            "IsAdjacentTo"         => range.IsAdjacentTo(other),
+            _                      => throw new ArgumentOutOfRangeException(nameof(predicate))
+        };
+
     private static bool InMemory(string predicate, RangeSet<DecimalRange, decimal> set, DecimalRange other)
         => predicate switch
         {
             "Contains"             => set.Contains(other),
+            "IsContainedBy"        => set.IsContainedBy(other),
             "Overlaps"             => set.Overlaps(other),
             "IsStrictlyLeftOf"     => set.IsStrictlyLeftOf(other),
             "IsStrictlyRightOf"    => set.IsStrictlyRightOf(other),
@@ -241,6 +259,25 @@ public sealed class ContinuousMultirangeParityTests
         await AssertPredicatesAgree(labels, sql);
     }
 
+    /// <summary>The single ranges each subset is asked about.</summary>
+    private static readonly (string Name, DecimalRange Range)[] Operands =
+    [
+        .. Universe,
+        ("empty", DecimalRange.Empty),
+        ("(,)",   DecimalRange.Infinite),
+        ("(,2)",  DecimalRange.CreateUnboundedStart(2m, false)),
+        ("(,2]",  DecimalRange.CreateUnboundedStart(2m, true)),
+        ("(,1]",  DecimalRange.CreateUnboundedStart(1m, true)),
+        ("[0,2)", DecimalRange.CreateFinite(0m, 2m)),
+        ("(0,2]", DecimalRange.CreateFinite(0m, 2m, false, true)),
+        ("[1,2]", DecimalRange.CreateFinite(1m, 2m, true, true)),
+        ("(0,1)", DecimalRange.CreateFinite(0m, 1m, false, false)),
+        ("[1,1]", DecimalRange.CreateFinite(1m, 1m, true, true)),
+        ("[0,)",  DecimalRange.CreateUnboundedEnd(0m)),
+        ("[2,)",  DecimalRange.CreateUnboundedEnd(2m)),
+        ("(1,)",  DecimalRange.CreateUnboundedEnd(1m, false))
+    ];
+
     /// <summary>
     /// The predicates over every subset against a single range: the fragments, and operands that
     /// stop or start exactly at a fragment's bound with the other inclusivity, which is what the
@@ -251,23 +288,6 @@ public sealed class ContinuousMultirangeParityTests
     {
         ContainerLifecycle.RequireDatabase();
 
-        (string Name, DecimalRange Range)[] operands =
-        [
-            .. Universe,
-            ("empty", DecimalRange.Empty),
-            ("(,)",   DecimalRange.Infinite),
-            ("(,2)",  DecimalRange.CreateUnboundedStart(2m, false)),
-            ("(,2]",  DecimalRange.CreateUnboundedStart(2m, true)),
-            ("(,1]",  DecimalRange.CreateUnboundedStart(1m, true)),
-            ("[0,2)", DecimalRange.CreateFinite(0m, 2m)),
-            ("(0,2]", DecimalRange.CreateFinite(0m, 2m, false, true)),
-            ("[1,2]", DecimalRange.CreateFinite(1m, 2m, true, true)),
-            ("(0,1)", DecimalRange.CreateFinite(0m, 1m, false, false)),
-            ("[1,1]", DecimalRange.CreateFinite(1m, 1m, true, true)),
-            ("[0,)",  DecimalRange.CreateUnboundedEnd(0m)),
-            ("[2,)",  DecimalRange.CreateUnboundedEnd(2m)),
-            ("(1,)",  DecimalRange.CreateUnboundedEnd(1m, false))
-        ];
 
         var labels = new List<(string Label, bool Model)>();
         var sql    = new List<string>();
@@ -278,11 +298,46 @@ public sealed class ContinuousMultirangeParityTests
             var setSql  = Constructor(mask);
             var setName = Name(mask);
 
-            foreach (var (operandName, operand) in operands)
+            foreach (var (operandName, operand) in Operands)
             foreach (var (predicate, @operator) in Predicates)
             {
                 labels.Add(($"{predicate} {setName} ⋄ {operandName}", InMemory(predicate, set, operand)));
                 sql.Add($"{setSql} {@operator} '{Literal(operand)}'::numrange");
+            }
+        }
+
+        await AssertPredicatesAgree(labels, sql);
+    }
+
+    /// <summary>
+    /// The same predicates with the range on the left: PostgreSQL's <c>anyrange op anymultirange</c>
+    /// half, every range against every subset.
+    /// </summary>
+    /// <remarks>
+    /// Most of these are a set-receiver predicate turned around, but <c>@&gt;</c>, <c>&amp;&lt;</c> and
+    /// <c>&amp;&gt;</c> are not: <c>a &amp;&lt; m</c> compares upper bounds where <c>m &amp;&gt; a</c>
+    /// compares lower ones, so a range-receiver member reading the wrong outer element of the set
+    /// answers plausibly for every one-element set and wrongly for the rest.
+    /// </remarks>
+    [TestMethod]
+    public async Task EveryRangeAgainstEverySubset_PredicatesAgreeWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var labels = new List<(string Label, bool Model)>();
+        var sql    = new List<string>();
+
+        foreach (var (operandName, operand) in Operands)
+        for (var mask = 0; mask < Subsets; mask++)
+        {
+            var set     = Build(mask);
+            var setSql  = Constructor(mask);
+            var setName = Name(mask);
+
+            foreach (var (predicate, @operator) in Predicates)
+            {
+                labels.Add(($"{predicate} {operandName} ⋄ {setName}", InMemory(predicate, operand, set)));
+                sql.Add($"'{Literal(operand)}'::numrange {@operator} {setSql}");
             }
         }
 

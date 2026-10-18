@@ -791,6 +791,43 @@
     ]
   },
   {
+    "id": "E45-compareto-runs-as-comparison-operator",
+    "source": "docs/efcore.md#query-ranges-with-linq",
+    "quote": "**`CompareTo` against 0** becomes `<`, `<=`, `>`, `>=` or `=`, for a range and a multirange, in the order `OrderBy` sorts by",
+    "claim": "A range or multirange CompareTo compared with 0 in a predicate translates to <, <=, >, >= or = between the operands, OrderBy on a range or multirange column translates to ORDER BY the column, and the rows returned match the same predicate and sort in memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "RangeOrderParityTests"
+    ]
+  },
+  {
+    "id": "E46-range-with-multirange-operand-translates",
+    "source": "docs/efcore.md#query-ranges-with-linq",
+    "quote": "Since 10.0.0 they also work on a range with a multirange on the other side, as the operator with the range on the left",
+    "claim": "Contains, IsContainedBy, Overlaps, IsStrictlyLeftOf, IsStrictlyRightOf, DoesNotExtendRightOf, DoesNotExtendLeftOf and IsAdjacentTo called on a range column with a multirange column or parameter translate to @>, <@, &&, <<, >>, &<, &> and -|- with the range on the left and no multirange lift, for core and NodaTime types; RangeSet.IsContainedBy translates to <@ with the multirange on the left.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.IsContainedBy"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "NodaQueryTranslationTests"
+    ]
+  },
+  {
     "id": "E47-multirange-aggregates-translate",
     "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
     "quote": "// range_agg(b.\"BlockedDays\") / range_intersect_agg(b.\"BlockedDays\") over a multirange column",
@@ -1508,6 +1545,58 @@
     ]
   },
   {
+    "id": "J39-integer-grammar",
+    "source": "docs/serialization.md#parse-a-literal",
+    "quote": "Integer bounds and elements follow PostgreSQL 16's integer grammar. You can write them in decimal, or in hexadecimal, octal or binary after `0x`, `0o` or `0b`, with single underscores between digits: `[0x1F,1_000)` is `[31,1000)`.",
+    "claim": "Every integer range, multirange and value set reads 0x/0o/0b prefixes and single digit separators as PostgreSQL 16 and 18 read them, accepts and refuses the same text, and overflows past the type's extremes.",
+    "oracle": "differential",
+    "surfaces": [
+      "Int32Range.ParseValue",
+      "Int64Range.ParseValue",
+      "Int16Set.ParseValue",
+      "Int32Set.ParseValue",
+      "Int64Set.ParseValue"
+    ],
+    "heldBy": [
+      "IntegerLiteralGrammarTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "J40-offset-range",
+    "source": "docs/serialization.md#dates-and-times-are-strict-iso-8601",
+    "quote": "**An offset goes up to ±15:59:59,** as in PostgreSQL. A `DateTimeOffset` holds at most ±14:00, so for an offset beyond that you also get the instant at offset zero. `+16:00` fails (`FormatException`).",
+    "claim": "DateTimeRange, DateTimeOffsetRange, their multiranges and sets, and the NodaTime InstantRange, LocalDateTimeRange and their sets read an ISO offset up to ±15:59:59 as PostgreSQL 16 and 18 read it — a DateTimeOffset beyond ±14:00 as the same instant at offset zero — and refuse ±16:00 and beyond, which PostgreSQL refuses.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateTimeRange.ParseValue",
+      "DateTimeOffsetRange.ParseValue",
+      "DateTimeOffsetSet.Parse",
+      "InstantRange.Parse",
+      "InstantSet.Parse"
+    ],
+    "heldBy": [
+      "TemporalLiteralGrammarTests",
+      "NodaTimeParseFormatTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "J41-localdatetime-offset-dropped",
+    "source": "docs/serialization.md#dates-and-times-are-strict-iso-8601",
+    "quote": "A `LocalDateTime` takes a `Z` or an offset and keeps the wall clock, as a `DateTime` does.",
+    "claim": "LocalDateTimeRange, its multirange, LocalDateTimeSet and LocalDateTimeSet<T> read a bound or element with Z, ±HH, ±HH:mm or ±HH:mm:ss as the wall clock written, the offset dropped, as PostgreSQL's timestamp input does.",
+    "oracle": "differential",
+    "surfaces": [
+      "LocalDateTimeRange.Parse",
+      "LocalDateTimeSet.Parse"
+    ],
+    "heldBy": [
+      "NodaTimeParseFormatTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
     "id": "M01-rangeset-invariant-on-construction",
     "source": "docs/ranges.md#rangeset--multirange-support",
     "quote": "Every way you create a set keeps three rules. The elements are sorted by lower bound, no two of them overlap, and no two are adjacent. To keep those rules, creating a set: - **Drops empty ranges.** - **Merges ranges that overlap or are adjacent.** - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**",
@@ -1698,6 +1787,94 @@
     ],
     "heldBy": [
       "SmallModelMultirangeOracleTests"
+    ]
+  },
+  {
+    "id": "M12-multirange-order",
+    "source": "docs/ranges.md#read-and-compare-sets",
+    "quote": "Two sets compare element by element in the [range order](#sort-ranges), and a set that runs out of elements first sorts first.",
+    "claim": "RangeSet.CompareTo gives the sign PostgreSQL's multirange <, = and > give for every pair, and sorts a list of sets as ORDER BY sorts the multirange values; it returns 0 exactly when Equals is true, and is antisymmetric and transitive.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests",
+      "RangeCompareToTests"
+    ]
+  },
+  {
+    "id": "M13-range-against-set-is-postgres-operator",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "You can call the comparisons on a range and pass a set. Each one is the PostgreSQL operator with the range on the left:",
+    "claim": "For every range shape and every set (built from up to two shapes, discrete; every subset of six fragments, continuous), the eight range-receiver predicates with a set operand answer what PostgreSQL's anyrange op anymultirange answers, and RangeSet.IsContainedBy with a range or a set answers what anymultirange <@ answers.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.IsContainedBy"
+    ],
+    "heldBy": [
+      "ShapeMatrixParityTests",
+      "ContinuousMultirangeParityTests",
+      "RangeSetOperandTests"
+    ]
+  },
+  {
+    "id": "M14-range-against-set-reads-outer-elements",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "A range compares with a set through the set's outer elements.",
+    "claim": "IsStrictlyLeftOf and DoesNotExtendLeftOf with a set operand are decided by the set's first element, IsStrictlyRightOf and DoesNotExtendRightOf by its last, and Contains by both, so a set with two or more elements answers as PostgreSQL does.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf",
+      "RangeExtensions.Contains"
+    ],
+    "heldBy": [
+      "ShapeMatrixParityTests",
+      "ContinuousMultirangeParityTests",
+      "RangeSetOperandTests"
+    ]
+  },
+  {
+    "id": "M15-range-against-set-edges-not-converses",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "`&<` and `&>` are not the set's methods turned around.",
+    "claim": "range.DoesNotExtendRightOf(set) compares upper bounds and differs from set.DoesNotExtendLeftOf(range), which compares lower bounds: [4,5) &< {[3,9)} is true and {[3,9)} &> [4,5) is false.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeSet.DoesNotExtendLeftOf"
+    ],
+    "heldBy": [
+      "RangeSetOperandTests",
+      "ContinuousMultirangeParityTests"
+    ]
+  },
+  {
+    "id": "M16-range-against-empty-set",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "With an empty set on either side, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendLeftOf`, `DoesNotExtendRightOf`, `Overlaps` and `IsAdjacentTo` return `false`.",
+    "claim": "A range Contains the empty set (the empty range included), and the positional predicates, Overlaps and IsAdjacentTo with an empty range or an empty set operand return false, as PostgreSQL does.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeSetOperandTests",
+      "ShapeMatrixParityTests",
+      "ContinuousMultirangeParityTests"
     ]
   },
   {
@@ -2184,6 +2361,52 @@
     ]
   },
   {
+    "id": "R26-range-order-is-postgres-order",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "The empty range sorts first. Every other range sorts by its lower bound, then by its upper bound.",
+    "claim": "For every range type and every ordered pair of shapes built from two values with every inclusivity, CompareTo gives the sign PostgreSQL's <, = and > give, and sorting the list gives the order ORDER BY gives.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests",
+      "RangeCompareToTests",
+      "NodaTimeRangeOrderTests"
+    ]
+  },
+  {
+    "id": "R27-range-order-zero-is-equals",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "`CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct range.",
+    "claim": "For every pair of ranges, CompareTo returns 0 exactly when Equals returns true (including equal values spelled differently, such as two offsets of one instant or 1.0 and 1.00), the order is antisymmetric and transitive, and a SortedSet built from the ranges holds every distinct one.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.CompareTo",
+      "*Range.Equals"
+    ],
+    "heldBy": [
+      "RangeCompareToTests",
+      "RangeOrderParityTests",
+      "NodaTimeRangeOrderTests"
+    ]
+  },
+  {
+    "id": "R28-range-order-null-first",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "`null` sorts before every range.",
+    "claim": "CompareTo(null) is positive for every range and every RangeSet, and the default comparer sorts a null range first.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeCompareToTests",
+      "NodaTimeRangeOrderTests"
+    ]
+  },
+  {
     "id": "R29-aggregates-over-sets",
     "source": "docs/ranges.md#aggregate-a-sequence-of-ranges",
     "quote": "Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:",
@@ -2576,6 +2799,37 @@
       "SetElementBridgeTests",
       "SqlLiteralTests",
       "DecorativeElementContractTests"
+    ]
+  },
+  {
+    "id": "S20-array-dimension-decoration",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "The decoration must count the elements as written, duplicates included, or the parse fails (`FormatException`), as it does on the server.",
+    "claim": "Every value set type reads array_in's one-dimension decoration ([l:u]= or [u]=) and drops it, accepts and rejects the same decorated text as PostgreSQL 16 and 18, and reads empty arrays nested to one depth ({{}}, {{},{}}) as empty, as PostgreSQL 17 and 18 do.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetDimensionDecorationTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "S21-nested-empty-arrays-version-split",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "`{{}}` and `{{},{}}` are `{}`. PostgreSQL 17 and later read them as `{}`, and PostgreSQL 16 rejects them.",
+    "claim": "Every value set reads empty arrays nested to one depth as the empty set and rejects a nested array holding an element; PostgreSQL 17 and 18 read the nested empties as {} and PostgreSQL 16 rejects them, which a live test asks each version.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetDimensionDecorationTests",
+      "LiteralGrammarParityTests",
+      "LiteralCorpusProbeTests"
     ]
   }
 ]
