@@ -46,7 +46,7 @@
     "unit": "DecimalSet",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
-    "reason": "numeric reads a decimal point and an exponent (NumberStyles.Float); the integer siblings refuse both (NumberStyles.Integer)"
+    "reason": "numeric reads a decimal point and an exponent, and refuses text decimal would round (DecimalLiteral); the integer siblings read NumberStyles.Integer, which overflows rather than rounds"
   },
   {
     "family": "core value sets",
@@ -235,7 +235,7 @@
     "unit": "DecimalRange",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
-    "reason": "numeric reads a decimal point and an exponent (NumberStyles.Float); the integer siblings refuse both (NumberStyles.Integer)"
+    "reason": "numeric reads a decimal point and an exponent, and refuses text decimal would round (DecimalLiteral); the integer siblings read NumberStyles.Integer, which overflows rather than rounds"
   },
   {
     "family": "core ranges",

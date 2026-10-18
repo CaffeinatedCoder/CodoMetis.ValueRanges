@@ -318,6 +318,9 @@ Good to know:
   and so does `{"{6f9619ff-8b86-d011-b42d-00c04fc964ff}"}`. Parentheses, and whitespace inside a
   quoted element, fail (`FormatException`), as they do on the server. `GuidSet<T>` reads the same
   grammar and hands your `Parse` the `D` form.
+- **A decimal is read exactly or refused.** `{1.00000000000000000000000000001}` fails
+  (`FormatException`) rather than reading as `{1.0000000000000000000000000000}`, because PostgreSQL
+  keeps every digit and the set would hold a different number. Before 10.0 it was rounded silently.
 - **A NUL character is refused.** PostgreSQL `text` can't hold U+0000, so `StringSet.From("a\0b")`
   throws `ArgumentException` and `{a\0b}` fails (`FormatException`), through `Parse`, `TryParse`,
   JSON and `Add` alike, and `StringSet<T>` checks the element's text form. Before 10.0 the set

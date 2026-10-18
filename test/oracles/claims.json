@@ -1312,6 +1312,23 @@
     ]
   },
   {
+    "id": "J30-decimal-read-exactly-or-refused",
+    "source": "docs/serialization.md#parse-a-literal",
+    "quote": "A decimal bound or element is read exactly or not at all. Text that names a number `decimal` can't\nhold, such as a 29th significant digit or `1e-30`, fails (`FormatException`) rather than being\nrounded to the nearest value.",
+    "claim": "DecimalRange, RangeSet<DecimalRange>, DecimalSet and DecimalSet<T> refuse, through Parse, TryParse, the span overloads, JSON (a number token, and a quoted one under AllowReadingFromString), the TypeConverter and the EF Core JSON document reader, any decimal text whose number decimal cannot hold exactly (a 29th significant digit, a scale beyond 28, 1e-30) with FormatException or JsonException, and read every spelling of a number it holds exactly, keeping the text's scale; a magnitude beyond decimal overflows as before.",
+    "oracle": "exception",
+    "surfaces": [
+      "DecimalRange.ParseValue",
+      "DecimalSet.ParseValue",
+      "DecimalRange.Parse",
+      "DecimalSet.Parse"
+    ],
+    "heldBy": [
+      "DecimalPrecisionTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
     "id": "J30-nodatime-converters-fallback-and-refusal",
     "source": "docs/serialization.md#element-converters",
     "quote": "**Those converters are a fallback too.** Any other converter on the options for the same type wins, in either registration order. So NodaTime.Serialization.SystemTextJson stays in charge. - **A non-ISO calendar fails on write.** A bare `LocalDate`, `LocalDateTime` or `YearMonth` in a calendar other than ISO throws `ArgumentException`, as NodaTime's own converter does.",
