@@ -6,6 +6,7 @@ using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 using CodoMetis.ValueRanges.Serialization;
 using NodaTime;
+using NodaTime.Calendars;
 
 namespace CodoMetis.ValueRanges;
 
@@ -35,6 +36,18 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     private LocalDateRange()
     {
     }
+
+    /// <summary>
+    /// The copy constructor a <c>with</c> expression on a variant chains to.
+    /// </summary>
+    /// <remarks>
+    /// A record's copy constructor cannot be private, so this check, not the private constructor
+    /// above, is what keeps the union closed: a type declared outside the nested variants is
+    /// refused here, before it can reach a switch.
+    /// </remarks>
+    /// <param name="original">The variant being copied.</param>
+    /// <exception cref="InvalidOperationException">The runtime type is not one of the nested variants.</exception>
+    protected LocalDateRange(LocalDateRange original) => ClosedUnion.Require(this);
 
     private static LocalDate ToIso(LocalDate value)
         => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso);
@@ -236,6 +249,116 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     public static LocalDate? PreviousValueBefore(LocalDate value)
         => ToIso(value) == LocalDate.MinIsoValue ? null : value.PlusDays(-1);
 
+    // -------------------------------------------------------------------------
+    // Calendar ranges
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the calendar month <paramref name="month"/> of <paramref name="year"/> in the ISO
+    /// calendar, from its first day to its last: <c>LocalDateRange.Month(2026, 2)</c> is
+    /// <c>[2026-02-01,2026-02-28]</c>.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <param name="month">The month, 1 to 12.</param>
+    /// <returns>The month as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year or the month is out of range.</exception>
+    public static LocalDateRange Month(int year, int month)
+        => new Finite(new LocalDate(year, month, 1), new LocalDate(year, month, CalendarSystem.Iso.GetDaysInMonth(year, month)));
+
+    /// <summary>
+    /// Returns the ISO calendar month that contains <paramref name="date"/>. A date in another
+    /// calendar is converted to ISO first, as every bound of this type is.
+    /// </summary>
+    /// <param name="date">Any day of the month.</param>
+    /// <returns>The month as a closed range of days.</returns>
+    public static LocalDateRange Month(LocalDate date)
+    {
+        date = ToIso(date);
+        return Month(date.Year, date.Month);
+    }
+
+    /// <summary>
+    /// Returns quarter <paramref name="quarter"/> of <paramref name="year"/>: three ISO calendar
+    /// months starting in January, April, July or October.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <param name="quarter">The quarter, 1 to 4.</param>
+    /// <returns>The quarter as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year or the quarter is out of range.</exception>
+    public static LocalDateRange Quarter(int year, int quarter)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(quarter, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(quarter, 4);
+
+        return new Finite(new LocalDate(year, quarter * 3 - 2, 1), new LocalDate(year, quarter * 3, CalendarSystem.Iso.GetDaysInMonth(year, quarter * 3)));
+    }
+
+    /// <summary>
+    /// Returns the quarter that contains <paramref name="date"/>, in the ISO calendar.
+    /// </summary>
+    /// <param name="date">Any day of the quarter.</param>
+    /// <returns>The quarter as a closed range of days.</returns>
+    public static LocalDateRange Quarter(LocalDate date)
+    {
+        date = ToIso(date);
+        return Quarter(date.Year, (date.Month + 2) / 3);
+    }
+
+    /// <summary>
+    /// Returns the ISO calendar year <paramref name="year"/>, from January 1 to December 31.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <returns>The year as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year is out of range.</exception>
+    public static LocalDateRange Year(int year) => new Finite(new LocalDate(year, 1, 1), new LocalDate(year, 12, 31));
+
+    /// <summary>
+    /// Returns the ISO calendar year that contains <paramref name="date"/>.
+    /// </summary>
+    /// <param name="date">Any day of the year.</param>
+    /// <returns>The year as a closed range of days.</returns>
+    public static LocalDateRange Year(LocalDate date) => Year(ToIso(date).Year);
+
+    /// <summary>
+    /// Returns ISO 8601 week <paramref name="week"/> of the ISO week-year <paramref name="weekYear"/>:
+    /// Monday to Sunday.
+    /// </summary>
+    /// <remarks>
+    /// Weeks are always ISO 8601 (<see cref="WeekYearRules.Iso"/>), never the current culture's: a
+    /// week starts on Monday, and week 1 is the week that holds the year's first Thursday. The same
+    /// rule as <c>DateRange.IsoWeek</c>.
+    /// </remarks>
+    /// <param name="weekYear">The ISO week-year.</param>
+    /// <param name="week">The week, 1 to 52, or 53 in a long week-year.</param>
+    /// <returns>The week as a closed range of seven days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The week-year or the week is out of range, or the week runs past either end of the ISO
+    /// calendar.
+    /// </exception>
+    public static LocalDateRange IsoWeek(int weekYear, int week)
+    {
+        // The first week of -9998 starts before LocalDate.MinIsoValue, and the last of 9999 ends
+        // after LocalDate.MaxIsoValue; NodaTime throws for the Monday or the Sunday, whichever is out.
+        var monday = WeekYearRules.Iso.GetLocalDate(weekYear, week, IsoDayOfWeek.Monday);
+        return new Finite(monday, WeekYearRules.Iso.GetLocalDate(weekYear, week, IsoDayOfWeek.Sunday));
+    }
+
+    /// <summary>
+    /// Returns the ISO 8601 week that contains <paramref name="date"/>: the Monday on or before it to
+    /// the Sunday after that Monday.
+    /// </summary>
+    /// <remarks>
+    /// Weeks are always ISO 8601, never the current culture's; see <see cref="IsoWeek(int, int)"/>.
+    /// </remarks>
+    /// <param name="date">Any day of the week.</param>
+    /// <returns>The week as a closed range of seven days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The week runs past either end of the ISO calendar.</exception>
+    public static LocalDateRange IsoWeek(LocalDate date)
+    {
+        date = ToIso(date);
+        return IsoWeek(WeekYearRules.Iso.GetWeekYear(date), WeekYearRules.Iso.GetWeekOfWeekYear(date));
+    }
+
     /// <summary>
     /// Enumerates the dates the range contains, ascending and inclusive of both bounds.
     /// </summary>
@@ -254,6 +377,64 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// <returns>The contained dates, ascending.</returns>
     /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
     public IEnumerable<LocalDate> Values() => DiscreteEnumeration.Values<LocalDateRange, LocalDate>(this);
+
+    /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="step"/> each, from its start:
+    /// <c>[2026-01-15,2026-04-14].Split(Period.FromMonths(1))</c> is <c>[2026-01-15,2026-02-14]</c>, <c>[2026-02-15,2026-03-14]</c>, <c>[2026-03-15,2026-04-14]</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. Each boundary is counted from the range's start, so a split by months keeps the start's day where the calendar has it: from January 31, the pieces start on February 28, March 31 and April 30.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="step">The length of each piece; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<LocalDateRange> Split(Period step)
+    {
+        NodaPeriods.RequirePositive(step, nameof(step));
+        return RangeSplitting.Split<LocalDateRange, LocalDate>(this, RangeSplitting.Steps<LocalDate>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n))));
+    }
+
+    /// <summary>
+    /// Cuts the range at the boundaries of a calendar period: <c>range.Split(LocalDateRange.Month)</c> gives one
+    /// piece per calendar month, the first and the last clipped to the range.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="period"/> is called with the first day of each piece and returns the period that holds
+    /// it, and the piece runs to that period's end. Pass <see cref="Month(LocalDate)"/>, <see cref="Quarter(LocalDate)"/>, <see cref="Year(LocalDate)"/> or <see cref="IsoWeek(LocalDate)"/>, or a function of your own,
+    /// such as a fiscal year. The pieces are adjacent and hold exactly the values of the range. The
+    /// empty range yields nothing. This runs in memory only.
+    /// </remarks>
+    /// <param name="period">Returns the period that holds a given day.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="period"/> returned a range that is not bounded on both sides or does not hold
+    /// the day it was given.
+    /// </exception>
+    public IEnumerable<LocalDateRange> Split(Func<LocalDate, LocalDateRange> period)
+        => RangeSplitting.Split<LocalDateRange, LocalDate>(this, RangeSplitting.Periods<LocalDateRange, LocalDate>(period));
+
+    /// <summary>
+    /// Enumerates the range's values from its start, <paramref name="step"/> apart:
+    /// <c>[2026-06-01,2026-06-30].Values(Period.FromWeeks(1))</c> is every Monday of June 2026.
+    /// </summary>
+    /// <remarks>
+    /// The stepping form of <see cref="Values()"/>, under the same rules: ascending, the empty range
+    /// yields nothing, and an unbounded range throws at the call. Each boundary is counted from the range's start, so a split by months keeps the start's day where the calendar has it: from January 31, the pieces start on February 28, March 31 and April 30. This runs in memory only.
+    /// </remarks>
+    /// <param name="step">The distance between two values; it must be positive.</param>
+    /// <returns>The values, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<LocalDate> Values(Period step)
+    {
+        NodaPeriods.RequirePositive(step, nameof(step));
+        return RangeSplitting.Values<LocalDateRange, LocalDate>(this, RangeSplitting.Steps<LocalDate>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n))));
+    }
 
     /// <summary>
     /// The number of days the range covers, or <see langword="null"/> when it is unbounded.
@@ -325,6 +506,39 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
     /// </returns>
     public int CompareTo(LocalDateRange? other) => RangeOrder.Compare<LocalDate>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[2026-06-01,2026-06-08].Shift(Period.FromWeeks(1))</c> is <c>[2026-06-08,2026-06-15]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// A period with months or years follows NodaTime's calendar arithmetic, which clips to the end of a
+    /// shorter month: <c>2026-01-31</c> plus one month is <c>2026-02-28</c>, and moving back gives
+    /// <c>2026-01-28</c>. Days and weeks move every date by the same amount, so moving back restores
+    /// the range. A period with a time part throws <see cref="ArgumentException"/>, as
+    /// <see cref="LocalDate.Plus(Period)"/> does.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDate"/> can hold.</exception>
+    public LocalDateRange Shift(Period delta) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[2026-06-10,2026-06-12].Expand(Period.FromDays(1))</c> is <c>[2026-06-09,2026-06-13]</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDate"/> can hold.</exception>
+    public LocalDateRange Expand(Period amount) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
 
     /// <inheritdoc />
     public override sealed string ToString()

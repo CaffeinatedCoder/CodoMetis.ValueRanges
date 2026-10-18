@@ -1,0 +1,18 @@
+Seed: Gap decides by the receiver's shape: it takes the receiver as the left operand, so a receiver lying to the right of its operand gets a range read from the wrong bounds
+Oracles: SmallModelOracleTests, DomainParityOracleTests, RangeSetLiftParityTests, ShapeMatrixParityTests
+Fails: every disjoint pair whose receiver lies right of its operand, on every range type; the Gap rows of the algebra matrix against PostgreSQL
+History: the receiver-shaped dispatch trap (AGENTS.md), planted before Gap shipped in 10.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/RangeExtensions.cs b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+index 23b77ab..23d9ac7 100644
+--- a/src/CodoMetis.ValueRanges/RangeExtensions.cs
++++ b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+@@ -607,7 +607,7 @@ public static class RangeExtensions
+             // have exactly one on the left, whose upper bound is therefore finite, as is the lower
+             // bound of the other. Adjacent operands need no arm of their own — the bounds they
+             // meet at describe a range with nothing in it, which CreateFinite returns as Empty.
+-            var (left, right) = RangeSetHelpers.IsStrictlyLeftOf(range, other) ? (range, other) : (other, (IRange<T>) range);
++            var (left, right) = ((IRange<T>) range, other);
+             var (end, endInclusive, _)     = RangeSetHelpers.RangeUpperBound(left);
+             var (start, startInclusive, _) = RangeSetHelpers.RangeLowerBound(right);
+ 

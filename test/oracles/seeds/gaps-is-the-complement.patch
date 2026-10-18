@@ -1,0 +1,18 @@
+Seed: RangeSet.Gaps() returns the complement, keeping the unbounded stretches before the first element and after the last
+Oracles: SmallModelMultirangeOracleTests, RangeSetLiftParityTests, ShapeMatrixParityTests
+Fails: every set of two or more elements that does not reach both ends of the domain; the Gaps rows of the algebra matrix against PostgreSQL
+History: planted before Gaps shipped in 10.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/RangeSet.cs b/src/CodoMetis.ValueRanges/RangeSet.cs
+index 0b38211..6ceb74c 100644
+--- a/src/CodoMetis.ValueRanges/RangeSet.cs
++++ b/src/CodoMetis.ValueRanges/RangeSet.cs
+@@ -1042,7 +1042,7 @@ public sealed class RangeSet<TRange, T>
+     /// <see cref="Empty"/> when the set is empty or a single range.
+     /// </returns>
+     public RangeSet<TRange, T> Gaps() =>
+-        _elements.Length < 2 ? Empty : From([Merge()]).Except(this);
++        _elements.Length < 2 ? Empty : Complement();
+ 
+     /// <summary>
+     /// Returns the parts of <paramref name="window"/> that the set does not cover — the free

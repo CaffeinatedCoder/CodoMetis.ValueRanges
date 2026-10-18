@@ -317,4 +317,15 @@ public sealed class NodaQueryTranslationTests
         StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Window.DoesNotExtendLeftOf(r.Windows))), "r.\"Window\" &> r.\"Windows\"");
         StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Windows.IsContainedBy(r.Window))), "r.\"Windows\" <@ r.\"Window\"");
     }
+
+    [TestMethod]
+    public void NodaMultirangeAggregates_TranslateOverTheMultirange()
+    {
+        var sql = Sql(db => db.Reservations
+            .GroupBy(r => r.CustomerId)
+            .Select(g => new { Union = g.Select(r => r.BlockedDays).RangeAgg(), Common = g.Select(r => r.Windows).RangeIntersectAgg() }));
+
+        StringAssert.Contains(sql, "range_agg(r.\"BlockedDays\")");
+        StringAssert.Contains(sql, "range_intersect_agg(r.\"Windows\")");
+    }
 }

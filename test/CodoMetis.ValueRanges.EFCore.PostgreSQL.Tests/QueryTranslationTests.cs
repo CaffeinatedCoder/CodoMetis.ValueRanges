@@ -329,6 +329,29 @@ public sealed class QueryTranslationTests
     }
 
     [TestMethod]
+    public void Gap_TranslatesToTheHullMinusBothOperands()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.Period.Gap(Range)));
+        StringAssert.Contains(
+            sql,
+            $"range_merge((datemultirange(range_merge(b.\"Period\", {RangeLiteral})) - datemultirange(b.\"Period\")) - datemultirange({RangeLiteral}))");
+    }
+
+    [TestMethod]
+    public void RangeSet_Gaps_TranslatesToTheHullMinusTheSet()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.BlockedDays.Gaps()));
+        StringAssert.Contains(sql, "datemultirange(range_merge(b.\"BlockedDays\")) - b.\"BlockedDays\"");
+    }
+
+    [TestMethod]
+    public void RangeSet_GapsInAWindow_TranslatesToTheWindowMinusTheSet()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => b.BlockedDays.Gaps(b.Period)));
+        StringAssert.Contains(sql, "datemultirange(b.\"Period\") - b.\"BlockedDays\"");
+    }
+
+    [TestMethod]
     public void RangeSet_Merge_TranslatesToRangeMergeFunction()
     {
         var sql = Sql(db => db.Bookings.Select(b => b.BlockedDays.Merge()));
@@ -379,6 +402,27 @@ public sealed class QueryTranslationTests
             .Select(g => g.Select(b => b.Period).RangeIntersectAgg()));
 
         StringAssert.Contains(sql, "range_intersect_agg(b.\"Period\")");
+    }
+
+    [TestMethod]
+    public void RangeAgg_OverAMultirangeColumn_TranslatesToRangeAggOverTheMultirange()
+    {
+        var sql = Sql(db => db.Bookings
+            .GroupBy(b => b.Day)
+            .Select(g => g.Select(b => b.BlockedDays).RangeAgg()));
+
+        StringAssert.Contains(sql, "range_agg(b.\"BlockedDays\")");
+    }
+
+    [TestMethod]
+    public void RangeIntersectAgg_OverAMultirangeColumn_TranslatesToRangeIntersectAggOverTheMultirange()
+    {
+        var sql = Sql(db => db.Bookings
+            .GroupBy(b => b.Day)
+            .Select(g => new { Agg = g.Select(b => b.SeatBlocks).RangeIntersectAgg(), Range = g.Select(b => b.Seats).RangeIntersectAgg() }));
+
+        StringAssert.Contains(sql, "range_intersect_agg(b.\"SeatBlocks\")");
+        StringAssert.Contains(sql, "range_intersect_agg(b.\"Seats\")");
     }
 
     // -------------------------------------------------------------------------
