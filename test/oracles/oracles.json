@@ -24,6 +24,24 @@
     "against": "the Int32Range and DecimalRange models, through an order-preserving embedding, for every discovered range type"
   },
   {
+    "class": "RangeSplitOracleTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the range itself as the union of its pieces, adjacency of consecutive pieces, piece starts a whole number of grid steps from the range's start, every k-th of Values(), and the calendar periods of both date packages, for every discovered range type"
+  },
+  {
+    "class": "CalendarRangeParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": ".NET's ISOWeek and the NodaTime package's WeekYearRules.Iso and YearMonth arithmetic, for every day of 1999-2031 and both domain ends, under five current cultures"
+  },
+  {
+    "class": "RangeArithmeticOracleTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the shape matrix moved by whole grid steps, the round trip, the hull and overlap laws between Shift and Expand, and OverflowException at the domain extremes, for every discovered range type"
+  },
+  {
     "class": "JsonDefaultContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "differential",
