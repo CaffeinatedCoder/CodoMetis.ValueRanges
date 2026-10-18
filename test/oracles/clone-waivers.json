@@ -1083,5 +1083,180 @@
     "member": "literalText",
     "kind": "extra",
     "reason": "the NodaTime bridges write their SQL literal through NodaStoreTemporal.Literal, because Npgsql's NodaTime literal carries nine fraction digits the server rounds; the core bridges take the shared SetProviderText"
+  },
+  {
+    "family": "nodatime value sets",
+    "unit": "LocalDateSet + LocalDateTimeSet",
+    "member": "ToIso($T)",
+    "kind": "extra",
+    "reason": "the two calendar-bearing sets convert an element to the ISO calendar; an Instant or LocalTime carries no calendar, and a YearMonth outside ISO is refused (RequireIso) rather than converted"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "InstantSet<TElement> + LocalTimeSet<TElement>",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "an Instant or LocalTime carries no calendar, so these arities canonicalize directly; the calendar-bearing ones refuse a non-ISO element on the way in (RequireIso)"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "InstantSet<TElement> + LocalTimeSet<TElement>",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "an Instant or LocalTime carries no calendar, so these arities canonicalize directly; the calendar-bearing ones refuse a non-ISO element on the way in (RequireIso)"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "InstantSet<TElement> + YearMonthSet<TElement>",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "their primitive's pattern is not the stem's own (Instant reads through the extended ISO instant pattern, YearMonth through its ISO year-month pattern), so the placeholder normalization reads them as a pair apart; the parse is the family's"
+  },
+  {
+    "family": "nodatime wrapper arities",
+    "unit": "LocalDateSet<TElement> + YearMonthSet<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "a date and a year-month have no time part, so their round-trip pattern is NodaTime's Iso one; the time-bearing arities need ExtendedIso to keep fractions of a second"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "CreateUnboundedEnd($T, bool)",
+    "kind": "lone body",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so an exclusive unbounded side steps to the next value (or is empty at the domain's edge); a continuous range stores the inclusivity as given"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "CreateUnboundedStart($T, bool)",
+    "kind": "lone body",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so an exclusive unbounded side steps to the next value (or is empty at the domain's edge); a continuous range stores the inclusivity as given"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "Finite.EndInclusive",
+    "kind": "lone body",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so a finite range's bounds are always inclusive; a continuous range stores each inclusivity"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "Finite.StartInclusive",
+    "kind": "lone body",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so a finite range's bounds are always inclusive; a continuous range stores each inclusivity"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "UnboundedEnd.<type>",
+    "kind": "lone body",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so an unbounded variant needs no inclusivity parameter; the continuous ranges carry it"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "UnboundedStart.<type>",
+    "kind": "lone body",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so an unbounded variant needs no inclusivity parameter; the continuous ranges carry it"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "Finite..ctor($T, $T)",
+    "kind": "extra",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so the finite variant is built from two bounds alone; the continuous ranges' constructor also takes each inclusivity"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "Finite.Deconstruct($T, $T)",
+    "kind": "extra",
+    "reason": "discrete: the factory canonicalizes every bound to the closed form [a,b], as PostgreSQL does for int4range, int8range and daterange, so a finite range deconstructs into its two bounds; there is no inclusivity to hand back"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "IsDiscrete",
+    "kind": "extra",
+    "reason": "the discrete ranges declare it true; the continuous ones take the interface default, false"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "NextValueAfter($T)",
+    "kind": "extra",
+    "reason": "only a discrete domain has a next value; the continuous ranges take the interface default, null"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "PreviousValueBefore($T)",
+    "kind": "extra",
+    "reason": "only a discrete domain has a previous value; the continuous ranges take the interface default, null"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + Int32Range + Int64Range",
+    "member": "Values()",
+    "kind": "extra",
+    "reason": "only a discrete range can list its values; Values() is deliberately absent from the continuous types (a compile error rather than a runtime one)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateTimeOffsetRange + DateTimeRange + TimeRange",
+    "member": "Expand(TimeSpan)",
+    "kind": "extra",
+    "reason": "the timestamp and time-of-day ranges step by a TimeSpan, which is not their element type; the date, integer, decimal and float ranges step by their element type (or a number of days), so their overload has another signature"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateTimeOffsetRange + DateTimeRange + TimeRange",
+    "member": "Shift(TimeSpan)",
+    "kind": "extra",
+    "reason": "the timestamp and time-of-day ranges step by a TimeSpan, which is not their element type; the date, integer, decimal and float ranges step by their element type (or a number of days), so their overload has another signature"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateTimeOffsetRange + DateTimeRange + TimeRange",
+    "member": "Split(TimeSpan)",
+    "kind": "extra",
+    "reason": "the timestamp and time-of-day ranges step by a TimeSpan, which is not their element type; the date, integer, decimal and float ranges step by their element type (or a number of days), so their overload has another signature"
+  },
+  {
+    "family": "efcore range definitions",
+    "unit": "DateTimeOffsetRange + DateTimeRange + InstantRange + LocalDateTimeRange + TimeRange",
+    "member": "storeValue",
+    "kind": "extra",
+    "reason": "the ranges with a time part truncate to the store's microsecond as Npgsql does (StoreTemporal / NodaStoreTemporal); a date, a number and a year-month are stored as they are"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "DateTimeOffsetSet + DateTimeSet + Float32Set + Float64Set + LocalDateSet + LocalDateTimeSet",
+    "member": "normalizeValue",
+    "kind": "extra",
+    "reason": "the sets whose element the store reads differently from memory normalize it on the way in: timestamp to an Unspecified wall clock, timestamptz to UTC, the calendar-bearing NodaTime types to ISO, and the float sets refuse NaN and the infinities (FiniteFloat, #153)"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "DateTimeOffsetSet + DateTimeSet + InstantSet + LocalDateTimeSet + LocalTimeSet + TimeSet",
+    "member": "storeValue",
+    "kind": "extra",
+    "reason": "the sets with a time part truncate to the store's microsecond as Npgsql does (StoreTemporal / NodaStoreTemporal); the others are stored as they are"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "DateTimeOffsetSet<> + DateTimeSet<> + InstantSet<> + LocalDateTimeSet<> + LocalTimeSet<> + TimeSet<>",
+    "member": "storeValue",
+    "kind": "extra",
+    "reason": "the bridges with a time part truncate to the store's microsecond as Npgsql does (StoreTemporal / NodaStoreTemporal); the others are stored as they are"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + DateTimeOffsetRange + DateTimeRange",
+    "member": "IsInfinity($T)",
+    "kind": "extra",
+    "reason": "Only the temporal ranges have extremes that stand for PostgreSQL ±infinity, so only they keep such a bound fixed under Shift and Expand (#224). The integer, decimal and float extremes are ordinary values and overflow."
   }
 ]
