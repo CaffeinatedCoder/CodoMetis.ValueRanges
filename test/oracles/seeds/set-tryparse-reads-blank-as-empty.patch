@@ -1,0 +1,17 @@
+Seed: Int32Set.TryParse(string) reads a blank literal as the empty set, where Parse and every other entry point refuse it
+Oracles: LiteralEntryPointParityTests, SetWrapperParityTests
+Fails: Int32Set: TryParse of "" and " " against Parse, and against the wrapper arity's TryParse
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+index b5a960f..9477c3d 100644
+--- a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
++++ b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+@@ -87,7 +87,7 @@ public sealed class Int32Set : IValueSet<int>, IValueSetFactory<Int32Set, int>,
+     /// Returns <see langword="false"/> and <see cref="Empty"/> on failure.
+     /// </summary>
+     public static bool TryParse(string? s, IFormatProvider? provider, out Int32Set result)
+-        => SetFormat.TryParse<Int32Set, int>(s.AsSpan(), provider, out result);
++        => SetFormat.TryParse<Int32Set, int>(string.IsNullOrWhiteSpace(s) ? "{}" : s.AsSpan(), provider, out result);
+ 
+     /// <summary>
+     /// Tries to parse a PostgreSQL array literal from a character span.

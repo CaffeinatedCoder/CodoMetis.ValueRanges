@@ -1,0 +1,17 @@
+Seed: the empty keyword is matched as a prefix, so "emptyx" and "empty x" read as the empty range where PostgreSQL's range_in refuses them
+Oracles: LiteralCorpusProbeTests
+Fails: the empty keyword family of every range type against PostgreSQL on the same text
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
+index f463698..4925a99 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
+@@ -14,7 +14,7 @@ internal static class RangeFormat
+     {
+         s = LiteralWhiteSpace.Trim(s);
+ 
+-        if (s.Equals("empty", StringComparison.OrdinalIgnoreCase))
++        if (s.StartsWith("empty", StringComparison.OrdinalIgnoreCase))
+             return TRange.Empty;
+ 
+         if (s.Length < 3)

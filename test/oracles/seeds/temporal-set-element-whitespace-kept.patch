@@ -1,5 +1,5 @@
 Seed: a temporal value set keeps whitespace at either end of a quoted or escaped element, so {" 2026-01-01"} throws where PostgreSQL's date_in reads {2026-01-01}
-Oracles: SetElementWhiteSpaceContractTests, LiteralGrammarParityTests
+Oracles: SetElementWhiteSpaceContractTests, LiteralGrammarParityTests, LiteralCorpusProbeTests
 Fails: the strips rows of every temporal set family and arity, Parse, TryParse, TypeConverter and JSON; the element-whitespace parity sweep against PostgreSQL for date[], timestamp[], timestamptz[] and time[]
 History: shipped before 9.1.0 (#70)
 

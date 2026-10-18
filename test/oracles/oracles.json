@@ -108,6 +108,24 @@
     "against": "construct(deconstruct(x)) == x, for every bounded variant of every discovered range type"
   },
   {
+    "class": "SetWrapperParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the primitive set, for its wrapper arity closed over an identity element: every operation, parse and format entry point, JSON both ways and the TypeConverter"
+  },
+  {
+    "class": "RangeSetLiftParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the range itself, for the one-element RangeSet holding it: every predicate, operation and accessor over the shape matrix with the domain's extremes, for every discovered range type"
+  },
+  {
+    "class": "LiteralEntryPointParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "Parse(string), for the same literal through the span overload, TryParse, JSON, the TypeConverter and configuration binding, for every discovered range, variant, multirange and value set type"
+  },
+  {
     "class": "ShapeMatrixParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
@@ -214,5 +232,35 @@
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "differential",
     "against": "each hand-copied sibling's normalized source, member by member, against its family's consensus (test/oracles/CloneSweep.cs)"
+  },
+  {
+    "class": "CultureEntryPointProbeTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the invariant culture's reading and writing, for every discovered range, multirange and set type × twelve read and five write entry points with no host (Parse, TryParse, TypeConverter, configuration binding, JSON, interpolation) × four current cultures (test/oracles/axes.md)"
+  },
+  {
+    "class": "HostCultureProbeTests",
+    "project": "CodoMetis.ValueRanges.AspNetCore.Tests",
+    "kind": "differential",
+    "against": "the invariant value, for every discovered range, variant, multirange and set type × query, nullable query, route value, form field and JSON body through MVC and a minimal API × four request cultures set by RequestLocalization: 200 with the value or 400, never 200 with null (test/oracles/axes.md)"
+  },
+  {
+    "class": "LiteralCorpusProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "PostgreSQL's own text input on the same text (pg_input_is_valid and the canonical text), for every range, multirange and value set type × the literal corpus × seven entry points and the EF Core write-back (test/oracles/axes.md)",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "CapturedCollectionProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "the same projection in memory, for every discovered range and value set type × a captured array, List, HashSet and IEnumerable × six lists (empty, overlapping, adjacent, with an empty value, duplicate, every shape) × Contains, Any and Count, alone and beside a Contains (test/oracles/axes.md)",
+    "needs": [
+      "docker"
+    ]
   }
 ]

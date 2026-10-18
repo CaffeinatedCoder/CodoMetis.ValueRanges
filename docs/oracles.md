@@ -214,6 +214,43 @@ The first is `JsonOptionsProbeTests`: every range, multirange and value set type
 variant, interface, `object`, record property, dictionary value} × {default, camelCase, snake_case,
 `ReferenceHandler.Preserve`, a source-generated context, `NumberHandling.AllowReadingFromString`}.
 
+The second (#124) is entry point × culture × type, in two classes because half the entry points need a host.
+`CultureEntryPointProbeTests` (conventions project) reads and writes every type through `Parse`, `TryParse`,
+`TypeDescriptor`, configuration binding, JSON and interpolation under four *current* cultures, against what the
+invariant culture reads and writes. `HostCultureProbeTests` (AspNetCore project) binds every type, as the union,
+each variant, nullable, the multirange and the set, from a query, a route value, a form field and a JSON body
+through MVC and a minimal API, under four *request* cultures set by `RequestLocalization`; a valid value answers
+200 with itself, an invalid one 400, never 200 with `null`. Its only disagreement is #116, measured wider than
+the issue first said: every variant of every range type, bound by a minimal API through `TryParse` from a
+query, nullable query, route value or form field, answers 200 with `null` for the right shape and for another
+shape alike. It is registered as one candidate per range type, scoped by the line's `variant minimal TryParse`
+prefix so the JSON-body and MVC cells of the same variants stay held.
+
+Route B's step 3 is `LiteralCorpusProbeTests` (integration project, #123): literal corpus × entry point × type,
+judged by PostgreSQL's own text input on the same text. The corpus is generated per element kind from the
+families `axes.md` lists; the authority is `pg_input_is_valid($1, type)` and the canonical text, asked
+for every literal of a type in one statement; the entry points are `Parse` and `TryParse` over a string
+and a span, JSON, the `TypeConverter` and the EF Core JSON document reader, plus the EF Core write-back
+as a SQL constant and a JSON document, compared on the server as typed values. Its first run turned the
+pair's two known cells (#114, #115) into 120 rows over 23 types, reached #117 on the literal path
+(`[x,infinity)` loses the last day), and found eight more defects (#126–#133): a
+sub-microsecond literal is a different value on each side, integer and array forms PostgreSQL 16 reads
+are refused, `GuidSet` follows `Guid.Parse` instead of `uuid_in`, `LocalDateTime` refuses an offset,
+`DateTimeOffset` refuses offsets beyond ±14:00, `(,max]` is an undocumented boundary row, and a NUL
+character reaches a `text` element. A row the documents name as a refusal (J06, J07), a value outside the
+CLR type's domain, and an extreme the store spells `±infinity` are counted, not reported, so the
+classification is part of what the class asserts and lives in its `DocumentedRefusal`.
+
+The fourth (#136) is the captured collection, the EF Core operand position no other sweep sends.
+`CapturedCollectionProbeTests` (integration project) reads every range and value set type from a captured
+array, `List`, `HashSet` and `IEnumerable` holding lists chosen to tell a list from the multirange it would
+collapse into (empty, overlapping, adjacent, with an empty value, a duplicate, every shape), through
+`Contains`, `Any` and `Count`, alone and beside a `Contains` that reads the same collection. The oracle is
+the same projection run in memory over the rows as loaded. Its first run registered #76, measured wider (a
+range collection no `Contains` reads also fails loudly, as `42809` for `Any(==)` and for `timerange`), and
+found #137: `Any` or `Count` with a predicate over an empty collection the plugin sends one parameter per
+element throws.
+
 ## How to use it
 
 **Run the oracles.** They are ordinary tests; `dotnet test` runs them all. The registered classes are
@@ -273,6 +310,43 @@ with the class as what varies it.
 "under conditions, observable result", name the surfaces a probe calls, and leave `heldBy` empty if
 nothing holds it. Ids are a letter (R ranges, M multirange, S sets, J literals/JSON/TypeConverter, E
 EF Core, A hosting/AOT), two digits and a slug, sorted.
+
+## Sibling parity
+
+The claims hold each promise where a document makes it, so they find a bug at the site they check
+and miss it at the sibling site that makes the same promise implicitly. The changelog shows that a
+bug at one site tends to come back at its siblings. The receiver-shaped dispatch went from
+`IsAdjacentTo` to `IsStrictlyLeftOf` to `RangeSet.Except(TRange)`, and the wrapper arities kept
+lagging their primitive set. A **sibling parity sweep** (`*ParityTests` in the conventions project,
+kind `differential`) runs two things that must agree on the same input and compares their answers.
+It needs no ground truth: when the siblings disagree, one of them is wrong.
+
+| Sweep | One side | The other side |
+|---|---|---|
+| `SetWrapperParityTests` | each primitive value set | its wrapper arity closed over an identity element (`Same<T>`, `SameText`) |
+| `RangeSetLiftParityTests` | each range operation, predicate and accessor | the same on the one-element `RangeSet` holding the range |
+| `LiteralEntryPointParityTests` | `Parse(string)` of a literal | the span overload, `TryParse`, JSON, the `TypeConverter` and configuration binding |
+
+The rules are the ones for any oracle, plus three of their own:
+
+- **The pair must be a promise.** Compare two sites only where a document says, or the design
+  requires, that they agree. Where the documents set them apart, compare through the documented
+  mapping, or leave the input out and cite the document in a comment. For example, a NodaTime
+  wrapper set refuses a non-ISO element that its primitive normalizes, and a `TypeConverter` reads
+  `""` as an absent value.
+- **The identity has to be real.** `SetWrapperParityTests` closes each family over an element that
+  adds nothing: it parses with the exact inverse of the primitive's text form (`DateTime` with
+  `RoundtripKind`, NodaTime with its ISO pattern) and compares as the primitive does. A wrapper that
+  added anything would turn a family defect into a harness defect.
+- **Make sure both sides really are distinct calls.** In generic code `TSet.Parse(string, …)` binds
+  to the span overload (see [testing.md](testing.md#the-sibling-parity-sweeps)), so a string-versus-span
+  comparison has to go through `StringOverloads`. A seed that breaks one side shows whether the sweep
+  reaches it.
+
+A disagreement goes through `Candidates.Verdict` like any other, with each failure line starting
+with the row's type name. A disagreement already filed against another oracle gets its own rows here
+under the same issue. #109 is the example: PostgreSQL disagrees with `IsUnboundedStart` on `(,)`, and
+so does the range's own one-element multirange.
 
 ## Generated operands
 

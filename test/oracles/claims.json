@@ -666,7 +666,8 @@
     ],
     "heldBy": [
       "SetCollectionContainsTests",
-      "SetCollectionTranslationTests"
+      "SetCollectionTranslationTests",
+      "CapturedCollectionProbeTests"
     ]
   },
   {
@@ -680,7 +681,8 @@
     ],
     "heldBy": [
       "RangeCollectionContainsTests",
-      "RangeCollectionTranslationTests"
+      "RangeCollectionTranslationTests",
+      "CapturedCollectionProbeTests"
     ]
   },
   {
@@ -764,7 +766,8 @@
     "heldBy": [
       "LiteralProviderContractTests",
       "LiteralCultureContractTests",
-      "RangeParseFormatTests"
+      "RangeParseFormatTests",
+      "CultureEntryPointProbeTests"
     ]
   },
   {
@@ -781,7 +784,8 @@
     ],
     "heldBy": [
       "LiteralProviderContractTests",
-      "RangeParseFormatTests"
+      "RangeParseFormatTests",
+      "CultureEntryPointProbeTests"
     ]
   },
   {
@@ -799,7 +803,8 @@
       "RangeParseFormatTests",
       "SetParseFormatTests",
       "LiteralGrammarParityTests",
-      "WrapperGrammarContractTests"
+      "WrapperGrammarContractTests",
+      "LiteralCorpusProbeTests"
     ]
   },
   {
@@ -891,7 +896,9 @@
       "*Set.Parse"
     ],
     "heldBy": [
-      "SpanParsingTests"
+      "SpanParsingTests",
+      "LiteralCorpusProbeTests",
+      "LiteralEntryPointParityTests"
     ]
   },
   {
@@ -907,7 +914,8 @@
     "heldBy": [
       "RangeLiteralGrammarContractTests",
       "LiteralGrammarParityTests",
-      "RangeSetOptimizationTests"
+      "RangeSetOptimizationTests",
+      "LiteralCorpusProbeTests"
     ]
   },
   {
@@ -929,7 +937,9 @@
     ],
     "heldBy": [
       "TypeConverterContractTests",
-      "ConfigurationBindingTests"
+      "ConfigurationBindingTests",
+      "CultureEntryPointProbeTests",
+      "LiteralEntryPointParityTests"
     ]
   },
   {
@@ -958,7 +968,8 @@
       "*Set.TryParse"
     ],
     "heldBy": [
-      "HostBindingTests"
+      "HostBindingTests",
+      "HostCultureProbeTests"
     ]
   },
   {
@@ -992,7 +1003,9 @@
       "HostBindingTests",
       "RangeJsonConverterTests",
       "NodaTimeConverterRegistrationTests",
-      "JsonOptionsProbeTests"
+      "JsonOptionsProbeTests",
+      "CultureEntryPointProbeTests",
+      "HostCultureProbeTests"
     ]
   },
   {
@@ -1190,7 +1203,8 @@
       "*Set.From"
     ],
     "heldBy": [
-      "SetJsonConverterTests"
+      "SetJsonConverterTests",
+      "SetWrapperParityTests"
     ]
   },
   {
@@ -1257,7 +1271,8 @@
       "LiteralCultureContractTests",
       "LiteralProviderContractTests",
       "YearMonthRangeTests",
-      "TemporalLiteralStrictnessContractTests"
+      "TemporalLiteralStrictnessContractTests",
+      "CultureEntryPointProbeTests"
     ]
   },
   {
@@ -1272,7 +1287,25 @@
     ],
     "heldBy": [
       "RangeLiteralGrammarContractTests",
-      "LiteralGrammarParityTests"
+      "LiteralGrammarParityTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "J34-literal-is-the-servers-text",
+    "source": "docs/serialization.md#literals-parsing-and-json",
+    "quote": "The text is the PostgreSQL literal, the same text the server itself reads and prints.",
+    "claim": "For every range, multirange and value set type and every text of the literal corpus, Parse(string), Parse(span), TryParse(string), TryParse(span), the JSON converter, the TypeConverter and the EF Core JSON document reader all refuse it where PostgreSQL's input function refuses it, and all read the value PostgreSQL reads where it reads one, and EF Core writes that value back (SQL constant, JSON document) as text PostgreSQL reads as the same value — except a refusal docs/serialization.md names (J06, J07), a value outside the CLR type's domain, and an extreme the store spells ±infinity.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.TryParse",
+      "RangeSet.Parse",
+      "*Set.Parse",
+      "*Set.ParseValue"
+    ],
+    "heldBy": [
+      "LiteralCorpusProbeTests"
     ]
   },
   {
@@ -1323,7 +1356,8 @@
     ],
     "heldBy": [
       "RangeSetComparisonTests",
-      "ExecutedQueryTests"
+      "ExecutedQueryTests",
+      "RangeSetLiftParityTests"
     ]
   },
   {
@@ -1400,7 +1434,8 @@
     ],
     "heldBy": [
       "SmallModelOracleTests",
-      "RangeSetTests"
+      "RangeSetTests",
+      "RangeSetLiftParityTests"
     ]
   },
   {
@@ -2129,7 +2164,8 @@
       "WrapperGrammarContractTests",
       "SetParseFormatTests",
       "SetJsonConverterTests",
-      "TemporalLiteralStrictnessContractTests"
+      "TemporalLiteralStrictnessContractTests",
+      "SetWrapperParityTests"
     ]
   },
   {
@@ -2182,7 +2218,8 @@
     ],
     "heldBy": [
       "SetParseFormatTests",
-      "LiteralGrammarParityTests"
+      "LiteralGrammarParityTests",
+      "LiteralCorpusProbeTests"
     ]
   },
   {

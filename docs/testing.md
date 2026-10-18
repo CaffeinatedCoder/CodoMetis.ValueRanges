@@ -63,7 +63,11 @@ Coverage of the arities *as a family* lives in the conventions suite, because it
 
 The literal grammars themselves follow PostgreSQL's `range_in` and `array_in`. `RangeLiteralGrammarContractTests` (conventions) sweeps every range type: only an absent bound is infinite (a quoted `""` or a whitespace-only bound is refused), quotes and backslash escapes work anywhere in a bound, and only ASCII whitespace is skipped. `SetParseFormatTests` pins the array grammar case by case (escapes in unquoted elements, nested braces and stray quotes refused) plus a round-trip sweep over every structural character. `LiteralGrammarParityTests` (integration) hands the same text to PostgreSQL and requires the same answer — refused by both, or the same value. `WrapperGrammarContractTests` (conventions) holds every wrapper arity, closed over a deliberately lenient element and over its representative one, to its primitive sibling's element grammar through every entry point.
 
+`LiteralCorpusProbeTests` (integration, route B's third probe) widens that parity sweep to a corpus and to every entry point. Per element kind it generates the structural families of each grammar (bounds, equal and inverted bounds per bracket pair, `empty` in every case, quoting, escapes, trailing junk, Unicode whitespace, array dimensions and NULLs, multirange canonicalization) and the texts the element input function reads differently (sign, leading zeros, exponents, `NaN`, non-decimal integers, more than 28 digits, `infinity` spellings, `epoch`/`now`/`today`, non-ISO dates, `24:00:00`, offsets, sub-microsecond digits, uuid spellings, NUL), about 100 literals for each of the 48 range, multirange and value set types. The server answers each with `pg_input_is_valid` and its canonical text in one batched statement per type; `Parse(string)`, `Parse(span)`, both `TryParse` overloads, JSON, the `TypeConverter` and the EF Core JSON document reader must all agree with each other and with it, and a value the library reads is written back through EF Core as a SQL constant and as a JSON document and compared with the original on the server as a typed value — which is what sees a precision the parser dropped. A refusal of a value outside the CLR domain, or of a form `docs/serialization.md` names (strict ISO 8601, J07; the `numeric` grammar, J06), is counted rather than reported. The whole sweep takes about five seconds; its known disagreements are candidates keyed `{type} {family} `.
+
 `test/CodoMetis.ValueRanges.AspNetCore.Tests/` runs the host-level behaviour with no ValueRanges registration at all: configuration binding through the `TypeConverter`, a `TestServer` host with MVC and minimal-API endpoints (query binding, JSON bodies both ways), and the OpenAPI document generated with and without the documented `ValueRangesSchemaTransformer` — whose patterns are checked to accept every literal form the parsers accept, and whose source is held verbatim against `docs/serialization.md`.
+
+`HostCultureProbeTests` there is the host half of route B's second probe sweep (#124): one `TestServer` with a minimal-API route group and a closed `ProbeController<T>` per declared type (every union, each of its five variants, every `RangeSet` and every set type, 107 in all), each bound from a query, a nullable query, a route value, a form field and a JSON body, under four request cultures set by `UseRequestLocalization` from `Accept-Language`. A valid value must come back with 200, the right runtime type and the same JSON value; a malformed literal, or a literal of another shape for a variant, must get 400. Each handler echoes the culture it ran under, so a row whose culture never arrived fails rather than passing vacuously. It links `RangeProbes`, `SetProbes`, `WrapperElements` and `Reflect` from the conventions project instead of copying them, and runs about 12,400 requests in about three seconds.
 
 `test/CodoMetis.ValueRanges.NodaTime.Tests/` covers what is new in the NodaTime satellite — type wiring, the one-day and one-month discrete steps, ISO calendar normalization (and `YearMonthRange`'s non-ISO rejection), wire-form parsing, `Interval`/`DateInterval`/month-alignment interop — with representative shape coverage; the engines themselves are exhaustively covered by the core tests. `NodaTimeSetTests.cs`/`NodaTimeSetJsonTests.cs` do the same for the five set types (calendar normalization, wire-form parsing, JSON with `ConfigureForNodaTime`). `NodaTimeSetElementBridgeTests.cs` covers the five NodaTime arities — ISO literal round-trips, ordering, algebra, JSON, the refusal of an element backed by a non-ISO value (construction, collection expressions, a registered element converter, and the `Contains`/`Add`/`Remove` probe against the empty set, where nothing is compared), and `CultureBoundDay`, an element that ignores the format argument and so leaks NodaTime's culture long form into the literal. `NodaTimeConverterRegistrationTests.cs` covers both JSON entry points: the `ElementJsonConverter` hook (all five sets round-tripping under plain `AddRangeConverters()` and under a bare factory, a registered converter still winning, identical output either way), and `AddNodaTimeRangeConverters()` (ISO 8601 element forms, all four ranges and all five sets, bare elements alongside a set, idempotence and order-independence against `AddRangeConverters()` and `ConfigureForNodaTime` — measured through `GetConverter` and a non-ISO date, since a round trip of ISO values passes whichever converter wins — and the refusal of bare non-ISO values on write).
 
@@ -87,7 +91,7 @@ Three further parity sweeps close the gaps the 8.0.0 audit left, each the struct
 
 `UnionCanonicalityTests.cs` (Id block 12xxx) and the second half of `ExecuteUpdateJsonTests.cs` (96xx) hold the two refusals `ValueSetSqlGuard` makes on the final SQL. Every refusal is asserted by *executing* the query — the 8.0.0 projection test only called `ToQueryString()` and asserted nothing, which is how a comparison that answered `false` against a live server was documented as working. The union data is the probe that found the gaps (`{a,c}` and `{b,c}`, each unioned with `{a,b}`: equal in memory, different concatenations on the server), and the positive half executes every legal composition and compares with memory. Several shapes compose over a `UNION ALL` (`Concatenated`) on purpose: EF inlines a projected union into a later predicate wherever it can, so only a derived table EF cannot see through proves that the guard follows a column back to its `array_cat` — disabling that tracking fails exactly those tests. The JSON half uses `UpdateGuardRow`, whose complex type is mapped both inside a document and as plain columns, so a refusal keyed off the CLR type rather than the translated setter would fail `TheSameComplexTypeOutsideAJsonColumn_IsStillUpdatable`.
 
-`test/CodoMetis.ValueRanges.Conventions.Tests/` covers what the compiler cannot: defects that build, test and pack clean and only surface once a consumer installs the package. Five groups — **changelog consistency** (the shipped `Version` is documented at the root and in every package's changelog, no file runs ahead of the version property, per-package versions are a subset of the root's, sections newest-first), **packaging** (every package declares a `PackageReadmeFile` and packs a README from *its own* directory rather than a shared one, carries a description and tags; the shared props ship symbols and Source Link with `ContinuousIntegrationBuild` gated on CI), **value set contracts** (the `NormalizeElement`, `CanonicalOrder` and `ElementJsonConverter` rules from AGENTS.md, asserted behaviourally: a set that breaks any of them fails to find an element it was built from, or writes objects where scalars belong), and **mapping parity** (every range and set type in both shipping assemblies resolves through `IRelationalTypeMappingSource` — including each wrapper arity closed over its representative element, which is a second way to be missing from the registry, since the families are registered by open generic definition rather than as closed definitions; plain arrays keep their native provider mapping), and **the default JSON contract** (`JsonDefaultContractTests`: every range shape — through the union, through `object`, inside a `RangeSet`, as a dictionary key — and every set family serializes unregistered exactly as under `AddRangeConverters()`, which is what fails when a new type or variant lacks its own `[JsonConverter]`). The **probe sweeps** (`*ProbeTests`, one `[DynamicData]` row per discovered type) hold the same promises over the product of consumer settings listed by hand in `test/oracles/axes.md`: `JsonOptionsProbeTests` runs every type through six declarations (union, sealed variant, interface, `object`, record property, dictionary value) under six `JsonSerializerOptions` (default, camelCase, snake_case, `ReferenceHandler.Preserve`, a source-generated context, `NumberHandling.AllowReadingFromString`) in under a second, and hands its disagreements to `Candidates.Verdict` scoped to the row.
+`test/CodoMetis.ValueRanges.Conventions.Tests/` covers what the compiler cannot: defects that build, test and pack clean and only surface once a consumer installs the package. Five groups — **changelog consistency** (the shipped `Version` is documented at the root and in every package's changelog, no file runs ahead of the version property, per-package versions are a subset of the root's, sections newest-first), **packaging** (every package declares a `PackageReadmeFile` and packs a README from *its own* directory rather than a shared one, carries a description and tags; the shared props ship symbols and Source Link with `ContinuousIntegrationBuild` gated on CI), **value set contracts** (the `NormalizeElement`, `CanonicalOrder` and `ElementJsonConverter` rules from AGENTS.md, asserted behaviourally: a set that breaks any of them fails to find an element it was built from, or writes objects where scalars belong), and **mapping parity** (every range and set type in both shipping assemblies resolves through `IRelationalTypeMappingSource` — including each wrapper arity closed over its representative element, which is a second way to be missing from the registry, since the families are registered by open generic definition rather than as closed definitions; plain arrays keep their native provider mapping), and **the default JSON contract** (`JsonDefaultContractTests`: every range shape — through the union, through `object`, inside a `RangeSet`, as a dictionary key — and every set family serializes unregistered exactly as under `AddRangeConverters()`, which is what fails when a new type or variant lacks its own `[JsonConverter]`). The **probe sweeps** (`*ProbeTests`, one `[DynamicData]` row per discovered type) hold the same promises over the product of consumer settings listed by hand in `test/oracles/axes.md`: `JsonOptionsProbeTests` runs every type through six declarations (union, sealed variant, interface, `object`, record property, dictionary value) under six `JsonSerializerOptions` (default, camelCase, snake_case, `ReferenceHandler.Preserve`, a source-generated context, `NumberHandling.AllowReadingFromString`) in under a second, and hands its disagreements to `Candidates.Verdict` scoped to the row. `CultureEntryPointProbeTests` runs every type, through the union and the sealed variant, through every entry point that needs no host — `Parse` and `TryParse` (string and span, a null and the current-culture provider), `TypeDescriptor` both ways with a null and the current culture, configuration binding, JSON (value and dictionary key) and interpolation — under de-DE, sv-SE, fa-IR and th-TH as the *current* culture, against the reference read and written under the invariant culture. `LiteralProviderContractTests` varies only the provider and `LiteralCultureContractTests` only `ToString`, so a parser that reached for `CultureInfo.CurrentCulture` itself passed both on a machine set to the invariant culture; its seed, `parser-reads-the-current-culture`, is that defect.
 
 Everything is discovered — projects by globbing `src/`, types by reflection — so a new package or type is covered without editing the tests. Two consequences worth knowing:
 
@@ -209,6 +213,14 @@ three families, none of which a hand-picked sweep had shown: `IsUnboundedStart`/
 `(,)` (#109), `RangeSet.Overlaps` on every continuous type (#106), and adjacency at the date extremes
 (#110). Its seeds plant a tied-end `Intersect` and a value set `IsSubsetOf` that ignores the tail.
 
+The fuzz sweep binds an operand as a column, a constant or a single parameter, never as a collection.
+`CapturedCollectionProbeTests` covers that operand position: every discovered range and value set type,
+read from a captured collection through `Contains`, `Any` and `Count`, compared with the same projection in
+memory ([oracles.md](oracles.md#axesmd--what-a-consumer-varies)). Its lists are built from the rows as
+loaded, so the store's microsecond truncation does not count as a disagreement. It reuses the fuzz sweep's
+type discovery (`FuzzTypes`), links `RangeProbes` and `SetProbes` from the conventions project, and runs in
+about five seconds.
+
 ### The Multirange Oracle
 
 `SmallModelMultirangeOracleTests` covers what the other two do not reach. The single-range oracle
@@ -294,6 +306,56 @@ Nulls are deliberately *not* in that table: it feeds sweeps that build valid set
 overloads, `Add`, `Remove`, `Contains`, an unquoted `NULL` in the array literal, a JSON `null` —
 refuses rather than drops. It runs over families whose element type is a reference type, which is
 `StringSet` alone today and whatever is added later without anyone having to remember.
+
+### The Sibling Parity Sweeps
+
+A bug found at one API site tends to come back at a sibling site that makes the same promise. The
+changelog shows it repeatedly: `IsAdjacentTo` (6.2.1), then `IsStrictlyLeftOf` and `Except` (7.0.0),
+then `RangeSet.Except(TRange)` (8.0.0). The wrapper arities kept lagging their primitive set. And
+`==`/`!=` went untested on 18 of 20 set types. A claim-driven oracle checks each site against its own
+document, so it can't see a promise two sites share without saying so. These three sweeps
+(conventions project, one `[DynamicData]` row per discovered type) compare the two siblings directly.
+They assert no ground truth: when the siblings disagree, one of them is wrong, and the failure line
+names both answers.
+
+- **`SetWrapperParityTests`**: each primitive set against its wrapper arity closed over an
+  *identity* element (`Int32Set` against `Int32Set<Same<int>>`, `StringSet` against
+  `StringSet<SameText>`, in `IdentityWrappers.cs`). An identity element parses, formats and compares
+  exactly as its primitive does, so the family's own code is the only difference. That's the
+  opposite of `WrapperElements`, whose elements get something wrong on purpose. The sweep runs the
+  family's probes plus its extremes, every subset shape, array literals derived from the element
+  texts (quoted, whitespace-padded, duplicated, out of order, empty, `NULL`, malformed) and JSON
+  documents (reordered, mistyped, quoted, padded). It compares every operation, `ParseValue` and
+  `FormatValue`, both overloads of `Parse` and `TryParse`, `ToString` with each format and provider,
+  the `TypeConverter`, JSON token kinds, and each sibling reading the other's document. It wants the
+  same element texts in the same order, or the same exception type.
+- **`RangeSetLiftParityTests`**: each range against the one-element `RangeSet` holding it, over the
+  shape matrix `DomainParityOracleTests` uses (`RangeSpecs.cs`), extended with bounds at the domain's
+  minimum and maximum. For every ordered pair it compares each predicate with the set-set and
+  set-range overloads, and each operation with the named method and the operator (`|`, `&`, `-`).
+  For every range it compares each accessor, `Merge`, `Complement`, the literal, and `Contains(T)`
+  at every grid point. Results are compared as literals, so the bound values and inclusivity have to
+  match, not just a few `Contains` answers.
+- **`LiteralEntryPointParityTests`**: one literal through every entry point: `Parse` and `TryParse`
+  (string and span), a JSON string, the `TypeConverter` and `IConfiguration` binding. It covers every
+  range union and each sealed variant (the union's answer narrowed to the variant's shape), every
+  multirange (including its explicit `IParsable` implementation) and every value set. The entry
+  points must produce equal values, or all refuse. A value set's JSON is its element array, so it
+  skips the JSON step here; `SetWrapperParityTests` covers that array. The empty string is an absent
+  value to the `TypeConverter` and the binder by design, so the converter and the binder never see it.
+
+The sweeps run in a few seconds altogether. Each one is seeded (`test/oracles/seeds/`), and their
+disagreements are candidates in `candidates.json`: #141 (wrapper JSON reads accept tokens the
+primitive refuses) and #109 (`IsUnboundedStart`/`IsUnboundedEnd` on `(,)`), found again here between
+a range and its own multirange.
+
+**The `Parse(string)` trap.** In generic code constrained on `IRangeFactory` or `IValueSetFactory`,
+`TSet.Parse(text, provider)` with a `string` argument calls the *span* overload. Both interfaces derive
+from `ISpanParsable<TSelf>`. Overload resolution drops the base interface's `IParsable<TSelf>`
+candidate whenever the derived interface's span candidate applies, and the implicit string-to-span
+conversion makes it apply. So a sweep that means to compare the two overloads compares the span one
+with itself. Call the string overloads through `StringOverloads` (constrained on `IParsable<TSelf>`
+alone). The parity sweeps do this, and their `TryParse` seed was missed until they did.
 
 ### Shape-Combination Matrix
 

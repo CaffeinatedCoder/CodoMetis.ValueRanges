@@ -10,6 +10,9 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+        <!-- Configuration binding is an entry point with no host: CultureEntryPointProbeTests binds every type. -->
+        <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.12" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
         <PackageReference Include="MSTest" Version="4.5.1" />
     </ItemGroup>
 

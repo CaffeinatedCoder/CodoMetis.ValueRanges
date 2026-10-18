@@ -27,6 +27,9 @@
         -->
         <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\WrapperElements.cs"
                  Link="WrapperElements.cs" />
+        <!-- The probe values per element type, shared for the same reason (CapturedCollectionProbeTests). -->
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\RangeProbes.cs" Link="RangeProbes.cs" />
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\SetProbes.cs" Link="SetProbes.cs" />
     </ItemGroup>
 
     <ItemGroup>
