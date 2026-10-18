@@ -242,10 +242,10 @@ stored and queried as the empty range, and nothing threw. It now throws.
 
 ## Migration from v9.x
 
-No signature changed. Some calls return a different value, and each one now matches PostgreSQL
-where the two sides disagreed before. Text that PostgreSQL rejects is now rejected here too. The
-compiler can't show you where, so check these in order, starting with the most likely to affect
-you:
+Nothing was removed. Some calls return a different value, and each one now matches PostgreSQL
+where the two sides disagreed before. Text that PostgreSQL rejects is now rejected here too, and each
+range shape gained its own `Parse` and `TryParse`. The compiler can't show you where, so check these
+in order, starting with the most likely to affect you:
 
 - **`IsUnboundedStart()` and `IsUnboundedEnd()` return `true` for the infinite range.** A query
   and the same call in memory already disagreed on it
@@ -271,6 +271,8 @@ you:
   ([details](#decimal-text-is-read-exactly-or-refused)).
 - **A range literal whose lower bound is greater than its upper bound now throws**, where it read as
   `empty` ([details](#write-range-literals-with-the-lower-bound-first)).
+- **A minimal-API parameter typed as one shape answers 400 for another shape**, where it bound
+  `null` and ran the handler ([details](#bind-a-shape-typed-parameter)).
 
 ### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
 
@@ -478,6 +480,32 @@ query string or a JSON body matched nothing, silently:
 `JsonException`. `CreateFinite(5, 1)` still returns `Empty`: a factory call has computed bounds, and
 that rule hasn't changed. If your input can arrive swapped, order the bounds before you build the
 literal, or call `CreateFinite` with the parsed bounds.
+
+### Bind a shape-typed parameter
+
+Every shape of every range type now has its own `Parse` and `TryParse`, which read only a literal of
+that shape. Minimal APIs bind a parameter through `TryParse`, so a parameter typed as one shape now
+binds:
+
+```csharp
+app.MapGet("/bookings", (DateRange.Finite period) => …);
+```
+
+| Request | 9.x | 10.0 |
+|---|---|---|
+| `?period=[2026-01-01,2026-06-30]` | 200, `period` is `null` | 200, `period` is the range |
+| `?period=(,2026-06-30]` | 200, `period` is `null` | 400 |
+| `?period=garbage` | 400 | 400 |
+
+This holds for the query, a route value and a form field, and for a nullable parameter. Before, the
+binder found the union's inherited `TryParse`, which succeeded, and then couldn't assign the result,
+so the handler ran with `null` even when the parameter wasn't nullable. A client that sends another
+shape now gets a 400. If an endpoint should take any shape, type the parameter as the union
+(`DateRange`) and switch on it. MVC and JSON bodies already behaved this way.
+
+`DateRange.Finite.Parse` now returns a `DateRange.Finite` and throws `FormatException` for another
+shape, where it was the union's `Parse` and returned any shape. Code that called `Parse` through a
+shape's name for a literal of another shape should call it on the union.
 
 ## Migration from v8.x
 

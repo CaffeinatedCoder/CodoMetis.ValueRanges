@@ -259,6 +259,11 @@ Good to know:
   `InvalidOperationException`.
 - **A property typed as one shape rejects the others.** A `DateRange.Finite` property fails on a
   literal of another shape.
+- **A minimal-API parameter typed as one shape binds only that shape.** Each shape has its own
+  `Parse` and `TryParse`, so `(DateRange.Finite period) => …` binds
+  `?period=[2026-01-01,2026-06-30]` and answers 400 for `(,2026-06-30]` or for text that doesn't
+  parse. Before 10.0, such a parameter bound `null` for every literal that parsed, and the handler
+  ran.
 - **Before 9.0 there was no converter.** Configuration binding of a range property produced `null`,
   with no error. ASP.NET Core model binding was never affected: minimal APIs and MVC bind query,
   route and form values through the static `TryParse`.

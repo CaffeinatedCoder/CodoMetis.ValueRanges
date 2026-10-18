@@ -1477,6 +1477,21 @@
     ]
   },
   {
+    "id": "J38-variant-minimal-api-binds-its-shape",
+    "source": "docs/serialization.md#bind-a-range-from-configuration",
+    "quote": "Each shape has its own\n  `Parse` and `TryParse`, so `(DateRange.Finite period) => …` binds\n  `?period=[2026-01-01,2026-06-30]` and answers 400 for `(,2026-06-30]` or for text that doesn't\n  parse.",
+    "claim": "Every shape of every range type has a static Parse(string, IFormatProvider) and TryParse(string, IFormatProvider, out shape) that read only a literal of that shape; a minimal-API parameter typed as the shape binds a literal of that shape from the query, a nullable query, a route value and a form field under every request culture, and answers 400 for another shape or a literal that does not parse.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range+*.Parse",
+      "*Range+*.TryParse"
+    ],
+    "heldBy": [
+      "HostCultureProbeTests",
+      "RangeParseFormatTests"
+    ]
+  },
+  {
     "id": "M01-rangeset-invariant-on-construction",
     "source": "docs/ranges.md#rangeset--multirange-support",
     "quote": "Every way you create a set keeps three rules. The elements are sorted by lower bound, no two of them overlap, and no two are adjacent. To keep those rules, creating a set: - **Drops empty ranges.** - **Merges ranges that overlap or are adjacent.** - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**",

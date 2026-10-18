@@ -245,6 +245,37 @@ public class RangeParseFormatTests
     public void Parse_EqualOrClosingBounds_AreNotInverted(string literal, string expected)
         => Assert.AreEqual(expected, Int32Range.Parse(literal, CultureInfo.InvariantCulture).ToString());
 
+    /// <summary>
+    /// #116: every shape parses only a literal of its own shape, so a minimal-API parameter typed as
+    /// one binds it (the union's inherited TryParse bound null). HostCultureProbeTests sweeps every type.
+    /// </summary>
+    [TestMethod]
+    public void ShapeParse_ReadsOnlyItsOwnShape()
+    {
+        Int32Range.Finite finite = Int32Range.Finite.Parse("[1,5)", null);
+        Assert.AreEqual(Int32Range.CreateFinite(1, 4), finite);
+        Assert.IsTrue(Int32Range.Finite.TryParse("[1,5)", null, out var tried));
+        Assert.AreEqual(finite, tried);
+
+        var message = Assert.ThrowsExactly<FormatException>(() => Int32Range.Finite.Parse("(,5]", null)).Message;
+        StringAssert.Contains(message, "the literal is a UnboundedStart");
+        Assert.IsFalse(Int32Range.Finite.TryParse("(,5]", null, out var wrong));
+        Assert.IsNull(wrong);
+        Assert.IsFalse(Int32Range.Finite.TryParse("garbage", null, out _));
+        Assert.IsFalse(Int32Range.Finite.TryParse(null, null, out _));
+
+        Assert.IsInstanceOfType<Int32Range.UnboundedStart>(Int32Range.UnboundedStart.Parse("(,5]", null));
+        Assert.IsInstanceOfType<Int32Range.UnboundedEnd>(Int32Range.UnboundedEnd.Parse("[5,)", null));
+        Assert.IsInstanceOfType<Int32Range.Infinity>(Int32Range.Infinity.Parse("(,)", null));
+        Assert.IsInstanceOfType<Int32Range.EmptyRange>(Int32Range.EmptyRange.Parse("empty", null));
+        Assert.IsTrue(DateRange.EmptyRange.TryParse("[5,5)".Replace("5", "2026-01-01"), null, out _));
+        Assert.IsFalse(DateRange.Infinity.TryParse("[2026-01-01,)", null, out _));
+
+        // The union's own overload is still reachable through a shape's name.
+        Assert.IsTrue(Int32Range.Finite.TryParse("(,5]", null, out Int32Range union));
+        Assert.IsInstanceOfType<Int32Range.UnboundedStart>(union);
+    }
+
     [TestMethod]
     public void CreateFinite_InvertedBounds_StaysEmpty()
         => Assert.AreEqual(Int32Range.Empty, Int32Range.CreateFinite(5, 1));

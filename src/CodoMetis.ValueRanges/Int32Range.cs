@@ -20,7 +20,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [JsonConverter(typeof(RangeJsonConverter<Int32Range, int>))]
 [TypeConverter(typeof(RangeTypeConverter<Int32Range, int>))]
-public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
+public abstract partial record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
 {
     private Int32Range()
     {
@@ -31,14 +31,14 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, Int32Range, int>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, Int32Range, int>))]
-    public sealed record EmptyRange : Int32Range, IEmptyRange<int>;
+    public sealed partial record EmptyRange : Int32Range, IEmptyRange<int>;
 
     /// <summary>
     /// Represents an <see cref="Int32Range"/> bounded on both sides.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Finite, Int32Range, int>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Finite, Int32Range, int>))]
-    public sealed record Finite : Int32Range, IFiniteRange<int>
+    public sealed partial record Finite : Int32Range, IFiniteRange<int>
     {
         internal Finite(int start, int end)
         {
@@ -77,7 +77,7 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// <param name="End">The upper (right) bound of the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, Int32Range, int>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, Int32Range, int>))]
-    public sealed record UnboundedStart(int End) : Int32Range, IUnboundedStartRange<int>
+    public sealed partial record UnboundedStart(int End) : Int32Range, IUnboundedStartRange<int>
     {
         /// <inheritdoc />
         public bool EndInclusive => true;
@@ -90,7 +90,7 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// <param name="Start">The lower (left) bound of the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, Int32Range, int>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, Int32Range, int>))]
-    public sealed record UnboundedEnd(int Start) : Int32Range, IUnboundedEndRange<int>
+    public sealed partial record UnboundedEnd(int Start) : Int32Range, IUnboundedEndRange<int>
     {
         /// <inheritdoc />
         public bool StartInclusive => true;
@@ -101,7 +101,7 @@ public abstract record Int32Range : IRange<int>, IRangeFactory<Int32Range, int>
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, Int32Range, int>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, Int32Range, int>))]
-    public sealed record Infinity : Int32Range, IInfinityRange<int>;
+    public sealed partial record Infinity : Int32Range, IInfinityRange<int>;
 
     /// <summary>
     /// Creates an <see cref="Int32Range"/> unbounded on the left.
