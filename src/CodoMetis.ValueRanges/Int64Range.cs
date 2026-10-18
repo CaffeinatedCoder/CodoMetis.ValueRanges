@@ -326,6 +326,10 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     /// </returns>
     public int CompareTo(Int64Range? other) => RangeOrder.Compare<long>(this, other);
 
+    /// <inheritdoc cref="CompareTo(Int64Range)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="Int64Range"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<Int64Range>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[1,5].Shift(10)</c> is <c>[11,15]</c>.

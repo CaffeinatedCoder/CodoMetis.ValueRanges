@@ -399,8 +399,9 @@ Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10
 
 ### Sort ranges
 
-Every range type implements `IComparable<TRange>`, so `Order()`, `List.Sort()` and `SortedSet` work
-with no comparer. The order is PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
+Every range type implements `IComparable<TRange>` and `IComparable`, so `Order()`, `List.Sort()` and
+`SortedSet` work with no comparer, also on a `List<IRange<T>>` or an `ArrayList`. The order is
+PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
 
 ```csharp
 var ranges = new[]
@@ -420,7 +421,8 @@ missing bound is the smallest lower bound and the largest upper bound. At the sa
 inclusive lower bound sorts first and an inclusive upper bound sorts last.
 
 `CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct
-range. `null` sorts before every range.
+range. `null` sorts before every range. The non-generic `CompareTo(object)` throws `ArgumentException` for an
+argument that is not the same range type.
 
 Good to know:
 
@@ -880,7 +882,7 @@ a.Equals(b);  // true — both normalize to { [1, 10] }
 a == b;       // true — same value semantics as the ranges themselves
 ```
 
-Sets implement `IComparable<RangeSet<TRange, T>>` in PostgreSQL's multirange order. Two sets compare
+Sets implement `IComparable<RangeSet<TRange, T>>` and `IComparable` in PostgreSQL's multirange order. Two sets compare
 element by element in the [range order](#sort-ranges), and a set that runs out of elements first
 sorts first. So the empty set sorts before every other set, and `{[1,3]}` before `{[1,3],[5,7]}`.
 As for ranges, `CompareTo` returns 0 exactly when the two sets are equal.

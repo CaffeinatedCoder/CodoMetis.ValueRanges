@@ -2992,6 +2992,20 @@
     ]
   },
   {
+    "id": "R43-nongeneric-icomparable",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "Every range type implements `IComparable<TRange>` and `IComparable`, so `Order()`, `List.Sort()` and `SortedSet` work with no comparer, also on a `List<IRange<T>>` or an `ArrayList`.",
+    "claim": "For every discovered range union and its RangeSet, the non-generic IComparable.CompareTo gives the sign the generic CompareTo gives for every ordered pair of shapes, is positive for null, throws ArgumentException naming the type for an argument of another range type, the element type or a string, and List<IRange<T>>.Sort() and ArrayList.Sort() sort as Order() does.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "NonGenericComparableContractTests"
+    ]
+  },
+  {
     "id": "S01-canonical-set",
     "source": "docs/value-sets.md#value-sets",
     "quote": "Every set is immutable and deduplicated, sorted, and free of nulls.",
