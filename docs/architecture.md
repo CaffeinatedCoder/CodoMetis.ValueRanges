@@ -167,7 +167,7 @@ See `src/CodoMetis.ValueRanges/RangeExtensions.cs` for the full implementation.
 
 ## Aggregates (`RangeAggregateExtensions.cs`)
 
-`RangeAgg()` (→ `RangeSet`, PostgreSQL `range_agg`) and `RangeIntersectAgg()` (→ `TRange?`, `null` on empty source, PostgreSQL `range_intersect_agg`) over `IEnumerable<TRange>`. Declared as **per-type overloads** (six each) because C# cannot infer the element type `T` from `TRange` alone — constraints do not participate in type inference. A generic private core holds the intersect-fold logic.
+`RangeAgg()` (→ `RangeSet`, PostgreSQL `range_agg`) and `RangeIntersectAgg()` (→ `TRange?`, `null` on empty source, PostgreSQL `range_intersect_agg`) over `IEnumerable<TRange>`. Declared as **per-type overloads** (six each) because C# cannot infer the element type `T` from `TRange` alone — constraints do not participate in type inference. A generic private core holds the intersect-fold logic. The overloads over `IEnumerable<RangeSet<TRange, T>>` (`range_agg(anymultirange)`, `range_intersect_agg(anymultirange)`) are generic instead, because the set type names both type arguments, so they serve the NodaTime types too; the aggregate translator tells the two sources apart by the method's parameter type, since `RangeAgg` returns a set either way.
 
 ## RangeSet<TRange, T> (`RangeSet.cs`)
 
@@ -406,6 +406,7 @@ they format themselves.
 - `IntersectEngine.cs`, `MergeEngine.cs` — per-shape intersection and merge logic
 - `ExceptEngine.cs` — set difference with boundary inversion at cut points
 - `DiscreteCanonical.cs` — canonicalizes discrete ranges to closed form
+- `RangeOrder.cs` — PostgreSQL's range order (`range_cmp`) behind every range type's `CompareTo` and, element by element, `RangeSet.CompareTo` (`multirange_cmp`); separate from `RangeSetHelpers.CompareByLowerBound`, which orders by lower bound only so `From` can merge neighbours
 - `RangeBoundHelpers.cs`, `RangeFormat.cs`, `RangeSetHelpers.cs` — shared utilities
 - `ValueSetCore.cs` — the value set engine: canonicalization, membership (binary search over the canonical order — `IValueSet<T>.CanonicalOrder` is the instance-side view of `CanonicalComparer` that `Contains` needs and cannot reach statically), equality, merge-scan algebra. `Union` keeps the **left** operand's representative among comparer-equal elements, the same "first in input order survives" tie-break `Canonicalize` applies; only the left-hand identity shortcut is sound, since a count matching the right operand merely means the left was a subset
 - `SetFormat.cs` — PostgreSQL array-literal parse/format for value sets (sibling of `RangeFormat`)

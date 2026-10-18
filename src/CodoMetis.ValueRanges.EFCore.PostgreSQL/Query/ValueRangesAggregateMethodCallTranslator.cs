@@ -11,7 +11,7 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// <summary>
 /// Translates the <c>RangeAgg</c>/<c>RangeIntersectAgg</c> aggregates to their PostgreSQL
 /// counterparts, <c>range_agg</c> (returning a multirange) and <c>range_intersect_agg</c>
-/// (returning a range) — for <see cref="RangeAggregateExtensions"/> and for any satellite
+/// (returning a range, or a multirange over multiranges) — for <see cref="RangeAggregateExtensions"/> and for any satellite
 /// overload class registered via <c>RangeTypeRegistry.RegisterAggregateExtensions</c>.
 /// </summary>
 internal sealed class ValueRangesAggregateMethodCallTranslator(
@@ -33,7 +33,14 @@ internal sealed class ValueRangesAggregateMethodCallTranslator(
             return null;
         }
 
-        var argument = sqlExpressionFactory.ApplyTypeMapping(selector, definition.RangeTypeMapping);
+        // range_agg and range_intersect_agg are each declared over anyrange and over anymultirange.
+        // The method's source type says which one this is; the return type does not, since
+        // RangeAgg returns a set either way.
+        var overSets = method.GetParameters() is [{ ParameterType: { IsGenericType: true } sourceType }]
+                    && sourceType.GetGenericArguments()[0] == definition.RangeSetClrType;
+
+        var argument = sqlExpressionFactory.ApplyTypeMapping(
+            selector, overSets ? definition.RangeSetTypeMapping : definition.RangeTypeMapping);
 
         return method.Name switch
         {
@@ -47,7 +54,7 @@ internal sealed class ValueRangesAggregateMethodCallTranslator(
                     definition.RangeSetClrType,
                     definition.RangeSetTypeMapping),
 
-            nameof(RangeAggregateExtensions.RangeIntersectAgg) when !isSet
+            nameof(RangeAggregateExtensions.RangeIntersectAgg) when !isSet && !overSets
                 => sqlExpressionFactory.AggregateFunction(
                     "range_intersect_agg",
                     [argument],
@@ -56,6 +63,16 @@ internal sealed class ValueRangesAggregateMethodCallTranslator(
                     argumentsPropagateNullability: [false],
                     definition.RangeClrType,
                     definition.RangeTypeMapping),
+
+            nameof(RangeAggregateExtensions.RangeIntersectAgg) when isSet && overSets
+                => sqlExpressionFactory.AggregateFunction(
+                    "range_intersect_agg",
+                    [argument],
+                    source,
+                    nullable: true,
+                    argumentsPropagateNullability: [false],
+                    definition.RangeSetClrType,
+                    definition.RangeSetTypeMapping),
 
             _ => null
         };

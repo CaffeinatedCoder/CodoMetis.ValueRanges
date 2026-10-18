@@ -22,6 +22,9 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **`IComparable<TRange>` on every range type, and `IComparable<RangeSet<TRange, T>>`**, in PostgreSQL's range and multirange order: empty first, then by lower bound, then by upper bound. `CompareTo` returns 0 exactly when the two are equal, and `null` sorts first ([Sort ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#sort-ranges)).
+- **A range with a `RangeSet` operand**: `Contains`, `IsContainedBy`, `Overlaps`, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendRightOf`, `DoesNotExtendLeftOf` and `IsAdjacentTo`, as PostgreSQL's operators with the range on the left, and **`RangeSet.IsContainedBy`** with a range or a set ([Compare a range with a set](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#compare-a-range-with-a-set)).
+- **`RangeAgg` and `RangeIntersectAgg` over a sequence of `RangeSet`**, as PostgreSQL's `range_agg` and `range_intersect_agg` over multiranges. They are generic, so they serve every range type, the NodaTime ones included ([Aggregates](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#aggregate-a-sequence-of-ranges)).
 
 ### Fixed
 

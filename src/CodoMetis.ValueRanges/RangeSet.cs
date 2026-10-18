@@ -73,7 +73,8 @@ public static class RangeSet
 [JsonConverter(typeof(RangeJsonConverterFactory))]
 [TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class RangeSet<TRange, T>
-    : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IFormattable, ISpanParsable<RangeSet<TRange, T>>
+    : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IComparable<RangeSet<TRange, T>>, IFormattable,
+      ISpanParsable<RangeSet<TRange, T>>
     where TRange : IRangeFactory<TRange, T>, IRange<T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
@@ -436,6 +437,31 @@ public sealed class RangeSet<TRange, T>
 
         return true;
     }
+
+    /// <summary>
+    /// Determines whether every value of the set is contained in <paramref name="other"/> — the
+    /// multirange <c>&lt;@</c> operator with a range on the right. Equivalent to
+    /// <c>other.Contains(this)</c>.
+    /// </summary>
+    /// <param name="other">The range that should contain the set.</param>
+    /// <returns>
+    /// <see langword="true"/> if every element lies inside <paramref name="other"/>; always
+    /// <see langword="true"/> for the empty set.
+    /// </returns>
+    public bool IsContainedBy(IRange<T> other) =>
+        // A range has no gaps, so it holds the set exactly when it holds the outermost elements.
+        _elements.IsEmpty || (other.Contains(_elements[0]) && other.Contains(_elements[^1]));
+
+    /// <summary>
+    /// Determines whether every value of the set is contained in <paramref name="other"/> — the
+    /// multirange <c>&lt;@</c> operator. Equivalent to <c>other.Contains(this)</c>.
+    /// </summary>
+    /// <param name="other">The set that should contain this set.</param>
+    /// <returns>
+    /// <see langword="true"/> if every element lies inside an element of <paramref name="other"/>;
+    /// always <see langword="true"/> for the empty set.
+    /// </returns>
+    public bool IsContainedBy(RangeSet<TRange, T> other) => other.Contains(this);
 
     /// <summary>
     /// Determines whether <paramref name="range"/> shares at least one value with the set.
@@ -1078,6 +1104,38 @@ public sealed class RangeSet<TRange, T>
     /// <summary>Structural inequality — the negation of <see cref="operator =="/>.</summary>
     public static bool operator !=(RangeSet<TRange, T>? left, RangeSet<TRange, T>? right) =>
         !(left == right);
+
+    /// <summary>
+    /// Compares this set with <paramref name="other"/> in PostgreSQL's multirange order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a multirange column: element by element in the range
+    /// order of <typeparamref name="TRange"/>, and a set that runs out of elements first sorts first.
+    /// </summary>
+    /// <remarks>
+    /// So the empty set sorts before every other set, and <c>{[1,3)}</c> before <c>{[1,3),[5,7)}</c>.
+    /// The result is 0 exactly when the two sets are equal, and <see langword="null"/> sorts before
+    /// every set. This is not <see cref="LowerBoundComparer"/>, which orders single ranges by their
+    /// lower bound only.
+    /// </remarks>
+    /// <param name="other">The set to compare with.</param>
+    /// <returns>
+    /// A negative number when this set sorts first, 0 when the two are equal, and a positive number
+    /// when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(RangeSet<TRange, T>? other)
+    {
+        if (other is null) return 1;
+        if (ReferenceEquals(this, other)) return 0;
+
+        // multirange_cmp: the first element pair that differs decides, then the element count.
+        int shared = Math.Min(_elements.Length, other._elements.Length);
+        for (int i = 0; i < shared; i++)
+        {
+            int comparison = RangeOrder.Compare<T>(_elements[i], other._elements[i]);
+            if (comparison != 0) return comparison;
+        }
+
+        return _elements.Length.CompareTo(other._elements.Length);
+    }
 
     // -------------------------------------------------------------------------
     // IFormattable / IParsable

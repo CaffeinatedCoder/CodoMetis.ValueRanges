@@ -35,22 +35,36 @@ internal sealed class ValueRangesMethodCallTranslator(
         nameof(RangeExtensions.Contains), method => method.GetParameters()[1].ParameterType.IsGenericParameter);
 
     private static readonly MethodInfo ContainsRangeMethod = GetExtensionMethod(
-        nameof(RangeExtensions.Contains), method => !method.GetParameters()[1].ParameterType.IsGenericParameter);
+        nameof(RangeExtensions.Contains), method => !method.GetParameters()[1].ParameterType.IsGenericParameter && !TakesSet(method));
 
-    private static readonly MethodInfo IsContainedByMethod        = GetExtensionMethod(nameof(RangeExtensions.IsContainedBy));
-    private static readonly MethodInfo OverlapsMethod             = GetExtensionMethod(nameof(RangeExtensions.Overlaps));
-    private static readonly MethodInfo IsStrictlyLeftOfMethod     = GetExtensionMethod(nameof(RangeExtensions.IsStrictlyLeftOf));
-    private static readonly MethodInfo IsStrictlyRightOfMethod    = GetExtensionMethod(nameof(RangeExtensions.IsStrictlyRightOf));
-    private static readonly MethodInfo DoesNotExtendRightOfMethod = GetExtensionMethod(nameof(RangeExtensions.DoesNotExtendRightOf));
-    private static readonly MethodInfo DoesNotExtendLeftOfMethod  = GetExtensionMethod(nameof(RangeExtensions.DoesNotExtendLeftOf));
+    private static readonly MethodInfo IsContainedByMethod        = GetRangeOperandMethod(nameof(RangeExtensions.IsContainedBy));
+    private static readonly MethodInfo OverlapsMethod             = GetRangeOperandMethod(nameof(RangeExtensions.Overlaps));
+    private static readonly MethodInfo IsStrictlyLeftOfMethod     = GetRangeOperandMethod(nameof(RangeExtensions.IsStrictlyLeftOf));
+    private static readonly MethodInfo IsStrictlyRightOfMethod    = GetRangeOperandMethod(nameof(RangeExtensions.IsStrictlyRightOf));
+    private static readonly MethodInfo DoesNotExtendRightOfMethod = GetRangeOperandMethod(nameof(RangeExtensions.DoesNotExtendRightOf));
+    private static readonly MethodInfo DoesNotExtendLeftOfMethod  = GetRangeOperandMethod(nameof(RangeExtensions.DoesNotExtendLeftOf));
 
     // -- RangeExtensions set operations: extension<TRange, T>(TRange) --
 
-    private static readonly MethodInfo IsAdjacentToMethod = GetExtensionMethod(nameof(RangeExtensions.IsAdjacentTo));
+    private static readonly MethodInfo IsAdjacentToMethod = GetRangeOperandMethod(nameof(RangeExtensions.IsAdjacentTo));
     private static readonly MethodInfo MergeMethod        = GetExtensionMethod(nameof(RangeExtensions.Merge));
     private static readonly MethodInfo IntersectMethod    = GetExtensionMethod(nameof(RangeExtensions.Intersect));
     private static readonly MethodInfo UnionMethod        = GetExtensionMethod(nameof(RangeExtensions.Union));
     private static readonly MethodInfo ExceptMethod       = GetExtensionMethod(nameof(RangeExtensions.Except));
+
+    // -- RangeExtensions with a RangeSet operand: the range-receiver half of range × multirange --
+
+    private static readonly HashSet<MethodInfo> SetOperandMethods =
+    [
+        GetSetOperandMethod(nameof(RangeExtensions.Contains)),
+        GetSetOperandMethod(nameof(RangeExtensions.IsContainedBy)),
+        GetSetOperandMethod(nameof(RangeExtensions.Overlaps)),
+        GetSetOperandMethod(nameof(RangeExtensions.IsStrictlyLeftOf)),
+        GetSetOperandMethod(nameof(RangeExtensions.IsStrictlyRightOf)),
+        GetSetOperandMethod(nameof(RangeExtensions.DoesNotExtendRightOf)),
+        GetSetOperandMethod(nameof(RangeExtensions.DoesNotExtendLeftOf)),
+        GetSetOperandMethod(nameof(RangeExtensions.IsAdjacentTo))
+    ];
 
     // -- RangeExtensions state methods: extension<T>(IRange<T>) --
 
@@ -71,6 +85,14 @@ internal sealed class ValueRangesMethodCallTranslator(
         => typeof(RangeExtensions)
           .GetMethods(BindingFlags.Public | BindingFlags.Static)
           .Single(method => method.Name == name && (filter is null || filter(method)));
+
+    private static MethodInfo GetRangeOperandMethod(string name) => GetExtensionMethod(name, method => !TakesSet(method));
+
+    private static MethodInfo GetSetOperandMethod(string name) => GetExtensionMethod(name, TakesSet);
+
+    private static bool TakesSet(MethodInfo method)
+        => method.GetParameters() is [_, { ParameterType: { IsGenericType: true } operand }]
+        && operand.GetGenericTypeDefinition() == typeof(RangeSet<,>);
 
     /// <inheritdoc />
     public SqlExpression? Translate(
@@ -109,6 +131,24 @@ internal sealed class ValueRangesMethodCallTranslator(
 
         SqlExpression Range(int index)
             => sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), definition.RangeTypeMapping);
+
+        // The operator with the range on the left, as PostgreSQL declares it: no multirange lift.
+        if (SetOperandMethods.Contains(generic))
+        {
+            var set = sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[1]), definition.RangeSetTypeMapping);
+            return generic.Name switch
+            {
+                nameof(RangeExtensions.Contains)             => sqlExpressionFactory.Contains(Range(0), set),
+                nameof(RangeExtensions.IsContainedBy)        => sqlExpressionFactory.ContainedBy(Range(0), set),
+                nameof(RangeExtensions.Overlaps)             => sqlExpressionFactory.Overlaps(Range(0), set),
+                nameof(RangeExtensions.IsStrictlyLeftOf)     => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeIsStrictlyLeftOf, Range(0), set),
+                nameof(RangeExtensions.IsStrictlyRightOf)    => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeIsStrictlyRightOf, Range(0), set),
+                nameof(RangeExtensions.DoesNotExtendRightOf) => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeDoesNotExtendRightOf, Range(0), set),
+                nameof(RangeExtensions.DoesNotExtendLeftOf)  => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeDoesNotExtendLeftOf, Range(0), set),
+                nameof(RangeExtensions.IsAdjacentTo)         => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeIsAdjacentTo, Range(0), set),
+                _                                            => null
+            };
+        }
 
         if (generic == ContainsValueMethod)
             return sqlExpressionFactory.Contains(Range(0), ApplyElementMapping(arguments[1], definition));
@@ -257,6 +297,9 @@ internal sealed class ValueRangesMethodCallTranslator(
 
             case nameof(RangeSet<,>.Overlaps) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.Overlaps(Set(instance), Operand(arguments[0]));
+
+            case nameof(RangeSet<,>.IsContainedBy) when instance is not null && arguments.Count == 1:
+                return sqlExpressionFactory.ContainedBy(Set(instance), Operand(arguments[0]));
 
             case nameof(RangeSet<,>.IsAdjacentTo) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(

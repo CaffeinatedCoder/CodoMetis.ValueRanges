@@ -7,6 +7,9 @@ covers all four packages, which share one version number and release together.
 
 ### Added
 
+- **EF Core: `CompareTo` against 0** on a range or multirange runs as `<`, `<=`, `>`, `>=` or `=`, and returns the rows the same comparison returns in memory ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
+- **EF Core: a range with a multirange operand** runs as the operator with the range on the left (`b."Period" &< b."Blocked"`), and `RangeSet.IsContainedBy` as `<@` ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
+- **EF Core: `RangeAgg` and `RangeIntersectAgg` over a multirange column** run as `range_agg` and `range_intersect_agg` over the multirange inside a `GroupBy` projection ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - **Docs: PostgreSQL 18 temporal keys over a range column**, `UNIQUE (… WITHOUT OVERLAPS)` and `FOREIGN KEY (… PERIOD …)`, declared through `EFCore.ComplexIndexes.PostgreSQL`'s `HasTemporalConstraint` and `HasTemporalForeignKey`, and `UseNpgsqlComplexIndexes()` as the way to have `EnsureCreated()` create them ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18)).
 
 ### Fixed

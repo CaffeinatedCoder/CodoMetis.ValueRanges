@@ -148,6 +148,52 @@ public class NodaTimeParseFormatTests
         Assert.AreEqual("[2024-06-01T12:00:00Z,2024-06-02T00:00:00Z)", range.ToString());
     }
 
+    /// <summary>
+    /// A <c>Z</c> or an offset after a <see cref="LocalDateTime"/> is read and dropped, the wall clock
+    /// kept, as PostgreSQL's <c>timestamp</c> input and the core's <c>DateTimeRange</c> do. Until 10.0.0
+    /// it threw (#130). Each row's wall clock is PostgreSQL's <c>::timestamp</c> answer on 16 and 18.
+    /// </summary>
+    [TestMethod]
+    [DataRow("2026-01-01 10:00:00Z")]
+    [DataRow("2026-01-01T10:00:00Z")]
+    [DataRow("2026-01-01 10:00:00+02")]
+    [DataRow("2026-01-01 10:00:00-03")]
+    [DataRow("2026-01-01 10:00:00+05:30")]
+    [DataRow("2026-01-01 10:00:00+05:53:28")]
+    [DataRow("2026-01-01 10:00:00+15:59:59")]
+    [DataRow("2026-01-01 10:00:00-15:59")]
+    [DataRow("2026-01-01 10:00Z")]
+    [DataRow("2026-01-01T10:00+02:00")]
+    public void Parse_LocalDateTime_WithAnOffset_KeepsTheWallClock(string text)
+    {
+        var wall = new LocalDateTime(2026, 1, 1, 10, 0);
+
+        Assert.AreEqual(LocalDateTimeRange.CreateUnboundedEnd(wall), LocalDateTimeRange.Parse($"[\"{text}\",)", null));
+        Assert.AreEqual(LocalDateTimeSet.From(wall), LocalDateTimeSet.Parse($"{{\"{text}\"}}", null));
+    }
+
+    /// <summary>
+    /// PostgreSQL stops at <c>±15:59:59</c>; NodaTime's <see cref="Offset"/> goes to <c>±18:00</c>, so
+    /// until 10.0.0 an instant at <c>+16:00</c> parsed where the server refuses it (#188).
+    /// </summary>
+    [TestMethod]
+    [DataRow("2026-01-01 10:00:00+16:00")]
+    [DataRow("2026-01-01 10:00:00-16")]
+    [DataRow("2026-01-01T10:00:00+18:00")]
+    [DataRow("2026-01-01T10:00+16:00")]
+    public void Parse_OffsetBeyondPostgres_IsRefused(string text)
+    {
+        Assert.ThrowsExactly<FormatException>(() => InstantRange.Parse($"[\"{text}\",)", null));
+        Assert.IsFalse(InstantSet.TryParse($"{{\"{text}\"}}", null, out _));
+        Assert.ThrowsExactly<FormatException>(() => LocalDateTimeRange.Parse($"[\"{text}\",)", null));
+    }
+
+    [TestMethod]
+    public void Parse_Instant_AtTheLargestOffset_ConvertsToInstant()
+        => Assert.AreEqual(
+            InstantRange.CreateUnboundedEnd(Instant.FromUtc(2025, 12, 31, 18, 0, 1)),
+            InstantRange.Parse("[\"2026-01-01 10:00:00+15:59:59\",)", null));
+
     // -----------------------------------------------------------------------
     // TryParse failure paths
     // -----------------------------------------------------------------------
