@@ -223,6 +223,15 @@ public sealed class LiteralCorpusProbeTests
             }
 
             compared++;
+            if (SubMicrosecond(family, kind))
+            {
+                // docs/architecture.md#domain-width-and-the-boundary (#126): the library keeps every
+                // digit it can hold, the server rounds the text half-to-even to the microsecond and the
+                // store truncates, as Npgsql binds. DomainBoundaryDivergenceTests pins all three values.
+                documented++;
+                continue;
+            }
+
             if (readsServerText && !Equals(parse.Value, fromServer))
                 failures.Add($"{head} library {parse.Text}, PostgreSQL reads {Show(pg.Text!)} = {fromServer}");
 
@@ -344,6 +353,8 @@ public sealed class LiteralCorpusProbeTests
         if (numeric) return JsonNumber.IsMatch(element) ? $"[{element}]" : null;
         return $"[{JsonSerializer.Serialize(element)}]";
     }
+
+    private static bool SubMicrosecond(string family, Kind kind) => family == "sub-microsecond" && IsTemporal(kind);
 
     // =========================================================================
     // The server

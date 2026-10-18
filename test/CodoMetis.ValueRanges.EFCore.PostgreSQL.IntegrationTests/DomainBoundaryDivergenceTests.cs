@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
 using Npgsql;
 
@@ -137,6 +139,51 @@ public sealed class DomainBoundaryDivergenceTests
         Assert.AreEqual(false, DateRange.Parse("[2026-01-01,infinity)", null).Contains(DateOnly.MaxValue),
                         "DateOnly.MaxValue is infinity here, which [x,infinity) excludes.");
         Assert.AreEqual(false, LocalDateRange.Parse("[2026-01-01,infinity)", null).Contains(LocalDate.MaxIsoValue));
+    }
+
+    /// <summary>
+    /// Precision (#126): the BCL types hold 100 ns and NodaTime 1 ns, the server a microsecond.
+    /// PostgreSQL reads more than six fraction digits rounded half-to-even; the store writes the value
+    /// truncated toward 2000-01-01, as Npgsql binds a parameter. So text with sub-microsecond digits
+    /// holds three values: the library's (every digit it can keep), the server's reading of the text
+    /// (rounded) and the stored one (truncated), at most 1 µs apart. Rounding on parse was rejected:
+    /// a value with sub-microsecond ticks would stop round-tripping through its own literal (claim S08).
+    /// </summary>
+    [TestMethod]
+    [DataRow("2026-01-01 10:00:00.1234567", "2026-01-01 10:00:00.123457", "2026-01-01 10:00:00.123456")]
+    [DataRow("2026-01-01 10:00:00.0000015", "2026-01-01 10:00:00.000002", "2026-01-01 10:00:00.000001")]
+    public async Task Timestamp_SubMicrosecondText_IsThreeValuesAtMostAMicrosecondApart(string text, string serverReads, string stored)
+    {
+        ContainerLifecycle.RequireDatabase();
+        await using var context = new IntegrationDbContext();
+
+        var literal = $"[\"{text}\",)";
+        var parsed  = Assert.IsInstanceOfType<DateTimeRange.UnboundedEnd>(DateTimeRange.Parse(literal, null));
+        Assert.AreEqual(DateTime.Parse(text, System.Globalization.CultureInfo.InvariantCulture), parsed.Start, "the library keeps every 100 ns digit");
+
+        Assert.AreEqual($"[\"{serverReads}\",)", (await Evaluate($"('{literal}'::tsrange)::text")).Value, "PostgreSQL rounds the text half-to-even");
+
+        var constant = context.GetService<IRelationalTypeMappingSource>().FindMapping(typeof(DateTimeRange))!.GenerateSqlLiteral(parsed);
+        Assert.AreEqual($"[\"{stored}\",)", (await Evaluate($"({constant})::text")).Value, "the store truncates, as Npgsql binds");
+
+        Assert.IsTrue(parsed.ToString().Contains(text[^7..]), "the library's own literal round-trips its digits");
+        Assert.AreEqual(parsed, DateTimeRange.Parse(parsed.ToString(), null));
+    }
+
+    [TestMethod]
+    public async Task LocalDateTime_NanosecondText_IsThreeValuesAtMostAMicrosecondApart()
+    {
+        ContainerLifecycle.RequireDatabase();
+        await using var context = new IntegrationDbContext();
+
+        const string literal = "[\"2026-01-01 10:00:00.123456789\",)";
+        var parsed = Assert.IsInstanceOfType<LocalDateTimeRange.UnboundedEnd>(LocalDateTimeRange.Parse(literal, null));
+        Assert.AreEqual(new LocalDateTime(2026, 1, 1, 10, 0, 0).PlusNanoseconds(123_456_789), parsed.Start);
+
+        Assert.AreEqual("[\"2026-01-01 10:00:00.123457\",)", (await Evaluate($"('{literal}'::tsrange)::text")).Value);
+
+        var constant = context.GetService<IRelationalTypeMappingSource>().FindMapping(typeof(LocalDateTimeRange))!.GenerateSqlLiteral(parsed);
+        Assert.AreEqual("[\"2026-01-01 10:00:00.123456\",)", (await Evaluate($"({constant})::text")).Value);
     }
 
     /// <summary>

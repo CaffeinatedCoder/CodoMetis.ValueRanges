@@ -21,6 +21,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 ### Fixed
 
 - Docs: an exclusive `infinity` or `-infinity` date bound excludes the date extreme, which stands for the infinity, so `[2026-01-01,infinity)` is `[2026-01-01,9999-12-30]` from a column and from the literal alike. Ask other tools to write an open end as absent or inclusive ([Domain width](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/architecture.md#domain-width-and-the-boundary)).
+- Docs: a temporal literal with more than six fraction digits keeps them in memory, while PostgreSQL reads the same text rounded to the microsecond and the EF Core package stores it truncated, so the three can be 1 µs apart ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#dates-and-times-are-strict-iso-8601)).
 
 ## [9.1.0] — 2026-10-17
 
