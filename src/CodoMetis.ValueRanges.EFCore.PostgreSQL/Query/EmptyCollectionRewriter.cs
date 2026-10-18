@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -33,7 +34,10 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// <para>
 /// The column types come from the columns that reference the <c>VALUES</c> alias elsewhere in the
 /// <c>SELECT</c>, which is where EF Core typed them; a column nothing reads gets an untyped
-/// <c>NULL</c>, which PostgreSQL accepts for a column it never compares.
+/// <c>NULL</c>, which PostgreSQL accepts for a column it never compares. Only a <c>VALUES</c> whose
+/// referenced column is a registered range or value set type is rewritten: a collection of some
+/// other type that a context configured for <c>MultipleParameters</c> sends the same way keeps EF
+/// Core's own behaviour, since the plugin did not put it on this path.
 /// </para>
 /// </remarks>
 internal static class EmptyCollectionRewriter
@@ -50,6 +54,8 @@ internal static class EmptyCollectionRewriter
             if (!select.Tables.Any(IsEmptyValues)) return select;
 
             var columns = ColumnCollector.Of(select);
+            if (!select.Tables.Any(table => IsEmptyValues(table) && HoldsAPluginType((ValuesExpression)table, columns))) return select;
+
             var tables  = select.Tables.Select(table => IsEmptyValues(table) ? OneRowOfNulls((ValuesExpression)table, columns) : table).ToList();
 
             SqlExpression none      = factory.Constant(false, typeMappings.FindMapping(typeof(bool)));
@@ -60,6 +66,11 @@ internal static class EmptyCollectionRewriter
 
         private static bool IsEmptyValues(TableExpressionBase table)
             => table is ValuesExpression { RowValues.Count: 0 };
+
+        /// <summary>Whether a column read from the <c>VALUES</c> is a registered range or value set type.</summary>
+        private static bool HoldsAPluginType(ValuesExpression values, IReadOnlyList<ColumnExpression> columns)
+            => columns.Any(c => c.TableAlias == values.Alias
+                             && (RangeTypeRegistry.TryGetByClrType(c.Type, out _, out _) || SetTypeRegistry.TryGetByClrType(c.Type, out _)));
 
         /// <summary>One row, a typed <c>NULL</c> per column, <c>0</c> for EF Core's ordering column.</summary>
         private ValuesExpression OneRowOfNulls(ValuesExpression values, IReadOnlyList<ColumnExpression> columns)
