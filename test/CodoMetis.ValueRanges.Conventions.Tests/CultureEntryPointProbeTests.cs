@@ -166,11 +166,11 @@ public sealed class CultureEntryPointProbeTests
                 var parsable = typeof(TValue);
 
                 // Read: the static parsers, with no provider and with the current culture handed over.
-                checks += Read(failures, row, "Parse(string, null)", parsable, at, value, () => TValue.Parse(literal, null));
-                checks += Read(failures, row, "Parse(string, CurrentCulture)", parsable, at, value, () => TValue.Parse(literal, CultureInfo.CurrentCulture));
+                checks += Read(failures, row, "Parse(string, null)", parsable, at, value, () => StringOverloads.Parse<TValue>(literal, null));
+                checks += Read(failures, row, "Parse(string, CurrentCulture)", parsable, at, value, () => StringOverloads.Parse<TValue>(literal, CultureInfo.CurrentCulture));
                 checks += Read(failures, row, "Parse(span, null)", parsable, at, value, () => TValue.Parse(literal.AsSpan(), null));
                 checks += Read(failures, row, "TryParse(string, null)", parsable, at, value,
-                               () => TValue.TryParse(literal, null, out var result) ? result : throw new FormatException("TryParse returned false"));
+                               () => StringOverloads.TryParse<TValue>(literal, null, out var result) ? result : throw new FormatException("TryParse returned false"));
                 checks += Read(failures, row, "TryParse(span, CurrentCulture)", parsable, at, value,
                                () => TValue.TryParse(literal.AsSpan(), CultureInfo.CurrentCulture, out var result) ? result : throw new FormatException("TryParse returned false"));
 

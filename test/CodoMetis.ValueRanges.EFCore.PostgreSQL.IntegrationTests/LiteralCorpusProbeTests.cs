@@ -205,7 +205,7 @@ public sealed class LiteralCorpusProbeTests
             // The server's canonical text can leave the CLR domain while the value does not — the
             // discrete (,9999-12-31] prints as (,10000-01-01) — so for a closed type an unreadable
             // canonical text is judged by the write-back below, and only a refusal of both is domain.
-            var readsServerText = TSelf.TryParse(pg.Text, Invariant, out var fromServer);
+            var readsServerText = StringOverloads.TryParse<TSelf>(pg.Text, Invariant, out var fromServer);
             if (!pg.Representable || !readsServerText && (isWrapper || !parse.Accepted))
             {
                 // The server reads a value the CLR type cannot hold: a refusal is the only right answer.
@@ -269,9 +269,9 @@ public sealed class LiteralCorpusProbeTests
     private static IEnumerable<(string Leg, Answer Answer)> EntryPoints<TSelf>(string literal, string? element, Grammar grammar, RelationalTypeMapping mapping)
         where TSelf : ISpanParsable<TSelf>
     {
-        yield return ("Parse(string)", Try(() => TSelf.Parse(literal, Invariant)));
+        yield return ("Parse(string)", Try(() => StringOverloads.Parse<TSelf>(literal, Invariant)));
         yield return ("Parse(span)", Try(() => TSelf.Parse(literal.AsSpan(), Invariant)));
-        yield return ("TryParse(string)", TryNeverThrows(() => (TSelf.TryParse(literal, Invariant, out var r), r)));
+        yield return ("TryParse(string)", TryNeverThrows(() => (StringOverloads.TryParse<TSelf>(literal, Invariant, out var r), r)));
         yield return ("TryParse(span)", TryNeverThrows(() => (TSelf.TryParse(literal.AsSpan(), Invariant, out var r), r)));
 
         if (grammar != Grammar.Array)
