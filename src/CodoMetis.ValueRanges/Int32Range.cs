@@ -221,8 +221,10 @@ public abstract partial record Int32Range : IRange<int>, IRangeFactory<Int32Rang
         };
 
     /// <inheritdoc />
+    /// <remarks>PostgreSQL 16\'s integer grammar — decimal, or <c>0x</c>, <c>0o</c> or <c>0b</c> digits, with single
+    /// underscores between digits (<see cref="IntegerLiteral"/>); the provider is ignored.</remarks>
     public static int ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => int.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture);
+        => IntegerLiteral.Parse<int>(s);
 
     /// <summary>
     /// Parses a PostgreSQL range literal (e.g. <c>[1,10]</c>, <c>empty</c>, <c>(,)</c>)

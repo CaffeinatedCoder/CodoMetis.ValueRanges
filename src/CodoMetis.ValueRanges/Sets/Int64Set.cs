@@ -68,8 +68,10 @@ public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>
     public ImmutableArray<long>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
+    /// <remarks>PostgreSQL 16\'s integer grammar — decimal, or <c>0x</c>, <c>0o</c> or <c>0b</c> digits, with single
+    /// underscores between digits (<see cref="IntegerLiteral"/>); the provider is ignored.</remarks>
     public static long ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => long.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture);
+        => IntegerLiteral.Parse<long>(s);
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{1,2}</c>, <c>{}</c>) into an
@@ -187,7 +189,8 @@ public sealed class Int64Set<TElement> :
     public ImmutableArray<TElement>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <summary>
-    /// Parses an element with the family's grammar — an optionally signed integer (<see cref="System.Globalization.NumberStyles.Integer"/>, invariant), exactly as
+    /// Parses an element with the family's grammar — an integer as PostgreSQL 16 reads it (decimal,
+    /// or <c>0x</c>/<c>0o</c>/<c>0b</c>, with <c>_</c> between digits), exactly as
     /// <see cref="Int64Set.ParseValue"/> reads it — and hands the element the parsed
     /// <see cref="long"/>'s invariant text via <see cref="IParsable{TSelf}"/>, which re-runs
     /// its validation: corrupt data throws rather than materializing.

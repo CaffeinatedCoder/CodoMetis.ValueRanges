@@ -1492,6 +1492,24 @@
     ]
   },
   {
+    "id": "J39-integer-grammar",
+    "source": "docs/serialization.md#parse-a-literal",
+    "quote": "Integer bounds and elements follow PostgreSQL 16's integer grammar. You can write them in decimal, or in hexadecimal, octal or binary after `0x`, `0o` or `0b`, with single underscores between digits: `[0x1F,1_000)` is `[31,1000)`.",
+    "claim": "Every integer range, multirange and value set reads 0x/0o/0b prefixes and single digit separators as PostgreSQL 16 and 18 read them, accepts and refuses the same text, and overflows past the type's extremes.",
+    "oracle": "differential",
+    "surfaces": [
+      "Int32Range.ParseValue",
+      "Int64Range.ParseValue",
+      "Int16Set.ParseValue",
+      "Int32Set.ParseValue",
+      "Int64Set.ParseValue"
+    ],
+    "heldBy": [
+      "IntegerLiteralGrammarTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
     "id": "M01-rangeset-invariant-on-construction",
     "source": "docs/ranges.md#rangeset--multirange-support",
     "quote": "Every way you create a set keeps three rules. The elements are sorted by lower bound, no two of them overlap, and no two are adjacent. To keep those rules, creating a set: - **Drops empty ranges.** - **Merges ranges that overlap or are adjacent.** - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**",
