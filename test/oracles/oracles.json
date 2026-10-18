@@ -277,5 +277,14 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "ComplexIndexesCrossTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "claim",
+    "against": "PostgreSQL 16 and 18 enforcing EFCore.ComplexIndexes.PostgreSQL's temporal and exclusion constraints and GiST indexes over a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange column, created by EnsureCreated with its differ registered",
+    "needs": [
+      "docker"
+    ]
   }
 ]

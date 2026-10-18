@@ -1,0 +1,19 @@
+Seed: the range and multirange mappings drop their store type name and carry the element store type (date, time without time zone), so no mapped column ends in range
+Oracles: ComplexIndexesCrossTests
+Fails: HasTemporalConstraint refuses every period as not a range or multirange type; the exclusion constraints and GiST indexes find no && operator or GiST operator class for the element type
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeDefinition.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeDefinition.cs
+index a33b2ff..86b6916 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeDefinition.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeDefinition.cs
+@@ -51,8 +51,8 @@ internal sealed class RangeTypeDefinition<TRange, T> : IRangeTypeDefinition
+                           ({ } n, { } v) => (Func<T, T>)(bound => v(n(bound)))
+                       };
+ 
+-        RangeTypeMapping    = new ValueRangeTypeMapping<TRange, T>(rangeStoreType, toStore, infinityText);
+-        RangeSetTypeMapping = new ValueRangeSetTypeMapping<TRange, T>(multirangeStoreType, toStore, infinityText);
++        RangeTypeMapping    = new ValueRangeTypeMapping<TRange, T>(elementStoreType, toStore, infinityText);
++        RangeSetTypeMapping = new ValueRangeSetTypeMapping<TRange, T>(elementStoreType, toStore, infinityText);
+ 
+         // A bound or element operand — range @> x, a constructor argument — has to reach the store as
+         // the range's own bounds do: normalized (a non-UTC DateTimeOffset otherwise throws on the way to

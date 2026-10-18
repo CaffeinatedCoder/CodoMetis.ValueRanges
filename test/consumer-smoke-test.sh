@@ -14,11 +14,13 @@
 # a consumer builds — compiles real code against them, runs it, and asserts on what it prints and on
 # the SQL the EF plugin translates. Never on the exit code alone.
 #
-# Three consumers: one installs only the core package, the most common shape; one installs the
+# Four consumers: one installs only the core package, the most common shape; one installs the
 # NodaTime EF satellite, which pulls in all four through the nuspec dependency chain — the chain is
-# what that consumer is testing; and one publishes with Native AOT and runs the native binary,
+# what that consumer is testing; one publishes with Native AOT and runs the native binary,
 # because whether a generic instantiation exists under AOT depends on the whole program, and a
-# probe inside the repository can turn green by accident.
+# probe inside the repository can turn green by accident; and one installs the EF package next to
+# EFCore.ComplexIndexes.PostgreSQL from nuget.org, the pairing docs/efcore.md recommends for
+# exclusion and temporal constraints, which neither package references.
 #
 # Usage: consumer-smoke-test.sh [feed-directory]
 #   With no argument the packages are packed fresh. Pass a directory of existing .nupkg files
@@ -82,8 +84,9 @@ assert_contains() {
     fi
 }
 
-# Creates a consumer project outside the repository and installs one package. Program.cs is written
-# by the caller beforehand, at $work/<name>.cs. Restores, builds, runs, and leaves the program's
+# Creates a consumer project outside the repository and installs one package of this repository, plus
+# any further packages from nuget.org given as id@version. Program.cs is written by the caller
+# beforehand, at $work/<name>.cs. Restores, builds, runs, and leaves the program's
 # output at $work/<name>.out and the resolved package graph at $work/<name>.packages.
 #
 # Source mapping, not just source ordering: this repository's own ids must come from the local feed
@@ -94,6 +97,7 @@ assert_contains() {
 # any machine-level sources.
 scaffold_consumer() {
     local name="$1" package="$2" app="$work/$1"
+    shift 2
 
     echo "==> $name: consumer project, $package"
     mkdir -p "$app"
@@ -124,6 +128,10 @@ XML
     # No --source flag: it would override the mapping above and restrict the whole restore,
     # transitive dependencies included, to the local feed.
     run dotnet add package "$package" --version "$version"
+    local extra
+    for extra in "$@"; do
+        run dotnet add package "${extra%@*}" --version "${extra#*@}"
+    done
     run dotnet build
     run dotnet list package --include-transitive
     echo "$output" > "$work/$name.packages"
@@ -401,6 +409,76 @@ done
 assert_contains '"Period" @> DATE '"'"'2024-06-15'"'"'' "$work/postgres.out" "BCL range predicate translates to @> (core plugin)"
 assert_contains '"Stay" @> DATE '"'"'2024-06-15'"'"''   "$work/postgres.out" "NodaTime range predicate translates to @> (NodaTime satellite)"
 assert_contains '"Tags" @> ARRAY['"'"'x'"'"']::text[]'  "$work/postgres.out" "value set membership translates to array containment"
+
+# ── EF Core + EFCore.ComplexIndexes.PostgreSQL: a joint consumer ─────────────────────────────────
+#
+# The other package accepts a temporal-constraint period or an exclusion-constraint column by its store
+# type name, so the pairing only works if the packaged mappings carry their range store types. The
+# integration suite proves it against PostgreSQL through a test-only reference; this proves the two
+# packages restore and compose in one consumer, from the feeds a consumer uses. GenerateCreateScript
+# runs the other package's differ (registered by UseNpgsqlComplexIndexes()), which renders the same
+# statements a migration would, and needs no database.
+complex_indexes_version=5.4.0
+
+cat > "$work/complexindexes.cs" <<'CSHARP'
+using CodoMetis.ValueRanges;
+using EFCore.ComplexIndexes.PostgreSQL;
+using Microsoft.EntityFrameworkCore;
+
+await using var db = new SmokeContext();
+Console.WriteLine(db.Database.GenerateCreateScript());
+
+public sealed class Booking
+{
+    public int Id { get; set; }
+
+    public int RoomId { get; set; }
+
+    public DateRange Period { get; set; } = DateRange.Empty;
+
+    public RangeSet<DateRange, DateOnly> Days { get; set; } = RangeSet<DateRange, DateOnly>.Empty;
+
+    public TimeRange Hours { get; set; } = TimeRange.Empty;
+}
+
+public sealed class SmokeContext : DbContext
+{
+    public DbSet<Booking> Bookings => Set<Booking>();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options)
+        => options.UseNpgsql("Host=localhost;Database=smoke", npgsql => npgsql.UseValueRanges())
+                  .UseNpgsqlComplexIndexes();
+
+    protected override void OnModelCreating(ModelBuilder model)
+    {
+        model.HasPostgresRange("timerange", "time");
+        model.Entity<Booking>(booking =>
+        {
+            booking.HasExclusionConstraint(ex => ex.WithEquality(b => b.RoomId).WithOverlaps(b => b.Period).HasName("ex_period"));
+            booking.HasTemporalConstraint(b => b.RoomId, b => b.Days, "uq_days");
+            booking.HasTemporalConstraint(b => b.RoomId, b => b.Hours, "uq_hours");
+        });
+    }
+}
+CSHARP
+
+scaffold_consumer complexindexes CodoMetis.ValueRanges.EFCore.PostgreSQL "EFCore.ComplexIndexes.PostgreSQL@$complex_indexes_version"
+
+echo "==> complexindexes: asserting"
+for pair in "CodoMetis.ValueRanges.EFCore.PostgreSQL $version" "EFCore.ComplexIndexes.PostgreSQL $complex_indexes_version"; do
+    id="${pair% *}" expected="${pair#* }"
+    assert_contains "> $id " "$work/complexindexes.packages" "$id installed"
+    if grep -F "> $id " "$work/complexindexes.packages" | grep -qvF " $expected"; then
+        echo "  FAIL: $id resolved at a version other than $expected"
+        grep -F "> $id " "$work/complexindexes.packages" | sed 's/^/      /'
+        failed=1
+    fi
+done
+assert_contains 'CREATE TYPE timerange AS RANGE'                                    "$work/complexindexes.out" "HasPostgresRange creates timerange"
+assert_contains '"Period" daterange NOT NULL'                                       "$work/complexindexes.out" "DateRange column is daterange"
+assert_contains 'EXCLUDE USING gist ("RoomId" WITH =, "Period" WITH &&)'            "$work/complexindexes.out" "exclusion constraint over a DateRange column"
+assert_contains 'UNIQUE ("RoomId", "Days" WITHOUT OVERLAPS)'                        "$work/complexindexes.out" "temporal constraint over a RangeSet (datemultirange) column"
+assert_contains 'UNIQUE ("RoomId", "Hours" WITHOUT OVERLAPS)'                       "$work/complexindexes.out" "temporal constraint over a TimeRange (timerange) column"
 
 [[ $failed -eq 0 ]] || { echo; echo "consumer smoke test FAILED"; exit 1; }
 echo
