@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using NodaTime;
 using Npgsql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
@@ -81,6 +83,60 @@ public sealed class DomainBoundaryDivergenceTests
                         $"[{min}, {min}) should be empty on both sides.");
         Assert.AreEqual(false, (await Evaluate($"isempty({rangeType}({max}, NULL, '[)'))")).Value,
                         $"[{max}, +∞) holds {max} and should be non-empty on both sides.");
+    }
+
+    /// <summary>
+    /// The date extremes stand for PostgreSQL's infinities (#117): Npgsql writes <c>DateOnly.MaxValue</c>
+    /// as <c>infinity</c> and reads <c>infinity</c> back as it, so the server's real 9999-12-31 has no
+    /// value of its own here. <c>[x,infinity)</c>, which excludes the infinity, is therefore
+    /// <c>[x,9999-12-30]</c> on every path: the column, the server's text through <c>Parse</c>, and
+    /// the literal as written. The server's range also holds its real 9999-12-31, which is the
+    /// divergence; reading the bound as the inclusive extreme instead was tried and made the column
+    /// path disagree with the server's algebra (<c>DifferentialFuzzParityTests</c>: <c>(,) -
+    /// (,-infinity]</c> is <c>(-infinity,)</c>, which excludes the minimum) and with the plugin's
+    /// own <c>[x,9999-12-30]</c>, which PostgreSQL stores as <c>[x,9999-12-31)</c>.
+    /// </summary>
+    [TestMethod]
+    [DataRow("daterange('2026-01-01', 'infinity')", "[2026-01-01,9999-12-30]")]
+    [DataRow("daterange('-infinity', '2026-01-01', '(]')", "[0001-01-02,2026-01-01]")]
+    [DataRow("daterange('-infinity', 'infinity')", "[0001-01-01,9999-12-30]")]
+    [DataRow("daterange('-infinity', 'infinity', '()')", "[0001-01-02,9999-12-30]")]
+    [DataRow("daterange(NULL, 'infinity')", "(,9999-12-30]")]
+    [DataRow("daterange('-infinity', NULL, '()')", "[0001-01-02,)")]
+    [DataRow("daterange('2026-01-01', 'infinity', '[]')", "[2026-01-01,9999-12-31]")]
+    [DataRow("'[2026-01-01,9999-12-30]'::daterange", "[2026-01-01,9999-12-30]")]
+    public async Task DateRange_AnInfiniteBound_ReadsAlikeFromTheColumnAndTheText(string expression, string expected)
+    {
+        ContainerLifecycle.RequireDatabase();
+        await using var context = new IntegrationDbContext();
+
+        // The expressions are this test's own constants, not input.
+#pragma warning disable EF1003
+        var value  = "SELECT " + expression + " AS \"Value\"";
+        var column = await context.Database.SqlQueryRaw<DateRange>(value).SingleAsync();
+        var text   = await context.Database.SqlQueryRaw<string>("SELECT (" + expression + ")::text AS \"Value\"").SingleAsync();
+
+        Assert.AreEqual(expected, column.ToString(), $"{expression} from the column");
+        Assert.AreEqual(column, DateRange.Parse(text, null), $"{expression} through its text {text}");
+        Assert.AreEqual(RangeSet<DateRange, DateOnly>.From(column),
+                        RangeSet<DateRange, DateOnly>.Parse($"{{{text}}}", null), $"{expression} in a multirange literal");
+
+        var noda = await context.Database.SqlQueryRaw<LocalDateRange>(value).SingleAsync();
+#pragma warning restore EF1003
+        Assert.AreEqual(noda, LocalDateRange.Parse(text, null), $"{expression} as a LocalDateRange");
+    }
+
+    /// <summary>The divergence itself: the server's open range holds its real last date.</summary>
+    [TestMethod]
+    public async Task DateRange_ExclusiveInfinity_HoldsTheServersLastDate()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        Assert.AreEqual(true, (await Evaluate("daterange('2026-01-01', 'infinity') @> '9999-12-31'::date")).Value,
+                        "PostgreSQL's [x,infinity) holds its real 9999-12-31, which no DateOnly stands for apart from infinity.");
+        Assert.AreEqual(false, DateRange.Parse("[2026-01-01,infinity)", null).Contains(DateOnly.MaxValue),
+                        "DateOnly.MaxValue is infinity here, which [x,infinity) excludes.");
+        Assert.AreEqual(false, LocalDateRange.Parse("[2026-01-01,infinity)", null).Contains(LocalDate.MaxIsoValue));
     }
 
     /// <summary>Evaluates one expression, returning either its value or the SQLSTATE it raised.</summary>

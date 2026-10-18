@@ -147,6 +147,10 @@ and the forms PostgreSQL prints in its default ISO `DateStyle`, and nothing else
   PostgreSQL writes its historical local-mean-time offsets. You get that instant at offset zero.
 - **`infinity` and `-infinity`** read as `MaxValue` and `MinValue`. That is what Npgsql gives you
   when it reads them.
+- **An exclusive `infinity` excludes the extreme.** `[2026-01-01,infinity)` reads as
+  `[2026-01-01,9999-12-30]` for `DateRange` and `LocalDateRange`, as the same value read from a
+  column does. The extreme stands for the infinity, so PostgreSQL's range also holds a 9999-12-31 that
+  has no value of its own here ([Domain width](architecture.md#domain-width-and-the-boundary)).
 
 The `DateTime` rule is PostgreSQL's own rule for `timestamp` input, and it is what a `tsrange`
 stores. So one literal is one value on every machine, and a local value round-trips with its kind.

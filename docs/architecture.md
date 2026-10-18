@@ -52,6 +52,27 @@ difference stays a known property. This is also the one place a `ShapeMatrixPari
 wrong to write: matching element domains are not sufficient, because the disagreement is about the
 sentinel rather than the domain.
 
+**The date extremes stand for the infinities.** Npgsql writes `DateOnly.MaxValue` and
+`LocalDate.MaxIsoValue` as `infinity`, and the minima as `-infinity`, and reads them back the same
+way; the plugin's store text does the same (`StoreTemporal`). So the server's real 9999-12-31 and
+0001-01-01 have no value of their own here: the extreme *is* the infinity. An exclusive infinite bound
+therefore excludes the extreme, and every path reads it alike — a column, the server's text through
+`Parse`, and the literal as written:
+
+| PostgreSQL value | This model | The server's range also holds |
+|---|---|---|
+| `[2026-01-01,infinity)` | `[2026-01-01,9999-12-30]` | 9999-12-31 |
+| `(-infinity,2026-01-02)` | `[0001-01-02,2026-01-01]` | 0001-01-01 |
+| `[2026-01-01,infinity]` | `[2026-01-01,9999-12-31]` | — |
+
+Reading the exclusive bound as the inclusive extreme instead would keep that last date, but it can't
+be done consistently (#117). On the upper side a column can't tell `infinity)` from `9999-12-31)`,
+which is how PostgreSQL stores `[x,9999-12-30]`. On the lower side the server's own algebra produces
+the exclusive form: `(,) - (,-infinity]` is `(-infinity,)`, which excludes exactly the minimum that
+was subtracted. Ranges another tool wrote this way load one day short
+([Rows written by other tools](efcore.md#rows-written-by-other-tools)).
+`DomainBoundaryDivergenceTests` asserts that the column and the text agree for every form.
+
 **Calendars.** NodaTime equality includes the calendar system, and of its nineteen calendars only ISO
 and Gregorian can represent `9999-12-31` at all. Gregorian shares ISO's arithmetic but is a distinct
 `CalendarSystem` instance, so a Gregorian-spelled domain maximum compares unequal to

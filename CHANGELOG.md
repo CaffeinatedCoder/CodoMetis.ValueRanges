@@ -24,6 +24,10 @@ Nothing was removed or renamed. Text that parsed is refused where PostgreSQL ref
 - Literals: decimal text that names a number `decimal` can't hold, such as a 29th significant digit or `1e-30`, throws `FormatException` from `DecimalRange`, `RangeSet<DecimalRange>`, `DecimalSet` and `DecimalSet<T>`, in a literal, JSON and configuration, where it was rounded: `[1.00000000000000000000000000001,2)` read as `[1.0000000000000000000000000000,2)` and contained 1 ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#parse-a-literal)).
 - Literals: a range or multirange literal whose lower bound is greater than its upper bound, such as `[5,1)`, throws `FormatException` from `Parse`, JSON and the `TypeConverter`, and `TryParse` returns `false`, where it read as `empty` and vanished from a multirange. `CreateFinite` still returns `Empty` ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#parse-a-literal)).
 
+### Fixed
+
+- Docs: an exclusive `infinity` or `-infinity` date bound excludes the date extreme, which stands for the infinity, so `[2026-01-01,infinity)` is `[2026-01-01,9999-12-30]` from a column and from the literal alike. Ask other tools to write an open end as absent or inclusive ([Domain width](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/architecture.md#domain-width-and-the-boundary)).
+
 ## [9.1.0] — 2026-10-17
 
 ### Added

@@ -247,6 +247,14 @@ public sealed class LiteralCorpusProbeTests
                 var head = $"{label} {family} {Show(literal)}:";
                 switch (verdicts[k])
                 {
+                    // docs/architecture.md#domain-width-and-the-boundary (#117): the date extremes stand
+                    // for the infinities, so [x,infinity) is [x,9999-12-30] here, as a column reads it, and
+                    // is stored as [x,9999-12-31), where the server's range also holds its real last date.
+                    // DomainBoundaryDivergenceTests holds the column and the text to the same value. A
+                    // LocalDate one day above the minimum is a year PostgreSQL can't hold, which is loud.
+                    case var _ when family == "infinity bound" && kind == Kind.Date:
+                        documented++;
+                        break;
                     case (null, _):
                         failures.Add($"{head} {leg} {Show(text)} of library {library[index].Text} is refused by PostgreSQL ({Show(texts[k] ?? "error")})");
                         break;

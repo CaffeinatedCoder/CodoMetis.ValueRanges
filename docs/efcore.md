@@ -429,6 +429,17 @@ Two members depend on every writer storing canonical form:
 `IsEmpty` isn't affected. An array is empty exactly when it has no elements, however many times
 any of them repeats.
 
+A date range that another tool wrote with an exclusive infinite bound loads one day short. For
+example, `daterange('2026-01-01', 'infinity')` loads as `[2026-01-01,9999-12-30]`, and
+`(-infinity,2026-01-01]` as starting on 0001-01-02. `DateOnly.MaxValue` and `MinValue` stand for
+`infinity` and `-infinity`, so the range can hold the extreme only when it includes the infinity.
+The literal, JSON and a JSON column read the same text the same way.
+
+If other tools write open-ended dates into your tables, have them write an absent bound
+(`daterange('2026-01-01', NULL)`, which loads as `[2026-01-01,)`) or an inclusive one
+(`'[2026-01-01,infinity]'`, which loads as `[2026-01-01,9999-12-31]`). The same holds for
+`LocalDateRange` ([Domain width](architecture.md#domain-width-and-the-boundary)).
+
 The difference comes from reading rows normalized while leaving them as written. The alternatives
 are rewriting other tools' rows on read, or not translating `Count` at all, and neither is worth it
 for the common case. If you query `Count` on a table that other tools also write, put the data in
