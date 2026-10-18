@@ -451,6 +451,8 @@ public sealed class FloatRow
     public Float32Set? SingleSet { get; set; }
 
     public RangeSet<Float32Range, float>? SingleBands { get; set; }
+
+    public double? Ratio { get; set; }
 }
 
 /// <summary>A database of its own for <see cref="FloatDomainParityTests"/>, created by <c>EnsureCreated</c>.</summary>

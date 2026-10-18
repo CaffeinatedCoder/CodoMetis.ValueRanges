@@ -1063,6 +1063,37 @@
     ]
   },
   {
+    "id": "E60-float-query-over-foreign-nan-answers-in-postgres-order",
+    "source": "docs/efcore.md#keep-nan-and-infinity-out-of-a-float-column",
+    "quote": "The finite-only rule covers every value your code creates, binds or loads. It can't cover a row that another tool writes into the same column. A query that runs in the database over such a row answers in PostgreSQL's order, where `NaN` sorts above every number, and only loading the entity throws:",
+    "claim": "Over rows written in SQL, without constraints: Where(r => r.Range.Contains(1e308)) returns the row holding [0,NaN); a range containing a NaN double column returns its row; Select(r => r.Set.Count) over {1,NaN} returns 2; loading the [0,NaN) row throws ArgumentException ('finite numbers only').",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "Float64Set.Count",
+      "Float64Range.CreateFinite"
+    ],
+    "heldBy": [
+      "FloatCheckConstraintTests"
+    ]
+  },
+  {
+    "id": "E61-float-check-constraints-refuse-nonfinite",
+    "source": "docs/efcore.md#keep-nan-and-infinity-out-of-a-float-column",
+    "quote": "The same three expressions work for `float4range`, `float4multirange` and `real[]`. For a range, multirange or array column, they reject `NaN`, `Infinity` and `-Infinity` and accept every finite value, an unbounded side, the empty range and `NULL`.",
+    "claim": "The three HasCheckConstraint expressions read from the guide's code block, created by EnsureCreated on float8range, float8multirange, double precision[], float4range, float4multirange and real[] columns, refuse every NaN and +/-Infinity literal of the corpus with 23514 (including a multirange whose infinity is an inner bound beside an unbounded side, which a bounds check passes) and store finite, unbounded, empty and NULL values.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "Float64Range.CreateFinite",
+      "Float32Range.CreateFinite",
+      "Float64Set.From"
+    ],
+    "heldBy": [
+      "FloatCheckConstraintTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -3547,6 +3578,19 @@
     "heldBy": [
       "Float32DomainTests",
       "FloatDomainParityTests"
+    ]
+  },
+  {
+    "id": "W06-float-server-predicate-boundary",
+    "source": "docs/why.md#where-is-the-model-stricter-than-the-database",
+    "quote": "A query that runs in the database over such a row still answers in PostgreSQL's order: `[0,NaN)` matches `Contains(1e308)` there.",
+    "claim": "Without a CHECK constraint, Where(r => r.Range.Contains(1e308)) returns a row holding [0,NaN) written in SQL, while loading that row throws.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains"
+    ],
+    "heldBy": [
+      "FloatCheckConstraintTests"
     ]
   }
 ]

@@ -169,6 +169,9 @@ precision` and `real` hold both, so a `float8range` column can store `[5,NaN)` a
 precision[]` column can store `{1.5,NaN}`, for example when another tool writes them. Loading such a
 row throws (`ArgumentException`) instead of returning a value that would sort differently in memory.
 A `NaN` or infinite query parameter throws in the same way, before the query runs.
+A query that runs in the database over such a row still answers in PostgreSQL's order: `[0,NaN)`
+matches `Contains(1e308)` there. A CHECK constraint keeps these values out of the column ([Keep NaN
+and infinity out of a float column](efcore.md#keep-nan-and-infinity-out-of-a-float-column)).
 
 **The NodaTime types avoid the two timestamp caveats.** `DateTimeRange` and `DateTimeOffsetRange`
 carry two [timestamp caveats](efcore.md) at the database boundary. The NodaTime types don't, for a
