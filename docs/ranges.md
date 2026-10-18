@@ -38,7 +38,7 @@ Which bounds `CreateFinite` includes by default depends on the element type:
 | Range type                                                 | `CreateFinite()` default   |
 |------------------------------------------------------------|----------------------------|
 | `Int32Range`, `Int64Range`, `DateRange`                    | `[start, end]` — closed    |
-| `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`     | `[start, end)` — half-open |
+| `DecimalRange`, `Float64Range`, `DateTimeRange`, `DateTimeOffsetRange` | `[start, end)` — half-open |
 
 Discrete types, whose values have a next value (integers and dates), include both bounds.
 Continuous types include the start and exclude the end. That half-open form is the usual
@@ -231,10 +231,15 @@ The type of `Length` also depends on the element type:
 | `DateRange` | `int?`, in days |
 | The timestamp ranges | `TimeSpan?` |
 | `DecimalRange` | `decimal?` |
+| `Float64Range` | `double?`, which can be `+∞` |
 | The NodaTime ranges | `Duration?` or `Period?` |
 
 In the NodaTime package, an instant range measures exact elapsed time (`Duration?`). A wall-clock
 range measures a calendar quantity (`Period?`).
+
+A `Float64Range` measures the difference `End - Start` as a `double`. For
+`[double.MinValue, double.MaxValue]` that difference is larger than any `double`, so `Length` returns
+`double.PositiveInfinity`. The range itself is still finite: the infinity is only the measurement.
 
 Good to know:
 

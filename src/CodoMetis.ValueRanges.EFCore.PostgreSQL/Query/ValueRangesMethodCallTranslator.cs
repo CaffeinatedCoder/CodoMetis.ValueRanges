@@ -501,6 +501,9 @@ internal sealed class ValueRangesMethodCallTranslator(
     {
         if (expression is not SqlConstantExpression { Value: not null }) return false;
 
+        // A definition's own element mapping writes a typed literal already ('1.5'::double precision).
+        if (definition.ElementTypeMapping is not null) return false;
+
         var storeType = ElementMapping(definition)?.StoreType;
         if (storeType is null) return false;
 

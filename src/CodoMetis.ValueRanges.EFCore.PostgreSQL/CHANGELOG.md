@@ -5,6 +5,10 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
+### Added
+
+- **`Float64Range` maps to the custom `float8range`** (`float8multirange` for `RangeSet<Float64Range, double>`), created with `HasPostgresRange("float8range", "double precision")` and no `subtype_diff`, plus `EnableUnmappedTypes()`. `Float64Set` and `Float64Set<T>` map to `double precision[]`. A stored `NaN` or infinity throws on load, and a `NaN` parameter throws before the query runs ([Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types)).
+
 ### Fixed
 
 - EF Core: `Any` or `Count` with a predicate over an empty captured list of value sets, or of ranges beside a `Contains`, returns `false` or `0`, as in memory. It threw `InvalidOperationException` ("Empty collections are not supported as inline query roots") ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).

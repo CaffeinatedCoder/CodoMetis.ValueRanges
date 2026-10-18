@@ -21,6 +21,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 
 ### Added
 
+- **`Float64Range`, `Float64Set` and `Float64Set<T>`** over finite `double` values. `NaN` and the infinities throw from every factory, parser and scalar operand (`Contains`, `Clamp`, `Add`, `Remove`), because .NET sorts `NaN` first and PostgreSQL last. Their text is exactly what PostgreSQL's `float8out` prints, which .NET's shortest form is not ([Why doubles are finite only](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/why.md#why-doubles-are-finite-only)).
 - **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
 
 ### Fixed

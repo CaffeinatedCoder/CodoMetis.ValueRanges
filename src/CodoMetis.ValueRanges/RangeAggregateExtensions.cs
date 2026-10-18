@@ -37,6 +37,10 @@ public static class RangeAggregateExtensions
         => RangeSet<DecimalRange, decimal>.From(source);
 
     /// <inheritdoc cref="RangeAgg(IEnumerable{Int32Range})"/>
+    public static RangeSet<Float64Range, double> RangeAgg(this IEnumerable<Float64Range> source)
+        => RangeSet<Float64Range, double>.From(source);
+
+    /// <inheritdoc cref="RangeAgg(IEnumerable{Int32Range})"/>
     public static RangeSet<DateRange, DateOnly> RangeAgg(this IEnumerable<DateRange> source)
         => RangeSet<DateRange, DateOnly>.From(source);
 
@@ -75,6 +79,10 @@ public static class RangeAggregateExtensions
     /// <inheritdoc cref="RangeIntersectAgg(IEnumerable{Int32Range})"/>
     public static DecimalRange? RangeIntersectAgg(this IEnumerable<DecimalRange> source)
         => IntersectAggCore<DecimalRange, decimal>(source);
+
+    /// <inheritdoc cref="RangeIntersectAgg(IEnumerable{Int32Range})"/>
+    public static Float64Range? RangeIntersectAgg(this IEnumerable<Float64Range> source)
+        => IntersectAggCore<Float64Range, double>(source);
 
     /// <inheritdoc cref="RangeIntersectAgg(IEnumerable{Int32Range})"/>
     public static DateRange? RangeIntersectAgg(this IEnumerable<DateRange> source)

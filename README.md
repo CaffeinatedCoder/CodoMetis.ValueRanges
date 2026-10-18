@@ -117,8 +117,9 @@ value](docs/why.md#unboundedness-is-a-shape-not-a-bound-value).
 | `DateTimeRange`        | `tsrange`             | `DateTime`       | —        |
 | `DateTimeOffsetRange`  | `tstzrange`           | `DateTimeOffset` | —        |
 | `TimeRange`            | `timerange` (custom)  | `TimeOnly`       | —        |
+| `Float64Range`         | `float8range` (custom) | `double`, finite only | —   |
 
-Each range type has a `RangeSet<TRange, T>` multirange counterpart. There are also ten value set
+Each range type has a `RangeSet<TRange, T>` multirange counterpart. There are also eleven value set
 families (`StringSet`, `GuidSet`, `Int32Set`, … — [full table](docs/value-sets.md)). Each family
 has a version for validated wrapper types, such as the ones Vogen, Metalama or StronglyTypedId
 generate, or ones you write by hand.
@@ -136,8 +137,12 @@ Good to know:
 - **PostgreSQL has no built-in `timerange`.** The EF Core package maps `TimeRange` to the custom type
   that people conventionally create for this. See [TimeRange and the custom timerange
   type](docs/efcore.md#timerange-and-the-custom-timerange-type).
+- **`Float64Range` holds finite numbers only.** Creating, parsing or loading a range with `NaN` or
+  an infinity in it throws. Like `timerange`, PostgreSQL has no built-in `float8range`. See [Custom
+  range types](docs/efcore.md#custom-range-types).
 - **The element types are a deliberately vetted list, not a generic `IComparable<T>` constraint.**
-  See [why `double`, `float` and `Guid` are absent](docs/why.md#why-these-element-types).
+  See [why these element types](docs/why.md#why-these-element-types), including why a `double` range
+  is finite only and why there is no `Guid` range.
 
 ### NodaTime
 

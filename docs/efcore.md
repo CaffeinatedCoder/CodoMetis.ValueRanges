@@ -26,7 +26,8 @@ by convention:
 | `RangeSet<Int32Range, int>`      | `int4multirange` |
 | `DateRange`                      | `daterange`      |
 | `RangeSet<DateRange, DateOnly>`  | `datemultirange` |
-| `TimeRange`                      | `timerange` ([custom type](#timerange-and-the-custom-timerange-type)) |
+| `TimeRange`                      | `timerange` ([custom type](#custom-range-types)) |
+| `Float64Range`                   | `float8range` ([custom type](#custom-range-types)) |
 | … and so on for all types        |                  |
 
 Good to know:
@@ -521,6 +522,20 @@ Good to know:
   `NullReferenceException` from inside EF, because the package's type mappings had no JSON reader
   or writer.
 
+## Custom range types
+
+Two range types map to a PostgreSQL range type the database doesn't ship. You create it once, from
+your model, and the rest works as for the built-in ones:
+
+| .NET type | Column types | Create it with | Good to know |
+|---|---|---|---|
+| `TimeRange` | `timerange`, `timemultirange` | `HasPostgresRange("timerange", "time")` | No `24:00:00`, see [below](#timerange-and-the-custom-timerange-type) |
+| `Float64Range` | `float8range`, `float8multirange` | `HasPostgresRange("float8range", "double precision")` | Finite values only, and no `subtype_diff`, see [below](#float64range-and-the-custom-float8range-type) |
+
+Both also need `EnableUnmappedTypes()` on the Npgsql data source, so Npgsql can send a type it
+doesn't know by name. The value sets need nothing extra: `Float64Set` is a native `double
+precision[]` column.
+
 ## TimeRange and the custom timerange type
 
 `timerange` isn't built into PostgreSQL. To use `TimeRange` columns you need two one-line additions
@@ -550,6 +565,35 @@ Good to know:
 - **`TimeOnly` has no `24:00:00`.** PostgreSQL's `time` accepts the special value `24:00:00`, which
   `TimeOnly` can't represent. To say "until the end of the day", use an unbounded end or an
   inclusive `TimeOnly.MaxValue` bound.
+
+## Float64Range and the custom float8range type
+
+Create the type without a `subtype_diff`, and turn on unmapped types as for `timerange`:
+
+```csharp
+// CREATE TYPE float8range AS RANGE (SUBTYPE = double precision) in your migrations;
+// PostgreSQL creates float8multirange alongside it.
+modelBuilder.HasPostgresRange("float8range", "double precision");
+
+options.UseNpgsql(connectionString, npgsql => npgsql
+    .UseValueRanges()
+    .ConfigureDataSource(dataSource => dataSource.EnableUnmappedTypes()));
+```
+
+Every LINQ query on a `Float64Range` or `RangeSet<Float64Range, double>` column runs as SQL, as on
+the built-in types. A constant you write in the query, such as `r.Score.Contains(0.5)`, is sent as
+`'0.5'::double precision`, the exact `double` you wrote.
+
+Good to know:
+
+- **Leave out `subtype_diff`.** The usual `subtype_diff = float8mi` overflows when PostgreSQL builds
+  a GiST index over very large values, and the insert or `CREATE INDEX` fails (`22003`). Without it,
+  the index builds and serves the range operators.
+- **Only finite values load.** A row that another tool wrote with `NaN` or an infinity in a bound
+  throws when you load it (`ArgumentException`). A `NaN` or infinite parameter throws before the query
+  runs. See [Why doubles are finite only](why.md#why-doubles-are-finite-only).
+- **The text is PostgreSQL's.** `ToString()`, a SQL literal and JSON all print a `double` the way
+  PostgreSQL does, so `1e23` is `9.999999999999999e+22` and `1e15` is `1e+15`.
 
 ## Store a YearMonthRange
 

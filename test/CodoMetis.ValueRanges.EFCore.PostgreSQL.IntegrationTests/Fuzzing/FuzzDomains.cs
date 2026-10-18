@@ -107,6 +107,14 @@ internal static class FuzzDomains
                 decimal.MinValue, decimal.MaxValue, 0m, [decimal.MinValue, decimal.MaxValue],
                 [(v, k) => v + k, (v, k) => v + k * 1.0m, (v, k) => v + k * 0.5m, (v, k) => v + k * 0.0001m]),
 
+            // Finite doubles only (#153). The extremes are ordinary values on both sides; the units
+            // step by whole numbers, by halves, by single ULPs — so (1, next double) and other
+            // neighbours that hold no double between them come up — and by decades, for the exponent
+            // text form. A step past MaxValue clamps rather than reaching infinity.
+            var t when t == typeof(double) => new FuzzDomain<double>(
+                double.MinValue, double.MaxValue, 0d, [double.MinValue, double.MaxValue, double.Epsilon, -double.Epsilon],
+                [(v, k) => v + k, (v, k) => v + k * 0.5, (v, k) => Ulps(v, k), (v, k) => v * Math.Pow(10, k)]),
+
             // DateOnly.MinValue and MaxValue reach PostgreSQL as -infinity and infinity; the edges
             // one day inside them are ordinary dates on both sides.
             var t when t == typeof(DateOnly) => new FuzzDomain<DateOnly>(
@@ -171,6 +179,13 @@ internal static class FuzzDomains
                      $"The differential sweep has no domain for element type '{typeof(T)}'. Add one to "
                    + $"{nameof(FuzzDomains)} — a type the sweep cannot draw is a type it does not check.")
         });
+
+    private static double Ulps(double value, long count)
+    {
+        for (var i = 0L; i < Math.Abs(count); i++)
+            value = count < 0 ? Math.BitDecrement(value) : Math.BitIncrement(value);
+        return double.IsFinite(value) ? value : throw new OverflowException();
+    }
 
     private static TimeOnly AddTime(TimeOnly value, long ticks)
     {
@@ -270,6 +285,7 @@ internal static class FuzzDomains
         Instant i        => InstantPattern.ExtendedIso.Format(i),
         LocalTime t      => LocalTimePattern.ExtendedIso.Format(t),
         YearMonth m      => YearMonthPattern.Iso.Format(m),
+        double d         => d.ToString("G17", CultureInfo.InvariantCulture),
         IFormattable f   => f.ToString(null, CultureInfo.InvariantCulture),
         _                => value.ToString()!
     };

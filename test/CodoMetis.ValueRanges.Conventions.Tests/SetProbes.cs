@@ -37,6 +37,11 @@ internal static class SetProbes
         [typeof(int)]            = [-7, 0, 42],
         [typeof(long)]           = [-7L, 0L, 9_000_000_000L],
         [typeof(decimal)]        = [-1.5m, 0m, 12.75m],
+
+        // 2^-25 is one of the two doubles .NET's shortest form gets wrong (it reads back one unit
+        // lower), and 1e300 is written in exponent form: both are where a float family's text could
+        // part from the value.
+        [typeof(double)]         = [-1.5d, 0d, 2.9802322387695312e-08, 1e300],
         [typeof(DateOnly)]       = [new DateOnly(2024, 6, 15), new DateOnly(1970, 1, 1)],
         [typeof(TimeOnly)]       = [new TimeOnly(9, 30), new TimeOnly(23, 59, 59)],
         [typeof(DateTime)]       = [
@@ -83,6 +88,11 @@ internal static class SetProbes
         // element that round-tripped through double would come back as 0.1000000000000000055.
         [typeof(Money)]          = [Money.Parse("12.50", null), Money.Parse("0.1", null),
                                     Money.Parse("-1.5", null)],
+
+        // 2^-25 again: a double-backed arity that asked its element for the default form would store
+        // it one unit lower — the reason the family pins G17.
+        [typeof(Score)]          = [Score.Parse("2.9802322387695312E-08", null), Score.Parse("0.1", null),
+                                    Score.Parse("-1.5", null), Score.Parse("1e300", null)],
 
         // The sub-second probes are the ones that fail if a temporal arity formats its elements
         // with their default form instead of the round-trip one — that is the whole reason

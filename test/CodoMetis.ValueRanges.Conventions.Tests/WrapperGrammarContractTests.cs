@@ -49,6 +49,12 @@ public sealed class WrapperGrammarContractTests
             "1.5", "1.50", "-1.5", "+1.5", " 1.5", "1.5 ", ".5", "1e3", "1.5E-1", "12.500e1",
             "1,5", "1,000", "1,000.5", "1 000", "(1)", "1-", "¤1", "0x10", "NaN", "Infinity", ""
         ],
+        // A float family refuses what float8in accepts only through C strtod (hexadecimal) and the
+        // non-finite spellings, and an out-of-range number, where double.Parse returns infinity or zero.
+        [typeof(double)] = [
+            "1.5", "-1.5", "+1.5", " 1.5", "1.5 ", ".5", "5.", "1e3", "1.5E-1", "1e+300", "1e309", "1e-400",
+            "2.9802322387695312e-08", "1,5", "1,000", "1 000", "0x10", "NaN", "Infinity", "-inf", "∞", ""
+        ],
         [typeof(int)]   = Integers("2147483648"),
         [typeof(short)] = Integers("32768"),
         [typeof(long)]  = Integers("9223372036854775808"),
@@ -81,6 +87,7 @@ public sealed class WrapperGrammarContractTests
     private static readonly Dictionary<Type, string[]> NumberProbes = new()
     {
         [typeof(decimal)] = ["1.5", "1.50", "-0.1", "1e3", "1.5e1", "12.50E-1"],
+        [typeof(double)]  = ["1.5", "-0.1", "1e3", "1E+300", "2.9802322387695312e-08", "1e309", "-0"],
         [typeof(int)]     = ["42", "-7", "1e3", "42.0", "2147483648"],
         [typeof(short)]   = ["42", "-7", "1e3", "42.0", "32768"],
         [typeof(long)]    = ["42", "-7", "1e3", "42.0", "9223372036854775808"]
@@ -92,8 +99,8 @@ public sealed class WrapperGrammarContractTests
     /// </summary>
     private static readonly HashSet<Type> NoGrammar = [typeof(string)];
 
-    /// <summary>15 wrapper families as of 9.0.0, less the string one, plus a lenient element for each of the four numeric ones.</summary>
-    private const int KnownClosures = 18;
+    /// <summary>16 wrapper families as of 10.0.0, less the string one, plus a lenient element for each of the five numeric ones.</summary>
+    private const int KnownClosures = 20;
 
     private static string[] Integers(string overflow) =>
         ["42", "-7", "+42", " 42", "42 ", "1,000", "1e3", "42.0", "(1)", "1-", "¤1", "0x2A", "4 2", overflow, ""];
@@ -135,6 +142,7 @@ public sealed class WrapperGrammarContractTests
     private static Type? LenientElementFor(Type primitive) => primitive.Name switch
     {
         nameof(Decimal) => typeof(LenientAmount),
+        nameof(Double)  => typeof(LenientScore),
         nameof(Int32)   => typeof(LenientCount),
         nameof(Int16)   => typeof(LenientTinyCount),
         nameof(Int64)   => typeof(LenientLargeCount),
@@ -249,6 +257,30 @@ public readonly record struct LenientAmount : IFormattable, IParsable<LenientAmo
     }
 
     public int CompareTo(LenientAmount other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+public readonly record struct LenientScore : IFormattable, IParsable<LenientScore>, IComparable<LenientScore>
+{
+    private readonly double _value;
+
+    private LenientScore(double value) => _value = value;
+
+    public static LenientScore Parse(string s, IFormatProvider? provider)
+        => new(double.Parse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out LenientScore result)
+    {
+        var parsed = double.TryParse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = parsed ? new LenientScore(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(LenientScore other) => _value.CompareTo(other._value);
 
     public string ToString(string? format, IFormatProvider? formatProvider)
         => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);

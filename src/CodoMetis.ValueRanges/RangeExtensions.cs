@@ -141,8 +141,10 @@ public static class RangeExtensions
         /// <see langword="false"/> for the empty range or when the value lies outside the bounds.
         /// Always <see langword="true"/> for <see cref="IInfinityRange{T}"/>.
         /// </returns>
-        public bool Contains(T value) =>
-            range switch
+        public bool Contains(T value)
+        {
+            value = range.NormalizeElement(value);
+            return range switch
             {
                 IInfinityRange<T> => true,
                 IFiniteRange<T> b => (b.StartInclusive ? b.Start.CompareTo(value) <= 0 : b.Start.CompareTo(value) < 0) &&
@@ -151,6 +153,7 @@ public static class RangeExtensions
                 IUnboundedEndRange<T> e   => e.StartInclusive ? e.Start.CompareTo(value) <= 0 : e.Start.CompareTo(value) < 0,
                 _                         => false
             };
+        }
 
         /// <summary>
         /// Returns the value in the range closest to <paramref name="value"/> — the value itself
@@ -165,8 +168,10 @@ public static class RangeExtensions
         /// </remarks>
         /// <param name="value">The value to bring into the range.</param>
         /// <returns>The clamped value, or <see langword="null"/> for the empty range.</returns>
-        public T? Clamp(T value) =>
-            range switch
+        public T? Clamp(T value)
+        {
+            value = range.NormalizeElement(value);
+            return range switch
             {
                 IInfinityRange<T> => value,
 
@@ -179,6 +184,7 @@ public static class RangeExtensions
 
                 _ => null
             };
+        }
 
         /// <summary>
         /// Determines whether <paramref name="other"/> is entirely contained within this range.

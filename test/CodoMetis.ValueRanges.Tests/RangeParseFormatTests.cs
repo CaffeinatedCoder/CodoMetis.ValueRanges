@@ -377,6 +377,28 @@ public class RangeParseFormatTests
     }
 
     [TestMethod]
+    public void Roundtrip_AllVariants_Float64Range()
+    {
+        Float64Range[] cases =
+        [
+            Float64Range.Empty,
+            Float64Range.Infinite,
+            Float64Range.CreateFinite(1.5, 9.9),
+            Float64Range.CreateFinite(0.1, 1e300, startInclusive: false, endInclusive: true),
+            Float64Range.CreateFinite(double.MinValue, double.MaxValue, true, true),
+            Float64Range.CreateUnboundedStart(end: 2.9802322387695312e-08, endInclusive: false),
+            Float64Range.CreateUnboundedEnd(start: double.Epsilon, startInclusive: true)
+        ];
+
+        foreach (var original in cases)
+        {
+            var s      = original.ToString();
+            var parsed = Float64Range.Parse(s, CultureInfo.InvariantCulture);
+            Assert.AreEqual(original, parsed, $"Roundtrip failed for: {s}");
+        }
+    }
+
+    [TestMethod]
     public void Roundtrip_DateRange()
     {
         var original = DateRange.CreateFinite(new DateOnly(2020, 3, 1), new DateOnly(2025, 12, 31));
