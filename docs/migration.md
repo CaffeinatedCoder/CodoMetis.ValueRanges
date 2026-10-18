@@ -4,6 +4,10 @@ This page lists the source changes your code needs when you move to a new major 
 [changelog](../CHANGELOG.md) describes each release in full. This page collects only the parts that
 need an edit where you call the library.
 
+After 10.0.0, a minor can change an answer too: a fix where a call returned a wrong value without
+throwing. Such a minor opens its changelog entry with "Changed answers", and has a section here,
+"Changed answers in x.y.0", that says how to find the calls whose answer changed.
+
 ## Migration from v1.x
 
 ### Update code that depends on `ToString()`

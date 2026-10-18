@@ -67,6 +67,19 @@
         <PackageValidationBaselineVersion>9.1.0</PackageValidationBaselineVersion>
     </PropertyGroup>
 
+    <!--
+        The latest release of the other supported line, or empty while only one line has a release.
+
+        Nothing in the build reads it. It is how SECURITY.md's second supported row is checked from
+        this branch: each branch knows its own line's latest release (the baseline above), and no
+        branch can read the other branch's props. It is set on both branches once 11.0.0 ships —
+        10.x's latest release on main, 11.x's on release/10.x — and moved in the PR that moves the
+        SECURITY.md row after a minor ships on the other line (CONTRIBUTING.md#branches-and-releases).
+    -->
+    <PropertyGroup>
+        <CompanionLineRelease></CompanionLineRelease>
+    </PropertyGroup>
+
     <!-- Provenance: a consumer stepping into this code gets the exact source it is running.
          Source Link ships in the SDK, so no PackageReference is needed. -->
     <PropertyGroup>

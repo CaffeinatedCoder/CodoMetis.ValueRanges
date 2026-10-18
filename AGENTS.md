@@ -75,8 +75,10 @@ the work, and close it from the PR (`Closes #n`).
   `enhancement`, `documentation`, `tests`, `chore`); every `package/*` the change affects
   (`core`, `nodatime`, `efcore`, `efcore-nodatime`); the `area/*` concern (`ranges`, `range-set`,
   `value-sets`, `json`, `literals`, `aot`, `release`); and `severity/*` on a bug. Add `silent` to
-  a bug that answers wrongly without throwing; by the release rule its fix goes in the next
-  major, never deferred to a minor. Add `breaking` to anything that changes an existing answer or
+  a bug that answers wrongly without throwing. Its fix went in the next major up to 10.0.0;
+  after 10.0.0 it ships as a minor on every supported line (never a patch), whose changelog entry
+  opens with `### Changed answers`, a row linking the issue and its `docs/migration.md` section
+  (`pr-hygiene.sh` fails a `silent` PR into a minor without that row). Add `breaking` to anything that changes an existing answer or
   signature, `found-by/oracle` to what the generated-oracle machinery finds, and `stacked` to a
   PR whose base is another open PR
 - **PRs** carry their issue's labels and milestone, open with `Closes #n`, and describe the
@@ -85,11 +87,16 @@ the work, and close it from the PR (`Closes #n`).
   is attached as native sub-issues and carries the same milestone. A theme that spans releases is
   an `epic` without a milestone; a finding it produces belongs to the release epic it ships in
 - **Roadmap:** the pinned `roadmap` issue (#34) holds every epic as a sub-issue
-- **Branches:** one version is supported at a time. `main` is the next release; `release/9.x`
-  holds 9.x patches until the `v10.0.0` tag, then takes no changes. Until then, a change
-  for both merges into `main` first and is cherry-picked (`-x`) into a PR against `release/9.x`.
-  An issue fixed only on `release/9.x` is closed by hand, because `Closes #n` acts only on `main`.
-  See CONTRIBUTING.md#branches-and-releases
+- **Branches:** up to two lines are supported at once, 10.x (LTS, .NET 10) and 11.x (.NET 11).
+  Until the `v10.0.0` tag: `main` is 10.0.0; `release/9.x` holds 9.x patches and then takes no
+  changes; `net11` holds the .NET 11 retarget, ships `11.0.0-preview.N`, and merges `main`
+  forward after every change, so nothing lands on `net11` that `main` should have. At the tag,
+  `release/10.x` is cut from it and `net11` becomes `main`. After it, a change for both merges
+  into `main` first and is cherry-picked (`-x`) into a PR against `release/10.x`; additions ship
+  as 10.x minors until `v11.0.0`, after which 10.x takes fixes only. An issue fixed only on a
+  release branch is closed by hand, because `Closes #n` acts only on `main`. SECURITY.md has one
+  row per line; the other line's latest release is `CompanionLineRelease` in
+  `Directory.Build.props`. See CONTRIBUTING.md#branches-and-releases
 
 ## Docs
 - `docs/architecture.md` — Discriminated union pattern, interface hierarchy, RangeSet internals
