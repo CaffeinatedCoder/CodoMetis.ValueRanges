@@ -41,6 +41,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 - **`Gap`** on a range returns the range between two ranges, and **`Gaps()`** and **`Gaps(window)`** on a `RangeSet` return the gaps between its elements and the uncovered parts of a window. All three run in EF Core queries ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#find-the-gap-between-two-ranges)).
 - **`Shift`** and **`Expand`** on every range type move a range by a step, or grow it on both sides, keeping each bound's inclusiveness. A bound moved past the element type's last value throws `OverflowException`. They run in memory only ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
 - **`DateRange.Month`**, **`Quarter`**, **`Year`** and **`IsoWeek`**, by number or by any day inside the period, and the same on `LocalDateRange`, with `Quarter` and `Year` on `YearMonthRange`. Weeks are ISO 8601 only, Monday to Sunday, whatever the current culture ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week)).
+- **`Split`** on every range type cuts it into pieces of one step, or at the boundaries of a calendar period such as `DateRange.Month`, and **`Values(step)`** on the discrete types skips ahead by a step. Both run in memory only ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#split-a-range-into-pieces)).
 
 ### Fixed
 

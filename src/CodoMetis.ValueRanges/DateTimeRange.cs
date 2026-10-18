@@ -187,6 +187,26 @@ public abstract partial record DateTimeRange : IRange<DateTime>, IRangeFactory<D
         };
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="step"/> each, from its start:
+    /// <c>[09:00,12:00).Split(TimeSpan.FromMinutes(30))</c> is the six half-hour slots from 09:00.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. On a continuous type each piece but the last is half-open, so a closed range ends in a closed piece rather than a single point.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="step">The length of each piece; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<DateTimeRange> Split(TimeSpan step)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(step, TimeSpan.Zero);
+        return RangeSplitting.Split<DateTimeRange, DateTime>(this, RangeSplitting.Steps<DateTime>(this, (start, n) => start.AddTicks(checked(n * step.Ticks))));
+    }
+
+    /// <summary>
     /// The elapsed time between the bounds, or <see langword="null"/> when the range is
     /// unbounded. The empty range measures <see cref="TimeSpan.Zero"/>.
     /// </summary>

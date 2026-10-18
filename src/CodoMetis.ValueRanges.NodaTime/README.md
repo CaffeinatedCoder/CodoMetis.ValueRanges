@@ -21,6 +21,7 @@ Each type is the same discriminated union of five sealed variants as in the core
 - **Arithmetic:** `Shift` and `Expand`, by a `Period`, a `Duration` or a number of months.
 - **Multiranges:** `RangeSet<TRange, T>`.
 - **Calendar ranges:** `LocalDateRange.Month`, `Quarter`, `Year` and `IsoWeek` (ISO 8601 weeks), and `YearMonthRange.Quarter` and `Year`.
+- **Splitting:** `Split` by a step or a calendar period, and `Values(step)` on `LocalDateRange` and `YearMonthRange`.
 - **Text and JSON:** PostgreSQL literal parsing and formatting, and `System.Text.Json` serialization.
 
 ## Value set types (v6)

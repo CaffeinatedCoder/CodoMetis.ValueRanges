@@ -297,6 +297,56 @@ Good to know:
 
 - **An unbounded range throws at the call.** `Values()` throws `NotSupportedException` when you
   call it, not at the first iteration. So the error points at the line that was wrong.
+- **`Values(step)` skips ahead.** `Int32Range.CreateFinite(1, 10).Values(3)` gives 1, 4, 7, 10. The
+  step is in the element type's unit: days for `DateRange`, months for `YearMonthRange`, a `Period`
+  for `LocalDateRange`.
+
+### Split a range into pieces
+
+`Split` cuts a range into consecutive pieces of one step each, from its start. The last piece is
+clipped to the range's end:
+
+```csharp
+Int32Range.CreateFinite(1, 10).Split(4);   // [1,4] [5,8] [9,10]
+
+var hours = TimeRange.CreateFinite(new TimeOnly(9, 0), new TimeOnly(17, 30));
+hours.Split(TimeSpan.FromMinutes(30));     // 17 half-hour slots, 09:00–09:30 through 17:00–17:30
+```
+
+Pass a calendar factory instead of a step to cut at calendar boundaries. Each piece is one period,
+and the first and last are clipped to the range:
+
+```csharp
+var contract = DateRange.CreateFinite(new DateOnly(2026, 1, 15), new DateOnly(2026, 4, 14));
+contract.Split(DateRange.Month);
+// [2026-01-15,2026-01-31] [2026-02-01,2026-02-28] [2026-03-01,2026-03-31] [2026-04-01,2026-04-14]
+
+DateRange.Quarter(2026, 1).Split(DateRange.IsoWeek);   // 14 pieces, Monday to Sunday
+```
+
+The pieces are adjacent and hold exactly the values of the range. So
+`RangeSet<DateRange, DateOnly>.From(contract.Split(DateRange.Month))` is `{contract}` again.
+
+Good to know:
+
+- **Each range type takes its own step.** An `int` for `Int32Range`, a number of days for
+  `DateRange`, a `TimeSpan` for the timestamp ranges and `TimeRange`, a `Period` for
+  `LocalDateRange` and `LocalDateTimeRange`, a `Duration` for `InstantRange`, and a number of months
+  for `YearMonthRange`.
+- **On a continuous type, the pieces are half-open.** Each one ends where the next begins. The last
+  piece keeps the range's own end, so `[0,10]` split by 5 is `[0,5) [5,10]`.
+- **Any period function works.** `Split` calls it with the first day of each piece, and the piece
+  runs to the end of the period it returns. A fiscal year or a billing cycle of your own works the
+  same way. The function must return a bounded range that holds the day it was given, or `Split`
+  throws `ArgumentException`.
+- **Weeks follow the same ISO 8601 rule as `IsoWeek`.** They never depend on the current culture.
+- **A period of months counts from the start.** `LocalDateRange.Split(Period.FromMonths(1))` from
+  January 31 starts its pieces on February 28, March 31 and April 30.
+- **Errors come at the call.** An unbounded range throws `NotSupportedException`. A step of zero or
+  less throws `ArgumentOutOfRangeException`. So does a step too small to move the start, such as
+  `0.5m` near `decimal.MaxValue`.
+- **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
+  a value ([What runs where](efcore.md#what-runs-where)).
 
 ### Clamp a value into a range
 

@@ -215,6 +215,44 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     public IEnumerable<long> Values() => DiscreteEnumeration.Values<Int64Range, long>(this);
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="step"/> each, from its start:
+    /// <c>Int64Range.CreateFinite(1, 10).Split(4)</c> is <c>[1,4]</c>, <c>[5,8]</c>, <c>[9,10]</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="step">The length of each piece; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<Int64Range> Split(long step)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
+        return RangeSplitting.Split<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+    }
+
+    /// <summary>
+    /// Enumerates the range's values from its start, <paramref name="step"/> apart:
+    /// <c>Int64Range.CreateFinite(1, 10).Values(3)</c> is 1, 4, 7, 10.
+    /// </summary>
+    /// <remarks>
+    /// The stepping form of <see cref="Values()"/>, under the same rules: ascending, the empty range
+    /// yields nothing, and an unbounded range throws at the call. This runs in memory only.
+    /// </remarks>
+    /// <param name="step">The distance between two values; it must be positive.</param>
+    /// <returns>The values, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<long> Values(long step)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
+        return RangeSplitting.Values<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+    }
+
+    /// <summary>
     /// The number of integers the range contains, or <see langword="null"/> when it is unbounded
     /// or the count is too large to represent. The empty range measures 0.
     /// </summary>

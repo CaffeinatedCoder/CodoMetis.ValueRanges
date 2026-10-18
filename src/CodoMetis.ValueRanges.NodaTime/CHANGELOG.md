@@ -17,6 +17,7 @@ covers all four packages, which share one version number and release together.
 - **`RangeAgg` and `RangeIntersectAgg` over a sequence of `RangeSet`** of a NodaTime range type, through the core package's generic overloads ([Aggregates](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#aggregate-a-sequence-of-ranges)).
 - **`Shift`** and **`Expand`** on the four NodaTime range types, by a `Period`, a `Duration` or a number of months. A period of months follows the calendar and clips to the end of a shorter month ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
 - **`LocalDateRange.Month`**, **`Quarter`**, **`Year`** and **`IsoWeek`**, and **`YearMonthRange.Quarter`** and **`Year`**. Weeks are ISO 8601 only, as `WeekYearRules.Iso` numbers them, and a date in another calendar is read as its ISO day ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week)).
+- **`Split`** on the four NodaTime range types, by a `Period`, a `Duration` or a number of months, or at a calendar period such as `LocalDateRange.Month`, and **`Values(step)`** on `LocalDateRange` and `YearMonthRange`. A period of months counts each boundary from the start ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#split-a-range-into-pieces)).
 
 ## [9.1.0] — 2026-10-17
 

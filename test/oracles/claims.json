@@ -579,11 +579,12 @@
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
     "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in a projection EF runs them in memory instead:",
-    "claim": "Length, Values(), Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
+    "claim": "Length, Values(), Values(step), Split, Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Length",
       "*Range.Values",
+      "*Range.Split",
       "RangeExtensions.Clamp",
       "*Range.Shift",
       "*Range.Expand",
@@ -2759,6 +2760,86 @@
       "CalendarRangeParityTests",
       "CalendarRangeTests",
       "NodaTimeCalendarRangeTests"
+    ]
+  },
+  {
+    "id": "R35-split-pieces-are-the-range",
+    "source": "docs/ranges.md#split-a-range-into-pieces",
+    "quote": "The pieces are adjacent and hold exactly the values of the range. So `RangeSet<DateRange, DateOnly>.From(contract.Split(DateRange.Month))` is `{contract}` again.",
+    "claim": "For every range type, bounded shape, inclusivity and positive step, RangeSet.From(range.Split(step)) equals RangeSet.From([range]); consecutive pieces are adjacent and strictly ordered; none is empty; piece i starts i steps from the range's start; the last is at most one step long and keeps the range's upper bound; the same holds for the calendar split, whose inner pieces are whole periods, and DateRange and LocalDateRange give the same pieces.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Split"
+    ],
+    "heldBy": [
+      "RangeSplitOracleTests",
+      "RangeSplitTests",
+      "NodaTimeSplitTests"
+    ]
+  },
+  {
+    "id": "R36-split-continuous-half-open",
+    "source": "docs/ranges.md#split-a-range-into-pieces",
+    "quote": "The last piece keeps the range's own end, so `[0,10]` split by 5 is `[0,5) [5,10]`.",
+    "claim": "On a continuous range every piece but the last is half-open at its boundary, and the last takes the range's upper bound with its inclusiveness, so a closed range never ends in a single-point piece.",
+    "oracle": "claim",
+    "surfaces": [
+      "DecimalRange.Split",
+      "DateTimeRange.Split",
+      "TimeRange.Split",
+      "InstantRange.Split"
+    ],
+    "heldBy": [
+      "RangeSplitOracleTests",
+      "RangeSplitTests"
+    ]
+  },
+  {
+    "id": "R37-split-by-calendar-period",
+    "source": "docs/ranges.md#split-a-range-into-pieces",
+    "quote": "The function must return a bounded range that holds the day it was given, or `Split` throws `ArgumentException`.",
+    "claim": "range.Split(period) cuts at the end of the period holding each piece's first value, for the calendar factories and any function; a function returning a range that is unbounded or does not hold the value it was given throws ArgumentException.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.Split",
+      "LocalDateRange.Split",
+      "YearMonthRange.Split"
+    ],
+    "heldBy": [
+      "RangeSplitOracleTests",
+      "RangeSplitTests",
+      "NodaTimeSplitTests"
+    ]
+  },
+  {
+    "id": "R38-split-errors-at-the-call",
+    "source": "docs/ranges.md#split-a-range-into-pieces",
+    "quote": "An unbounded range throws `NotSupportedException`. A step of zero or less throws `ArgumentOutOfRangeException`. So does a step too small to move the start, such as `0.5m` near `decimal.MaxValue`.",
+    "claim": "Split and Values(step) on an unbounded or infinite range throw NotSupportedException, and with a step of zero or less (or a Period with a negative unit, or a step that does not move the start at the element type's precision) throw ArgumentOutOfRangeException, at the call rather than at the first MoveNext; Empty yields nothing; a range ending at the domain's maximum splits without overflowing.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Split",
+      "*Range.Values"
+    ],
+    "heldBy": [
+      "RangeSplitOracleTests",
+      "RangeSplitTests",
+      "NodaTimeSplitTests"
+    ]
+  },
+  {
+    "id": "R39-values-step",
+    "source": "docs/ranges.md#list-the-values-of-a-discrete-range",
+    "quote": "`Int32Range.CreateFinite(1, 10).Values(3)` gives 1, 4, 7, 10.",
+    "claim": "On every discrete range type, Values(step) yields every k-th value of Values() for a grid step k, and a Period or month step counts from the start.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Values"
+    ],
+    "heldBy": [
+      "RangeSplitOracleTests",
+      "RangeSplitTests",
+      "NodaTimeSplitTests"
     ]
   },
   {

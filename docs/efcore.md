@@ -700,7 +700,7 @@ translation, and in a projection EF runs them in memory instead:
 | Operation | Why it does not translate |
 |---|---|
 | `Length` on any range | The finite case would be `upper(x) - lower(x)`, but the empty range measures 0 where PostgreSQL's subtraction yields `NULL`, and `int4range` overflows `int4` before a cast can widen it. |
-| `Values()` on a discrete range | Enumeration is `generate_series`, whose result is a set of rows rather than a value — it cannot appear where a scalar is expected. |
+| `Values()` and `Values(step)` on a discrete range, `Split` on any range | Enumeration is `generate_series`, whose result is a set of rows rather than a value — it cannot appear where a scalar is expected. |
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | PostgreSQL converts between arrays and multiranges only through `unnest` and a custom aggregate. |
 | `Shift`, `Expand` on any range | PostgreSQL has no range arithmetic, and rebuilding the range from `lower(x) + d` gives answers that differ from memory: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, `timestamptz + interval '1 day'` follows the session time zone across a daylight-saving change, and an `infinity` date absorbs the step where `DateOnly.MaxValue` overflows. |
 | `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column, and the same factories on `LocalDateRange` and `YearMonthRange` | Not translated yet. PostgreSQL has no calendar-range function, and the SQL would combine `date_trunc` with interval arithmetic per factory. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. |
