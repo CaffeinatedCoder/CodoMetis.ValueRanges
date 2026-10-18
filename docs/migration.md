@@ -253,6 +253,9 @@ most likely to affect you:
 - **A wrapper set reads only the JSON its plain set reads.** A quoted number needs
   `AllowReadingFromString`, and a wrapper Guid is the hyphenated form
   ([details](#send-a-wrapper-set-the-json-you-send-the-plain-set)).
+- **A wrapper element whose text form doesn't round-trip now throws**, on every write and read,
+  where it was stored or read back as a different value
+  ([details](#check-that-your-elements-text-form-round-trips)).
 
 ### Read UUIDs as PostgreSQL reads them
 
@@ -312,6 +315,37 @@ rejects the request with the same error the plain set gave.
 
 `WriteAsString` alone no longer round-trips a wrapper set, as it never did a plain one: set
 `AllowReadingFromString` too, or read the payload with the options that wrote it.
+
+### Check that your element's text form round-trips
+
+Every core wrapper set (`StringSet<T>`, `GuidSet<T>`, the integer versions, `DecimalSet<T>` and the
+four temporal ones) now checks that the text your element's `ToString` gives reads back, through
+the family's own parser and your `Parse`, as the same element. The NodaTime versions already did.
+Before, only the backing type's grammar was checked, so a wrong value that still parsed went through:
+
+| Element | 9.x | 10.0 |
+|---|---|---|
+| `Int32Set<T>`, `ToString` gives `V + 1` | wrote `{124}` for 123, read it back as 124 | throws on write and on read |
+| `StringSet<T>`, `ToString` adds `CUST-`, `Parse` keeps any text | wrote `{CUST-123}`, read back `CUST-CUST-123` | throws on write and on read |
+| `StringSet<T>`, `ToString` adds `CUST-`, `Parse` refuses it | wrote `{CUST-123}`, failed on read with your message | throws on write naming the rule |
+| `DateTimeSet<T>`, `ToString` ignores the format | wrote `{"06/15/2024 10:30:00"}`, failed on read | throws on write naming the rule |
+
+Where it throws: `ToString` and the SQL literal or parameter with `InvalidOperationException` (the
+EF Core bridge throws `ArgumentException` for the Guid, integer, decimal and temporal versions), the
+JSON write with `JsonException`, `Parse` with `FormatException`, `TryParse` with `false`, and
+loading a column with `FormatException`. The message names the element type, the text and the rule.
+
+A generated wrapper that forwards `format` and `provider` to the value inside, and parses with
+that value's `Parse`, passes without a change. So does one that normalizes on parse, such as one
+that trims or lowercases: the check compares values, not text. What fails is a `ToString` that
+decorates, pads or computes, and a `Parse` that doesn't undo it. Move the decoration to a display
+property and keep the text form the backing value's.
+
+One case the check reaches that the grammar never did: a `DateTime` element with `Kind` `Local`,
+at a wall clock the machine's time zone skips. Its `"O"` text carries the zone's offset, which
+`DateTime.Parse` applies through the zone, so your `Parse` reads another wall clock. `ToString` and
+JSON now refuse it; the EF Core bridge still stores the wall clock, as it did since 9.0, because the
+column holds no offset.
 
 ## Migration from v8.x
 

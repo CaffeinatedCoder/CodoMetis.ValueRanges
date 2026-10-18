@@ -2417,5 +2417,24 @@
       "SetParseFormatTests",
       "LiteralCorpusProbeTests"
     ]
+  },
+  {
+    "id": "S19-text-form-round-trip-checked",
+    "source": "docs/value-sets.md#keep-the-text-form-of-the-underlying-type",
+    "quote": "The set checks the whole round trip, not only the grammar: your `Parse` must read the text your\n`ToString` gives back as the same value. The check runs whenever a set is written (`ToString`,\nJSON, the SQL literal and the bound parameter in EF Core) and whenever one is read (`Parse`,\n`TryParse`, JSON, a column).",
+    "claim": "For every core wrapper arity, an element whose invariant text form the family's own parser reads back as a different element, or cannot read, is refused with an exception naming the element type, its text and the text-form contract: InvalidOperationException from ToString, JsonException from the JSON write, InvalidOperationException or ArgumentException from the SQL literal and the bound parameter, FormatException from Parse and the TypeConverter, false from TryParse, JsonException from the JSON read; an element that normalizes on parse is accepted.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Set.FormatValue",
+      "*Set.ParseValue",
+      "*Set.ToString",
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetElementBridgeTests",
+      "SqlLiteralTests",
+      "DecorativeElementContractTests"
+    ]
   }
 ]

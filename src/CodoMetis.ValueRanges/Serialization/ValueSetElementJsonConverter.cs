@@ -102,6 +102,24 @@ internal static class ValueSetElementJson
     /// <summary>What System.Text.Json reads inside the quotes of a decimal: <see cref="NumberStyles.Float"/> without the whitespace.</summary>
     private const NumberStyles QuotedDecimal = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
 
+    /// <summary>
+    /// The element's wire text, with the family's text-form refusal (<see cref="WrapperElement"/>)
+    /// surfaced as a <see cref="JsonException"/> naming the offending text.
+    /// </summary>
+    internal static string Format<TSet, T>(T value)
+        where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
+        where T : IEquatable<T>
+    {
+        try
+        {
+            return TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new JsonException(ex.Message, ex);
+        }
+    }
+
     internal static T Parse<TSet, T>(string s)
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
@@ -143,7 +161,7 @@ internal sealed class ValueSetTextElementJsonConverter<TSet, T> : JsonConverter<
     }
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
-        => writer.WriteStringValue(TSet.FormatValue(value, null, CultureInfo.InvariantCulture));
+        => writer.WriteStringValue(ValueSetElementJson.Format<TSet, T>(value));
 }
 
 /// <summary>
@@ -190,7 +208,7 @@ internal sealed class ValueSetGuidElementJsonConverter<TSet, T> : JsonConverter<
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
-        var text = TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
+        var text = ValueSetElementJson.Format<TSet, T>(value);
 
         // The hyphenated form is what System.Text.Json writes for a Guid and the only form it — and
         // Read above — takes back. An element formatting as N, B or P would otherwise write a payload
@@ -236,7 +254,7 @@ internal sealed class ValueSetIntegerElementJsonConverter<TSet, T> : JsonConvert
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
-        var text = TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
+        var text = ValueSetElementJson.Format<TSet, T>(value);
 
         if (!long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
             throw new JsonException(
@@ -281,7 +299,7 @@ internal sealed class ValueSetDecimalElementJsonConverter<TSet, T> : JsonConvert
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
-        var text = TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
+        var text = ValueSetElementJson.Format<TSet, T>(value);
 
         if (!decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
             throw new JsonException(
