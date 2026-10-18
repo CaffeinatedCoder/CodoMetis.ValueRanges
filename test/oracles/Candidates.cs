@@ -71,7 +71,18 @@ public static class Candidates
         var known   = For(oracle).Where(c => c.Method is null || method is null || string.Equals(c.Method, method, StringComparison.Ordinal))
                                  .Where(c => rowPrefix is null || c.Row.StartsWith(rowPrefix, StringComparison.Ordinal))
                                  .ToList();
+        Judge(known, failures, header, shown, requireEveryCandidate);
+    }
+
+    /// <summary>
+    /// <see cref="Verdict"/> over the candidates that apply to this call, given directly: what
+    /// <c>SeedVerdictTests</c> drives with an unfiled candidate, which the registry never holds for long.
+    /// </summary>
+    internal static void Judge(IReadOnlyList<Candidate> known, IReadOnlyList<string> failures, string header, int shown = 25,
+                               bool requireEveryCandidate = true)
+    {
         var failing = new List<string>();
+        var unfiled = new List<string>();
         var matched = new HashSet<Candidate>();
 
         foreach (var line in failures)
@@ -85,7 +96,7 @@ public static class Candidates
 
             matched.Add(candidate);
             if (candidate.Issue.Length == 0)
-                failing.Add($"[known candidate: {candidate.Family}] {line.TrimStart()}");
+                unfiled.Add($"[known candidate: {candidate.Family}] {line.TrimStart()}");
             else
                 Console.WriteLine($"SKIPPED [known candidate: {candidate.Family}, {candidate.Issue}] {line.TrimStart()}");
         }
@@ -93,6 +104,9 @@ public static class Candidates
         foreach (var fixedCandidate in known.Where(c => requireEveryCandidate && !matched.Contains(c)))
             failing.Add($"candidate fixed: remove the entry for '{fixedCandidate.Row}' ({fixedCandidate.Family}) from test/oracles/candidates.json");
 
+        // Known rows last, so a message cut short hides them first: SeedVerdict (tools/oracles.cs seeds)
+        // reads a message whose every shown row is known as one whose hidden rows are known too (#55).
+        failing.AddRange(unfiled);
         if (failing.Count == 0) return;
 
         throw new AssertFailedException(

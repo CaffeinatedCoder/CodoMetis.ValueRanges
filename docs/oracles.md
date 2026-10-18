@@ -111,6 +111,14 @@ diff --git a/src/CodoMetis.ValueRanges/RangeExtensions.cs b/src/CodoMetis.ValueR
   one `CAUGHT` / `MISSED` / `ERROR` line per (seed, oracle), exit code 1 unless everything is caught.
   Oracles that need Docker run against a container like the integration suite does. It is not part of
   CI — a build and a run per seed — and it is run before a release.
+- An oracle catches a seed when one of its tests fails with a row that is not a known candidate. The
+  rule is per row (`test/oracles/SeedVerdict.cs`, compiled into the tool and held by
+  `SeedVerdictTests`): until 10.0.0 one `[known candidate:` anywhere in a message discarded the whole
+  test, so a seed that broke a row beside a known one read as missed (#55).
+- A seed can still apply and plant nothing, once the code it changes no longer decides the answer.
+  `OracleSeedTests` cannot see that; only the run can. In 10.0.0 `parser-reads-the-current-culture`
+  handed the current culture to element parsers that had stopped reading any culture, and was
+  re-planted where one still does.
 
 ### `candidates.json` — disagreements found but not fixed
 
