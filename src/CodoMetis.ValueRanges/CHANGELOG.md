@@ -22,6 +22,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **A range with a `RangeSet` operand**: `Contains`, `IsContainedBy`, `Overlaps`, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendRightOf`, `DoesNotExtendLeftOf` and `IsAdjacentTo`, as PostgreSQL's operators with the range on the left, and **`RangeSet.IsContainedBy`** with a range or a set ([Compare a range with a set](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#compare-a-range-with-a-set)).
 
 ### Fixed
 

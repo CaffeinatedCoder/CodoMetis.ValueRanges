@@ -791,6 +791,28 @@
     ]
   },
   {
+    "id": "E46-range-with-multirange-operand-translates",
+    "source": "docs/efcore.md#query-ranges-with-linq",
+    "quote": "Since 10.0.0 they also work on a range with a multirange on the other side, as the operator with the range on the left",
+    "claim": "Contains, IsContainedBy, Overlaps, IsStrictlyLeftOf, IsStrictlyRightOf, DoesNotExtendRightOf, DoesNotExtendLeftOf and IsAdjacentTo called on a range column with a multirange column or parameter translate to @>, <@, &&, <<, >>, &<, &> and -|- with the range on the left and no multirange lift, for core and NodaTime types; RangeSet.IsContainedBy translates to <@ with the multirange on the left.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.IsContainedBy"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "NodaQueryTranslationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -1682,6 +1704,80 @@
     ],
     "heldBy": [
       "SmallModelMultirangeOracleTests"
+    ]
+  },
+  {
+    "id": "M13-range-against-set-is-postgres-operator",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "You can call the comparisons on a range and pass a set. Each one is the PostgreSQL operator with the range on the left:",
+    "claim": "For every range shape and every set (built from up to two shapes, discrete; every subset of six fragments, continuous), the eight range-receiver predicates with a set operand answer what PostgreSQL's anyrange op anymultirange answers, and RangeSet.IsContainedBy with a range or a set answers what anymultirange <@ answers.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.IsContainedBy"
+    ],
+    "heldBy": [
+      "ShapeMatrixParityTests",
+      "ContinuousMultirangeParityTests",
+      "RangeSetOperandTests"
+    ]
+  },
+  {
+    "id": "M14-range-against-set-reads-outer-elements",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "A range compares with a set through the set's outer elements.",
+    "claim": "IsStrictlyLeftOf and DoesNotExtendLeftOf with a set operand are decided by the set's first element, IsStrictlyRightOf and DoesNotExtendRightOf by its last, and Contains by both, so a set with two or more elements answers as PostgreSQL does.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsStrictlyRightOf",
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeExtensions.DoesNotExtendLeftOf",
+      "RangeExtensions.Contains"
+    ],
+    "heldBy": [
+      "ShapeMatrixParityTests",
+      "ContinuousMultirangeParityTests",
+      "RangeSetOperandTests"
+    ]
+  },
+  {
+    "id": "M15-range-against-set-edges-not-converses",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "`&<` and `&>` are not the set's methods turned around.",
+    "claim": "range.DoesNotExtendRightOf(set) compares upper bounds and differs from set.DoesNotExtendLeftOf(range), which compares lower bounds: [4,5) &< {[3,9)} is true and {[3,9)} &> [4,5) is false.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.DoesNotExtendRightOf",
+      "RangeSet.DoesNotExtendLeftOf"
+    ],
+    "heldBy": [
+      "RangeSetOperandTests",
+      "ContinuousMultirangeParityTests"
+    ]
+  },
+  {
+    "id": "M16-range-against-empty-set",
+    "source": "docs/ranges.md#compare-a-range-with-a-set",
+    "quote": "With an empty set on either side, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendLeftOf`, `DoesNotExtendRightOf`, `Overlaps` and `IsAdjacentTo` return `false`.",
+    "claim": "A range Contains the empty set (the empty range included), and the positional predicates, Overlaps and IsAdjacentTo with an empty range or an empty set operand return false, as PostgreSQL does.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsStrictlyLeftOf",
+      "RangeExtensions.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeSetOperandTests",
+      "ShapeMatrixParityTests",
+      "ContinuousMultirangeParityTests"
     ]
   },
   {

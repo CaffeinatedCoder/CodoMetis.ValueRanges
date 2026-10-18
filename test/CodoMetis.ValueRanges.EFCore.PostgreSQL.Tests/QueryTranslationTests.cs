@@ -115,6 +115,47 @@ public sealed class QueryTranslationTests
         StringAssert.Contains(sql, $"b.\"Period\" -|- {RangeLiteral}");
     }
 
+    // -------------------------------------------------------------------------
+    // A range with a multirange on the right: the operator as PostgreSQL declares it
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void RangeWithAMultirangeOperand_IsTheOperatorWithTheRangeOnTheLeft()
+    {
+        (string Sql, string Expected)[] cases =
+        [
+            (Sql(db => db.Bookings.Where(b => b.Period.Contains(b.BlockedDays))),             "b.\"Period\" @> b.\"BlockedDays\""),
+            (Sql(db => db.Bookings.Where(b => b.Period.IsContainedBy(b.BlockedDays))),        "b.\"Period\" <@ b.\"BlockedDays\""),
+            (Sql(db => db.Bookings.Where(b => b.Period.Overlaps(b.BlockedDays))),             "b.\"Period\" && b.\"BlockedDays\""),
+            (Sql(db => db.Bookings.Where(b => b.Period.IsStrictlyLeftOf(b.BlockedDays))),     "b.\"Period\" << b.\"BlockedDays\""),
+            (Sql(db => db.Bookings.Where(b => b.Period.IsStrictlyRightOf(b.BlockedDays))),    "b.\"Period\" >> b.\"BlockedDays\""),
+            (Sql(db => db.Bookings.Where(b => b.Period.DoesNotExtendRightOf(b.BlockedDays))), "b.\"Period\" &< b.\"BlockedDays\""),
+            (Sql(db => db.Bookings.Where(b => b.Period.DoesNotExtendLeftOf(b.BlockedDays))),  "b.\"Period\" &> b.\"BlockedDays\""),
+            (Sql(db => db.Bookings.Where(b => b.Period.IsAdjacentTo(b.BlockedDays))),         "b.\"Period\" -|- b.\"BlockedDays\"")
+        ];
+
+        foreach (var (sql, expected) in cases) Assert.Contains(expected, sql);
+    }
+
+    [TestMethod]
+    public void RangeWithAMultirangeParameter_BindsTheMultirange()
+    {
+        var blocked = RangeSet<DateRange, DateOnly>.From([Range]);
+
+        Assert.Contains("b.\"Period\" &< @blocked", Sql(db => db.Bookings.Where(b => b.Period.DoesNotExtendRightOf(blocked))));
+        Assert.Contains("b.\"Period\" @> @blocked", Sql(db => db.Bookings.Where(b => b.Period.Contains(blocked))));
+    }
+
+    [TestMethod]
+    public void MultirangeIsContainedBy_IsContainedByWithTheMultirangeOnTheLeft()
+    {
+        var blocked = RangeSet<DateRange, DateOnly>.From([Range]);
+
+        Assert.Contains("b.\"BlockedDays\" <@ b.\"Period\"", Sql(db => db.Bookings.Where(b => b.BlockedDays.IsContainedBy(b.Period))));
+        Assert.Contains($"b.\"BlockedDays\" <@ {RangeLiteral}", Sql(db => db.Bookings.Where(b => b.BlockedDays.IsContainedBy(Range))));
+        Assert.Contains("b.\"BlockedDays\" <@ @blocked", Sql(db => db.Bookings.Where(b => b.BlockedDays.IsContainedBy(blocked))));
+    }
+
     [TestMethod]
     public void Works_ForAllRangeTypes()
     {

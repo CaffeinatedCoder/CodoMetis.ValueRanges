@@ -12,6 +12,7 @@ covers all four packages, which share one version number and release together.
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`LocalDateRange.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **A range with a `RangeSet` operand** on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`, and `RangeSet.IsContainedBy`, as in the core package ([Compare a range with a set](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#compare-a-range-with-a-set)).
 
 ## [9.1.0] — 2026-10-17
 

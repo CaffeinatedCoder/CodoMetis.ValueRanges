@@ -309,4 +309,12 @@ public sealed class NodaQueryTranslationTests
         var sql = Sql(db => db.Reservations.Where(r => r.BillingPeriods.Contains(Month)));
         StringAssert.Contains(sql, "r.\"BillingPeriods\" @> DATE '2024-06-01'");
     }
+
+    [TestMethod]
+    public void NodaRangeWithAMultirangeOperand_IsTheOperatorWithTheRangeOnTheLeft()
+    {
+        StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Period.Contains(r.BlockedDays))), "r.\"Period\" @> r.\"BlockedDays\"");
+        StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Window.DoesNotExtendLeftOf(r.Windows))), "r.\"Window\" &> r.\"Windows\"");
+        StringAssert.Contains(Sql(db => db.Reservations.Where(r => r.Windows.IsContainedBy(r.Window))), "r.\"Windows\" <@ r.\"Window\"");
+    }
 }
