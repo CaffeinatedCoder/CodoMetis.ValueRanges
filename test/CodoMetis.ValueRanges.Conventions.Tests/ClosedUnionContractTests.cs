@@ -30,9 +30,6 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 [TestClass]
 public sealed class ClosedUnionContractTests
 {
-    /// <summary>8 core unions and 3 NodaTime unions, as of 10.0.0.</summary>
-    private const int KnownUnions = 11;
-
     /// <summary>The consumer's sixth variant, as the compiler accepts it.</summary>
     private sealed record Rogue(Int32Range Seed) : Int32Range(Seed);
 
@@ -49,18 +46,15 @@ public sealed class ClosedUnionContractTests
     public void EveryUnion_RefusesAnEmittedSubtype_AndStillCopiesItsOwnVariants()
     {
         var checkedUnions = RangeProbes.AllRangeTypes()
-                                       .Select(pair => Reflect.InvokeGeneric<string>(
+                                       .Select(pair => Reflect.InvokeGeneric<Type>(
                                             typeof(ClosedUnionContractTests), nameof(AssertClosed),
                                             pair.Range, pair.Element))
                                        .ToList();
 
-        Assert.IsTrue(
-            checkedUnions.Count >= KnownUnions,
-            $"Only {checkedUnions.Count} unions were checked, fewer than the {KnownUnions} known to exist: "
-          + $"{string.Join(", ", checkedUnions)}.");
+        RangeCensus.AssertReachedEveryUnion(checkedUnions, nameof(EveryUnion_RefusesAnEmittedSubtype_AndStillCopiesItsOwnVariants));
     }
 
-    private static string AssertClosed<TRange, T>()
+    private static Type AssertClosed<TRange, T>()
         where TRange : class, IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
@@ -105,7 +99,7 @@ public sealed class ClosedUnionContractTests
             Assert.AreEqual(value, copy, $"{name}.{variant.Name}: with produced a different value.");
         }
 
-        return name;
+        return union;
     }
 
     private static Type EmitSubtype(Type union, ConstructorInfo copyConstructor)
