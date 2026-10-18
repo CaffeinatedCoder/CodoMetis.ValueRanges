@@ -17,6 +17,14 @@ public sealed class ContainerLifecycle
 
     internal static string? ConnectionString { get; private set; }
 
+    /// <summary>
+    /// The server's connection string as soon as the container is up, whether or not the shared
+    /// schema could be created. A test that creates its own database uses this one (see
+    /// <see cref="RequireServer"/>), so a defect that breaks the shared <c>EnsureCreated</c> fails
+    /// that test with the defect's own error instead of leaving it inconclusive.
+    /// </summary>
+    internal static string? ServerConnectionString { get; private set; }
+
     private static string? _unavailableReason;
 
     [AssemblyInitialize]
@@ -26,7 +34,8 @@ public sealed class ContainerLifecycle
         {
             _container = new PostgreSqlBuilder("postgres:17-alpine").Build();
             await _container.StartAsync();
-            ConnectionString = _container.GetConnectionString();
+            ServerConnectionString = _container.GetConnectionString();
+            ConnectionString       = ServerConnectionString;
 
             await using var context = new IntegrationDbContext();
             await context.Database.EnsureCreatedAsync();
@@ -42,6 +51,16 @@ public sealed class ContainerLifecycle
     public static async Task StopContainer()
     {
         if (_container is not null) await _container.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Like <see cref="RequireDatabase"/>, for a test that needs only the server, not the shared schema.
+    /// </summary>
+    internal static void RequireServer()
+    {
+        if (ServerConnectionString is not null) return;
+
+        RequireDatabase();
     }
 
     /// <summary>

@@ -172,7 +172,11 @@ public readonly record struct TestKey : IFormattable, IParsable<TestKey>
     public override string ToString() => _value;
 }
 
-public sealed class IntegrationDbContext : DbContext
+/// <param name="connectionString">
+/// Another database than the shared one, for a test that creates the schema itself; the shared one
+/// (<see cref="ContainerLifecycle.ConnectionString"/>) when omitted.
+/// </param>
+public sealed class IntegrationDbContext(string? connectionString = null) : DbContext
 {
     public DbSet<Reservation> Reservations => Set<Reservation>();
 
@@ -188,7 +192,7 @@ public sealed class IntegrationDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseNpgsql(
-            ContainerLifecycle.ConnectionString!,
+            connectionString ?? ContainerLifecycle.ConnectionString!,
             // Implies UseNodaTime() and UseValueRanges() — the BCL range types keep working.
             // EnableUnmappedTypes lets Npgsql put the custom timerange type on the wire;
             // Npgsql resolves it dynamically instead of from its built-in mappings.
