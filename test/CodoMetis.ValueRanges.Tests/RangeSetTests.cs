@@ -381,6 +381,33 @@ public class RangeSetTests
         Assert.IsFalse(set.Overlaps(Int32Range.CreateFinite(4, 6)));
     }
 
+    // On a continuous domain an operand can stop exactly where a later element starts without
+    // sharing a value with it, while an earlier element does share values. Choosing the candidate
+    // by the bound value alone picked that later element and answered false (#106); PostgreSQL's
+    // && answers true. A discrete domain cannot reach this: [3,5) canonicalizes to [3,4].
+
+    [TestMethod]
+    public void Overlaps_ContinuousRangeEndingWhereALaterElementStarts_ReturnsTrue()
+    {
+        var set = DecimalRangeSet.From([DecimalRange.CreateFinite(1m, 4m), DecimalRange.CreateFinite(5m, 8m)]);
+
+        Assert.IsTrue(set.Overlaps(DecimalRange.CreateFinite(3m, 5m)), "[3,5) shares [3,4) with the first element");
+        Assert.IsTrue(set.Overlaps(DecimalRange.CreateUnboundedStart(5m, false)), "(,5) covers the first element");
+        Assert.IsTrue(set.Overlaps(DecimalRangeSet.From([DecimalRange.CreateFinite(3m, 5m)])), "the set overload probes the same way");
+        Assert.IsTrue(set.Overlaps(DecimalRange.CreateFinite(3m, 5m, false, true)), "(3,5] shares 5 with the second element");
+    }
+
+    [TestMethod]
+    public void Overlaps_ContinuousRangeBetweenElements_ReturnsFalse()
+    {
+        var set = DecimalRangeSet.From([DecimalRange.CreateFinite(1m, 4m), DecimalRange.CreateFinite(5m, 8m)]);
+
+        Assert.IsFalse(set.Overlaps(DecimalRange.CreateFinite(4m, 5m)), "[4,5) sits in the gap");
+        Assert.IsFalse(set.Overlaps(DecimalRange.CreateFinite(4m, 5m, true, false)));
+        Assert.IsFalse(set.Overlaps(DecimalRange.CreateFinite(0m, 1m)), "[0,1) stops where the first element starts");
+        Assert.IsFalse(set.Overlaps(DecimalRange.CreateUnboundedStart(1m, false)));
+    }
+
     // -------------------------------------------------------------------------
     // Union
     // -------------------------------------------------------------------------

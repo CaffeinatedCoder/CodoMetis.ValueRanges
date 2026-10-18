@@ -6,9 +6,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
 /// Wraps the provider's <see cref="IRelationalParameterBasedSqlProcessorFactory"/> so that every
-/// processor it creates runs <see cref="ValueSetSqlGuard"/> over its result — which is also what
-/// turns a translated <c>Union</c> into <c>array_cat</c>, so a query that bypasses this decorator
-/// fails on the server instead of skipping the guard.
+/// processor it creates runs <see cref="EmptyCollectionRewriter"/> and then <see cref="ValueSetSqlGuard"/>
+/// over its result — the guard is also what turns a translated <c>Union</c> into <c>array_cat</c>, so
+/// a query that bypasses this decorator fails on the server instead of skipping the guard.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -74,7 +74,14 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
         RelationalParameterBasedSqlProcessorParameters   parameters
     ) : RelationalParameterBasedSqlProcessor(dependencies, parameters)
     {
+        // The provider expands a captured collection into VALUES rows here; an empty one leaves a
+        // VALUES with no rows, which the SQL generator refuses, so it is given the SQL that reads no
+        // rows before the guard judges the final tree.
         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
-            => ValueSetSqlGuard.Check(inner.Process(queryExpression, parametersDecorator));
+            => ValueSetSqlGuard.Check(
+                EmptyCollectionRewriter.Rewrite(
+                    inner.Process(queryExpression, parametersDecorator),
+                    Dependencies.SqlExpressionFactory,
+                    Dependencies.TypeMappingSource));
     }
 }

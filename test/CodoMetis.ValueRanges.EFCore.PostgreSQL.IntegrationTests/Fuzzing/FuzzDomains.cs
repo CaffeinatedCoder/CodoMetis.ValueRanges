@@ -33,6 +33,9 @@ internal sealed class FuzzDomain<T>(
     /// <summary>Whether <paramref name="value"/> is one of the exact extremes (a value the store writes as ±infinity, or the domain's end).</summary>
     public bool IsExtreme(T value) => extremes.Any(e => e.CompareTo(value) == 0);
 
+    /// <summary>The exact extremes themselves.</summary>
+    public IReadOnlyList<T> Extremes => extremes;
+
     /// <summary>Draws one value.</summary>
     public T Draw(Random random) => random.Next(10) switch
     {

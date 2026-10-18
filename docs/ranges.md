@@ -190,6 +190,10 @@ Good to know:
 
 - **The empty and infinite ranges are adjacent to nothing.**
 - **Two ranges open at the same end are never adjacent.** They always overlap.
+- **In the database, a date at the extreme is adjacent to nothing.** `DateOnly.MinValue` and
+  `MaxValue` reach PostgreSQL as `-infinity` and `infinity`, so a query answers `false` where
+  memory answers `true` for `[0001-01-01,0001-01-01]` and `[0001-01-02,)`
+  ([EF Core](efcore.md#store-timestamp-ranges)).
 - **Changed in 6.2.1.** Before 6.2.1, `IsAdjacentTo` returned `false` whenever the range you
   called it on was unbounded. So the relation was not symmetric, and it disagreed with PostgreSQL.
   `RangeSet` merges neighbours after sorting them by lower bound, which always puts an

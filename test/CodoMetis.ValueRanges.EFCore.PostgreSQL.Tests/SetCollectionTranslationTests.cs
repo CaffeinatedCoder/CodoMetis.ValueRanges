@@ -73,6 +73,33 @@ public sealed class SetCollectionTranslationTests
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
     }
 
+    /// <summary>
+    /// An empty captured collection expands to a <c>VALUES</c> with no rows, which EF Core's SQL
+    /// generator refuses ("Empty collections are not supported as inline query roots", #137). It is
+    /// given one row of typed <c>NULL</c>s and <c>FALSE</c> on its <c>WHERE</c> instead — EF Core folds
+    /// the predicate away under it — so the subquery reads no rows and <c>Any</c> is
+    /// <see langword="false"/>, <c>Count</c> is <c>0</c>.
+    /// </summary>
+    [TestMethod]
+    public void Any_OverAnEmptyCapturedList_ReadsNoRows()
+    {
+        var wanted = new List<StringSet>();
+
+        Assert.AreEqual(
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::text[])) AS w(\"Value\")     WHERE FALSE)",
+            Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
+    }
+
+    [TestMethod]
+    public void Count_OverAnEmptyCapturedList_ReadsNoRows()
+    {
+        var wanted = new List<StringSet>();
+
+        StringAssert.Contains(
+            Where(db => db.Bookings.Where(b => wanted.Count(w => w.IsSubsetOf(b.Tags)) == 0)),
+            "WHERE (     SELECT count(*)::int     FROM (VALUES (NULL::text[])) AS w(\"Value\")     WHERE FALSE) = 0");
+    }
+
     [TestMethod]
     public void Contains_OverEFParameter_IsRefusedWithWhatToWriteInstead()
     {
