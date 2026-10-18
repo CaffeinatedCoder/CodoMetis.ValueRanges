@@ -106,4 +106,39 @@ public class RangeAggregateTests
 
         Assert.AreEqual(range, new[] { Int32Range.Infinite, range }.RangeIntersectAgg());
     }
+
+    // -------------------------------------------------------------------------
+    // Over a sequence of sets
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void RangeAgg_OverSets_IsTheUnionOfEverySet()
+    {
+        IntSet[] sets =
+        [
+            IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(20, 25)]),
+            IntSet.From([Int32Range.CreateFinite(6, 8)]),
+            IntSet.Empty
+        ];
+
+        Assert.AreEqual("{[1,8],[20,25]}", sets.RangeAgg().ToString());
+        Assert.AreEqual(IntSet.Empty, Array.Empty<IntSet>().RangeAgg());
+        Assert.AreEqual(IntSet.Infinite, new[] { sets[0], IntSet.Infinite }.RangeAgg());
+    }
+
+    [TestMethod]
+    public void RangeIntersectAgg_OverSets_KeepsWhatEverySetHolds()
+    {
+        IntSet[] sets =
+        [
+            IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(20, 25)]),
+            IntSet.From([Int32Range.CreateFinite(3, 22)])
+        ];
+
+        Assert.AreEqual("{[3,5],[20,22]}", sets.RangeIntersectAgg()!.ToString());
+        Assert.IsNull(Array.Empty<IntSet>().RangeIntersectAgg(), "null for an empty source, as PostgreSQL's NULL");
+        Assert.AreEqual(IntSet.Empty, new[] { sets[0], IntSet.Empty }.RangeIntersectAgg(), "an empty set empties the fold");
+        Assert.AreEqual(IntSet.Empty, new[] { IntSet.Empty, sets[0] }.RangeIntersectAgg());
+        Assert.AreEqual(sets[0], new[] { IntSet.Infinite, sets[0] }.RangeIntersectAgg(), "the infinite set is the identity");
+    }
 }

@@ -120,6 +120,9 @@ public class SmallModelMultirangeOracleTests
             var complement = set.Complement();
             Check(failures, domain, "Complement", Difference(universe, model), complement, valueOf);
             Check(failures, domain, "Complement twice", model, complement.Complement(), valueOf);
+
+            // The inner complement: what the hull adds to the set, never the stretches beyond it.
+            Check(failures, domain, "Gaps", Difference(Hull(model), model), set.Gaps(), valueOf);
         }
 
         Candidates.Verdict(nameof(SmallModelMultirangeOracleTests), failures, Message(domain, "subsets"));
@@ -171,6 +174,10 @@ public class SmallModelMultirangeOracleTests
                     Check(failures, domain, $"{Name(leftModel)} & range {Name(rightModel)}", intersection, left & range, valueOf);
                     Check(failures, domain, $"{Name(leftModel)} - range {Name(rightModel)}", difference, left - range, valueOf);
                     Bool("IsAdjacentTo range", left.IsAdjacentTo(range), adjacent);
+
+                    // The free parts of a window: the window's values the set leaves uncovered.
+                    Check(failures, domain, $"{Name(leftModel)} Gaps(window {Name(rightModel)})",
+                          Difference(rightModel, leftModel), left.Gaps(range), valueOf);
                 }
 
                 Bool("Contains",          left.Contains(right),          rightModel.IsSubsetOf(leftModel));
@@ -313,6 +320,9 @@ public class SmallModelMultirangeOracleTests
                                         .Where(index => (mask & (1 << index)) != 0)));
 
     private static HashSet<int> Full() => [.. Enumerable.Range(0, GridMax + 1)];
+
+    private static HashSet<int> Hull(HashSet<int> model) =>
+        model.Count == 0 ? [] : [.. Enumerable.Range(model.Min(), model.Max() - model.Min() + 1)];
 
     private static HashSet<int> Union(HashSet<int> left, HashSet<int> right) => [.. left, .. right];
 

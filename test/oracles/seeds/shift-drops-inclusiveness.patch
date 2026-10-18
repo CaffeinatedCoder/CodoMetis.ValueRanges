@@ -1,0 +1,18 @@
+Seed: Shift and Expand rebuild a finite range half-open, dropping the inclusiveness of its bounds
+Oracles: RangeArithmeticOracleTests
+Fails: every finite range that is not half-open, on every range type: a closed discrete range loses its last value, a continuous one changes its bounds
+History: planted before Shift and Expand shipped in 10.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+index de8f988..1a0b06a 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+@@ -26,7 +26,7 @@ internal static class RangeArithmetic
+         => range switch
+         {
+             IEmptyRange<T> or IInfinityRange<T> => range,
+-            IFiniteRange<T> f => TRange.CreateFinite(lower(f.Start), upper(f.End), f.StartInclusive, f.EndInclusive),
++            IFiniteRange<T> f => TRange.CreateFinite(lower(f.Start), upper(f.End), true, false),
+             IUnboundedStartRange<T> s => TRange.CreateUnboundedStart(upper(s.End), s.EndInclusive),
+             IUnboundedEndRange<T> e => TRange.CreateUnboundedEnd(lower(e.Start), e.StartInclusive),
+ 

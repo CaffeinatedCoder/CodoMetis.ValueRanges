@@ -1,0 +1,18 @@
+Seed: IsInfinity() on a range column translates to lower_inf AND NOT upper_inf, so (,5] answers true and (,) false on the server
+Oracles: ExecutedQueryTests
+Fails: RangeShapePredicates_MatchInMemory — IsInfinity on the unbounded-start and infinite rows disagrees with memory
+History: the composition the substring assertions in QueryTranslationTests could not tell from the right one (#118)
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index d7e38da..b24d2ed 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -176,7 +176,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+         if (generic == IsInfinityMethod)
+             return sqlExpressionFactory.AndAlso(
+                 BoolFunction("lower_inf", Range(0)),
+-                BoolFunction("upper_inf", Range(0)));
++                sqlExpressionFactory.Not(BoolFunction("upper_inf", Range(0))));
+ 
+         if (generic == IsFiniteMethod)
+             return sqlExpressionFactory.AndAlso(

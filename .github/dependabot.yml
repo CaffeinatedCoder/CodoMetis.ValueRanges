@@ -11,7 +11,9 @@
 # raising one raises every consumer's minimum, which is a release decision, not a dependency
 # update. The test projects' EF Core and Npgsql references track those floors for the same reason
 # and are ignored here; bump them by hand together with the floor. Security advisories still
-# surface for everything through Dependabot security updates and NuGetAudit at build time.
+# surface for everything as Dependabot alerts and through NuGetAudit at build time. Security
+# update PRs honour the ignore list below, which is how the toolchain packages at its end stay
+# out of the csproj.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -42,3 +44,12 @@ updates:
       # The ASP.NET Core packages version with the shared framework: 11.x needs net11.0.
       - dependency-name: "Microsoft.AspNetCore*"
         update-types: [ "version-update:semver-major" ]
+      # Reached only through the EF Core test project's Microsoft.EntityFrameworkCore.Design reference
+      # (-> Microsoft.Build.Tasks.Core, Microsoft.CodeAnalysis.Workspaces.MSBuild), which exists for
+      # MigrationScaffoldTests. Scaffolding never signs or verifies XML or parses PKCS data, and no
+      # shipping project references Design, so consumers never receive either package. Dependabot's
+      # remedy is a direct pin of a toolchain internal in the test csproj (#160, #161), and every new
+      # advisory brings another one. The alerts are dismissed as not used (#194); NU1903 stays a
+      # warning (Directory.Build.props), so a new advisory still shows up at build time.
+      - dependency-name: "System.Security.Cryptography.Xml"
+      - dependency-name: "System.Security.Cryptography.Pkcs"

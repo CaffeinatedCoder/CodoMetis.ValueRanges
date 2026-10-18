@@ -8,8 +8,10 @@ namespace CodoMetis.ValueRanges;
 /// The EF Core provider translates them to those aggregates inside grouped queries.
 /// </summary>
 /// <remarks>
-/// The overloads are declared per range type because C# cannot infer the element type
-/// <c>T</c> from the range type alone (constraints do not participate in type inference).
+/// The overloads over ranges are declared per range type because C# cannot infer the element type
+/// <c>T</c> from the range type alone (constraints do not participate in type inference). The
+/// overloads over sets are generic, because <see cref="RangeSet{TRange,T}"/> names both, and so
+/// serve every range type, the NodaTime ones included.
 /// </remarks>
 public static class RangeAggregateExtensions
 {
@@ -99,6 +101,51 @@ public static class RangeAggregateExtensions
     /// <inheritdoc cref="RangeIntersectAgg(IEnumerable{Int32Range})"/>
     public static TimeRange? RangeIntersectAgg(this IEnumerable<TimeRange> source)
         => IntersectAggCore<TimeRange, TimeOnly>(source);
+
+    /// <summary>
+    /// Aggregates the sets into one normalized <see cref="RangeSet{TRange,T}"/>, the union of all of
+    /// them — equivalent to the PostgreSQL <c>range_agg</c> aggregate over multiranges.
+    /// </summary>
+    /// <remarks>
+    /// An empty source yields <see cref="RangeSet{TRange,T}.Empty"/>, and an empty set adds nothing.
+    /// As with the range overloads, PostgreSQL returns <c>NULL</c> over zero rows.
+    /// </remarks>
+    /// <param name="source">The sets to aggregate.</param>
+    /// <typeparam name="TRange">The range type of the sets.</typeparam>
+    /// <typeparam name="T">The element type of the ranges.</typeparam>
+    /// <returns>A normalized set covering every value of every input set.</returns>
+    public static RangeSet<TRange, T> RangeAgg<TRange, T>(this IEnumerable<RangeSet<TRange, T>> source)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => RangeSet<TRange, T>.From(source.SelectMany(set => set));
+
+    /// <summary>
+    /// Intersects all sets of the sequence into one set — equivalent to the PostgreSQL
+    /// <c>range_intersect_agg</c> aggregate over multiranges.
+    /// </summary>
+    /// <remarks>
+    /// An empty source yields <see langword="null"/>, matching the <c>NULL</c> PostgreSQL returns
+    /// for aggregates over zero rows. Sets with no value in common, or an empty set among the
+    /// inputs, give <see cref="RangeSet{TRange,T}.Empty"/>.
+    /// </remarks>
+    /// <param name="source">The sets to intersect.</param>
+    /// <typeparam name="TRange">The range type of the sets.</typeparam>
+    /// <typeparam name="T">The element type of the ranges.</typeparam>
+    /// <returns>
+    /// The values common to every input set, or <see langword="null"/> for an empty source.
+    /// </returns>
+    public static RangeSet<TRange, T>? RangeIntersectAgg<TRange, T>(this IEnumerable<RangeSet<TRange, T>> source)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        RangeSet<TRange, T>? accumulator = null;
+        foreach (var set in source)
+        {
+            accumulator = accumulator is null ? set : accumulator.Intersect(set);
+        }
+
+        return accumulator;
+    }
 
     private static TRange? IntersectAggCore<TRange, T>(IEnumerable<TRange> source)
         where TRange : class, IRangeFactory<TRange, T>, IRange<T>

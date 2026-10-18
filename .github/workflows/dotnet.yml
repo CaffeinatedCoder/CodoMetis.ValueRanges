@@ -1,4 +1,4 @@
-# Build and test on every push to main, a release branch or net11, and every PR into any of them.
+# Build and test on every push to main, a release branch or net11, and on every pull request.
 # Two lines are supported from 11.0.0 on (CONTRIBUTING.md#branches-and-releases), and each branch
 # that ships one needs the same checks as main's:
 #
@@ -6,8 +6,15 @@
 #   - release/9.x holds 9.x patches until the v10.0.0 tag, then takes no changes.
 #   - net11 holds the .NET 11 retarget and ships 11.0.0-preview.N until the v10.0.0 tag, merging
 #     main forward after every 10.0.0 fix. At the tag it becomes main.
-#   - release/10.x is cut from the v10.0.0 tag and holds the LTS line: 10.x minors (additions until
-#     v11.0.0, fixes only after it) and patches, cherry-picked from main.
+#   - release/10.x is cut from the v10.0.0 tag and holds the LTS line: 10.x minors (additions for
+#     six months after v11.0.0, fixes only after that) and patches, cherry-picked from main.
+#
+# Pull requests run whatever their base, so a stacked PR (one opened against another open PR's
+# branch) is built and tested while it is stacked (#146). Retargeting it to main fires `edited`,
+# which is deliberately not a trigger: a body edit would start a run whose skipped jobs pass the
+# required checks, and would cancel a real run in the same concurrency group. It isn't needed
+# either, because main's protection requires these checks on an up-to-date branch, and a PR whose
+# base was merged into main is behind main, so updating it pushes a commit and starts a run.
 #
 # The release workflow keeps a 10.x tag off GitHub's Latest once 11.0.0 exists, and publishes a
 # preview tag as a prerelease (release.yml, "Create the release").
@@ -38,7 +45,6 @@ on:
   push:
     branches: [ "main", "release/**", "net11" ]
   pull_request:
-    branches: [ "main", "release/**", "net11" ]
   workflow_dispatch:
 
 permissions:
@@ -62,7 +68,9 @@ jobs:
   # Linux runs the whole suite, because Linux is sufficient to validate the product: nothing in
   # the four shipping packages reads the environment. There is no TimeZoneInfo, no DateTime.Now,
   # no CurrentCulture, no file or path access anywhere in src/ — the library is pure managed code
-  # on a single TFM, invariant by contract. It cannot behave differently per OS.
+  # on a single TFM, invariant by contract. It cannot behave differently per OS. The runner's zone
+  # is UTC, which skips and repeats no wall clock, so the tests of the local-kind rule set their own
+  # (LocalTimeZone, under test/CodoMetis.ValueRanges.Tests) instead of relying on the machine's (#119).
   test:
     name: Test (ubuntu-latest)
     runs-on: ubuntu-latest
