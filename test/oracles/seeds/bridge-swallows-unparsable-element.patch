@@ -3,10 +3,10 @@ Oracles: DecorativeElementContractTests
 Fails: Int32Set<DecoratedNumber> at the SQL literal and the bound parameter, written as 0
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeDefinition.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeDefinition.cs
-index d81a489..750b1d0 100644
+index 63dbfcb..d7e9a38 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeDefinition.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/SetTypeDefinition.cs
-@@ -223,16 +223,9 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
+@@ -256,16 +256,9 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
          {
              primitive = _parsePrimitive(text);
          }
@@ -24,4 +24,4 @@ index d81a489..750b1d0 100644
 +            return default!;
          }
  
-         // Compared before the store's truncation, which is a documented, deliberate loss.
+         // Compared before the store's truncation, which is a documented, deliberate loss. Every family

@@ -148,6 +148,12 @@ public sealed class Int16Set<TElement> :
         static () => new ValueSetJsonConverter<Int16Set<TElement>, TElement>(),
         static () => new ValueSetTypeConverter<Int16Set<TElement>, TElement>());
 
+    /// <summary>
+    /// The format the family asks its elements for: their default, which is the backing primitive's
+    /// own text form — the contract <see cref="WrapperElement"/> checks.
+    /// </summary>
+    private const string? RoundTripFormat = null;
+
     private readonly ImmutableArray<TElement> _elements;
 
     private Int16Set(ImmutableArray<TElement> elements) => _elements = elements;
@@ -197,15 +203,25 @@ public sealed class Int16Set<TElement> :
     /// — before 9.0.0 a group separator made <c>"1,5"</c> fifteen here while the primitive family
     /// refused it.
     /// </remarks>
-    public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+    /// <summary>The family's element parser, unchecked: the grammar, then the element's own <c>Parse</c>. See <see cref="WrapperElement"/>.</summary>
+    private static TElement ParseElement(string s)
         => TElement.Parse(
             Int16Set.ParseValue(s, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture),
             CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Checked: the element the text parsed to must format back to text that reads as the same
+    /// element, or the read fails (<see cref="WrapperElement"/>, <c>FormatException</c>).
+    /// </summary>
+    public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+        => WrapperElement.Parsed(ParseElement(s.ToString()), RoundTripFormat, ParseElement);
+
     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text
     /// form.</summary>
     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
-        => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+        => string.IsNullOrEmpty(format)
+               ? WrapperElement.Formatted(value, RoundTripFormat, ParseElement, provider)
+               : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON number

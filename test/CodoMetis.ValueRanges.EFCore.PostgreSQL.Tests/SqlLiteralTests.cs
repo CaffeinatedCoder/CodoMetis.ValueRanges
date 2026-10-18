@@ -142,4 +142,45 @@ public sealed class SqlLiteralTests
         StringAssert.Contains(error.Message, nameof(TestLossyStamp));
         StringAssert.Contains(error.Message, "must format to exactly the backing primitive's text form");
     }
+
+    /// <summary>
+    /// The bridge checks the round trip through the store primitive for every core family (#53):
+    /// an element whose text form is a different number passes the integer grammar and was bound as
+    /// that number until 10.0.0. The string bridge holds the same rule on its own.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSets_ElementWhoseTextDoesNotReadBackAsItself_AreRejected()
+    {
+        var number = Assert.ThrowsExactly<ArgumentException>(() => LiteralOf(Int32Set<OffByOne>.From(new OffByOne(123))));
+        StringAssert.Contains(number.Message, nameof(OffByOne));
+        StringAssert.Contains(number.Message, "must format to exactly the backing primitive's text form");
+
+        var text = Assert.ThrowsExactly<InvalidOperationException>(() => LiteralOf(StringSet<LenientKey>.From(new LenientKey("123"))));
+        StringAssert.Contains(text.Message, "'CUST-123'");
+        StringAssert.Contains(text.Message, "must format to exactly the backing primitive's text form");
+    }
+
+    private readonly record struct OffByOne(int Value) : IFormattable, IParsable<OffByOne>, IComparable<OffByOne>
+    {
+        public static OffByOne Parse(string s, IFormatProvider? provider) => new(int.Parse(s, CultureInfo.InvariantCulture));
+        public static bool TryParse(string? s, IFormatProvider? provider, out OffByOne result)
+        {
+            var ok = int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value);
+            result = new(value);
+            return ok;
+        }
+        public string ToString(string? format, IFormatProvider? formatProvider) => (Value + 1).ToString(CultureInfo.InvariantCulture);
+        public int CompareTo(OffByOne other) => Value.CompareTo(other.Value);
+    }
+
+    private readonly record struct LenientKey(string Value) : IFormattable, IParsable<LenientKey>
+    {
+        public static LenientKey Parse(string s, IFormatProvider? provider) => new(s);
+        public static bool TryParse(string? s, IFormatProvider? provider, out LenientKey result)
+        {
+            result = new(s ?? "");
+            return s is not null;
+        }
+        public string ToString(string? format, IFormatProvider? formatProvider) => $"CUST-{Value}";
+    }
 }
