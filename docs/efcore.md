@@ -247,15 +247,71 @@ raises `23P01` (`exclusion_violation`), and you get a `DbUpdateException` wrappi
   `[2024-01-01, 2024-01-10]` and `[2024-01-11, 2024-01-20]` are *adjacent, not overlapping*, and
   both are saved. That is the same distinction `IsAdjacentTo` and `Overlaps` draw in memory.
 
-> **Exclusion constraints come from migrations, not `EnsureCreated()`.** A design-time service
+> **`EnsureCreated()` creates exclusion constraints only with `UseNpgsqlComplexIndexes()`.** A design-time service
 > emits them, and `dotnet ef migrations add` loads it automatically. `EnsureCreated()` builds the
 > schema through the runtime differ, which doesn't know about them. The table is created, the
 > constraint silently isn't, and overlapping rows are accepted. This was verified: a table from
-> `EnsureCreated()` carries zero exclusion constraints. Use migrations, or add the constraint with
-> explicit SQL.
+> `EnsureCreated()` carries zero exclusion constraints. Use migrations, add the constraint with
+> explicit SQL, or call `UseNpgsqlComplexIndexes()` on the options. That registers the package's
+> differ for `EnsureCreated()` too, so the constraints are created.
 
 Everything in this section was run against PostgreSQL 17 with a `DateRange` property, including
 the rejected overlap and the accepted adjacent pair.
+
+### Reject overlapping rows with a temporal key (PostgreSQL 18)
+
+PostgreSQL 18 has this rule built in, as a temporal key: a `UNIQUE` constraint whose last column is a
+range column marked `WITHOUT OVERLAPS`. `EFCore.ComplexIndexes.PostgreSQL` declares one with
+`HasTemporalConstraint`, over any range or multirange column this package maps:
+
+```csharp
+modelBuilder.Entity<Booking>()
+    .HasTemporalConstraint(b => b.RoomId, b => b.Period, "uq_booking_room_period");
+```
+
+The constraint it creates reads back from PostgreSQL as:
+
+```sql
+UNIQUE ("RoomId", "Period" WITHOUT OVERLAPS)
+```
+
+The rule is the exclusion constraint's. A second booking for the same room whose `Period` overlaps
+an existing one fails with a `DbUpdateException` wrapping a `PostgresException`. Its `SqlState` is
+`23P01` and its `ConstraintName` is the constraint's name. Bookings for another room, and adjacent
+bookings, are saved.
+
+A temporal foreign key goes one step further. It requires each row's period to lie inside the
+periods the referenced rows hold for the same key:
+
+```csharp
+modelBuilder.Entity<Availability>()
+    .HasTemporalConstraint(a => a.RoomId, a => a.Period, "uq_availability_room_period");
+
+modelBuilder.Entity<Booking>()
+    .HasTemporalForeignKey<Booking, Availability>(
+        b => b.RoomId, b => b.Period, a => a.RoomId, a => a.Period, "fk_booking_room_period");
+```
+
+That gives `FOREIGN KEY ("RoomId", PERIOD "Period") REFERENCES "Availabilities"("RoomId", PERIOD "Period")`.
+A booking passes when the room's availabilities cover its period together, even across two adjacent
+rows. A booking that runs past them, or names a room with no availability, fails with `SqlState`
+`23503` (`foreign_key_violation`). PostgreSQL requires the referenced columns to carry a temporal key,
+which is why `Availability` declares one.
+
+Good to know:
+
+- **It needs PostgreSQL 18.** Older servers reject `WITHOUT OVERLAPS` as a syntax error. On 16 and
+  17, use the [exclusion constraint](#reject-overlapping-rows-with-an-exclusion-constraint) above.
+- **`btree_gist` is created for you.** The constraint indexes the scalar key with GiST, which needs
+  the extension, and ComplexIndexes adds `CREATE EXTENSION IF NOT EXISTS btree_gist` to the schema.
+- **`EnsureCreated()` needs `UseNpgsqlComplexIndexes()`**, exactly as for the exclusion constraint.
+- **The API is ComplexIndexes'.** This package adds nothing for temporal keys. They work because
+  every range and multirange type here maps to a column whose store type ends in `range`, which is
+  what `HasTemporalConstraint` accepts.
+
+Everything in this section was run against PostgreSQL 18 with `EFCore.ComplexIndexes.PostgreSQL`
+5.4.0, over a `DateRange`, a `RangeSet<DateRange, DateOnly>` and a `TimeRange` column for the
+temporal key, and a `DateRange` column for the foreign key.
 
 ## Store a value set in an array column
 

@@ -844,6 +844,88 @@
     ]
   },
   {
+    "id": "E48-temporal-key-over-mapped-columns",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "`EFCore.ComplexIndexes.PostgreSQL` declares one with `HasTemporalConstraint`, over any range or multirange column this package maps:",
+    "claim": "HasTemporalConstraint over a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange column, with UseNpgsqlComplexIndexes(), renders UNIQUE (\"RoomId\", \"<column>\" WITHOUT OVERLAPS) in the create script and creates it with EnsureCreated on PostgreSQL 18, which pg_get_constraintdef reads back verbatim.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E49-temporal-key-rejects-overlap",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "A second booking for the same room whose `Period` overlaps an existing one fails with a `DbUpdateException` wrapping a `PostgresException`. Its `SqlState` is `23P01` and its `ConstraintName` is the constraint's name. Bookings for another room, and adjacent bookings, are saved.",
+    "claim": "Under a temporal key on PostgreSQL 18, a row overlapping an existing row for the same key in a DateRange, RangeSet<DateRange, DateOnly> or TimeRange column fails SaveChanges with DbUpdateException wrapping PostgresException 23P01 naming the constraint; adjacent rows (adjacent multiranges included) and rows for another key are saved.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite",
+      "RangeSet.From"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E50-temporal-foreign-key-coverage",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "A booking passes when the room's availabilities cover its period together, even across two adjacent rows. A booking that runs past them, or names a room with no availability, fails with `SqlState` `23503` (`foreign_key_violation`).",
+    "claim": "HasTemporalForeignKey over DateRange columns renders and creates FOREIGN KEY (\"RoomId\", PERIOD \"Period\") REFERENCES \"Availabilities\"(\"RoomId\", PERIOD \"Period\") on PostgreSQL 18; a dependent period covered by two adjacent principal rows is saved, and one past them or for a key with no principal row fails with DbUpdateException wrapping PostgresException 23503 naming the constraint.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.CreateFinite"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E51-temporal-key-needs-postgres-18",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "Older servers reject `WITHOUT OVERLAPS` as a syntax error.",
+    "claim": "EnsureCreated over a model with HasTemporalConstraint on PostgreSQL 16 throws PostgresException 42601.",
+    "oracle": "exception",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E52-temporal-key-creates-btree-gist",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "ComplexIndexes adds `CREATE EXTENSION IF NOT EXISTS btree_gist` to the schema.",
+    "claim": "After EnsureCreated with a temporal key or temporal foreign key in a fresh PostgreSQL 18 database, pg_extension holds btree_gist.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E53-ensurecreated-with-complexindexes-registration",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint",
+    "quote": "Use migrations, add the constraint with > explicit SQL, or call `UseNpgsqlComplexIndexes()` on the options. That registers the package's > differ for `EnsureCreated()` too, so the constraints are created.",
+    "claim": "With UseNpgsqlComplexIndexes() on the options, EnsureCreated creates the exclusion constraints (PostgreSQL 16 and 18) and temporal constraints (18) the model declares, and an overlap is rejected; without it none is created.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
