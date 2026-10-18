@@ -733,5 +733,12 @@
     "member": "primitive only: ToIso($T)",
     "kind": "extra",
     "reason": "the calendar-bearing NodaTime primitive sets convert an element to the ISO calendar; their arities cannot convert a wrapped value and refuse it (RequireIso)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "Values($T)",
+    "kind": "extra",
+    "reason": "Every discrete range has Values(step), but only on the integer ranges is the step the element type itself. DateRange steps in int days, LocalDateRange in a Period and YearMonthRange in int months, so their overloads don't normalize to Values($T)."
   }
 ]
