@@ -487,10 +487,12 @@ tell you which of these you forgot:
   from the core tables.
 - **Tests that list types by hand.** `RangeProbes.Bounds` and `SetProbes.Probes` (two ordered values
   per element type; every `*ProbeTests` sweep reads them); a column in `TestDbContext` and
-  `IntegrationDbContext`; the discovery floors in `MappingParityTests.Discovery_FindsEveryRangeAndSetType`
+  `IntegrationDbContext`; the set-type discovery floors in `MappingParityTests.Discovery_FindsEveryRangeAndSetType`
   (a floor does not fail when a type is added, so raise it, or the next type that goes missing is
-  invisible); a `Case` per package in `test/consumer-smoke-test.sh` when the type exercises a path
-  the existing cases do not.
+  invisible). Range unions need no edit: the sweeps check that they reached every union of
+  `RangeCensus`, which counts unions by their nested variants rather than by an interface (#222).
+  Last, a `Case` per package in `test/consumer-smoke-test.sh` when the type exercises a path the
+  existing cases do not.
 - **Catalogues.** `test/oracles/claims.json` for every new sentence in the consumer docs
   (`OracleCatalogueTests` fails on a sentence without a claim, `OracleSurfaceCoverageTests` on a
   public member without one or a `surface-waivers.json` reason); `postgres-surface.json` for the

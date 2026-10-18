@@ -376,7 +376,7 @@ public sealed class LiteralCorpusProbeTests
     private static bool SubMicrosecond(string family, Kind kind) => family == "sub-microsecond" && IsTemporal(kind);
 
     /// <summary>The corpus rows that PostgreSQL 17 and later read as <c>{}</c> and PostgreSQL 16 rejects (#128).</summary>
-    private static readonly HashSet<string> NestedEmptyArrays = new(StringComparer.Ordinal) { "{{}}", "{{},{}}", "{ {} }", "{{{},{}}}", "{{{}},{{}}}" };
+    private static readonly HashSet<string> NestedEmptyArrays = new(StringComparer.Ordinal) { "{{}}", "{{},{}}", "{ {} }", "{{{},{}}}", "{{{}},{{}}}", "{{{},{}},{{},{}}}", "{{{{}}},{{{}}}}" };
 
     /// <summary>The server's own version, <c>server_version_num</c> (160004 for 16.4), never the image's name.</summary>
     private static async Task<int> ServerVersion(NpgsqlConnection connection)
@@ -604,6 +604,10 @@ public sealed class LiteralCorpusProbeTests
             ("2026-01-01 10:00+15:30", "offset range"), ("2026-01-01 10:00:00+14:30", "offset range"), ("2026-01-01 10:00:00-00", "offset"),
             ("2026-01-01 10:00:00+16:00", "offset beyond range"), ("2026-01-01 10:00:00-16", "offset beyond range"), ("2026-01-01 10:00:00+18:00", "offset beyond range"),
             ("2026-01-01 10:00:00+15:59:60", "malformed offset"), ("2026-01-01 10:00:00+05:60", "malformed offset"),
+            // Offsets PostgreSQL reads that the strict grammar refuses, as for a DateTime (J07, #234).
+            ("2026-01-01 10:00:00+0530", "non-ISO temporal"), ("2026-01-01 10:00:00-0530", "non-ISO temporal"),
+            ("2026-01-01 10:00:00+5:30", "non-ISO temporal"), ("2026-01-01 10:00:00+1430", "non-ISO temporal"),
+            ("2026-01-01 10:00:00+1530", "non-ISO temporal"),
             ("2026-01-01 10:00:00.123456+00", "fraction"), ("2026-01-01 10:00:00.1234567+00", "sub-microsecond"),
             ("2026-01-01 10:00:00", "timestamptz without offset"), ("2026-01-01 10:00:00 UTC", "zone name"), ("2026-01-01 10:00:00 Europe/Berlin", "zone name"),
             ("2026-01-01 24:00:00+00", "hour 24 in a timestamp"), ("0001-01-01 00:00:00+00", "extreme"),
@@ -774,12 +778,13 @@ public sealed class LiteralCorpusProbeTests
         // decimal int4 with upper + 1 representable, the count as written (duplicates included), and
         // empty arrays nested to one depth, which 17 and later read as {} (16 refuses them).
         foreach (var literal in new[] { $"[-5:-4]={{{a},{b}}}", $"[1]={{{a}}}", $"[+1:+1]={{{a}}}", $"[01:01]={{{a}}}", $" [1:1] = {{{a}}}",
-                                        $"[1:2]={{{a},{a}}}", $"[2147483646:2147483646]={{{a}}}", "{ {} }", "{{{},{}}}", "{{{}},{{}}}" })
+                                        $"[1:2]={{{a},{a}}}", $"[2147483646:2147483646]={{{a}}}", "{ {} }", "{{{},{}}}", "{{{}},{{}}}",
+                                        "{{{},{}},{{},{}}}", "{{{{}}},{{{}}}}" })
             yield return ("dimension decoration", literal);
         foreach (var literal in new[] { $"[2]={{{a}}}", $"[1:1]={{{a},{a}}}", "[1:0]={}", "[1:1]={}", "[1:1]={{}}", $"[ 1:1]={{{a}}}",
                                         $"[2147483647:2147483647]={{{a}}}", $"[-2147483649:-2147483649]={{{a}}}", $"[0x1:0x1]={{{a}}}",
                                         $"[1:1]=={{{a}}}", $"[1:1]{{{a}}}", $"[:1]={{{a}}}", $"[]={{{a}}}", $"[1:1]={{{a}}}x", $"[1:1]=\u00A0{{{a}}}",
-                                        "{{},{{}}}", "{{},}", $"{{{{}},{{{a}}}}}" })
+                                        "{{},{{}}}", "{{},}", $"{{{{}},{{{a}}}}}", "{{{},{}},{{}}}", "{{{}},{{},{}}}", "{{{{}},{{}}},{{{}}}}" })
             yield return ("malformed dimension decoration", literal);
         foreach (var literal in new[] { $"{{{a}}}x", $"{{{a}", a, $"{{{a},}}", $"{{,{a}}}", $"{{{a},,{b}}}", $"{{{a}}}}}", $"{{{{{a}}}", $"{{{a}}};", $"x{{{a}}}", $"{{{a}}}{{{b}}}" })
             yield return ("junk", literal);

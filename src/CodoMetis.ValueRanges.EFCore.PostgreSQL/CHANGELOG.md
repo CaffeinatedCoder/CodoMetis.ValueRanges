@@ -17,6 +17,7 @@ covers all four packages, which share one version number and release together.
 
 ### Fixed
 
+- Docs: a query that runs in the database over a `NaN` or infinite float that another tool stored answers in PostgreSQL's order; only loading the row throws. A CHECK constraint per column kind keeps such values out ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#keep-nan-and-infinity-out-of-a-float-column)).
 - EF Core: `Any` or `Count` with a predicate over an empty captured list of value sets, or of ranges beside a `Contains`, returns `false` or `0`, as in memory. It threw `InvalidOperationException` ("Empty collections are not supported as inline query roots") ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
 
 ## [9.1.0] — 2026-10-17

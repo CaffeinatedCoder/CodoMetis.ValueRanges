@@ -73,7 +73,7 @@ public static class RangeSet
 [JsonConverter(typeof(RangeJsonConverterFactory))]
 [TypeConverter(typeof(LiteralTypeConverter))]
 public sealed class RangeSet<TRange, T>
-    : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IComparable<RangeSet<TRange, T>>, IFormattable,
+    : IReadOnlyList<TRange>, IEquatable<RangeSet<TRange, T>>, IComparable<RangeSet<TRange, T>>, IComparable, IFormattable,
       ISpanParsable<RangeSet<TRange, T>>
     where TRange : IRangeFactory<TRange, T>, IRange<T>
     where T : struct, IComparable<T>, IEquatable<T>
@@ -1170,6 +1170,10 @@ public sealed class RangeSet<TRange, T>
 
         return _elements.Length.CompareTo(other._elements.Length);
     }
+
+    /// <inheritdoc cref="CompareTo(RangeSet{TRange, T})"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="RangeSet{TRange,T}"/> of the same types.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<RangeSet<TRange, T>>(this, other, static (a, b) => a.CompareTo(b));
 
     // -------------------------------------------------------------------------
     // IFormattable / IParsable

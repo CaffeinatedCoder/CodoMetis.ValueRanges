@@ -23,6 +23,10 @@ internal static class IntegerLiteral
 {
     internal static T Parse<T>(ReadOnlySpan<char> s) where T : IBinaryInteger<T>, IMinMaxValue<T>
     {
+        // PostgreSQL text cannot hold U+0000, and the BCL integer parsers ignore trailing NULs, so
+        // "31\0" read as 31 until #233 (the slow path below always refused it).
+        if (s.Contains('\0')) throw Invalid(s);
+
         // The decimal form without separators, which is nearly every literal.
         if (T.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)) return value;
 

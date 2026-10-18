@@ -14,8 +14,9 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// The claim-driven oracles hold a documented promise per type and cannot notice that one sibling
 /// lacks a line the others have. This can, from the source text alone, without running the library:
 /// a member present in all but one or two siblings, a member only a minority has (one sibling, or a
-/// group smaller than a third of the family, reported once under the group's joined names), and a body
-/// only such a minority shares while a near-identical one is shared by more (#200).
+/// group of fewer than half the family, reported once under the group's joined names), and a body
+/// shared by fewer siblings than the largest body cluster while a near-identical one is shared by more
+/// (#200, #236).
 /// </para>
 /// <para>
 /// A divergence is not a defect by itself — the format constant of <c>DateSet</c> differs from

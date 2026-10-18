@@ -46,6 +46,29 @@ public sealed class SeedVerdictTests
         Assert.IsFalse(SeedVerdict.Catches(message));
     }
 
+    /// <summary>
+    /// A known row whose text spans lines is still one known row: until #235 its continuation line had no
+    /// <c>[known candidate:</c> prefix and read as a caught row.
+    /// </summary>
+    [TestMethod]
+    public void AKnownRowSpanningLines_DoesNotCatch()
+    {
+        var unfiled = new Candidates.Candidate("AnyOracle", "Int32Set whitespace {1,", "a known disagreement", Issue: "");
+        var message = MessageOf([unfiled], ["Int32Set whitespace {1,\n2}: memory {1,2}, server refused"]);
+
+        Assert.IsFalse(SeedVerdict.Catches(message), message);
+        StringAssert.Contains(message, "{1,⏎2}");
+    }
+
+    [TestMethod]
+    public void ARowSpanningLines_BesideAKnownRow_StillCatches()
+    {
+        var unfiled = new Candidates.Candidate("AnyOracle", "Int32Set whitespace {1,", "a known disagreement", Issue: "");
+
+        Assert.IsTrue(SeedVerdict.Catches(MessageOf([unfiled], ["Int32Set whitespace {1,\n2}: memory {1,2}, server refused",
+                                                                "Int32Set junk {1}\nx: memory {1}, server refused"])));
+    }
+
     /// <summary>A seed that makes a known row agree changes what the sweep answers, which is a catch.</summary>
     [TestMethod]
     public void ACandidateFixed_Catches()

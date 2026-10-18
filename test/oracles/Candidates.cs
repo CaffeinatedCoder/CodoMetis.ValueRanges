@@ -90,15 +90,15 @@ public static class Candidates
             var candidate = known.FirstOrDefault(c => line.Contains(c.Row, StringComparison.Ordinal));
             if (candidate is null)
             {
-                failing.Add(line);
+                failing.Add(OneLine(line));
                 continue;
             }
 
             matched.Add(candidate);
             if (candidate.Issue.Length == 0)
-                unfiled.Add($"[known candidate: {candidate.Family}] {line.TrimStart()}");
+                unfiled.Add($"[known candidate: {candidate.Family}] {OneLine(line.TrimStart())}");
             else
-                Console.WriteLine($"SKIPPED [known candidate: {candidate.Family}, {candidate.Issue}] {line.TrimStart()}");
+                Console.WriteLine($"SKIPPED [known candidate: {candidate.Family}, {candidate.Issue}] {OneLine(line.TrimStart())}");
         }
 
         foreach (var fixedCandidate in known.Where(c => requireEveryCandidate && !matched.Contains(c)))
@@ -110,10 +110,19 @@ public static class Candidates
         if (failing.Count == 0) return;
 
         throw new AssertFailedException(
-            $"{header} ({failing.Count} failures):" + Environment.NewLine
+            $"{OneLine(header)} ({failing.Count} failures):" + Environment.NewLine
           + string.Join(Environment.NewLine, failing.Take(shown))
           + (failing.Count > shown ? $"{Environment.NewLine}  … and {failing.Count - shown} more" : ""));
     }
+
+    /// <summary>
+    /// A row as one line, line breaks shown as ⏎. The message is one row per line, and SeedVerdict reads
+    /// it that way: a row whose text held a newline (a value set element holding <c>\n</c>, an exception
+    /// message) put its continuation on a line without the <c>[known candidate:</c> prefix, which read as
+    /// a caught row (#235).
+    /// </summary>
+    private static string OneLine(string text)
+        => text.Contains('\n') || text.Contains('\r') ? text.Replace("\r\n", "⏎").Replace('\n', '⏎').Replace('\r', '⏎') : text;
 
     private static IReadOnlyList<Candidate> Load()
     {
