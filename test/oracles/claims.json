@@ -2774,7 +2774,7 @@
     "id": "R30-shift-overflow-throws",
     "source": "docs/ranges.md#move-or-widen-a-range",
     "quote": "`Shift` and `Expand` throw `OverflowException` when a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They never wrap around.",
-    "claim": "For every range type, Shift or Expand moving a finite bound past the element type's least or greatest value throws OverflowException, a TimeRange bound moved past either end of the day included, and moving away from the extreme, or an unbounded side, does not throw.",
+    "claim": "For every range type, Shift or Expand moving a finite bound past the element type's least or greatest value throws OverflowException, a TimeRange bound moved past either end of the day included, and moving away from the extreme, or an unbounded side, does not throw; on the temporal types a bound already at an extreme stands for infinity and stays (R42).",
     "oracle": "exception",
     "surfaces": [
       "*Range.Shift",
@@ -2789,12 +2789,14 @@
   {
     "id": "R31-shift-by-months-follows-calendar",
     "source": "docs/ranges.md#move-or-widen-a-range",
-    "quote": "`LocalDateRange` and `LocalDateTimeRange` move by NodaTime's calendar arithmetic, which clips to the end of a shorter month.",
-    "claim": "LocalDateRange.Shift(Period.FromMonths(1)) of [2026-01-01,2026-01-31] is [2026-02-01,2026-02-28], and shifting it back gives [2026-01-01,2026-01-28]; a period with a time part throws ArgumentException.",
+    "quote": "A `LocalDateRange` moves the day after its last day, as PostgreSQL stores a `daterange`, so a whole month moves to a whole month: `LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1))` is `LocalDateRange.Month(2026, 3)`, and moving it back gives February again.",
+    "claim": "LocalDateRange.Shift and Expand by a period of months move the upper bound as its exclusive end and step back a day, so Month(y, m).Shift(P1M) is Month(y, m + 1), Quarter(y, q).Shift(P3M) the next quarter and Year(y).Shift(P1Y) the next year, for every month of a leap and a non-leap year, and the shift back restores the range, as PostgreSQL moves the daterange [first, next first) and LocalDateTimeRange moves [first, next first); a start on the 31st still clips to the shorter month; YearMonthRange.Quarter(y, q).Shift(3) is the next quarter; a period with a time part throws ArgumentException.",
     "oracle": "claim",
     "surfaces": [
       "LocalDateRange.Shift",
-      "LocalDateTimeRange.Shift"
+      "LocalDateRange.Expand",
+      "LocalDateTimeRange.Shift",
+      "YearMonthRange.Shift"
     ],
     "heldBy": [
       "NodaTimeShiftExpandTests"
@@ -3005,6 +3007,23 @@
     "heldBy": [
       "RangeOrderParityTests",
       "QueryTranslationTests"
+    ]
+  },
+  {
+    "id": "R42-shift-keeps-infinite-bounds",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "`Shift` and `Expand` leave such a bound alone, as `infinity - 1` is still `infinity` in PostgreSQL.",
+    "claim": "On DateRange, DateTimeRange, DateTimeOffsetRange, LocalDateRange, LocalDateTimeRange, InstantRange and YearMonthRange, Shift and Expand leave a bound at the element type's least or greatest value where it is, and on the two closed date ranges also an end the day before the maximum; a finite bound moved past an extreme still throws OverflowException; Shift(d).Shift(-d) is the identity on such a range; a row read from a tsrange, tstzrange or daterange open to infinity (inclusive for daterange), moved and saved, still holds infinity, and one read from daterange [x,infinity) saves the same upper bound moved or not.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Shift",
+      "*Range.Expand"
+    ],
+    "heldBy": [
+      "RangeArithmeticOracleTests",
+      "RangeShiftExpandTests",
+      "NodaTimeShiftExpandTests",
+      "InfinityShiftRoundTripTests"
     ]
   },
   {

@@ -497,6 +497,13 @@ Good to know:
 - **A bound moved past the last value throws.** `Shift` and `Expand` throw `OverflowException` when
   a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They
   never wrap around.
+- **A bound that stands for infinity stays where it is.** On the date and time ranges,
+  `DateOnly.MaxValue`, `DateTime.MaxValue` and the other extremes stand for PostgreSQL's
+  `infinity` and `-infinity`. `Shift` and `Expand` leave such a bound alone, as `infinity - 1`
+  is still `infinity` in PostgreSQL. A closed date range counts the day before the maximum too,
+  because a column holding `[2026-01-01,infinity)` loads as `[2026-01-01,9999-12-30]`. So that
+  range shifted back a day is `[2025-12-31,9999-12-30]`, and it still ends at infinity. The
+  integer and float ranges have no infinity, so their extremes still throw.
 - **A `Float64Range` or `Float32Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`,
   so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue`
   throws `OverflowException`, as for the other types. A `NaN` or infinite step throws
@@ -506,9 +513,11 @@ Good to know:
 - **A `DateTimeOffsetRange` keeps its offsets.** A day is exactly 24 hours, whatever a time zone
   does that night.
 - **A period of months follows the calendar.** `LocalDateRange` and `LocalDateTimeRange` move by
-  NodaTime's calendar arithmetic, which clips to the end of a shorter month. So
-  `[2026-01-01,2026-01-31]` moved by one month is `[2026-02-01,2026-02-28]`, and moving it back
-  gives `[2026-01-01,2026-01-28]`. A period of days or weeks moves back exactly.
+  NodaTime's calendar arithmetic, which clips to the end of a shorter month. A `LocalDateRange`
+  moves the day after its last day, as PostgreSQL stores a `daterange`, so a whole month moves to a
+  whole month: `LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1))` is
+  `LocalDateRange.Month(2026, 3)`, and moving it back gives February again. A start on the 31st
+  still clips: January 31 plus one month is February 28.
 - **They run in memory only.** PostgreSQL has no range arithmetic. See
   [What runs where](efcore.md#what-runs-where).
 

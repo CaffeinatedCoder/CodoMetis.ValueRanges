@@ -1,0 +1,20 @@
+Seed: Shift and Expand move a bound that stands for PostgreSQL's -infinity or infinity as an ordinary value, so it throws at the extreme or turns finite
+Oracles: RangeArithmeticOracleTests
+Fails: every edge row of the seven infinity-backed types (DateRange, DateTimeRange, DateTimeOffsetRange, LocalDateRange, LocalDateTimeRange, InstantRange, YearMonthRange): the extreme throws or moves instead of staying
+History: shipped in the 10.0.0 previews, found by the pre-tag analysis, fixed in 10.0.0 (#224)
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+index 886aa4c..14a7bac 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+@@ -53,8 +53,8 @@ internal static class RangeArithmetic
+         where TRange : IRangeFactory<TRange, T>, IRange<T>
+         where T : struct, IComparable<T>, IEquatable<T>
+         => Move<TRange, T>(range,
+-                           value => lowerIsInfinity(value) ? value : lower(value),
+-                           value => upperIsInfinity(value) ? value : upper(value));
++                           lower,
++                           upper);
+ 
+     /// <summary>
+     /// Runs one step of an element type's arithmetic and reports a result outside the type's values

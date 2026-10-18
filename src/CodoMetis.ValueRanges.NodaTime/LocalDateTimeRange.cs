@@ -364,11 +364,14 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     /// shorter month, so moving back does not always restore the range. Days, weeks and time units move
     /// every value by the same amount.
     /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="LocalDateTime.MinIsoValue"/> or <see cref="LocalDateTime.MaxIsoValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="delta">How far to move the range.</param>
     /// <returns>The moved range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDateTime"/> can hold.</exception>
-    public LocalDateTimeRange Shift(Period delta) => RangeArithmetic.Move<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+    public LocalDateTimeRange Shift(Period delta) => RangeArithmetic.MoveKeepingInfinity<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)), IsInfinity, IsInfinity);
 
     /// <summary>
     /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
@@ -378,11 +381,20 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
     /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="LocalDateTime.MinIsoValue"/> or <see cref="LocalDateTime.MaxIsoValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="amount">How far to move each bound outward.</param>
     /// <returns>The grown, or shrunk, range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDateTime"/> can hold.</exception>
-    public LocalDateTimeRange Expand(Period amount) => RangeArithmetic.Move<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
+    public LocalDateTimeRange Expand(Period amount) => RangeArithmetic.MoveKeepingInfinity<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)), IsInfinity, IsInfinity);
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is an extreme that stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, which <see cref="Shift"/> and <see cref="Expand"/> leave where it is (#224).
+    /// </summary>
+    private static bool IsInfinity(LocalDateTime value) => value == LocalDateTime.MinIsoValue || value == LocalDateTime.MaxIsoValue;
 
     /// <inheritdoc />
     public override sealed string ToString()

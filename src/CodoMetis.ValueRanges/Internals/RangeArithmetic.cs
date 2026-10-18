@@ -36,6 +36,27 @@ internal static class RangeArithmetic
         };
 
     /// <summary>
+    /// <see cref="Move{TRange,T}"/> for a type whose extremes stand for PostgreSQL's <c>-infinity</c> and
+    /// <c>infinity</c>: a bound that stands for one stays where it is, as <c>infinity ± d</c> stays
+    /// infinite in PostgreSQL (#224). Moving it as a date turned a row read from
+    /// <c>[x,infinity)</c> into a finite range on its way back. A finite bound moved past an extreme
+    /// still throws. Each side has its own test, because a closed date range's upper bound stands
+    /// for <c>infinity)</c> one day before the extreme, where its exclusive end is.
+    /// </summary>
+    internal static TRange MoveKeepingInfinity<TRange, T>(
+        TRange         range,
+        Func<T, T>     lower,
+        Func<T, T>     upper,
+        Func<T, bool>  lowerIsInfinity,
+        Func<T, bool>  upperIsInfinity
+    )
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => Move<TRange, T>(range,
+                           value => lowerIsInfinity(value) ? value : lower(value),
+                           value => upperIsInfinity(value) ? value : upper(value));
+
+    /// <summary>
     /// Runs one step of an element type's arithmetic and reports a result outside the type's values
     /// as <see cref="OverflowException"/>, whichever exception the type itself throws for it — the
     /// BCL date and time types throw <see cref="ArgumentOutOfRangeException"/>, the integers and

@@ -291,11 +291,14 @@ public abstract partial record DateTimeRange : IRange<DateTime>, IRangeFactory<D
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="delta"/> moves the range down.
     /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="DateTime.MinValue"/> or <see cref="DateTime.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="delta">How far to move the range.</param>
     /// <returns>The moved range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateTime"/> can hold.</exception>
-    public DateTimeRange Shift(TimeSpan delta) => RangeArithmetic.Move<DateTimeRange, DateTime>(this, value => RangeArithmetic.Checked(() => value.Add(delta)), value => RangeArithmetic.Checked(() => value.Add(delta)));
+    public DateTimeRange Shift(TimeSpan delta) => RangeArithmetic.MoveKeepingInfinity<DateTimeRange, DateTime>(this, value => RangeArithmetic.Checked(() => value.Add(delta)), value => RangeArithmetic.Checked(() => value.Add(delta)), IsInfinity, IsInfinity);
 
     /// <summary>
     /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
@@ -305,11 +308,20 @@ public abstract partial record DateTimeRange : IRange<DateTime>, IRangeFactory<D
     /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
     /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="DateTime.MinValue"/> or <see cref="DateTime.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="amount">How far to move each bound outward.</param>
     /// <returns>The grown, or shrunk, range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateTime"/> can hold.</exception>
-    public DateTimeRange Expand(TimeSpan amount) => RangeArithmetic.Move<DateTimeRange, DateTime>(this, value => RangeArithmetic.Checked(() => value.Subtract(amount)), value => RangeArithmetic.Checked(() => value.Add(amount)));
+    public DateTimeRange Expand(TimeSpan amount) => RangeArithmetic.MoveKeepingInfinity<DateTimeRange, DateTime>(this, value => RangeArithmetic.Checked(() => value.Subtract(amount)), value => RangeArithmetic.Checked(() => value.Add(amount)), IsInfinity, IsInfinity);
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is an extreme that stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, which <see cref="Shift"/> and <see cref="Expand"/> leave where it is (#224).
+    /// </summary>
+    private static bool IsInfinity(DateTime value) => value == DateTime.MinValue || value == DateTime.MaxValue;
 
     /// <inheritdoc />
     public override sealed string ToString()

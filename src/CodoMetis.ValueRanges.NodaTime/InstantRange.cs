@@ -297,11 +297,14 @@ public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<Ins
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="delta"/> moves the range down.
     /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="Instant.MinValue"/> or <see cref="Instant.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="delta">How far to move the range.</param>
     /// <returns>The moved range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="Instant"/> can hold.</exception>
-    public InstantRange Shift(Duration delta) => RangeArithmetic.Move<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+    public InstantRange Shift(Duration delta) => RangeArithmetic.MoveKeepingInfinity<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)), IsInfinity, IsInfinity);
 
     /// <summary>
     /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
@@ -311,11 +314,20 @@ public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<Ins
     /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
     /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="Instant.MinValue"/> or <see cref="Instant.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="amount">How far to move each bound outward.</param>
     /// <returns>The grown, or shrunk, range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="Instant"/> can hold.</exception>
-    public InstantRange Expand(Duration amount) => RangeArithmetic.Move<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
+    public InstantRange Expand(Duration amount) => RangeArithmetic.MoveKeepingInfinity<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)), IsInfinity, IsInfinity);
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is an extreme that stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, which <see cref="Shift"/> and <see cref="Expand"/> leave where it is (#224).
+    /// </summary>
+    private static bool IsInfinity(Instant value) => value == Instant.MinValue || value == Instant.MaxValue;
 
     /// <inheritdoc />
     public override sealed string ToString()
