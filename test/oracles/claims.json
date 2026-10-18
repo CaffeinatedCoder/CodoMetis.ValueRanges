@@ -1492,6 +1492,24 @@
     ]
   },
   {
+    "id": "J39-integer-grammar",
+    "source": "docs/serialization.md#parse-a-literal",
+    "quote": "Integer bounds and elements follow PostgreSQL 16's integer grammar. You can write them in decimal, or in hexadecimal, octal or binary after `0x`, `0o` or `0b`, with single underscores between digits: `[0x1F,1_000)` is `[31,1000)`.",
+    "claim": "Every integer range, multirange and value set reads 0x/0o/0b prefixes and single digit separators as PostgreSQL 16 and 18 read them, accepts and refuses the same text, and overflows past the type's extremes.",
+    "oracle": "differential",
+    "surfaces": [
+      "Int32Range.ParseValue",
+      "Int64Range.ParseValue",
+      "Int16Set.ParseValue",
+      "Int32Set.ParseValue",
+      "Int64Set.ParseValue"
+    ],
+    "heldBy": [
+      "IntegerLiteralGrammarTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
     "id": "J40-offset-range",
     "source": "docs/serialization.md#dates-and-times-are-strict-iso-8601",
     "quote": "**An offset goes up to ±15:59:59,** as in PostgreSQL. A `DateTimeOffset` holds at most ±14:00, so for an offset beyond that you also get the instant at offset zero. `+16:00` fails (`FormatException`).",
@@ -2564,6 +2582,37 @@
       "SetElementBridgeTests",
       "SqlLiteralTests",
       "DecorativeElementContractTests"
+    ]
+  },
+  {
+    "id": "S20-array-dimension-decoration",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "The decoration must count the elements as written, duplicates included, or the parse fails (`FormatException`), as it does on the server.",
+    "claim": "Every value set type reads array_in's one-dimension decoration ([l:u]= or [u]=) and drops it, accepts and rejects the same decorated text as PostgreSQL 16 and 18, and reads empty arrays nested to one depth ({{}}, {{},{}}) as empty, as PostgreSQL 17 and 18 do.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetDimensionDecorationTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "S21-nested-empty-arrays-version-split",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "`{{}}` and `{{},{}}` are `{}`. PostgreSQL 17 and later read them as `{}`, and PostgreSQL 16 rejects them.",
+    "claim": "Every value set reads empty arrays nested to one depth as the empty set and rejects a nested array holding an element; PostgreSQL 17 and 18 read the nested empties as {} and PostgreSQL 16 rejects them, which a live test asks each version.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetDimensionDecorationTests",
+      "LiteralGrammarParityTests",
+      "LiteralCorpusProbeTests"
     ]
   }
 ]

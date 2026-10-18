@@ -96,16 +96,20 @@ public class TemporalLiteralGrammarTests
     /// <summary>
     /// A local value round-trips exactly, <see cref="DateTimeKind"/> included: it formats with an
     /// offset and the offset is not applied on the way back, so no zone rule is consulted — not even
-    /// for a wall clock the machine's zone skips or repeats.
+    /// for a wall clock the zone skips or repeats. Run in Berlin, because in UTC, the CI runner's
+    /// zone, those two rows are ordinary wall clocks and the test checks nothing zone-specific (#119).
     /// </summary>
     [TestMethod]
+    [DoNotParallelize]
     public void LocalValue_RoundTrips_WithItsKind()
     {
+        using var zone = LocalTimeZone.UseBerlin();
+
         foreach (var local in new[]
                  {
                      new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Local).AddTicks(1_234_567),
-                     new DateTime(2026, 3, 29, 2, 30, 0, DateTimeKind.Local),
-                     new DateTime(2026, 10, 25, 2, 30, 0, DateTimeKind.Local),
+                     LocalTimeZone.Skipped,
+                     LocalTimeZone.Repeated,
                      DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Local),
                      DateTime.SpecifyKind(DateTime.MaxValue.AddDays(-1), DateTimeKind.Local)
                  })
