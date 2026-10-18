@@ -172,6 +172,23 @@ public sealed class QueryTranslationTests
     }
 
     [TestMethod]
+    public void CompareTo_AgainstANullOperand_IsDecidedAsInMemory()
+    {
+        DateRange? none = null;
+        var some = DateRange.CreateFinite(new DateOnly(2024, 1, 1), new DateOnly(2024, 2, 1));
+
+        // null sorts first: > 0 holds for every row, <= 0 for none (#220).
+        Assert.DoesNotContain("WHERE", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(none) > 0).Select(b => (object?)b.Id)));
+        Assert.Contains("WHERE FALSE", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(none) <= 0).Select(b => (object?)b.Id)));
+        Assert.DoesNotContain("WHERE", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(null) >= 0).Select(b => (object?)b.Id)));
+
+        // A non-null operand keeps the bare operator: the null test folds away by the parameter's value.
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.CompareTo(some) > 0).Select(b => (object?)b.Id));
+        Assert.Contains("WHERE b.\"Period\" > @some", sql);
+        Assert.DoesNotContain("IS NULL", sql);
+    }
+
+    [TestMethod]
     public void CompareTo_OnAMultirange_IsTheComparisonOperator()
     {
         var blocked = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5)]);

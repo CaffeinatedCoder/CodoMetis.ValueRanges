@@ -63,16 +63,33 @@ internal static class RangeSplitting
     /// The boundaries of a fixed step: the <c>n</c>-th is <paramref name="at"/>(start, n), and one
     /// the element type cannot hold is <see langword="null"/>.
     /// </summary>
-    internal static Boundary<T> Steps<T>(IRange<T> range, Func<T, long, T> at)
+    /// <remarks>
+    /// <paramref name="at"/> can overflow on <c>n × step</c> alone while <c>start + n × step</c> still
+    /// fits: from a negative start the product passes the maximum before the sum does. Ending the
+    /// split there dropped the last pieces silently (#219). So a type whose product can overflow
+    /// first passes <paramref name="afterPrevious"/>, the previous boundary plus one step, and the
+    /// boundary is <see langword="null"/> only when that overflows too, which means the boundary
+    /// itself has left the domain.
+    /// </remarks>
+    internal static Boundary<T> Steps<T>(IRange<T> range, Func<T, long, T> at, Func<T, T>? afterPrevious = null)
         where T : struct, IComparable<T>, IEquatable<T>
     {
         var start = range is IFiniteRange<T> finite ? finite.Start : default;
 
-        return (_, n) =>
+        return (previous, n) =>
         {
             try
             {
                 return at(start, n);
+            }
+            catch (Exception exception) when (exception is OverflowException or ArgumentOutOfRangeException)
+            {
+                if (afterPrevious is null) return null;
+            }
+
+            try
+            {
+                return afterPrevious(previous);
             }
             catch (Exception exception) when (exception is OverflowException or ArgumentOutOfRangeException)
             {

@@ -245,6 +245,12 @@ public class TemporalLiteralGrammarTests
     [DataRow("2026-01-01T09:30:00+05x30:00")]       // and both colons
     [DataRow("0001-01-01T00:00:00+00:00:01")]       // the instant falls before DateTime.MinValue
     [DataRow("9999-12-31T23:59:59-00:00:01")]       // or after DateTime.MaxValue
+    [DataRow("2026-01-01T09:30:00+0530")]           // offsets are ±HH, ±HH:mm or ±HH:mm:ss, as for a
+    [DataRow("2026-01-01T09:30:00-0530")]           // DateTime: .NET's zzz read these until #234
+    [DataRow("2026-01-01T09:30:00+5:30")]
+    [DataRow("2026-01-01 09:30:00+1430")]
+    [DataRow("2026-01-01 09:30:00+1530")]
+    [DataRow("2026-01-01T09:30+0530")]
     public void DateTimeOffset_Rejects(string text)
         => Assert.ThrowsExactly<FormatException>(() => DateTimeOffsetRange.ParseValue(text, null));
 

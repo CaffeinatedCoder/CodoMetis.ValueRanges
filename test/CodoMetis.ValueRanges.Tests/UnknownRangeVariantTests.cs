@@ -55,5 +55,7 @@ public class UnknownRangeVariantTests
 
         // Only a range's own type is accepted by CompareTo, so no shipped range compares with this one.
         public int CompareTo(RogueRange? other) => throw new NotSupportedException();
+
+        int IComparable.CompareTo(object? other) => throw new NotSupportedException();
     }
 }

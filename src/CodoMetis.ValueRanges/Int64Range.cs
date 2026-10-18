@@ -231,7 +231,7 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     public IEnumerable<Int64Range> Split(long step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
-        return RangeSplitting.Split<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+        return RangeSplitting.Split<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step)), previous => checked(previous + step)));
     }
 
     /// <summary>
@@ -249,7 +249,7 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     public IEnumerable<long> Values(long step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
-        return RangeSplitting.Values<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+        return RangeSplitting.Values<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step)), previous => checked(previous + step)));
     }
 
     /// <summary>
@@ -325,6 +325,10 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
     /// </returns>
     public int CompareTo(Int64Range? other) => RangeOrder.Compare<long>(this, other);
+
+    /// <inheritdoc cref="CompareTo(Int64Range)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="Int64Range"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<Int64Range>(this, other, static (a, b) => a.CompareTo(b));
 
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their

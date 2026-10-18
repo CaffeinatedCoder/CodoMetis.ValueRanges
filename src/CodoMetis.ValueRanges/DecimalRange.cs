@@ -202,7 +202,7 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
     public IEnumerable<DecimalRange> Split(decimal step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
-        return RangeSplitting.Split<DecimalRange, decimal>(this, RangeSplitting.Steps<decimal>(this, (start, n) => checked(start + n * step)));
+        return RangeSplitting.Split<DecimalRange, decimal>(this, RangeSplitting.Steps<decimal>(this, (start, n) => checked(start + n * step), previous => checked(previous + step)));
     }
 
     /// <summary>
@@ -289,6 +289,10 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
     /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
     /// </returns>
     public int CompareTo(DecimalRange? other) => RangeOrder.Compare<decimal>(this, other);
+
+    /// <inheritdoc cref="CompareTo(DecimalRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="DecimalRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<DecimalRange>(this, other, static (a, b) => a.CompareTo(b));
 
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
