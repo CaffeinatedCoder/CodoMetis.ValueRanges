@@ -427,7 +427,9 @@ argument that is not the same range type.
 Good to know:
 
 - **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
-  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`.
+  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`. With a
+  `null` range on the right, the query returns the rows memory returns: `> 0`, `>= 0` and `!= 0` hold
+  for every row, and `< 0`, `<= 0` and `== 0` for none.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
   nullable column, the two orders differ only in where the nulls go.
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
