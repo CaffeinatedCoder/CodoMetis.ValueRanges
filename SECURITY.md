@@ -46,22 +46,41 @@ Reporters are credited in the advisory unless they ask not to be.
 
 ## Supported versions
 
-Security fixes land on the latest released minor version. Older majors are not maintained — the
-remedy for those is to upgrade.
+Up to two lines are supported at once, one per .NET major: the LTS line and the current line. Each
+receives security fixes on its latest released minor. Older minors of a line are fixed by
+upgrading to its latest minor, which never changes the platform you target. Older lines are not
+maintained.
 
 | Version | Supported |
 |---|---|
 | 9.1.x | ✅ |
 | < 9.1 | ❌ |
 
+Previews (`11.0.0-preview.N`) are not supported versions and have no row: a fix reaches a preview
+in the next preview.
+
+### How the table changes
+
+- **Until 10.0.0 ships**, one line is supported: 9.1.x.
+- **When 10.0.0 ships**, 9.x stops receiving fixes and 10.0.x takes its row. The 11.0.0 previews
+  continue and still have no row.
+- **When 11.0.0 ships**, the table gets its second row: 11.0.x, and below it the latest 10.x minor.
+  From then on each line's row moves when that line ships a minor.
+
 ### For how long
 
-There is no fixed end-of-support date. The current line targets **.NET 10** (`net10.0`, and EF Core
-10 for the EF Core packages), and the intention is to keep it maintained for as long as Microsoft
-supports that .NET release (.NET 10 is LTS, supported until November 2028), or until a new major of
-this package supersedes it, whichever comes first — majors here are cheap, and a new one has never
-meant the old one lost fixes before its successor shipped. If that intention changes, it is recorded
-here before anywhere else.
+There is no fixed end-of-support date. Each line is tied to the .NET release it targets:
+
+- **9.x** targets **.NET 10** (`net10.0`, EF Core 10) and receives fixes until 10.0.0 ships.
+- **10.x**, the LTS line, targets **.NET 10** (`net10.0`, EF Core 10, PostgreSQL 14+). The intention
+  is to maintain it for as long as Microsoft supports .NET 10 (LTS, until November 2028).
+- **11.x** targets **.NET 11** (`net11.0`, EF Core 11, Npgsql 11, PostgreSQL 16+), as previews until
+  .NET 11 is released. The intention is to maintain it for as long as Microsoft supports .NET 11.
+
+From 11.0.0 on, a new major means a new .NET release, and nothing else. A fix that changes what a
+call returns ships as a minor on every supported line, with a "Changed answers" section at the top of
+that version's changelog entry, so a line never stops receiving the fixes that matter most. If this
+intention changes, it is recorded here before anywhere else.
 
 ### If this project stops being maintained
 
