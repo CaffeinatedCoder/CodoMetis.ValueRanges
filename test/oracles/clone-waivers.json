@@ -656,5 +656,89 @@
     "member": "arity only: RequireText($T)",
     "kind": "extra",
     "reason": "the arity checks the element's text form for a NUL character through one helper; the closed set checks the string itself inline (TextElement, #133)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Int16Set + Int32Set + Int64Set",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer families read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ones read strict ISO 8601 (IsoTemporal), the others their own grammar"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer ranges read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ranges read strict ISO 8601 (IsoTemporal)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Int16Set<TElement> + Int32Set<TElement> + Int64Set<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "integer-backed wrappers write a JSON number through the integer element converter, as their primitive siblings do; text-backed and temporal ones write a JSON string"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DecimalSet<TElement> + GuidSet<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "each has a converter of its own for the token its primitive writes: a number keeping scale for decimal, the hyphenated uuid string for Guid; they share only the naming pattern"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DateTimeOffsetSet<TElement> + DateTimeSet<TElement> + TimeSet<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "the temporal arities pin the round-trip O format because the default text form drops sub-seconds (and the DateTime Kind); the others' default already round-trips (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DecimalRange + Int64Range",
+    "member": "FiniteLength($T, $T)",
+    "kind": "extra",
+    "reason": "the two ranges whose span can exceed their own element type compute it without overflowing and return null when it would; Int32Range counts in long, the temporal ranges measure a TimeSpan"
+  },
+  {
+    "family": "efcore range definitions",
+    "unit": "InstantRange + LocalDateTimeRange",
+    "member": "storeValue",
+    "kind": "lone body",
+    "reason": "the NodaTime temporal ranges truncate to the store's microsecond with NodaStoreTemporal, the BCL ones with StoreTemporal: the same rule over different types"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "InstantSet + LocalDateSet + LocalDateTimeSet + LocalTimeSet",
+    "member": "literalText",
+    "kind": "extra",
+    "reason": "the NodaTime temporal sets write their SQL literal through NodaStoreTemporal.Literal, because Npgsql's NodaTime literal carries nine fraction digits the server rounds; the BCL sets use the shared SetProviderText"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "DateTimeOffsetSet + DateTimeSet + LocalDateSet + LocalDateTimeSet",
+    "member": "normalizeValue",
+    "kind": "extra",
+    "reason": "the sets whose element the store reads differently from memory normalize it: timestamp to an Unspecified wall clock, timestamptz to UTC, the calendar-bearing NodaTime types to ISO; the others' elements are stored as they are"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "arity only: RequireIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime arities refuse an element whose wrapped value is not ISO (IsoWrapperElement), which a wrapper cannot convert; their primitive sets convert it instead (ToIso)"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "primitive only: ToIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime primitive sets convert an element to the ISO calendar; their arities cannot convert a wrapped value and refuse it (RequireIso)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "Values($T)",
+    "kind": "extra",
+    "reason": "Every discrete range has Values(step), but only on the integer ranges is the step the element type itself. DateRange steps in int days, LocalDateRange in a Period and YearMonthRange in int months, so their overloads don't normalize to Values($T)."
   }
 ]

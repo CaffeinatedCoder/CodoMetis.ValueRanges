@@ -1,0 +1,31 @@
+Seed: Int32Set and Int64Set hash the canonical array by reference instead of by its elements, the same line copied into both, so two equal sets hash differently and a dictionary keyed by either misses
+Oracles: CloneDivergenceTests
+Fails: a lone body shared by the two siblings, reported as Int32Set + Int64Set; before #200 two siblings that drifted together were not reported at all
+History: #200, found while adding the float families
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+index 5ce4916..50da36d 100644
+--- a/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
++++ b/src/CodoMetis.ValueRanges/Sets/Int32Set.cs
+@@ -106,7 +106,7 @@ public sealed class Int32Set : IValueSet<int>, IValueSetFactory<Int32Set, int>,
+     public override bool Equals(object? obj) => Equals(obj as Int32Set);
+ 
+     /// <inheritdoc />
+-    public override int GetHashCode() => ValueSetCore.SetHashCode(_elements);
++    public override int GetHashCode() => _elements.GetHashCode();
+ 
+     /// <summary>Structural equality — delegates to <see cref="Equals(Int32Set)"/>.</summary>
+     public static bool operator ==(Int32Set? left, Int32Set? right)
+diff --git a/src/CodoMetis.ValueRanges/Sets/Int64Set.cs b/src/CodoMetis.ValueRanges/Sets/Int64Set.cs
+index 306400c..9e575cc 100644
+--- a/src/CodoMetis.ValueRanges/Sets/Int64Set.cs
++++ b/src/CodoMetis.ValueRanges/Sets/Int64Set.cs
+@@ -106,7 +106,7 @@ public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>
+     public override bool Equals(object? obj) => Equals(obj as Int64Set);
+ 
+     /// <inheritdoc />
+-    public override int GetHashCode() => ValueSetCore.SetHashCode(_elements);
++    public override int GetHashCode() => _elements.GetHashCode();
+ 
+     /// <summary>Structural equality — delegates to <see cref="Equals(Int64Set)"/>.</summary>
+     public static bool operator ==(Int64Set? left, Int64Set? right)
