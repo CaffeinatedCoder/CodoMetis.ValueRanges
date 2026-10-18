@@ -360,3 +360,124 @@ they format themselves.
 - `RangeBoundHelpers.cs`, `RangeFormat.cs`, `RangeSetHelpers.cs` — shared utilities
 - `ValueSetCore.cs` — the value set engine: canonicalization, membership (binary search over the canonical order — `IValueSet<T>.CanonicalOrder` is the instance-side view of `CanonicalComparer` that `Contains` needs and cannot reach statically), equality, merge-scan algebra. `Union` keeps the **left** operand's representative among comparer-equal elements, the same "first in input order survives" tie-break `Canonicalize` applies; only the left-hand identity shortcut is sound, since a count matching the right operand merely means the left was a subset
 - `SetFormat.cs` — PostgreSQL array-literal parse/format for value sets (sibling of `RangeFormat`)
+
+## Adding a Range or Set Type
+
+Every concrete type is a hand-written copy of its siblings, and that is the design, not a gap.
+Measured on 10.0.0 with the type names normalized, `Int32Range` and `Int64Range` differ in about
+25 of 254 lines and `Int32Set` and `Int64Set` in 20 of 258; across an axis the copy is only half
+(`Int32Range` and `DecimalRange` differ in about 120 lines), because discrete versus continuous
+changes the `Finite` constructor, both unbounded records, `CreateFinite`, `Length` and `Values`,
+and temporal versus numeric changes `ParseValue`, `FormatValue` and the literal grammar. The lines
+that differ are mostly the shipped doc comments and the per-type semantics: which PostgreSQL type
+it mirrors, the boundary convention and why, what `Length` counts, how it overflows.
+
+A scaffolding script or template was considered for this and rejected (#174). It would be a
+twelfth sibling that no sweep reads, it rots the first time the live files take a fix, and it
+scaffolds the hundred lines that take ten minutes while leaving the hundred that take thought. A
+generic base record is not available either: the private constructor and the nested sealed
+variants are what keep each union closed, so the five variants and the factory — about a hundred
+lines per type — are the irreducible floor. The repository took the other side of the trade with
+the clone-divergence sweep (`test/oracles/CloneSweep.cs`, #145): the siblings *are* the template,
+and `CloneDivergenceTests` keeps them in step. The procedure below is built on that.
+
+### 1. Measure the domain before writing a line
+
+This is the part no sweep can do. Against a live server, establish what the doc comments will
+promise: whether the subtype is discrete (PostgreSQL canonicalizes `int4range`, `int8range` and
+`daterange` to `[)`; the model to `[]`) or continuous; how the CLR extremes map
+(`MinValue`/`MaxValue` versus `-infinity`/`infinity`, see [Domain Width](#domain-width-and-the-boundary));
+what `Length` should count and where it overflows; which values the CLR type holds that the
+database refuses, or the reverse (`numrange` holds NaN, `DecimalRange` cannot; `time` holds
+`24:00:00`, `TimeOnly` cannot); and what the literal looks like in ISO `DateStyle`. A domain the
+server does not ship (`timerange`, `float8range`) needs `CREATE TYPE … AS RANGE` on the consumer's
+side, and the measurement includes whether a `subtype_diff` is safe to declare. #153
+(`DoubleRange`) is the worked example: its measurement table is the issue body, and every design
+decision in it follows from one row of that table.
+
+### 2. Copy the nearest sibling on every axis
+
+The sweep's families name the siblings. Pick the one that matches on each axis and copy its file;
+rename; then change only what step 1 measured.
+
+| Axis | One side | Other side | What it changes |
+|---|---|---|---|
+| Discrete / continuous | `Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange` | `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange`, `LocalDateTimeRange`, `InstantRange` | `Finite` constructor and inclusiveness storage, the unbounded records, `CreateFinite` (canonicalizing via `DiscreteCanonical` or not), `IsDiscrete`, `NextValueAfter`/`PreviousValueBefore`, `Values`, what `Length` means |
+| Numeric / temporal | `Int32Range`, `DecimalRange`, `Int32Set`, `DecimalSet` | `DateRange`, `TimeRange`, `DateSet`, `TimeSet` and the NodaTime types | `ParseValue` through `IsoTemporal` / `NodaPatterns` rather than `T.Parse`, a pinned `FormatValue`, the strictness remark, the EF `storeValue` |
+| Primitive set / wrapper arity | `Int32Set` | `Int32Set<T>` | Copy **both**: the sweep pairs each primitive with its own arity (`primitive vs arity` family), and the arity carries `ElementJsonConverter`, the BCL-only constraint and a `GenericConverters.Register` line |
+| Core / NodaTime satellite | `DateRange`, `DateSet` | `LocalDateRange`, `LocalDateSet` | Own `ConvertersRegistered` for AOT, `NodaPatterns`, calendar normalization in `From` and `NormalizeElement`, the satellite's registration method rather than the core registry's table |
+
+A new type that sits on an axis no sibling occupies (a float domain is continuous and numeric,
+like `DecimalRange`, but refuses values at construction, like `YearMonthRange.RequireIso`) copies
+the closest one and borrows the mechanism from the other. Expect the sweep to report the borrowed
+member as a divergence; that is what the waiver is for.
+
+### 3. The wiring outside the type's own file
+
+The sweep covers the EF registrations. The rest is hand-listed, and the tests in step 4 are what
+tell you which of these you forgot:
+
+- **Core.** The closed converter pair in `Serialization/RangeJsonConverter.cs`
+  (`XRangeJsonConverter`, `XRangeSetJsonConverter`) or `ValueSetJsonConverter.cs`
+  (`XSetJsonConverter`), named by the type's `[JsonConverter]` attribute; `RangeAggregateExtensions`
+  (`RangeAgg`, `RangeIntersectAgg`); `ValueSetRangeExtensions` (`ToRangeSet`, `ToXSet`) when a range
+  and a set now exist over the same element.
+- **EF Core.** A `RangeTypeDefinition<XRange, T>(rangeType, multirangeType, subtype)` row in
+  `RangeTypeRegistry`; a `SetTypeDefinition<XSet, T>` row and a `Bridged<P>` entry for the arity in
+  `SetTypeRegistry`; typed constant operands in `ValueRangesMethodCallTranslator` if the element's
+  literal is not already cast (`anyrange @> anyelement` resolves without implicit coercions). A
+  custom range type is documented in `docs/efcore.md` beside `timerange`, with its `HasPostgresRange`
+  and `EnableUnmappedTypes` setup.
+- **NodaTime.** Both satellites register from
+  `NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions` (`Register`, `RegisterFamily`), never
+  from the core tables.
+- **Tests that list types by hand.** `RangeProbes.Bounds` and `SetProbes.Probes` (two ordered values
+  per element type; every `*ProbeTests` sweep reads them); a column in `TestDbContext` and
+  `IntegrationDbContext`; the discovery floors in `MappingParityTests.Discovery_FindsEveryRangeAndSetType`
+  (a floor does not fail when a type is added, so raise it, or the next type that goes missing is
+  invisible); a `Case` per package in `test/consumer-smoke-test.sh` when the type exercises a path
+  the existing cases do not.
+- **Catalogues.** `test/oracles/claims.json` for every new sentence in the consumer docs
+  (`OracleCatalogueTests` fails on a sentence without a claim, `OracleSurfaceCoverageTests` on a
+  public member without one or a `surface-waivers.json` reason); `postgres-surface.json` for the
+  type's constructor functions and operators (`dotnet run tools/oracles.cs pg-surface` regenerates
+  the listing; a custom domain contributes no built-in rows); `clone-waivers.json` for every
+  deliberate difference from the family consensus, each with the reason the sibling does not share
+  it.
+- **Docs.** The [Range Types](#range-types) table above, `docs/ranges.md` or `docs/value-sets.md`,
+  the root and package READMEs, and the package changelog (`ChangelogConventionTests` holds the
+  version wiring).
+
+### 4. Let the tests list what is left
+
+Run them in this order; each layer's failures are the worklist for the next.
+
+1. `dotnet build` — CS1591 names every public member whose doc comment the copy did not bring, and
+   the shipped `.xml` is what IntelliSense shows, so the comments are not optional.
+2. `dotnet test --filter "FullyQualifiedName~Conventions.Tests"` — `CloneDivergenceTests`
+   lists every member that differs from the family consensus (fix it or waive it with a reason);
+   `JsonDefaultContractTests` and `TypeConverterContractTests` the variant or set without its own
+   attribute; `MappingParityTests` the type no `IRelationalTypeMappingSource` resolves;
+   `OracleSurfaceCoverageTests` and `OracleCatalogueTests` the unclaimed member and the unheld
+   sentence; the literal sweeps (`LiteralProviderContractTests`, `LiteralCultureContractTests`,
+   `TemporalLiteralStrictnessContractTests`, `CultureEntryPointProbeTests`) and
+   `JsonOptionsProbeTests` pick the type up by reflection and need nothing but the `Bounds` row.
+3. The unit and translation projects, which are per-operation and discover nothing: a new type
+   gets a `[DataRow]` wherever `Int64Range` has one and the operation's answer depends on the
+   domain (`RangeLengthTests`, `RangeParseFormatTests`, `RangeValuesAndClampTests`).
+4. The integration projects with Docker — the authority on the semantics step 1 measured.
+   `ShapeMatrixParityTests` asks PostgreSQL for every ordered shape pair of every discovered type;
+   `LiteralGrammarParityTests` and `TemporalStoreParityTests` hold the literal and the store value;
+   `InlineRangeConstantExecutionTests` needs one constant-operand query per element type;
+   `CapturedCollectionProbeTests` and `HostCultureProbeTests` read `RangeProbes`.
+5. `dotnet run tools/oracles.cs status` (the unheld claims and unwaived members), `… clones` (the
+   divergences with their waiver status), then `test/consumer-smoke-test.sh` for the packed
+   artefacts and the Native AOT consumer, which is the only place a missing closed converter
+   registration shows.
+
+### 5. Seed the guard
+
+A type that refuses values at construction, normalizes elements or pins a format has a guard, and
+the workflow rule applies to it as to any fix: strip the guard, confirm which oracle fails and
+why, keep the revert as `test/oracles/seeds/<defect>.patch` naming that oracle. For #153 the
+obvious seed is the one that lets `[5,NaN)` through to the parity sweep.
