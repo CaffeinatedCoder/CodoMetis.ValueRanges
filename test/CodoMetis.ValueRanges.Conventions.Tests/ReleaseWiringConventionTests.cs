@@ -202,12 +202,9 @@ public sealed class ReleaseWiringConventionTests
     [TestMethod]
     public void PullRequests_AreBuiltWhateverTheirBase()
     {
-        var trigger = Regex.Match(
-            BuildWorkflowText(), @"^  pull_request:[^\n]*\n((?:    [^\n]*\n)*)", RegexOptions.Multiline);
+        var settings = TriggerSettings(BuildWorkflowText(), "pull_request");
 
-        Assert.IsTrue(trigger.Success, "The .NET workflow has no pull_request trigger.");
-
-        var settings = trigger.Groups[1].Value;
+        Assert.IsNotNull(settings, "The .NET workflow has no pull_request trigger.");
 
         Assert.IsFalse(
             settings.Contains("branches", StringComparison.Ordinal),
@@ -255,6 +252,35 @@ public sealed class ReleaseWiringConventionTests
         StringAssert.Contains(gate, "needs: [ integration-legs ]");
         Assert.IsTrue(Regex.IsMatch(gate, @"(?m)^    if:\s*always\(\)\s*$"), "The integration gate does not run with if: always().");
         StringAssert.Contains(gate, "needs.integration-legs.result }}\" = success");
+    }
+
+    /// <summary>
+    /// The settings of one trigger under <c>on:</c>, comments removed: whatever follows its colon on
+    /// the same line (a flow mapping such as <c>{ branches: [ main ] }</c>), and every following line
+    /// that is blank or indented deeper than the key, up to the next key at the key's indentation or
+    /// shallower. A line-anchored regex missed both the flow form and a block after a blank line
+    /// (#237). <see langword="null"/> when the trigger isn't there.
+    /// </summary>
+    private static string? TriggerSettings(string workflow, string trigger)
+    {
+        var lines   = workflow.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var keyLine = Array.FindIndex(lines, line => Regex.IsMatch(line, $@"^\s+{trigger}\s*:"));
+
+        if (keyLine < 0) return null;
+
+        static string Uncommented(string line) => Regex.Replace(line, @"(^|\s)#.*$", "");
+
+        var indent   = lines[keyLine].Length - lines[keyLine].TrimStart().Length;
+        var settings = new List<string> { Uncommented(lines[keyLine][(lines[keyLine].IndexOf(':') + 1)..]) };
+
+        foreach (var line in lines.Skip(keyLine + 1))
+        {
+            if (line.Trim().Length == 0 || line.TrimStart().StartsWith('#')) continue;
+            if (line.Length - line.TrimStart().Length <= indent) break;
+            settings.Add(Uncommented(line));
+        }
+
+        return string.Join('\n', settings);
     }
 
     private static string BuildWorkflowText() =>
