@@ -242,22 +242,22 @@ stored and queried as the empty range, and nothing threw. It now throws.
 
 ## Migration from v9.x
 
-No signature changed. Some calls answer differently, and each one now agrees with PostgreSQL where
-the two sides disagreed before. The compiler can't show you where, so check these:
+No signature changed. Some calls return a different value, and each one now matches PostgreSQL
+where the two sides disagreed before. The compiler can't show you where, so check these:
 
-- **`RangeSet.Overlaps` on a continuous domain answers `true` for more operands.** A query and the
-  same predicate in memory already disagreed on them
-  ([details](#check-rangesetoverlaps-on-a-continuous-domain)).
+- **`RangeSet.Overlaps` on a continuous element type returns `true` for more inputs.** A query and
+  the same call in memory already disagreed on them
+  ([details](#check-rangesetoverlaps-on-a-continuous-element-type)).
 
-### Check `RangeSet.Overlaps` on a continuous domain
+### Check `RangeSet.Overlaps` on a continuous element type
 
 Check code that calls `Overlaps` on a `RangeSet` over `decimal`, `DateTime`, `DateTimeOffset`,
-`TimeOnly`, `LocalDateTime` or `Instant` with a range or set operand, and acts on `false`.
+`TimeOnly`, `LocalDateTime` or `Instant`, passes a range or a set, and acts on `false`.
 
-Before 10.0.0, `Overlaps` answered `false` when the operand stopped exactly where a later element
-started, with one side exclusive, although an earlier element shared values with it. It tested only
-the element that starts where the operand stops. PostgreSQL's `&&` answered `true` for the same
-values, so a query through EF Core and the same call in memory disagreed on those rows.
+Before 10.0.0, `Overlaps` returned `false` when the range you passed stopped exactly where a later
+element started, with one side exclusive, although an earlier element shared values with it. It
+tested only the element that starts where your range stops. PostgreSQL's `&&` returns `true` for
+the same values, so a query through EF Core and the same call in memory disagreed on those rows.
 
 ```csharp
 var set = RangeSet<DecimalRange, decimal>.From([DecimalRange.CreateFinite(1, 4), DecimalRange.CreateFinite(5, 8)]);
