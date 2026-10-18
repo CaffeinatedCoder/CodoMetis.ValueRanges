@@ -1,62 +1,6 @@
 [
   {
     "oracle": "LiteralCorpusProbeTests",
-    "row": "LocalDateTimeRange offset ",
-    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
-    "issue": "#130",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "LocalDateTimeSet offset ",
-    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
-    "issue": "#130",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "LocalDateTimeSet<WallClockStamp> offset ",
-    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
-    "issue": "#130",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<LocalDateTimeRange> offset ",
-    "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
-    "issue": "#130",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "DateTimeOffsetRange offset range ",
-    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
-    "issue": "#131",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "DateTimeOffsetSet offset range ",
-    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
-    "issue": "#131",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "DateTimeOffsetSet<EventStamp> offset range ",
-    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
-    "issue": "#131",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<DateTimeOffsetRange> offset range ",
-    "family": "DateTimeOffset refuses offsets beyond ±14:00 that timestamptz reads",
-    "issue": "#131",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
     "row": "Int32Range extreme (,2147483647]:",
     "family": "(,max] needs max + 1 to canonicalize; PostgreSQL raises 22003",
     "issue": "#132",
