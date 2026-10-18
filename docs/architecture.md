@@ -52,6 +52,15 @@ difference stays a known property. This is also the one place a `ShapeMatrixPari
 wrong to write: matching element domains are not sufficient, because the disagreement is about the
 sentinel rather than the domain.
 
+**Precision.** The BCL temporal types hold 100 ns and NodaTime's 1 ns; PostgreSQL holds a
+microsecond. A literal keeps every digit the type can hold, so a value round-trips through its own
+text (claim S08). PostgreSQL's text input rounds more than six fraction digits half-to-even, while
+Npgsql truncates a parameter toward 2000-01-01, and the plugin's store text follows Npgsql
+(`StoreTemporal`, `NodaStoreTemporal`). So `2026-01-01 10:00:00.1234567` is three values — .1234567
+in memory, .123457 on the server read from that text, .123456 stored — at most 1 µs apart (#126).
+Rounding on parse would remove the second gap and break the first promise; it would also disagree
+with every parameter. `DomainBoundaryDivergenceTests` pins the three values.
+
 **The date extremes stand for the infinities.** Npgsql writes `DateOnly.MaxValue` and
 `LocalDate.MaxIsoValue` as `infinity`, and the minima as `-infinity`, and reads them back the same
 way; the plugin's store text does the same (`StoreTemporal`). So the server's real 9999-12-31 and

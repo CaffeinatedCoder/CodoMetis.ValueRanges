@@ -151,6 +151,11 @@ and the forms PostgreSQL prints in its default ISO `DateStyle`, and nothing else
   `[2026-01-01,9999-12-30]` for `DateRange` and `LocalDateRange`, as the same value read from a
   column does. The extreme stands for the infinity, so PostgreSQL's range also holds a 9999-12-31 that
   has no value of its own here ([Domain width](architecture.md#domain-width-and-the-boundary)).
+- **More than six fraction digits are three values.** `10:00:00.1234567` is .1234567 here.
+  PostgreSQL reads the same text rounded to the microsecond, .123457, and the EF Core package stores
+  it truncated, .123456, as Npgsql binds it. They are at most 1 µs apart. Your own values keep every
+  digit through their literal and JSON, so round to the microsecond yourself if a value must equal
+  what the server reads from its text ([Domain width](architecture.md#domain-width-and-the-boundary)).
 
 The `DateTime` rule is PostgreSQL's own rule for `timestamp` input, and it is what a `tsrange`
 stores. So one literal is one value on every machine, and a local value round-trips with its kind.
