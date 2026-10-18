@@ -40,13 +40,20 @@ internal static class SetFormat
         where T : IEquatable<T>
     {
         s = LiteralWhiteSpace.Trim(s);
+        var decorated = TryReadDimension(ref s, out var declared);
 
         if (s.Length < 2 || s[0] != '{' || s[^1] != '}')
             throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is not a valid array literal.");
 
         // Not trimmed: a trailing escaped space ({a\ }) belongs to the last element.
         var inner = s[1..^1];
-        if (LiteralWhiteSpace.Trim(inner).IsEmpty) return TSet.Empty;
+        if (LiteralWhiteSpace.Trim(inner).IsEmpty || !decorated && IsNestOfEmptyArrays(s))
+        {
+            // A decoration names at least one element, and array_in refuses it on {} and {{}} alike.
+            if (decorated)
+                throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is empty but its dimension decoration names {declared} element(s).");
+            return TSet.Empty;
+        }
 
         var values   = new List<T>();
         var position = 0;
@@ -64,10 +71,109 @@ internal static class SetFormat
             position++;
         }
 
+        // array_in counts the elements as written, duplicates included, before the set deduplicates them.
+        if (decorated && values.Count != declared)
+            throw new FormatException(
+                $"The input string '{LiteralExcerpt.Of(s)}' holds {values.Count} element(s) but its dimension decoration names {declared}.");
+
         // Routing through From re-canonicalizes, so unsorted or duplicated literals — e.g. an
         // array written by hand or by another tool — normalize on parse.
         return TSet.From(values);
     }
+
+    /// <summary>
+    /// Reads and removes the dimension decoration <c>array_in</c> accepts before a one-dimensional array,
+    /// <c>[lower:upper]=</c> or <c>[upper]=</c> (lower 1), and returns the element count it names. Until
+    /// 10.0.0 it was refused, so <c>[0:1]={1,2}</c>, which <c>array_out</c> prints for an array whose
+    /// lower bound is not 1, could not be read back (#128). A set has no index, so the bounds are dropped.
+    /// </summary>
+    /// <remarks>
+    /// Measured on PostgreSQL 16 and 18, which agree: each bound is an optionally signed decimal
+    /// <see cref="int"/> with no whitespace inside the brackets; <c>upper + 1</c> must not overflow;
+    /// whitespace may surround the <c>=</c>. A second bracket pair declares a second dimension, which a
+    /// value set cannot hold.
+    /// </remarks>
+    private static bool TryReadDimension(ref ReadOnlySpan<char> s, out long declared)
+    {
+        declared = 0;
+        if (s.IsEmpty || s[0] != '[') return false;
+
+        var close = s.IndexOf(']');
+        if (close < 0) throw Malformed(s, "an unterminated dimension decoration");
+
+        var bounds = s[1..close];
+        var colon  = bounds.IndexOf(':');
+        var lower  = colon < 0 ? 1 : Bound(s, bounds[..colon]);
+        var upper  = Bound(s, colon < 0 ? bounds : bounds[(colon + 1)..]);
+        if (upper == int.MaxValue) throw Malformed(s, "an upper dimension bound past the largest index");
+
+        var rest = LiteralWhiteSpace.Trim(s[(close + 1)..]);
+        if (!rest.IsEmpty && rest[0] == '[')
+            throw new FormatException($"The input string '{LiteralExcerpt.Of(s)}' is a multi-dimensional array literal; a value set is one-dimensional.");
+        if (rest.IsEmpty || rest[0] != '=') throw Malformed(s, "a dimension decoration without '='");
+
+        declared = (long)upper - lower + 1;
+        s        = LiteralWhiteSpace.Trim(rest[1..]);
+        return true;
+
+        static int Bound(ReadOnlySpan<char> literal, ReadOnlySpan<char> text)
+        {
+            var digits = text.Length > 0 && text[0] is '+' or '-' ? text[1..] : text;
+            return !digits.IsEmpty && !digits.ContainsAnyExceptInRange('0', '9')
+                   && int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var bound)
+                ? bound
+                : throw Malformed(literal, "a dimension bound that is not a decimal integer");
+        }
+    }
+
+    /// <summary>
+    /// Whether the literal is empty arrays nested to one depth, <c>{{}}</c> or <c>{{},{}}</c>, which
+    /// PostgreSQL 17 and later read as the empty array <c>{}</c> (PostgreSQL 16 refuses them). Mixed
+    /// depths, <c>{{},{{}}}</c>, and any element make it a multi-dimensional literal instead.
+    /// </summary>
+    private static bool IsNestOfEmptyArrays(ReadOnlySpan<char> s)
+    {
+        var position = 0;
+        return Depth(s, ref position) > 1 && position == s.Length;
+
+        static int Depth(ReadOnlySpan<char> s, ref int position)
+        {
+            if (position == s.Length || s[position] != '{') return -1;
+            position++;
+            Skip(s, ref position);
+            if (position < s.Length && s[position] == '}')
+            {
+                position++;
+                return 1;
+            }
+
+            var depth = Depth(s, ref position);
+            while (depth > 0)
+            {
+                Skip(s, ref position);
+                if (position == s.Length) return -1;
+                if (s[position] == '}')
+                {
+                    position++;
+                    return depth + 1;
+                }
+
+                if (s[position++] != ',') return -1;
+                Skip(s, ref position);
+                if (Depth(s, ref position) != depth) return -1;
+            }
+
+            return -1;
+        }
+
+        static void Skip(ReadOnlySpan<char> s, ref int position)
+        {
+            while (position < s.Length && LiteralWhiteSpace.Is(s[position])) position++;
+        }
+    }
+
+    private static FormatException Malformed(ReadOnlySpan<char> s, string what)
+        => new($"The input string '{LiteralExcerpt.Of(s)}' is not a valid array literal: {what}.");
 
     internal static bool TryParse<TSet, T>(ReadOnlySpan<char> s, IFormatProvider? provider, out TSet result)
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
