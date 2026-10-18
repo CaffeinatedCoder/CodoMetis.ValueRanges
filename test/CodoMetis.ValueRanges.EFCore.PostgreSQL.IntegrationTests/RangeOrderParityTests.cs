@@ -39,7 +39,7 @@ public sealed class RangeOrderParityTests
     public async Task EveryRangeAndMultirange_OrdersAsPostgres()
     {
         ContainerLifecycle.RequireDatabase();
-        Assert.IsGreaterThanOrEqualTo(11, FuzzTypes.Ranges.Count, "range type discovery found too few types");
+        RangeCensus.AssertReachedEveryUnion(FuzzTypes.Ranges.Select(t => t.Range), nameof(EveryRangeAndMultirange_OrdersAsPostgres));
 
         var method = typeof(RangeOrderParityTests).GetMethod(nameof(Sweep), BindingFlags.NonPublic | BindingFlags.Static)!;
         var lines  = new List<string>();
