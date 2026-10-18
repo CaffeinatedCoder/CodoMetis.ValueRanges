@@ -284,7 +284,7 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     public IEnumerable<Float64Range> Split(double step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(RequireFinite(step, nameof(step)));
-        return RangeSplitting.Split<Float64Range, double>(this, RangeSplitting.Steps<double>(this, (start, n) => Bounded(start + n * step)));
+        return RangeSplitting.Split<Float64Range, double>(this, RangeSplitting.Steps<double>(this, (start, n) => Moved(start + n * step)));
     }
 
     /// <summary>
@@ -411,15 +411,14 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
         return RangeArithmetic.Move<Float64Range, double>(this, value => Moved(value - amount), value => Moved(value + amount));
     }
 
-    /// <summary>A moved bound, or <see cref="OverflowException"/> where IEEE arithmetic would give an infinity.</summary>
+    /// <summary>
+    /// A moved bound or split boundary, or <see cref="OverflowException"/> where IEEE arithmetic would give an
+    /// infinity — the exception the other range types throw past their last value, and the one that ends a split.
+    /// </summary>
     private static double Moved(double value)
         => double.IsFinite(value)
                ? value
                : throw new OverflowException("The moved bound is outside the finite values Double can hold.");
-
-    /// <summary>A split boundary; past the finite values it ends the split, as an overflow does for the other types.</summary>
-    private static double Bounded(double value)
-        => double.IsFinite(value) ? value : throw new OverflowException();
 
     /// <inheritdoc />
     public override sealed string ToString()

@@ -845,5 +845,26 @@
     "member": "formatPrimitive",
     "kind": "lone body",
     "reason": "G17 reads back as the same double for every value; the default form does not for 2^-25 and 2^-958 (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "Moved($T)",
+    "kind": "extra",
+    "reason": "IEEE addition overflows to an infinity rather than throwing, so a moved bound or split boundary is checked here and an infinity becomes the OverflowException the other range types throw past their last value (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "Shift($T)",
+    "kind": "lone body",
+    "reason": "refuses a NaN or infinite delta (an operand like any other, #153) and moves through Moved, because double addition overflows to an infinity where the siblings' checked arithmetic throws"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "Expand($T)",
+    "kind": "lone body",
+    "reason": "refuses a NaN or infinite amount (an operand like any other, #153) and moves through Moved, because double addition overflows to an infinity where the siblings' checked arithmetic throws"
   }
 ]

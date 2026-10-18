@@ -35,6 +35,7 @@ public sealed class RangeSplitOracleTests
         [typeof(int)]            = k => k,
         [typeof(long)]           = k => (long)k,
         [typeof(decimal)]        = k => k * 0.5m,
+        [typeof(double)]         = k => k * 0.5,
         [typeof(DateOnly)]       = k => k,
         [typeof(TimeOnly)]       = k => TimeSpan.FromMinutes(30 * k),
         [typeof(DateTime)]       = k => TimeSpan.FromMinutes(30 * k),
@@ -51,6 +52,7 @@ public sealed class RangeSplitOracleTests
         [typeof(int)]            = int.MaxValue - 3,
         [typeof(long)]           = long.MaxValue - 3,
         [typeof(decimal)]        = decimal.MaxValue - 3m,
+        [typeof(double)]         = double.MaxValue - 4 * Math.ScaleB(1.0, 971),
         [typeof(DateOnly)]       = DateOnly.MaxValue.AddDays(-3),
         [typeof(TimeOnly)]       = TimeOnly.MaxValue.AddMinutes(-90),
         [typeof(DateTime)]       = DateTime.MaxValue.AddMinutes(-90),
@@ -59,6 +61,17 @@ public sealed class RangeSplitOracleTests
         [typeof(LocalDateTime)]  = LocalDateTime.MaxIsoValue.PlusMinutes(-90),
         [typeof(Instant)]        = Instant.MaxValue.Minus(Duration.FromMinutes(90)),
         [typeof(YearMonth)]      = new YearMonth(9999, 9)
+    };
+
+    /// <summary>
+    /// The step at the domain's maximum, where it differs from the grid step. Near
+    /// <see cref="double.MaxValue"/> one unit in the last place is 2^971, so half a unit of the grid is no
+    /// step at all — <c>Split</c> throws for a step too small to move the start, as it does for decimal —
+    /// and the edge is approached in halves of that unit instead.
+    /// </summary>
+    private static readonly Dictionary<Type, Func<int, object>> EdgeSteps = new()
+    {
+        [typeof(double)] = k => k * Math.ScaleB(1.0, 970)
     };
 
     public sealed record SplitRow(string Label, Func<List<string>, int> Sweep)
@@ -137,7 +150,7 @@ public sealed class RangeSplitOracleTests
             checks++;
             var outcome = Outcome(() =>
             {
-                var pieces = Run(split, nearMax, k);
+                var pieces = Run(split, nearMax, k, EdgeSteps.GetValueOrDefault(typeof(T), step));
                 return RangeSet<TRange, T>.From(pieces).Equals(RangeSet<TRange, T>.From([nearMax])) && Equals(pieces[^1].UpperBound(), max)
                            ? "ok"
                            : $"pieces {Join(pieces)}";
@@ -216,13 +229,14 @@ public sealed class RangeSplitOracleTests
                 failures.Add($"{label} {name} Values({k}) → {string.Join(",", stepped)}, expected {string.Join(",", expected)}");
         }
 
-        List<TRange> Run(MethodInfo method, TRange range, int k) => [.. ((IEnumerable)Invoke(method, range, k)).Cast<TRange>()];
+        List<TRange> Run(MethodInfo method, TRange range, int k, Func<int, object>? by = null)
+            => [.. ((IEnumerable)Invoke(method, range, k, by)).Cast<TRange>()];
 
-        object Invoke(MethodInfo method, TRange range, int k)
+        object Invoke(MethodInfo method, TRange range, int k, Func<int, object>? by = null)
         {
             try
             {
-                return method.Invoke(range, [step(k)])!;
+                return method.Invoke(range, [(by ?? step)(k)])!;
             }
             catch (TargetInvocationException wrapped) when (wrapped.InnerException is { } actual)
             {

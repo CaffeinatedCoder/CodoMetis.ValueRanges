@@ -36,6 +36,7 @@ public sealed class RangeArithmeticOracleTests
         [typeof(int)]            = k => k,
         [typeof(long)]           = k => (long)k,
         [typeof(decimal)]        = k => k * 0.5m,
+        [typeof(double)]         = k => k * 0.5,
         [typeof(DateOnly)]       = k => k,
         [typeof(TimeOnly)]       = k => TimeSpan.FromMinutes(30 * k),
         [typeof(DateTime)]       = k => TimeSpan.FromMinutes(30 * k),
@@ -47,6 +48,16 @@ public sealed class RangeArithmeticOracleTests
     };
 
     private static readonly int[] Steps = [-3, -1, 0, 1, 2, 3];
+
+    /// <summary>
+    /// The step at the domain's extremes, where it differs from the grid step. Adding half a unit to
+    /// <see cref="double.MaxValue"/> rounds back to it, as IEEE addition does, so the overflow past the last
+    /// value is asked for with one unit in the last place there (2^971) instead.
+    /// </summary>
+    private static readonly Dictionary<Type, Func<int, object>> EdgeSteps = new()
+    {
+        [typeof(double)] = k => k * Math.ScaleB(1.0, 971)
+    };
 
     public sealed record ArithmeticRow(string Label, Func<List<string>, int> Sweep)
     {
@@ -101,11 +112,11 @@ public sealed class RangeArithmeticOracleTests
         var expand  = typeof(TRange).GetMethod("Expand", [step(1).GetType()])!;
         var checks  = 0;
 
-        TRange Call(MethodInfo method, TRange range, int k)
+        TRange Call(MethodInfo method, TRange range, int k, Func<int, object>? by = null)
         {
             try
             {
-                return (TRange)method.Invoke(range, [step(k)])!;
+                return (TRange)method.Invoke(range, [(by ?? step)(k)])!;
             }
             catch (TargetInvocationException wrapped) when (wrapped.InnerException is { } actual)
             {
@@ -166,12 +177,13 @@ public sealed class RangeArithmeticOracleTests
             ("[min,max]",     TRange.CreateFinite(min, max, true, true), true, true),
         ];
 
+        var edge = EdgeSteps.GetValueOrDefault(typeof(T), step);
         foreach (var (name, range, atMin, atMax) in edges)
         {
-            Throws("Shift(1)",   () => Call(shift, range, 1),   atMax);
-            Throws("Shift(-1)",  () => Call(shift, range, -1),  atMin);
-            Throws("Expand(1)",  () => Call(expand, range, 1),  atMin || atMax);
-            Throws("Expand(-1)", () => Call(expand, range, -1), false);
+            Throws("Shift(1)",   () => Call(shift, range, 1, edge),   atMax);
+            Throws("Shift(-1)",  () => Call(shift, range, -1, edge),  atMin);
+            Throws("Expand(1)",  () => Call(expand, range, 1, edge),  atMin || atMax);
+            Throws("Expand(-1)", () => Call(expand, range, -1, edge), false);
 
             // Nothing moves an empty or infinite range, so nothing there can overflow.
             Throws("Empty.Shift", () => Call(shift, TRange.Empty, 1), false);
