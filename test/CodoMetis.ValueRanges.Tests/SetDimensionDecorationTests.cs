@@ -40,6 +40,10 @@ public class SetDimensionDecorationTests
     [DataRow("{{} ,{}}", "{}")]
     [DataRow("{{{}},{{}}}", "{}")]
     [DataRow("{{{},{}}}", "{}")]
+    [DataRow("{{{},{}},{{},{}}}", "{}")]       // rectangular: every sibling has the same shape (#231)
+    [DataRow("{{{{}}},{{{}}}}", "{}")]
+    [DataRow("{{{},{}},{{},{}},{{},{}}}", "{}")]
+    [DataRow("{{{{}},{{}}},{{{}},{{}}}}", "{}")]
     public void Reads_AsPostgresReadsIt(string literal, string expected)
         => Assert.AreEqual(expected, Int32Set.Parse(literal, CultureInfo.InvariantCulture).ToString());
 
@@ -73,6 +77,11 @@ public class SetDimensionDecorationTests
     [DataRow("[1:1][1:1]={{1}}")]              // two dimensions, which a set cannot hold
     [DataRow("[1:2][1:1]={{1},{2}}")]
     [DataRow("{{},{{}}}")]                     // mixed depths
+    [DataRow("{{{},{}},{{}}}")]                // ragged: same depth, different counts (#231)
+    [DataRow("{{{}},{{},{}}}")]
+    [DataRow("{{{},{},{}},{{},{}}}")]
+    [DataRow("{{{{}},{{}}},{{{}},{{},{}}}}")]
+    [DataRow("{{{{}},{{}}},{{{}}}}")]
     [DataRow("{{},}")]
     [DataRow("{{}}x")]
     [DataRow("{{1},{}}")]
