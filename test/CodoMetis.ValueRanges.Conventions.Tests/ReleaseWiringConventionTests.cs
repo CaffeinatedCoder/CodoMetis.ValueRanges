@@ -219,6 +219,44 @@ public sealed class ReleaseWiringConventionTests
           + "pass the required checks and cancel a real run in the same concurrency group.");
     }
 
+    /// <summary>
+    /// Branch protection on <c>main</c> requires these checks by name (strict), and it is configured on
+    /// GitHub, not here. A job renamed in the workflow, or split into a matrix whose checks carry the leg
+    /// in their names, stops reporting the required check, and every PR then waits for it forever while
+    /// its own CI looks green (#215). Each name must stay a literal job name in the .NET workflow.
+    /// </summary>
+    [TestMethod]
+    public void TheRequiredChecks_AreStillJobNames()
+    {
+        string[] required = ["Test (ubuntu-latest)", "Integration (live PostgreSQL)", "Pack", "Consumer smoke test"];
+
+        var jobNames = Regex.Matches(BuildWorkflowText(), @"^    name:\s*(?<name>.+?)\s*$", RegexOptions.Multiline)
+                            .Select(match => match.Groups["name"].Value)
+                            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.IsEmpty(required.Where(name => !jobNames.Contains(name)).ToList(),
+                       "A status check main's branch protection requires is no longer a job name in dotnet.yml. "
+                     + "Keep a job with that exact name, or change the protection on GitHub first.");
+    }
+
+    /// <summary>
+    /// The integration legs run as a matrix (one check per PostgreSQL major), so the required
+    /// "Integration (live PostgreSQL)" check is a gate job over them. It must run whatever the legs did
+    /// (<c>if: always()</c>) and pass only on success: a gate that is skipped when a leg fails reports
+    /// "skipped", which branch protection accepts as passed.
+    /// </summary>
+    [TestMethod]
+    public void TheIntegrationGate_PassesOnlyWhenEveryLegPassed()
+    {
+        var gate = Regex.Match(BuildWorkflowText(), @"(?ms)^  integration:\n.*?(?=^  \S|\z)").Value;
+
+        Assert.AreNotEqual(0, gate.Length, "Could not find the integration gate job in dotnet.yml.");
+        StringAssert.Contains(gate, "name: Integration (live PostgreSQL)");
+        StringAssert.Contains(gate, "needs: [ integration-legs ]");
+        Assert.IsTrue(Regex.IsMatch(gate, @"(?m)^    if:\s*always\(\)\s*$"), "The integration gate does not run with if: always().");
+        StringAssert.Contains(gate, "needs.integration-legs.result }}\" = success");
+    }
+
     private static string BuildWorkflowText() =>
         File.ReadAllText(Path.Combine(RepoLayout.Root.FullName, ".github", "workflows", "dotnet.yml"));
 
