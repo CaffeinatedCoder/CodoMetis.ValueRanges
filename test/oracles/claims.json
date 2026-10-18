@@ -774,6 +774,22 @@
     ]
   },
   {
+    "id": "E44-date-extremes-adjacent-to-nothing-in-sql",
+    "source": "docs/efcore.md#store-timestamp-ranges",
+    "quote": "**A date at the extreme is adjacent to nothing in the database.** Npgsql also writes `DateOnly.MinValue` and `MaxValue`, and `LocalDate.MinIsoValue` and `MaxIsoValue`, as `-infinity` and `infinity`, and no date is next to those. So `IsAdjacentTo` returns `false` in SQL for `[0001-01-01,0001-01-01]` and `[0001-01-02,)`, and `true` in memory, where 0001-01-01 is a day like any other. One day inside the extremes the two sides agree. If you set `Npgsql.DisableDateTimeInfinityConversions`, the extremes stay dates and the two sides agree there too.",
+    "claim": "With Npgsql's infinity conversions on, a DateRange or LocalDateRange bounded at an extreme is adjacent to its neighbour in memory and not on the server (as a literal, a parameter and through EF Core), one day inside the extremes both agree, and with Npgsql.DisableDateTimeInfinityConversions set both agree at the extremes too.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "DomainBoundaryDivergenceTests",
+      "InfinityConversionsDisabledTests",
+      "DifferentialFuzzParityTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",

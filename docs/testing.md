@@ -200,7 +200,10 @@ memory and the database hid until someone chose the row that showed it. This swe
   `22008`, `22009`), such as `[x, int.MaxValue]` or a year PostgreSQL cannot hold. That is the
   documented domain boundary, so those rows are counted and set aside. Reading a result back also
   absorbs the `(,-2147483648)` row of `DomainBoundaryDivergenceTests`: what the server holds beyond
-  the model's domain reads back as the value the model sees.
+  the model's domain reads back as the value the model sees. The other documented row — a date
+  range bounded at an extreme Npgsql writes as `±infinity` is adjacent to nothing on the server —
+  is set aside only when it disagrees in exactly that shape (memory `true`, EF and PostgreSQL
+  `false`) and counted; an adjacency row at the edge that disagrees any other way still fails.
 - **A failure line** is `Type Operation [at the domain edge] LeftShape×RightShape [leg]: operands →
   memory=…, EF=…, PostgreSQL=… (seed=…, row=…)`. The part before the leg is what a candidate row
   matches. "At the domain edge" marks a row whose operand touches an exact extreme, so a candidate
