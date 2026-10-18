@@ -41,11 +41,19 @@ namespace CodoMetis.ValueRanges.Oracles;
 /// </para>
 /// <para>
 /// <b>Three rules</b>, per family of <c>N</c> units and per member key. A member present in at least
-/// <c>max(3, N − 2)</c> siblings is <i>missing</i> from the rest. A member only one sibling has is
-/// <i>extra</i>. A body no sibling shares is a <i>lone body</i> when a body two or more siblings share
-/// is near it — at least half similar by token sequence, or behind an identical non-empty signature — which is the
-/// near miss a copy that drifted leaves. A member whose body and signature are both bespoke (a <c>Length</c>
-/// typed per range) is near nothing and stays silent, which keeps the waiver list short.
+/// <c>max(3, N − 2)</c> siblings is <i>missing</i> from the rest. A member only a minority has — one
+/// sibling, or a group smaller than a third of the family — is <i>extra</i>. A body only such a minority
+/// shares is a <i>lone body</i> when a body more siblings share is near it — at least half similar by
+/// token sequence, or behind an identical non-empty signature — which is the near miss a copy that
+/// drifted leaves. A member whose body and signature are both bespoke (a <c>Length</c> typed per range)
+/// is near nothing and stays silent, which keeps the waiver list short.
+/// </para>
+/// <para>
+/// <b>Groups.</b> A divergence a minority shares is reported once, its unit the group's names joined
+/// with <c> + </c> in ordinal order (<c>Float32Range + Float64Range</c>), and waived once under that
+/// name. Until 10.0.0 only a single sibling counted, so two siblings that drifted together — a pair added
+/// in one change, or a defect copied into two files — went quiet, and the second float family silenced
+/// every divergence the first had been waived for (#200).
 /// </para>
 /// <para>
 /// Every divergence is either waived in <c>test/oracles/clone-waivers.json</c> with a reason or fails
@@ -67,6 +75,12 @@ internal static class CloneSweep
 
     /// <summary>Beyond this many ambiguous alias occurrences in one member, only the all-or-nothing readings are tried.</summary>
     private const int MaxAliasVariants = 6;
+
+    /// <summary>A group of siblings smaller than a third of its family is a minority, and its shared divergence is reported.</summary>
+    public const int MinorityDivisor = 3;
+
+    /// <summary>Joins the units of a group divergence, and of the waiver that covers it.</summary>
+    public const string GroupSeparator = " + ";
 
     public const string MissingKind  = "missing";
     public const string ExtraKind    = "extra";
@@ -658,28 +672,39 @@ internal static class CloneSweep
                                                   $"present in {having.Count} of {n} ({Names(having)}){(sample.Length > 0 ? $": {sample}" : "")}"));
             }
 
-            if (having.Count == 1)
+            // A member a minority has: one sibling, or a few that drifted from the family together —
+            // a pair added in one change, or a defect copied into two files. Reported once, naming
+            // the group, so it is waived once.
+            if (having.Count < consensus && IsMinority(having.Count, n))
             {
-                var unit = having[0];
-                found.Add(new CloneDivergence(family.Name, unit.Name, key, ExtraKind,
-                                              $"no sibling has it{(unit.Members[key].Lines.Count > 0 ? ": " + string.Join(" ⏎ ", unit.Members[key].Lines.Take(3)) : "")}"));
+                var sample = having[0].Members[key].Lines;
+                found.Add(new CloneDivergence(family.Name, Group(having), key, ExtraKind,
+                                              $"{(having.Count == 1 ? "no sibling has it" : $"only {having.Count} of {n} have it")}"
+                                            + $"{(sample.Count > 0 ? ": " + string.Join(" ⏎ ", sample.Take(3)) : "")}"));
             }
 
-            var byBody   = having.GroupBy(u => u.Members[key].Text, StringComparer.Ordinal).ToList();
-            var clusters = byBody.Where(g => g.Count() >= 2).ToList();
+            var byBody   = having.GroupBy(u => u.Members[key].Text, StringComparer.Ordinal).Select(g => g.ToList()).ToList();
+            var clusters = byBody.Where(g => g.Count >= 2).ToList();
             if (clusters.Count == 0) continue;
 
-            foreach (var lone in byBody.Where(g => g.Count() == 1).Select(g => g.Single()))
+            // A body a minority shares, near a body more siblings share: a drifted copy, alone or in
+            // company. The cluster it is compared with must be larger than the group, or neither side
+            // is the family's consensus.
+            foreach (var group in byBody.Where(g => IsMinority(g.Count, n)))
             {
-                var mine = lone.Members[key];
-                var best = clusters.Select(c => (Cluster: c, Theirs: c.First().Members[key]))
+                var mine = group[0].Members[key];
+                var near = clusters.Where(c => c.Count > group.Count)
+                                   .Select(c => (Cluster: c, Theirs: c[0].Members[key]))
                                    .Select(c => (c.Cluster, c.Theirs, Similarity: Similarity(mine.Body, c.Theirs.Body), SameHeader: mine.Header.Count > 0 && mine.Header.SequenceEqual(c.Theirs.Header)))
                                    .OrderByDescending(c => c.SameHeader).ThenByDescending(c => c.Similarity)
-                                   .First();
+                                   .ToList();
+                if (near.Count == 0) continue;
+
+                var best = near[0];
                 if (!best.SameHeader && best.Similarity < NearMissSimilarity) continue;
 
-                found.Add(new CloneDivergence(family.Name, lone.Name, key, LoneBodyKind,
-                                              Diff(mine.Lines, best.Theirs.Lines) + $" — as in {Names(best.Cluster.ToList())}"));
+                found.Add(new CloneDivergence(family.Name, Group(group), key, LoneBodyKind,
+                                              Diff(mine.Lines, best.Theirs.Lines) + $" — as in {Names(best.Cluster)}"));
             }
         }
 
@@ -688,6 +713,19 @@ internal static class CloneSweep
 
     private static string Names(IReadOnlyList<CloneUnit> units)
         => string.Join(", ", units.Select(u => u.Name));
+
+    /// <summary>
+    /// Whether <paramref name="count"/> of <paramref name="n"/> siblings is a minority the rules report:
+    /// fewer than a third of the family, or one sibling in any family.
+    /// </summary>
+    public static bool IsMinority(int count, int n) => count == 1 || count * MinorityDivisor < n;
+
+    /// <summary>
+    /// The unit a divergence names: the sibling's own name, or the group's names in ordinal order joined
+    /// with <see cref="GroupSeparator"/> — the form a waiver spells to cover them all at once.
+    /// </summary>
+    private static string Group(IReadOnlyList<CloneUnit> units)
+        => string.Join(GroupSeparator, units.Select(u => u.Name).Order(StringComparer.Ordinal));
 
     /// <summary>2·LCS / (|a| + |b|) over token sequences: 1 for identical, 0 for nothing in common.</summary>
     public static double Similarity(IReadOnlyList<string> a, IReadOnlyList<string> b)

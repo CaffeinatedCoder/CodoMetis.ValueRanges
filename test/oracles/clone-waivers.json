@@ -645,6 +645,83 @@
   },
   {
     "family": "core value sets",
+    "unit": "Int16Set + Int32Set + Int64Set",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer families read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ones read strict ISO 8601 (IsoTemporal), the others their own grammar"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer ranges read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ranges read strict ISO 8601 (IsoTemporal)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Int16Set<TElement> + Int32Set<TElement> + Int64Set<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "integer-backed wrappers write a JSON number through the integer element converter, as their primitive siblings do; text-backed and temporal ones write a JSON string"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DecimalSet<TElement> + GuidSet<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "each has a converter of its own for the token its primitive writes: a number keeping scale for decimal, the hyphenated uuid string for Guid; they share only the naming pattern"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DateTimeOffsetSet<TElement> + DateTimeSet<TElement> + TimeSet<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "the temporal arities pin the round-trip O format because the default text form drops sub-seconds (and the DateTime Kind); the others' default already round-trips (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DecimalRange + Int64Range",
+    "member": "FiniteLength($T, $T)",
+    "kind": "extra",
+    "reason": "the two ranges whose span can exceed their own element type compute it without overflowing and return null when it would; Int32Range counts in long, the temporal ranges measure a TimeSpan"
+  },
+  {
+    "family": "efcore range definitions",
+    "unit": "InstantRange + LocalDateTimeRange",
+    "member": "storeValue",
+    "kind": "lone body",
+    "reason": "the NodaTime temporal ranges truncate to the store's microsecond with NodaStoreTemporal, the BCL ones with StoreTemporal: the same rule over different types"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "InstantSet + LocalDateSet + LocalDateTimeSet + LocalTimeSet",
+    "member": "literalText",
+    "kind": "extra",
+    "reason": "the NodaTime temporal sets write their SQL literal through NodaStoreTemporal.Literal, because Npgsql's NodaTime literal carries nine fraction digits the server rounds; the BCL sets use the shared SetProviderText"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "arity only: RequireIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime arities refuse an element whose wrapped value is not ISO (IsoWrapperElement), which a wrapper cannot convert; their primitive sets convert it instead (ToIso)"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "primitive only: ToIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime primitive sets convert an element to the ISO calendar; their arities cannot convert a wrapped value and refuse it (RequireIso)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "Values($T)",
+    "kind": "extra",
+    "reason": "Every discrete range has Values(step), but only on the integer ranges is the step the element type itself. DateRange steps in int days, LocalDateRange in a Period and YearMonthRange in int months, so their overloads don't normalize to Values($T)."
+  },
+  {
+    "family": "core value sets",
     "unit": "Float64Set",
     "member": "From(IEnumerable<$T>)",
     "kind": "lone body",
@@ -866,5 +943,33 @@
     "member": "Expand($T)",
     "kind": "lone body",
     "reason": "refuses a NaN or infinite amount (an operand like any other, #153) and moves through Moved, because double addition overflows to an infinity where the siblings' checked arithmetic throws"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float64Set + StringSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "the two families with an element the column cannot hold refuse the probe From refuses: a string with a NUL character (TextElement, #133), a NaN or infinite double (#153); the other families' elements are valid by type"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement> + StringSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "the two arities whose element can wrap a value the column cannot hold refuse it on every construction path: text with a NUL character (TextElement, #133), a NaN or infinite double (#153)"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "DecimalSet / DecimalSet<TElement> + GuidSet / GuidSet<TElement> + Int16Set / Int16Set<TElement> + Int32Set / Int32Set<TElement> + Int64Set / Int64Set<TElement>",
+    "member": "arity only: FormatValue($T, string?, IFormatProvider?)",
+    "kind": "extra",
+    "reason": "these primitives' default text form is already their literal, so they take the interface's FormatValue; their arities declare one to check the text-form contract (WrapperElement, #53). The temporal, float and string primitives pin a format of their own, so both sides of those pairs declare it"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "InstantSet / InstantSet<TElement> + LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement> + LocalTimeSet / LocalTimeSet<TElement> + YearMonthSet / YearMonthSet<TElement>",
+    "member": "primitive only: IValueSetFactory<$TYPE, $T>.ElementJsonConverter",
+    "kind": "extra",
+    "reason": "System.Text.Json has no converter for a NodaTime element, so the NodaTime primitive sets supply one; their arities supply their own under the arity's key, which the pairing reads as a different member"
   }
 ]
