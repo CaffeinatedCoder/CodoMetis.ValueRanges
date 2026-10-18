@@ -1,0 +1,25 @@
+Seed: StringSet<TElement> no longer checks that an element's text form reads back as the same element, on write (FormatValue) nor on read (ParseValue), so a decorated element is written to JSON and a lenient one grows its prefix on every literal round trip
+Oracles: DecorativeElementContractTests
+Fails: StringSet<DecoratedText> at the JSON write (the EF bridge still refuses the SQL literal and the parameter on its own), and StringSet<Lenient>: literal round trip changed the set
+History: the 10.0.0 fix for #53, reverted for the string arity
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/StringSet.cs b/src/CodoMetis.ValueRanges/Sets/StringSet.cs
+index a8723be..f3452a1 100644
+--- a/src/CodoMetis.ValueRanges/Sets/StringSet.cs
++++ b/src/CodoMetis.ValueRanges/Sets/StringSet.cs
+@@ -271,13 +271,11 @@ public sealed class StringSet<TElement> :
+     /// element, or the read fails (<see cref="WrapperElement"/>, <c>FormatException</c>).
+     /// </summary>
+     public static TElement ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+-        => WrapperElement.Parsed(ParseElement(s.ToString()), RoundTripFormat, ParseElement);
++        => ParseElement(s.ToString());
+ 
+     /// <summary>Formats an element via <see cref="IFormattable"/> — its backing text form.</summary>
+     public static string FormatValue(TElement value, string? format, IFormatProvider? provider)
+-        => string.IsNullOrEmpty(format)
+-               ? WrapperElement.Formatted(value, RoundTripFormat, ParseElement, provider)
+-               : value.ToString(format, provider ?? CultureInfo.InvariantCulture);
++        => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+ 
+     /// <summary>
+     /// The JSON fallback for elements that carry no converter of their own: a JSON string holding

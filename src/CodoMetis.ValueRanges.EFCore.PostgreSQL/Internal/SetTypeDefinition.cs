@@ -94,11 +94,39 @@ internal sealed class StringBridgedSetTypeDefinition<TSet, TElement> : ISetTypeD
     where TSet : class, IValueSetFactory<TSet, TElement>, IValueSet<TElement>
     where TElement : struct, IEquatable<TElement>, IFormattable, IParsable<TElement>
 {
+    // The text column holds the element's text form, and the element must read it back as itself:
+    // the same contract the core arities check in FormatValue and ParseValue (WrapperElement) and
+    // the primitive-backed bridge below checks with requireRoundTrip, held here at the EF boundary
+    // too. Until 10.0.0 a decorated element went to the column and failed only on the way back, with
+    // the element's own message, and one whose Parse kept the decoration grew on every round trip (#53).
     private static string ToPrimitive(TElement element)
-        => element.ToString(null, CultureInfo.InvariantCulture);
+    {
+        var text = element.ToString(null, CultureInfo.InvariantCulture);
+        TElement back;
+        try
+        {
+            back = FromPrimitive(text);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException(
+                $"The invariant text form '{text}' of '{typeof(TElement)}' cannot be read back by its own Parse. "
+              + "Value set elements must format to exactly the backing primitive's text form, and read it back as the same element.", ex);
+        }
 
+        if (!back.Equals(element))
+            throw new InvalidOperationException(
+                $"The '{typeof(TElement)}' element formats as '{text}', which reads back as a different element. "
+              + "Value set elements must format to exactly the backing primitive's text form, and read it back as the same element.");
+
+        return text;
+    }
+
+    // Through the family's ParseValue rather than TElement.Parse: the text rule and the round-trip
+    // check the literal and JSON apply, so a column holding text the element reads as another value
+    // throws on materialization rather than loading it.
     private static TElement FromPrimitive(string primitive)
-        => TElement.Parse(primitive, CultureInfo.InvariantCulture);
+        => TSet.ParseValue(primitive, CultureInfo.InvariantCulture);
 
     public Type SetClrType => typeof(TSet);
 
@@ -217,6 +245,11 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
 
     private TPrimitive ToPrimitive(TElement element)
     {
+        // The element's own text, not the family's FormatValue: the round trip this boundary checks
+        // (requireRoundTrip) goes through the store primitive, which is what the column holds. For a
+        // DateTime element with Kind Local the two differ — the literal carries the machine's offset,
+        // which the element's BCL Parse applies through the zone and so cannot read back a wall clock
+        // the zone skips, while the store keeps the wall clock and drops the offset (9.0.0).
         var text = element.ToString(_elementFormat, CultureInfo.InvariantCulture);
         TPrimitive primitive;
         try
@@ -235,20 +268,42 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
               + "backing primitive's text form.", ex);
         }
 
-        // Compared before the store's truncation, which is a documented, deliberate loss.
-        if (_requireRoundTrip && !FromPrimitive(primitive).Equals(element))
-            throw new ArgumentException(
-                $"The '{typeof(TElement)}' element formats as '{text}', which reads back as a different value "
-              + $"through '{typeof(TPrimitive)}' — what a NodaTime value in a calendar other than ISO does, since "
-              + "its own fields are written as if they were ISO. Convert the wrapped value with "
-              + "WithCalendar(CalendarSystem.Iso) before wrapping it.",
-                nameof(element));
+        // Compared before the store's truncation, which is a documented, deliberate loss. Every family
+        // sets requireRoundTrip since 10.0.0 (#53); the NodaTime calendar-bearing ones did before.
+        if (_requireRoundTrip)
+        {
+            TElement back;
+            try
+            {
+                back = FromPrimitive(primitive);
+            }
+            catch (FormatException ex)
+            {
+                // The family's own read-leg check refused it (WrapperElement): the same contract, named here.
+                throw new ArgumentException(
+                    $"The '{typeof(TElement)}' element formats as '{text}', which cannot be read back as the same element "
+                  + $"through '{typeof(TPrimitive)}'. Value set elements must format to exactly the backing primitive's "
+                  + "text form, and read it back as the same element.", nameof(element), ex);
+            }
+
+            if (!back.Equals(element))
+                throw new ArgumentException(
+                    $"The '{typeof(TElement)}' element formats as '{text}', which reads back as a different element "
+                  + $"through '{typeof(TPrimitive)}'. Value set elements must format to exactly the backing primitive's "
+                  + "text form, and read it back as the same element. A NodaTime value in a calendar other than ISO "
+                  + "does this, since its own fields are written as if they were ISO: convert it with "
+                  + "WithCalendar(CalendarSystem.Iso) before wrapping it.",
+                    nameof(element));
+        }
 
         return _storeValue is null ? primitive : _storeValue(primitive);
     }
 
+    // Through the family's ParseValue rather than TElement.Parse: the same grammar the literal and
+    // JSON read, and the same round-trip check on the way in (WrapperElement), so a column holding
+    // text the element reads as another value throws on materialization rather than loading it.
     private TElement FromPrimitive(TPrimitive primitive)
-        => TElement.Parse(_formatPrimitive(primitive), CultureInfo.InvariantCulture);
+        => TSet.ParseValue(_formatPrimitive(primitive), CultureInfo.InvariantCulture);
 
     public Type SetClrType => typeof(TSet);
 

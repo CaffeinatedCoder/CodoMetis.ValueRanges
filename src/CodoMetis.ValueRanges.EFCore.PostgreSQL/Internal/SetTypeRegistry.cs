@@ -49,17 +49,23 @@ internal static class SetTypeRegistry
             // decimal — and false of every temporal below, whose default form silently drops
             // sub-seconds (and, for DateTime, the Kind). The numeric families read the element's text
             // with their own element parser, so a group separator is refused here exactly as it is by
-            // DecimalSet.Parse: NumberStyles.Number read a culture-leaking "1,5" as fifteen.
+            // DecimalSet.Parse: NumberStyles.Number read a culture-leaking "1,5" as fifteen. The Guid
+            // bridge reads uuid_in's grammar through GuidSet.ParseValue for the same reason (#129).
+            //
+            // Every core family requires the round trip (#53): the element's text, read back through
+            // the store primitive and the family's ParseValue, must be the same element, or the
+            // write is refused naming the text-form contract — as the family's own FormatValue
+            // refuses it for the literal and JSON (WrapperElement in the core).
             [typeof(GuidSet<>)] = Bridged<Guid>(
-                "uuid", null, static text => Guid.Parse(text, Invariant), Text),
+                "uuid", null, static text => GuidSet.ParseValue(text, Invariant), Text, requireRoundTrip: true),
             [typeof(Int16Set<>)] = Bridged<short>(
-                "smallint", null, static text => Int16Set.ParseValue(text, Invariant), Text),
+                "smallint", null, static text => Int16Set.ParseValue(text, Invariant), Text, requireRoundTrip: true),
             [typeof(Int32Set<>)] = Bridged<int>(
-                "integer", null, static text => Int32Set.ParseValue(text, Invariant), Text),
+                "integer", null, static text => Int32Set.ParseValue(text, Invariant), Text, requireRoundTrip: true),
             [typeof(Int64Set<>)] = Bridged<long>(
-                "bigint", null, static text => Int64Set.ParseValue(text, Invariant), Text),
+                "bigint", null, static text => Int64Set.ParseValue(text, Invariant), Text, requireRoundTrip: true),
             [typeof(DecimalSet<>)] = Bridged<decimal>(
-                "numeric", null, static text => DecimalSet.ParseValue(text, Invariant), Text),
+                "numeric", null, static text => DecimalSet.ParseValue(text, Invariant), Text, requireRoundTrip: true),
 
             // ParseExact, not Parse: an element that ignores the format specifier and hands back
             // its own default form is a contract violation, and the strict parse turns it into
@@ -72,12 +78,12 @@ internal static class SetTypeRegistry
                 "date", "yyyy-MM-dd",
                 static text => DateOnly.ParseExact(text, "yyyy-MM-dd", Invariant),
                 static value => value.ToString("yyyy-MM-dd", Invariant),
-                storeText: true),
+                storeText: true, requireRoundTrip: true),
             [typeof(TimeSet<>)] = Bridged<TimeOnly>(
                 "time without time zone", "O",
                 static text => TimeOnly.ParseExact(text, "O", Invariant),
                 static value => value.ToString("O", Invariant),
-                storeValue: StoreTemporal.Truncate, storeText: true),
+                storeValue: StoreTemporal.Truncate, storeText: true, requireRoundTrip: true),
 
             // The same store-side normalization the closed siblings apply: PostgreSQL
             // `timestamp` has no time zone, so elements are written as wall-clock time with
@@ -87,14 +93,14 @@ internal static class SetTypeRegistry
                 "timestamp without time zone", "O",
                 ParseRoundTripWallClock,
                 static value => value.ToString("O", Invariant),
-                storeValue: StoreTemporal.Truncate, storeText: true),
+                storeValue: StoreTemporal.Truncate, storeText: true, requireRoundTrip: true),
             [typeof(DateTimeOffsetSet<>)] = Bridged<DateTimeOffset>(
                 "timestamp with time zone", "O",
                 static text => DateTimeOffset
                               .ParseExact(text, "O", Invariant, DateTimeStyles.AssumeUniversal)
                               .ToUniversalTime(),
                 static value => value.ToString("O", Invariant),
-                storeValue: StoreTemporal.Truncate, storeText: true)
+                storeValue: StoreTemporal.Truncate, storeText: true, requireRoundTrip: true)
         }.ToFrozenDictionary();
 
     private static CultureInfo Invariant => CultureInfo.InvariantCulture;

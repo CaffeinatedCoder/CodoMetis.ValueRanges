@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Core;
 using NodaTime;
 using CodoMetis.ValueRanges.Oracles;
@@ -23,7 +24,9 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// configuration binding and a JSON string. In the other direction <c>{1e3}</c> — PostgreSQL numeric
 /// grammar — was refused by the wrapper and read by the primitive. The temporal arities already
 /// parsed with the family grammar first and handed the element its round-trip text; the numeric ones
-/// now do the same.
+/// now do the same. A JSON string is held to the primitive set's own JSON read rather than to the
+/// literal: until 10.0.0 the numeric and Guid arities read a JSON string with the literal grammar,
+/// wider than System.Text.Json's for the primitive (#141).
 /// </para>
 /// <para>
 /// Each numeric family is swept twice: over a deliberately lenient element (<c>NumberStyles.Any</c>),
@@ -165,13 +168,21 @@ public sealed class WrapperGrammarContractTests
                                     : Refused);
             Compare("TypeConverter", Outcome(() => (TWrapperSet)TypeDescriptor.GetConverter(typeof(TWrapperSet))
                                                                               .ConvertFromInvariantString(literal)!));
-            Compare("JSON string", Outcome(() => JsonSerializer.Deserialize<TWrapperSet>(
-                                                     $"[{JsonSerializer.Serialize(text)}]")!));
 
-            void Compare(string path, string actual)
+            // A JSON string is not the literal: the primitive set reads it with System.Text.Json's
+            // grammar for the primitive (a quoted number only under AllowReadingFromString, a Guid in
+            // the hyphenated form only), and the wrapper must read exactly that, not the literal (#141).
+            var json = $"[{JsonSerializer.Serialize(text)}]";
+            foreach (var (name, options) in JsonOptions)
+                Compare($"JSON string under {name}",
+                        Outcome(() => JsonSerializer.Deserialize<TWrapperSet>(json, options)!),
+                        Outcome(() => JsonSerializer.Deserialize<TPrimitiveSet>(json, options)!));
+
+            void Compare(string path, string actual, string? against = null)
             {
-                if (actual != expected)
-                    failures.Add($"  {label} {path} of {literal}: {actual}, but {typeof(TPrimitiveSet).Name} reads {expected}");
+                against ??= expected;
+                if (actual != against)
+                    failures.Add($"  {label} {path} of {literal}: {actual}, but {typeof(TPrimitiveSet).Name} reads {against}");
             }
         }
 
@@ -189,6 +200,12 @@ public sealed class WrapperGrammarContractTests
     }
 
     private const string Refused = "refused";
+
+    private static readonly (string Name, JsonSerializerOptions Options)[] JsonOptions =
+    [
+        ("default options", JsonSerializerOptions.Default),
+        ("AllowReadingFromString", new JsonSerializerOptions { NumberHandling = JsonNumberHandling.AllowReadingFromString })
+    ];
 
     private static string Outcome<TSet>(Func<TSet> read) where TSet : IFormattable
     {
