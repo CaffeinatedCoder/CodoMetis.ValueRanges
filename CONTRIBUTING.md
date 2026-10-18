@@ -172,6 +172,12 @@ the invariant literal under five cultures for every discovered type (`LiteralCul
   issue that tracks it. It fails labelled until the issue is filed, is reported as skipped while the
   issue is open, and fails as `candidate fixed` once the fix lands, so the entry is removed in the same
   PR.
+- **Clones.** The hand-copied type families — the value sets and their wrapper arities, the range
+  unions, the EF registrations — are compared sibling by sibling from the source text
+  (`CloneSweep.cs`, `CloneDivergenceTests`). A member one sibling lacks or alone has, or a body that
+  drifted from the one the others share, is either waived with a reason in `clone-waivers.json` or
+  fails CI. `dotnet run tools/oracles.cs clones` prints the list with the JSON line to paste for a new
+  one; a fix that lands at one site and not its siblings is what this catches.
 
 ## Commit trailers
 
