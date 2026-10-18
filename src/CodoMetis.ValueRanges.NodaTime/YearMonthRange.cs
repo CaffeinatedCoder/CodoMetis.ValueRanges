@@ -462,11 +462,14 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="months"/> moves the range down.
     /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// The first and last month of the ISO calendar stand for PostgreSQL's <c>-infinity</c> and
+    /// <c>infinity</c>, as their first and last day do, and they stay where they are, as
+    /// <c>infinity ± d</c> does in PostgreSQL. A finite bound moved past either one still throws.
     /// </remarks>
     /// <param name="months">How far to move the range, in months.</param>
     /// <returns>The moved range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="YearMonth"/> can hold.</exception>
-    public YearMonthRange Shift(int months) => RangeArithmetic.Move<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(months)), value => RangeArithmetic.Checked(() => value.PlusMonths(months)));
+    public YearMonthRange Shift(int months) => RangeArithmetic.MoveKeepingInfinity<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(months)), value => RangeArithmetic.Checked(() => value.PlusMonths(months)), IsInfinity, IsInfinity);
 
     /// <summary>
     /// Returns the range grown by <paramref name="months"/>, in months on both sides: the lower bound moves down
@@ -476,11 +479,20 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// A negative <paramref name="months"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
     /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// The first and last month of the ISO calendar stand for PostgreSQL's <c>-infinity</c> and
+    /// <c>infinity</c>, as their first and last day do, and they stay where they are, as
+    /// <c>infinity ± d</c> does in PostgreSQL. A finite bound moved past either one still throws.
     /// </remarks>
     /// <param name="months">How far to move each bound outward, in months.</param>
     /// <returns>The grown, or shrunk, range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="YearMonth"/> can hold.</exception>
-    public YearMonthRange Expand(int months) => RangeArithmetic.Move<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(checked(-months))), value => RangeArithmetic.Checked(() => value.PlusMonths(months)));
+    public YearMonthRange Expand(int months) => RangeArithmetic.MoveKeepingInfinity<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(checked(-months))), value => RangeArithmetic.Checked(() => value.PlusMonths(months)), IsInfinity, IsInfinity);
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is an extreme that stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, which <see cref="Shift"/> and <see cref="Expand"/> leave where it is (#224).
+    /// </summary>
+    private static bool IsInfinity(YearMonth value) => value == MinIso || value == MaxIso;
 
     /// <inheritdoc />
     public override sealed string ToString()

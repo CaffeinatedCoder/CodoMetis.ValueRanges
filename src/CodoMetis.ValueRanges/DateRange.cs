@@ -458,11 +458,14 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="days"/> moves the range down.
     /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="DateOnly.MinValue"/> or <see cref="DateOnly.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, and so does a closed end the day before the maximum, whose exclusive end it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="days">How far to move the range, in days.</param>
     /// <returns>The moved range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateOnly"/> can hold.</exception>
-    public DateRange Shift(int days) => RangeArithmetic.Move<DateRange, DateOnly>(this, value => RangeArithmetic.Checked(() => value.AddDays(days)), value => RangeArithmetic.Checked(() => value.AddDays(days)));
+    public DateRange Shift(int days) => RangeArithmetic.MoveKeepingInfinity<DateRange, DateOnly>(this, value => RangeArithmetic.Checked(() => value.AddDays(days)), value => RangeArithmetic.Checked(() => value.AddDays(days)), IsInfinity, EndIsInfinity);
 
     /// <summary>
     /// Returns the range grown by <paramref name="days"/>, in days on both sides: the lower bound moves down
@@ -472,11 +475,27 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     /// A negative <paramref name="days"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
     /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// A bound at <see cref="DateOnly.MinValue"/> or <see cref="DateOnly.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, and it stays where it is, and so does a closed end the day before the maximum, whose exclusive end it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
+    /// bound moved past either one still throws.
     /// </remarks>
     /// <param name="days">How far to move each bound outward, in days.</param>
     /// <returns>The grown, or shrunk, range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="DateOnly"/> can hold.</exception>
-    public DateRange Expand(int days) => RangeArithmetic.Move<DateRange, DateOnly>(this, value => RangeArithmetic.Checked(() => value.AddDays(checked(-days))), value => RangeArithmetic.Checked(() => value.AddDays(days)));
+    public DateRange Expand(int days) => RangeArithmetic.MoveKeepingInfinity<DateRange, DateOnly>(this, value => RangeArithmetic.Checked(() => value.AddDays(checked(-days))), value => RangeArithmetic.Checked(() => value.AddDays(days)), IsInfinity, EndIsInfinity);
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is an extreme that stands for PostgreSQL's <c>-infinity</c> or
+    /// <c>infinity</c>, which <see cref="Shift"/> and <see cref="Expand"/> leave where it is (#224).
+    /// </summary>
+    private static bool IsInfinity(DateOnly value) => value == DateOnly.MinValue || value == DateOnly.MaxValue;
+
+    /// <summary>
+    /// <see cref="IsInfinity"/> for a closed end, which also stands for <c>infinity)</c> the day before
+    /// the maximum, because its exclusive end is the maximum: a column holding <c>[x,infinity)</c>
+    /// reads as <c>[x,9999-12-30]</c> (#117).
+    /// </summary>
+    private static bool EndIsInfinity(DateOnly end) => end == DateOnly.MinValue || end.DayNumber >= DateOnly.MaxValue.DayNumber - 1;
 
     /// <inheritdoc />
     public override sealed string ToString()

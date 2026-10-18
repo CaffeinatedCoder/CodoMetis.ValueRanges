@@ -101,7 +101,11 @@ public class NodaTimeShiftExpandTests
 
         Assert.AreEqual(YearMonthRange.CreateFinite(new YearMonth(2027, 1), new YearMonth(2027, 3)), quarter.Shift(12));
         Assert.AreEqual(YearMonthRange.CreateFinite(new YearMonth(2025, 12), new YearMonth(2026, 4)), quarter.Expand(1));
-        Assert.ThrowsExactly<OverflowException>(() => YearMonthRange.CreateUnboundedStart(new YearMonth(9999, 12), true).Shift(1));
+        Assert.ThrowsExactly<OverflowException>(() => YearMonthRange.CreateUnboundedStart(new YearMonth(9999, 11), true).Shift(2));
+
+        // 9999-12 is the last month of the ISO calendar, stored as infinity: it stays (#224).
+        Assert.AreEqual(YearMonthRange.CreateUnboundedStart(new YearMonth(9999, 12), true),
+                        YearMonthRange.CreateUnboundedStart(new YearMonth(9999, 12), true).Shift(1));
     }
 
     [TestMethod]
