@@ -523,9 +523,10 @@ public sealed class LiteralCorpusProbeTests
 
     private static ElementCorpus Elements(Kind kind) => kind switch
     {
-        Kind.Int2 => Integers("32767", "-32768", "32768", "-32769"),
-        Kind.Int4 => Integers("2147483647", "-2147483648", "2147483648", "-2147483649"),
-        Kind.Int8 => Integers("9223372036854775807", "-9223372036854775808", "9223372036854775808", "-9223372036854775809"),
+        Kind.Int2 => Integers("32767", "-32768", "32768", "-32769", "0x7FFF", "-0x8000", "0x8000"),
+        Kind.Int4 => Integers("2147483647", "-2147483648", "2147483648", "-2147483649", "0x7FFFFFFF", "-0x80000000", "0x80000000"),
+        Kind.Int8 => Integers("9223372036854775807", "-9223372036854775808", "9223372036854775808", "-9223372036854775809",
+                              "0x7FFFFFFFFFFFFFFF", "-0x8000000000000000", "0x8000000000000000"),
         Kind.Numeric => new(["1.5", "2", "5.25", "9"],
         [
             ("1.5", "element"), ("+1.5", "sign"), ("-1.5", "sign"), ("-0", "sign"), (".5", "point"), ("5.", "point"),
@@ -597,11 +598,20 @@ public sealed class LiteralCorpusProbeTests
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
-    private static ElementCorpus Integers(string max, string min, string aboveMax, string belowMin) => new(["1", "2", "5", "9"],
+    private static ElementCorpus Integers(string max, string min, string aboveMax, string belowMin, string hexMax, string hexMin, string hexAboveMax) => new(["1", "2", "5", "9"],
     [
         ("1", "element"), ("+1", "sign"), ("-1", "sign"), ("-0", "sign"), ("007", "leading zeros"), ("1e3", "exponent"), ("1.0", "fraction"),
         ("1.5", "fraction"), (max, "extreme"), (min, "extreme"), (aboveMax, "overflow"), (belowMin, "overflow"),
         ("0x1F", "non-decimal integer"), ("0o17", "non-decimal integer"), ("0b101", "non-decimal integer"), ("1_000", "digit separator integer"),
+        // PostgreSQL 16's integer grammar at its edges (#127), measured on 16 and 18: a prefix in either
+        // case, a sign before it, one underscore after it, the extremes in hex with the sign applied last.
+        ("0X1F", "non-decimal integer"), ("-0x1F", "non-decimal integer"), ("+0b101", "non-decimal integer"), ("0x_1F", "non-decimal integer"),
+        ("0o_17", "non-decimal integer"), ("0x000000000000001F", "non-decimal integer"), (hexMax, "non-decimal extreme"), (hexMin, "non-decimal extreme"),
+        (hexAboveMax, "non-decimal overflow"), ("0_1", "digit separator integer"), ("1_000_0", "digit separator integer"),
+        ("0x", "malformed non-decimal integer"), ("0x1__F", "malformed non-decimal integer"), ("0x1F_", "malformed non-decimal integer"),
+        ("00x1", "malformed non-decimal integer"), ("0x-1", "malformed non-decimal integer"), ("0o8", "malformed non-decimal integer"),
+        ("0b2", "malformed non-decimal integer"), ("0x 1F", "malformed non-decimal integer"), ("0_x1", "malformed non-decimal integer"),
+        ("_1", "malformed digit separator"), ("1_", "malformed digit separator"), ("1__000", "malformed digit separator"), ("-_1", "malformed digit separator"),
         ("\uFF11", "unicode digit"), ("\u0663", "unicode digit"), ("1 2", "malformed element"), ("- 1", "malformed element"),
         ("NaN", "numeric special"), ("infinity", "numeric special")
     ]);

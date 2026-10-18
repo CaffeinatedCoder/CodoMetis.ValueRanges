@@ -1,146 +1,6 @@
 [
   {
     "oracle": "LiteralCorpusProbeTests",
-    "row": "Int16Set digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int16Set non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int16Set<TinyCode> digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int16Set<TinyCode> non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int32Range digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int32Range non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int32Set digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int32Set non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int32Set<SmallCode> digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int32Set<SmallCode> non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int64Range digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int64Range non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int64Set digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int64Set non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int64Set<LargeCode> digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "Int64Set<LargeCode> non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<Int32Range> digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<Int32Range> non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<Int64Range> digit separator integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<Int64Range> non-decimal integer ",
-    "family": "integer input refuses 0x, 0o, 0b and digit separators that PostgreSQL 16 reads",
-    "issue": "#127",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
     "row": "LocalDateTimeRange offset ",
     "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
     "issue": "#130",
@@ -205,6 +65,20 @@
   {
     "oracle": "LiteralCorpusProbeTests",
     "row": "Int64Range extreme (,9223372036854775807]:",
+    "family": "(,max] needs max + 1 to canonicalize; PostgreSQL raises 22003",
+    "issue": "#132",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int32Range non-decimal extreme (,0x7FFFFFFF]:",
+    "family": "(,max] needs max + 1 to canonicalize; PostgreSQL raises 22003",
+    "issue": "#132",
+    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "LiteralCorpusProbeTests",
+    "row": "Int64Range non-decimal extreme (,0x7FFFFFFFFFFFFFFF]:",
     "family": "(,max] needs max + 1 to canonicalize; PostgreSQL raises 22003",
     "issue": "#132",
     "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
