@@ -1094,6 +1094,20 @@
     ]
   },
   {
+    "id": "E62-timerange-stored-2400-fails-to-load",
+    "source": "docs/efcore.md#timerange-and-the-custom-timerange-type",
+    "quote": "**A stored `24:00:00` bound fails to load.** If another tool wrote one, such as `[22:00,24:00)`, loading the row throws `ArgumentOutOfRangeException` from Npgsql's `time` read, and so does a query that selects the bound. Rewrite such rows to an unbounded end: `UPDATE … SET hours = timerange(lower(hours), NULL)`.",
+    "claim": "A timerange row holding a 24:00:00 bound throws ArgumentOutOfRangeException when it loads and when its bound is projected; rewritten with timerange(lower(x), NULL) it loads as an unbounded end.",
+    "oracle": "exception",
+    "surfaces": [
+      "TimeRange.CreateUnboundedEnd",
+      "RangeExtensions.UpperBound"
+    ],
+    "heldBy": [
+      "TimeAndYearMonthIntegrationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",

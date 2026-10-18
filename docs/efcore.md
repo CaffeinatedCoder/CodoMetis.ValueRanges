@@ -654,6 +654,10 @@ Good to know:
 - **`TimeOnly` has no `24:00:00`.** PostgreSQL's `time` accepts the special value `24:00:00`, which
   `TimeOnly` can't represent. To say "until the end of the day", use an unbounded end or an
   inclusive `TimeOnly.MaxValue` bound.
+- **A stored `24:00:00` bound fails to load.** If another tool wrote one, such as `[22:00,24:00)`,
+  loading the row throws `ArgumentOutOfRangeException` from Npgsql's `time` read, and so does a
+  query that selects the bound. Rewrite such rows to an unbounded end:
+  `UPDATE … SET hours = timerange(lower(hours), NULL)`.
 
 ## Float64Range and the custom float8range type
 
