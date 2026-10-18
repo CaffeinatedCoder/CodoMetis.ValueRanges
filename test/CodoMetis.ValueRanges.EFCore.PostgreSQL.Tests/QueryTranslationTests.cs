@@ -219,9 +219,7 @@ public sealed class QueryTranslationTests
     {
         var sql = Sql(db => db.Bookings.Where(b => b.Period.IsInfinity()));
 
-        StringAssert.Contains(sql, "lower_inf(b.\"Period\")");
-        StringAssert.Contains(sql, "upper_inf(b.\"Period\")");
-        StringAssert.Contains(sql, "AND");
+        StringAssert.EndsWith(sql, "WHERE lower_inf(b.\"Period\") AND upper_inf(b.\"Period\")");
     }
 
     [TestMethod]
@@ -229,9 +227,7 @@ public sealed class QueryTranslationTests
     {
         var sql = Sql(db => db.Bookings.Where(b => b.Period.IsFinite()));
 
-        StringAssert.Contains(sql, "NOT (lower_inf(b.\"Period\"))");
-        StringAssert.Contains(sql, "NOT (upper_inf(b.\"Period\"))");
-        StringAssert.Contains(sql, "NOT (isempty(b.\"Period\"))");
+        StringAssert.EndsWith(sql, "WHERE NOT (lower_inf(b.\"Period\")) AND NOT (upper_inf(b.\"Period\")) AND NOT (isempty(b.\"Period\"))");
     }
 
     [TestMethod]
