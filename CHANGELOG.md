@@ -35,6 +35,8 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 - **EF Core: `CompareTo` against 0** on a range or multirange runs as `<`, `<=`, `>`, `>=` or `=`, and returns the rows the same comparison returns in memory ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
 - **A range with a `RangeSet` operand**: `Contains`, `IsContainedBy`, `Overlaps`, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendRightOf`, `DoesNotExtendLeftOf` and `IsAdjacentTo`, as PostgreSQL's operators with the range on the left, and **`RangeSet.IsContainedBy`** with a range or a set ([Compare a range with a set](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#compare-a-range-with-a-set)).
 - **EF Core: a range with a multirange operand** runs as the operator with the range on the left (`b."Period" &< b."Blocked"`), and `RangeSet.IsContainedBy` as `<@` ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
+- **`RangeAgg` and `RangeIntersectAgg` over a sequence of `RangeSet`**, as PostgreSQL's `range_agg` and `range_intersect_agg` over multiranges. They are generic, so they serve every range type, the NodaTime ones included ([Aggregates](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#aggregate-a-sequence-of-ranges)).
+- **EF Core: `RangeAgg` and `RangeIntersectAgg` over a multirange column** run as `range_agg` and `range_intersect_agg` over the multirange inside a `GroupBy` projection ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
 
 ### Fixed
 

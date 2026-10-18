@@ -381,6 +381,27 @@ public sealed class QueryTranslationTests
         StringAssert.Contains(sql, "range_intersect_agg(b.\"Period\")");
     }
 
+    [TestMethod]
+    public void RangeAgg_OverAMultirangeColumn_TranslatesToRangeAggOverTheMultirange()
+    {
+        var sql = Sql(db => db.Bookings
+            .GroupBy(b => b.Day)
+            .Select(g => g.Select(b => b.BlockedDays).RangeAgg()));
+
+        StringAssert.Contains(sql, "range_agg(b.\"BlockedDays\")");
+    }
+
+    [TestMethod]
+    public void RangeIntersectAgg_OverAMultirangeColumn_TranslatesToRangeIntersectAggOverTheMultirange()
+    {
+        var sql = Sql(db => db.Bookings
+            .GroupBy(b => b.Day)
+            .Select(g => new { Agg = g.Select(b => b.SeatBlocks).RangeIntersectAgg(), Range = g.Select(b => b.Seats).RangeIntersectAgg() }));
+
+        StringAssert.Contains(sql, "range_intersect_agg(b.\"SeatBlocks\")");
+        StringAssert.Contains(sql, "range_intersect_agg(b.\"Seats\")");
+    }
+
     // -------------------------------------------------------------------------
     // RangeSet (multirange) operations
     // -------------------------------------------------------------------------

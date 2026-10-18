@@ -828,6 +828,22 @@
     ]
   },
   {
+    "id": "E47-multirange-aggregates-translate",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "// range_agg(b.\"BlockedDays\") / range_intersect_agg(b.\"BlockedDays\") over a multirange column",
+    "claim": "RangeAgg and RangeIntersectAgg over a multirange column inside a GroupBy projection translate to range_agg and range_intersect_agg over the column with the multirange mapping on both sides, for core and NodaTime types, and return what memory returns for every group.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg",
+      "RangeAggregateExtensions.RangeIntersectAgg"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "NodaQueryTranslationTests",
+      "RangeAggregateParityTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -2388,6 +2404,36 @@
     "heldBy": [
       "RangeCompareToTests",
       "NodaTimeRangeOrderTests"
+    ]
+  },
+  {
+    "id": "R29-aggregates-over-sets",
+    "source": "docs/ranges.md#aggregate-a-sequence-of-ranges",
+    "quote": "Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:",
+    "claim": "RangeAgg over a sequence of sets is the union of every set and RangeIntersectAgg is the fold of Intersect (null for an empty source, the empty set when an input is empty, the infinite set neutral), for core and NodaTime types, in either input order, each agreeing with range_agg(anymultirange) and range_intersect_agg(anymultirange) over every subset of eight sets.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg",
+      "RangeAggregateExtensions.RangeIntersectAgg"
+    ],
+    "heldBy": [
+      "RangeAggregateParityTests",
+      "RangeAggregateTests",
+      "NodaTimeRangeSetTests"
+    ]
+  },
+  {
+    "id": "R30-set-intersect-agg-empty-input",
+    "source": "docs/ranges.md#aggregate-a-sequence-of-ranges",
+    "quote": "An empty set among the inputs makes it the empty set.",
+    "claim": "RangeIntersectAgg over sets returns RangeSet.Empty when any input is the empty set, wherever it appears in the sequence, as range_intersect_agg does.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeIntersectAgg"
+    ],
+    "heldBy": [
+      "RangeAggregateTests",
+      "RangeAggregateParityTests"
     ]
   },
   {

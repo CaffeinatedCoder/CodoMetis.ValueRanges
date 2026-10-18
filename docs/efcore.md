@@ -100,6 +100,10 @@ bookings.Select(b => b.BlockedDays.Merge());
 bookings.GroupBy(b => b.CustomerId)
         .Select(g => g.Select(b => b.Period).RangeAgg());
 
+// range_agg(b."BlockedDays") / range_intersect_agg(b."BlockedDays") over a multirange column
+bookings.GroupBy(b => b.CustomerId)
+        .Select(g => g.Select(b => b.BlockedDays).RangeIntersectAgg());
+
 // isempty / lower_inf / upper_inf on multirange columns
 bookings.Where(b => !b.BlockedDays.IsEmpty());
 
@@ -608,7 +612,7 @@ parameters:
 | | `IsEmpty`, `IsUnboundedStart`/`End`, `IsInfinity`, `IsFinite` | `isempty`, `lower_inf`, `upper_inf`, and combinations |
 | | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |
 | | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
-| | `RangeAgg`, `RangeIntersectAgg` | `range_agg`, `range_intersect_agg` |
+| | `RangeAgg`, `RangeIntersectAgg`, over ranges or sets | `range_agg`, `range_intersect_agg` |
 | `RangeSet` | the same operations over multirange columns, plus `Complement` and `IsContainedBy` | the multirange forms, and `'{(,)}' - x` |
 | Value sets | `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, and the proper variants | `@>`, `&&`, `<@` |
 | | `Count`, `IsEmpty` | `cardinality` |
