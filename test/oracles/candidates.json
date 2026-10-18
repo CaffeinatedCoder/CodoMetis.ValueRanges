@@ -260,27 +260,6 @@
   },
   {
     "oracle": "LiteralCorpusProbeTests",
-    "row": "DecimalRange beyond 28 digits ",
-    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
-    "issue": "#115",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "DecimalSet beyond 28 digits ",
-    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
-    "issue": "#115",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<DecimalRange> beyond 28 digits ",
-    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
-    "issue": "#115",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
     "row": "DateTimeOffsetRange sub-microsecond ",
     "family": "sub-microsecond digits: kept to 100 ns and stored truncated; PostgreSQL rounds half-to-even",
     "issue": "#126",

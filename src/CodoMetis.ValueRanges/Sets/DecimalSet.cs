@@ -71,8 +71,10 @@ public sealed class DecimalSet : IValueSet<decimal>, IValueSetFactory<DecimalSet
     public ImmutableArray<decimal>.Enumerator GetEnumerator() => _elements.GetEnumerator();
 
     /// <inheritdoc cref="IValueSetFactory{TSet,T}.ParseValue"/>
+    /// <remarks>PostgreSQL's <c>numeric</c> grammar, refused where <see cref="decimal"/> would round the number
+    /// the text spells (<see cref="DecimalLiteral"/>); the provider is ignored.</remarks>
     public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => decimal.Parse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture);
+        => DecimalLiteral.Parse(s);
 
     /// <summary>
     /// Parses a PostgreSQL array literal (e.g. <c>{1.5,2.25}</c>, <c>{}</c>) into a

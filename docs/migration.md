@@ -256,6 +256,8 @@ most likely to affect you:
 - **A wrapper element whose text form doesn't round-trip now throws**, on every write and read,
   where it was stored or read back as a different value
   ([details](#check-that-your-elements-text-form-round-trips)).
+- **Decimal text with more precision than `decimal` holds now throws**, where it was rounded
+  ([details](#decimal-text-is-read-exactly-or-refused)).
 
 ### Read UUIDs as PostgreSQL reads them
 
@@ -346,6 +348,29 @@ at a wall clock the machine's time zone skips. Its `"O"` text carries the zone's
 `DateTime.Parse` applies through the zone, so your `Parse` reads another wall clock. `ToString` and
 JSON now refuse it; the EF Core bridge still stores the wall clock, as it did since 9.0, because the
 column holds no offset.
+
+### Decimal text is read exactly or refused
+
+`DecimalRange`, `RangeSet<DecimalRange>`, `DecimalSet` and `DecimalSet<T>` refuse decimal text whose
+number `decimal` can't hold exactly, through every entry point: `Parse`, `TryParse`, JSON (a number
+token, or a quoted one under `AllowReadingFromString`), the `TypeConverter` and configuration
+binding, and an EF Core JSON column. Before, `decimal.Parse` rounded it to the nearest value,
+silently, and the value in memory was a different number from what PostgreSQL holds for the same
+text:
+
+| Text | 9.x | 10.0 | PostgreSQL |
+|---|---|---|---|
+| `[1.00000000000000000000000000001,2)` | `[1.0000000000000000000000000000,2)`, contains 1 | `FormatException` | doesn't contain 1 |
+| `{1.00000000000000000000000000001,1}` | one element | `FormatException` | two elements |
+| `[1e-30]` (JSON) | `0.0000000000000000000000000000` | `JsonException` | `1e-30` |
+| `{1e30}` | `OverflowException` | `OverflowException` | reads |
+
+The check is on the value, not the text: `1e3`, `+1.5`, `007.50`, a trailing zero beyond the 28th
+decimal place and every other spelling of a number `decimal` holds still read, with the text's scale.
+A column holding more precision was already loud: Npgsql throws `OverflowException` reading it.
+
+If you receive such text, decide what to keep before parsing: round it yourself with
+`decimal.Round`, or store it as `numeric` text.
 
 ## Migration from v8.x
 

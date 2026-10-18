@@ -98,6 +98,12 @@ does. The text is PostgreSQL's, and it has no culture.
 Decimal bounds follow PostgreSQL's `numeric` grammar: sign, digits, point and exponent. A group
 separator or a currency symbol fails (`FormatException`).
 
+A decimal bound or element is read exactly or not at all. Text that names a number `decimal` can't
+hold, such as a 29th significant digit or `1e-30`, fails (`FormatException`) rather than being
+rounded to the nearest value. PostgreSQL keeps every digit, so a rounded value would be a different
+number from the server's. Before 10.0, `[1.00000000000000000000000000001,2)` read as
+`[1.0000000000000000000000000000,2)` and contained 1, where the server's range doesn't.
+
 Discrete types are normalized when you parse them. `"[1,10)"` and `"[1,9]"` hold the same values,
 and both parse to the same closed range `[1, 9]`:
 
