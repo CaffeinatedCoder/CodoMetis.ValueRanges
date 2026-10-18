@@ -1,0 +1,18 @@
+Seed: Split stops one step early on a discrete range: the last piece is taken when the next boundary reaches the range's last value rather than passing it
+Oracles: RangeSplitOracleTests
+Fails: every discrete range whose length is a multiple of the step plus one, on every discrete type: its last two pieces come out as one; and every calendar split whose last period ends one day before the range
+History: planted before Split shipped in 10.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeSplitting.cs b/src/CodoMetis.ValueRanges/Internals/RangeSplitting.cs
+index fe32928..2b0084a 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeSplitting.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeSplitting.cs
+@@ -131,7 +131,7 @@ internal static class RangeSplitting
+         // on a continuous one. A piece whose window reaches that point is the last and takes the
+         // range's own end, so a closed continuous range ends [5,10] rather than [5,10), [10,10].
+         // A discrete range ending at the domain's maximum stops only when the boundaries run out.
+-        T? stop = TRange.IsDiscrete ? TRange.NextValueAfter(range.End) : range.End;
++        T? stop = range.End;
+ 
+         var from          = range.Start;
+         var fromInclusive = range.StartInclusive;

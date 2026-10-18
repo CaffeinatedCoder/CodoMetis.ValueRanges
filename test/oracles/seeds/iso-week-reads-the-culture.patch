@@ -1,0 +1,18 @@
+Seed: DateRange.IsoWeek(date) starts the week on the current culture's first day of the week instead of Monday
+Oracles: CalendarRangeParityTests
+Fails: every day that is not a Monday, under the invariant culture, en-US, fa-IR and ar-EG; de-DE starts on Monday and passes
+History: planted before the calendar factories shipped in 10.0.0; weeks are ISO 8601 only (#48)
+
+diff --git a/src/CodoMetis.ValueRanges/DateRange.cs b/src/CodoMetis.ValueRanges/DateRange.cs
+index 2bcfddc..641a920 100644
+--- a/src/CodoMetis.ValueRanges/DateRange.cs
++++ b/src/CodoMetis.ValueRanges/DateRange.cs
+@@ -273,7 +273,7 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
+     /// <returns>The week as a closed range of seven days.</returns>
+     /// <exception cref="ArgumentOutOfRangeException">The week runs past <see cref="DateOnly.MaxValue"/>.</exception>
+     public static DateRange IsoWeek(DateOnly date)
+-        => IsoWeekStartingOn(date.AddDays(-(((int)date.DayOfWeek + 6) % 7)));
++        => IsoWeekStartingOn(date.AddDays(-(((int)date.DayOfWeek - (int)CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek + 7) % 7)));
+ 
+     private static DateRange IsoWeekStartingOn(DateOnly monday)
+         => monday.DayNumber > DateOnly.MaxValue.DayNumber - 6

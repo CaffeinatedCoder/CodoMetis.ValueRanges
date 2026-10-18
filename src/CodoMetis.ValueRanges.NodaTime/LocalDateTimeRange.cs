@@ -39,6 +39,18 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     {
     }
 
+    /// <summary>
+    /// The copy constructor a <c>with</c> expression on a variant chains to.
+    /// </summary>
+    /// <remarks>
+    /// A record's copy constructor cannot be private, so this check, not the private constructor
+    /// above, is what keeps the union closed: a type declared outside the nested variants is
+    /// refused here, before it can reach a switch.
+    /// </remarks>
+    /// <param name="original">The variant being copied.</param>
+    /// <exception cref="InvalidOperationException">The runtime type is not one of the nested variants.</exception>
+    protected LocalDateTimeRange(LocalDateTimeRange original) => ClosedUnion.Require(this);
+
     private static LocalDateTime ToIso(LocalDateTime value)
         => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso);
 
@@ -245,6 +257,26 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     }
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="step"/> each, from its start:
+    /// <c>[09:00,12:00).Split(Period.FromMinutes(30))</c> is the six half-hour slots from 09:00.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. On a continuous type each piece but the last is half-open, so a closed range ends in a closed piece rather than a single point. Each boundary is counted from the range's start, so a split by months keeps the start's day where the calendar has it.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="step">The length of each piece; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<LocalDateTimeRange> Split(Period step)
+    {
+        NodaPeriods.RequirePositive(step, nameof(step));
+        return RangeSplitting.Split<LocalDateTimeRange, LocalDateTime>(this, RangeSplitting.Steps<LocalDateTime>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n))));
+    }
+
+    /// <summary>
     /// The calendar period between the bounds, or <see langword="null"/> when the range is
     /// unbounded. The empty range measures <see cref="Period.Zero"/>.
     /// </summary>
@@ -298,6 +330,55 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     /// </summary>
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out LocalDateTimeRange result)
         => RangeFormat.TryParse<LocalDateTimeRange, LocalDateTime>(s, provider, out result);
+
+    /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(LocalDateTimeRange? other) => RangeOrder.Compare<LocalDateTime>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[09:00,10:00).Shift(Period.FromWeeks(1))</c> is the same hour a week later.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// A period with months or years follows NodaTime's calendar arithmetic, which clips to the end of a
+    /// shorter month, so moving back does not always restore the range. Days, weeks and time units move
+    /// every value by the same amount.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDateTime"/> can hold.</exception>
+    public LocalDateTimeRange Shift(Period delta) => RangeArithmetic.Move<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[09:00,10:00).Expand(Period.FromMinutes(15))</c> is <c>[08:45,10:15)</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDateTime"/> can hold.</exception>
+    public LocalDateTimeRange Expand(Period amount) => RangeArithmetic.Move<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
 
     /// <inheritdoc />
     public override sealed string ToString()
