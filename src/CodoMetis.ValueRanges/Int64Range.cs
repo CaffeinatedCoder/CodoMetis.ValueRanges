@@ -228,8 +228,10 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     }
 
     /// <inheritdoc />
+    /// <remarks>PostgreSQL 16\'s integer grammar — decimal, or <c>0x</c>, <c>0o</c> or <c>0b</c> digits, with single
+    /// underscores between digits (<see cref="IntegerLiteral"/>); the provider is ignored.</remarks>
     public static long ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => long.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture);
+        => IntegerLiteral.Parse<long>(s);
 
     /// <summary>
     /// Parses a PostgreSQL range literal (e.g. <c>[1,10]</c>, <c>empty</c>, <c>(,)</c>)

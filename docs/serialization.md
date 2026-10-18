@@ -95,6 +95,10 @@ if (Int32Range.TryParse(userInput, null, out var range))
 `Parse` and `TryParse` read the invariant literal and **ignore the provider**, as `Guid.Parse`
 does. The text is PostgreSQL's, and it has no culture.
 
+Integer bounds and elements follow PostgreSQL 16's integer grammar. You can write them in decimal,
+or in hexadecimal, octal or binary after `0x`, `0o` or `0b`, with single underscores between digits:
+`[0x1F,1_000)` is `[31,1000)`. PostgreSQL 15 and older read decimal digits only.
+
 Decimal bounds follow PostgreSQL's `numeric` grammar: sign, digits, point and exponent. A group
 separator or a currency symbol fails (`FormatException`).
 
