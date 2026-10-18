@@ -147,19 +147,24 @@ Each range in your list goes to PostgreSQL as its own parameter, and `Contains` 
 get exactly the rows whose range equals one in your list, the same rows as in memory. This works
 for a list, an array or any other collection you capture, and for every range type, `TimeRange`
 and the NodaTime ranges included.
+`Any` and `Count` over the list read the ranges from `VALUES`, so overlapping, adjacent, duplicate
+and empty ranges stay what they are. An empty list matches nothing: `Contains` is `false`, `Any`
+with a condition is `false` and `Count` with a condition is `0`.
 
 Good to know:
 
-- **`EF.Parameter(wanted).Contains(…)` throws.** It asks for the whole list as one parameter, and
-  Npgsql would send that as a multirange rather than as an array of ranges. Remove `EF.Parameter`.
+- **`EF.Parameter(wanted)` throws.** It asks for the whole list as one parameter, and Npgsql would
+  send that as a multirange rather than as an array of ranges. Remove `EF.Parameter`, and the list
+  goes out one parameter per range.
 - **Before 9.1.0 a captured list failed.** PostgreSQL rejected the parameter
   (`42809 op ANY/ALL (array) requires array on right side`), and for `TimeRange` Npgsql threw
   (`InvalidCastException`). A constant list and an inline `new[] { … }` already worked.
-- **`Any` or `Count` alone over a captured list of ranges can return a different answer from
-  memory.** Without a `Contains` in the same query, the list still goes out as one parameter that
-  PostgreSQL reads as a multirange. A multirange merges overlapping and adjacent ranges and drops
-  empty ones. Wrap the list in `EF.Constant` until 10.0.0 fixes this:
-  `bookings.Select(b => EF.Constant(wanted).Count(w => w.Overlaps(b.Seats)))`.
+- **Before 10.0.0, `Any` or `Count` alone over a captured list returned a different answer from
+  memory.** Without a `Contains` in the same query, the list went out as one parameter that
+  PostgreSQL read as a multirange, which merges overlapping and adjacent ranges and drops empty
+  ones. `wanted.Count(w => w.Overlaps(b.Seats))` over `[1,5]` and `[3,8]` was 1 where memory says
+  2. If you wrapped the list in `EF.Constant` to avoid that, you can remove the wrapper; it still
+  works.
 - **A list of `RangeSet` values needs nothing.** It goes out as one array of multiranges, which is
   what it is.
 

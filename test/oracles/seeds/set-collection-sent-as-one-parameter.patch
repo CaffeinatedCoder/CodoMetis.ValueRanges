@@ -4,15 +4,15 @@ Fails: every value set type through every collection form and list, Contains, An
 History: shipped before 9.1.0 (#46)
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
-index 8c1bebd..c2ed8b2 100644
+index a5bf1d0..1344bde 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
-@@ -100,7 +100,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+@@ -98,7 +98,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+         protected override Expression VisitExtension(Expression node)
              => node is QueryParameterExpression parameter
                 && (parameter.TranslationMode ?? defaultMode) == ParameterTranslationMode.Parameter
-                && Element(parameter.Type) is var (_, isSet)
--               && (isSet || rangeContainsSources.Contains(parameter.Name))
-+               && !isSet && rangeContainsSources.Contains(parameter.Name)
+-               && Element(parameter.Type) is not null
++               && Element(parameter.Type) is (_, false)
                     ? new QueryParameterExpression(parameter.Name, parameter.Type, ParameterTranslationMode.MultipleParameters)
                     : base.VisitExtension(node);
  

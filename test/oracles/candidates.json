@@ -803,12 +803,5 @@
     "family": "a discrete bound exclusive at ±infinity is canonicalized one step inside the domain",
     "issue": "#117",
     "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "CapturedCollectionProbeTests",
-    "row": ", alone: ",
-    "family": "a range collection no Contains reads goes out as one parameter Npgsql types as a multirange: unnest merges and drops empties, Any(==) fails with 42809, timerange cannot be written",
-    "issue": "#76",
-    "method": "Ranges_AnswerAsInMemory"
   }
 ]
