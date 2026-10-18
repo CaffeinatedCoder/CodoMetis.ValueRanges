@@ -22,6 +22,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **`Gap`** on a range returns the range between two ranges, and **`Gaps()`** and **`Gaps(window)`** on a `RangeSet` return the gaps between its elements and the uncovered parts of a window ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#find-the-gap-between-two-ranges)).
 
 ### Fixed
 

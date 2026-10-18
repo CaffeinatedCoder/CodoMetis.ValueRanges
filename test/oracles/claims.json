@@ -791,6 +791,22 @@
     ]
   },
   {
+    "id": "E45-gap-and-gaps-translate",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**`Gap`** becomes `range_merge` of the hull minus both ranges, computed on multiranges.",
+    "claim": "Range Gap translates to range_merge((multirange(range_merge(a, b)) - multirange(a)) - multirange(b)), RangeSet.Gaps() to multirange(range_merge(x)) - x and Gaps(window) to multirange(window) - x, and each returns the in-memory answer for every shape pair, in a projection and in a predicate.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Gap",
+      "RangeSet.Gaps"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "ExecutedQueryTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -1685,6 +1701,42 @@
     ]
   },
   {
+    "id": "M12-gaps-inner-complement",
+    "source": "docs/ranges.md#find-the-free-slots-in-a-set",
+    "quote": "Unlike `Complement()`, it leaves out what lies before the first element and after the last.",
+    "claim": "set.Gaps() holds exactly the values of set.Merge() the set does not hold, canonically, for every multirange; a set with fewer than two elements has no gaps.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.Gaps",
+      "RangeSet.Merge",
+      "RangeSet.Complement"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelMultirangeOracleTests",
+      "RangeSetLiftParityTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
+    "id": "M13-gaps-in-window",
+    "source": "docs/ranges.md#find-the-free-slots-in-a-set",
+    "quote": "It gives the same values as `Complement().Intersect(window)`.",
+    "claim": "set.Gaps(window) holds exactly the values of window the set does not hold, canonically, for every multirange and window; an unbounded window keeps its open side where the set leaves it uncovered.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.Gaps",
+      "RangeSet.Complement",
+      "RangeSet.Intersect"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelMultirangeOracleTests",
+      "RangeSetLiftParityTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
     "id": "R01-createfinite-degenerate-is-empty",
     "source": "docs/ranges.md#create-a-range",
     "quote": "**An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form an empty or inverted interval. Examples are `start > end`, or equal bounds that are both exclusive.",
@@ -2165,6 +2217,41 @@
     ],
     "heldBy": [
       "NodaTimeInteropTests"
+    ]
+  },
+  {
+    "id": "R26-gap-between-two-ranges",
+    "source": "docs/ranges.md#find-the-gap-between-two-ranges",
+    "quote": "So the two ranges and their gap together make up exactly `a.Merge(b)`.",
+    "claim": "For every pair of ranges, a.Gap(b) is one range, equal to b.Gap(a), sharing no value with either operand, and a ∪ a.Gap(b) ∪ b holds exactly the values of a.Merge(b); in PostgreSQL the same as range_merge(multirange(range_merge(a,b)) - multirange(a) - multirange(b)).",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeExtensions.Gap",
+      "RangeExtensions.Merge"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelOracleTests",
+      "DomainParityOracleTests",
+      "RangeSetLiftParityTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
+    "id": "R27-gap-empty-when-touching",
+    "source": "docs/ranges.md#find-the-gap-between-two-ranges",
+    "quote": "`Gap` returns `Empty` when the ranges overlap or are adjacent, and when either of them is empty.",
+    "claim": "a.Gap(b) is Empty exactly when a and b overlap, are adjacent, or either is empty; otherwise it is non-empty, with each bound the opposite inclusiveness of the operand bound it meets.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Gap",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelOracleTests",
+      "DomainParityOracleTests"
     ]
   },
   {

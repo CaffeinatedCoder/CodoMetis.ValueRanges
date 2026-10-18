@@ -418,6 +418,33 @@ RangeSet<Int32Range, int>.From([a, b]).Merge(); // [1, 12]
 `Merge` ignores an empty range, and an unbounded edge stays unbounded in the result. On a
 `RangeSet`, `Merge()` covers the whole set.
 
+### Find the gap between two ranges
+
+```csharp
+var a = Int32Range.CreateFinite(1, 3);
+var b = Int32Range.CreateFinite(10, 12);
+
+a.Gap(b);  // [4, 9]
+b.Gap(a);  // [4, 9] — the order doesn't matter
+
+a.Gap(Int32Range.CreateFinite(4, 6));  // Empty — adjacent, nothing lies between them
+```
+
+`Gap` returns the range that lies between two ranges. It holds every value that `Merge` covers and
+neither range holds. So the two ranges and their gap together make up exactly `a.Merge(b)`.
+
+Good to know:
+
+- **No gap gives you `Empty`.** `Gap` returns `Empty` when the ranges overlap or are adjacent, and
+  when either of them is empty.
+- **Each bound of the gap flips at the edge it meets.** On a continuous type, `[1,3)` and `(3,5]`
+  leave the single value 3, so their gap is `[3,3]`.
+- **An unbounded range still has a gap on its bounded side.** `(-∞, 3]` and `[10, +∞)` leave
+  `[4, 9]`.
+- **`Gap` runs in the database.** In an EF Core query it becomes `range_merge` over the multirange
+  difference, because PostgreSQL has no gap function. See
+  [What runs where](efcore.md#what-runs-where).
+
 ### Aggregate a sequence of ranges
 
 `RangeAgg()` and `RangeIntersectAgg()` combine a sequence of ranges. They are the in-memory
@@ -546,6 +573,33 @@ IntSet.Infinite.IsInfinity();  // true — the only set that covers everything
 
 Creating a set collapses any `Infinity` input to the one-element `Infinite` set. So that set is the
 only way to represent full coverage. That is what makes the check exact, both in memory and in SQL.
+
+### Find the free slots in a set
+
+```csharp
+var booked = IntSet.From([
+    Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(20, 30), Int32Range.CreateFinite(35, 40)
+]);
+
+booked.Gaps();                                // { [11, 19], [31, 34] }
+booked.Complement();                          // { (-∞, 0], [11, 19], [31, 34], [41, +∞) }
+
+booked.Gaps(Int32Range.CreateFinite(5, 50));  // { [11, 19], [31, 34], [41, 50] }
+```
+
+`Gaps()` returns every value between the set's first and last element that the set doesn't cover.
+Unlike `Complement()`, it leaves out what lies before the first element and after the last.
+
+`Gaps(window)` returns the parts of `window` that the set doesn't cover, such as the free days of a
+month. It gives the same values as `Complement().Intersect(window)`.
+
+Good to know:
+
+- **A set with fewer than two elements has no gaps.** `Gaps()` returns the `Empty` set for it.
+- **An unbounded window keeps its open side.** `booked.Gaps(Int32Range.CreateUnboundedEnd(5))`
+  ends with `[41, +∞)`.
+- **Both run in the database.** `Gaps()` becomes `datemultirange(range_merge(x)) - x`, and
+  `Gaps(window)` becomes `datemultirange(window) - x`.
 
 ### Build a set with a collection expression
 

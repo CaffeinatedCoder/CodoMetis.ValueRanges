@@ -1029,6 +1029,39 @@ public sealed class RangeSet<TRange, T>
     public RangeSet<TRange, T> Complement() => Infinite.Except(this);
 
     /// <summary>
+    /// Returns the gaps between the set's elements: every value between its first and last
+    /// element that the set does not cover.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="Complement"/>, nothing before the first element or after the last
+    /// counts, so a set with fewer than two elements has no gaps. In an EF Core query this is
+    /// <c>multirange(range_merge(set)) - set</c>.
+    /// </remarks>
+    /// <returns>
+    /// <see cref="Merge()"/> minus this set: one element per gap, in order, and
+    /// <see cref="Empty"/> when the set is empty or a single range.
+    /// </returns>
+    public RangeSet<TRange, T> Gaps() =>
+        _elements.Length < 2 ? Empty : From([Merge()]).Except(this);
+
+    /// <summary>
+    /// Returns the parts of <paramref name="window"/> that the set does not cover — the free
+    /// slots inside a day, a week or any other window.
+    /// </summary>
+    /// <remarks>
+    /// The same values as <c>Complement().Intersect(window)</c>, computed without the
+    /// complement. Elements outside the window play no part, and an unbounded window keeps its
+    /// unbounded side wherever the set leaves it uncovered. In an EF Core query this is
+    /// <c>multirange(window) - set</c>.
+    /// </remarks>
+    /// <param name="window">The range to find the uncovered parts of.</param>
+    /// <returns>
+    /// <paramref name="window"/> minus this set; <see cref="Empty"/> when the set covers the
+    /// whole window or the window is empty.
+    /// </returns>
+    public RangeSet<TRange, T> Gaps(TRange window) => From([window]).Except(this);
+
+    /// <summary>
     /// Returns the smallest single range containing every value of the set, spanning any
     /// interior gaps — equivalent to the PostgreSQL <c>range_merge</c> function on
     /// multiranges. The empty set yields <see cref="IRangeFactory{TRange,T}.Empty"/>.

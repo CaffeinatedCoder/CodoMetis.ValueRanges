@@ -268,8 +268,9 @@ public sealed class ShapeMatrixParityTests
     }
 
     /// <summary>
-    /// <c>Intersect</c>, <c>Merge</c>, <c>Union</c> and <c>Except</c> over every ordered shape
-    /// pair, against <c>*</c>, <c>range_merge</c>, <c>+</c> and <c>-</c>.
+    /// <c>Intersect</c>, <c>Merge</c>, <c>Union</c>, <c>Except</c> and <c>Gap</c> over every ordered
+    /// shape pair, against <c>*</c>, <c>range_merge</c>, <c>+</c>, <c>-</c> and the multirange form
+    /// the EF Core translation of <c>Gap</c> emits — plus <c>RangeSet.Gaps</c> over the pair.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -314,6 +315,20 @@ public sealed class ShapeMatrixParityTests
 
             labels.Add(($"Except '{leftName}' ∖ '{rightName}'", true, left.Except(right).ToString()));
             sql.Add($"{setA} - {setB}");
+
+            // PostgreSQL has no gap function; this is the form the EF Core translation emits.
+            labels.Add(($"Gap '{leftName}' ⋯ '{rightName}'", false, Literal(left.Gap(right)!)));
+            sql.Add($"range_merge({multirangeType}(range_merge({a}, {b})) - {setA} - {setB})");
+
+            // The two set forms over the pair's union, which has a gap exactly when the pair does,
+            // and the uncovered part of the right operand as a window.
+            var pair = left.Union(right);
+            labels.Add(($"Gaps '{leftName}' ∪ '{rightName}'", true, pair.Gaps().ToString()));
+            sql.Add($"{multirangeType}(range_merge({setA} + {setB})) - ({setA} + {setB})");
+
+            labels.Add(($"Gaps(window '{rightName}') of '{leftName}'", true,
+                        RangeSet<TRange, T>.From([left]).Gaps(right).ToString()));
+            sql.Add($"{setB} - {setA}");
         }
 
         var server = await EvaluateText(sql);
@@ -390,6 +405,31 @@ public sealed class ShapeMatrixParityTests
             ("[5,)",  DecimalRange.CreateUnboundedEnd(5m)),
             ("(3,)",  DecimalRange.CreateUnboundedEnd(3m, false)),
             ("(,)",   DecimalRange.Infinite)
+        ]);
+    }
+
+    /// <summary>
+    /// The date domain, where a gap between two stays is the question a booking system asks most:
+    /// discrete like <see cref="int"/>, but through <c>datemultirange</c> and the date literal.
+    /// </summary>
+    [TestMethod]
+    public async Task DateRange_Algebra_AgreesWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        DateOnly D(int month, int day) => new(2024, month, day);
+
+        await AssertAlgebraAgrees<DateRange, DateOnly>("daterange", "datemultirange",
+        [
+            ("empty",     DateRange.Empty),
+            ("[Jan,Mar]", DateRange.CreateFinite(D(1, 1), D(3, 31))),
+            ("[Apr,Jun]", DateRange.CreateFinite(D(4, 1), D(6, 30))),
+            ("[Mar,May]", DateRange.CreateFinite(D(3, 1), D(5, 31))),
+            ("[Nov,Dec]", DateRange.CreateFinite(D(11, 1), D(12, 31))),
+            ("(,Mar]",    DateRange.CreateUnboundedStart(D(3, 31))),
+            ("[Apr,)",    DateRange.CreateUnboundedEnd(D(4, 1))),
+            ("[Dec,)",    DateRange.CreateUnboundedEnd(D(12, 1))),
+            ("(,)",       DateRange.Infinite)
         ]);
     }
 }
