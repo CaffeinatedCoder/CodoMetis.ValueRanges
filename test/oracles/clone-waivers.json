@@ -432,5 +432,33 @@
     "member": "parseStoreText",
     "kind": "extra",
     "reason": "the one family whose element text (2024-06) differs from its store text (2024-06-01): a JSON document holds the dates and is read back through LocalDateSet"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "text has one rule the column enforces and the others do not: a NUL character cannot be stored, so Contains, Add and Remove refuse the probe From refuses (TextElement, #133); the other families' elements are valid by type"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "the element's text form is what the text column holds, so the NUL rule applies to it on every construction path (TextElement, #133); the other arities' primitives are valid by type"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "RequireText($T)",
+    "kind": "extra",
+    "reason": "the element's text form is what the text column holds, so the NUL rule applies to it on every construction path (TextElement, #133); the other arities' primitives are valid by type"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "StringSet / StringSet<TElement>",
+    "member": "arity only: RequireText($T)",
+    "kind": "extra",
+    "reason": "the arity checks the element's text form for a NUL character through one helper; the closed set checks the string itself inline (TextElement, #133)"
   }
 ]

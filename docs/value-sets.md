@@ -291,6 +291,10 @@ Good to know:
   and so does `{"{6f9619ff-8b86-d011-b42d-00c04fc964ff}"}`. Parentheses, and whitespace inside a
   quoted element, fail (`FormatException`), as they do on the server. `GuidSet<T>` reads the same
   grammar and hands your `Parse` the `D` form.
+- **A NUL character is refused.** PostgreSQL `text` can't hold U+0000, so `StringSet.From("a\0b")`
+  throws `ArgumentException` and `{a\0b}` fails (`FormatException`), through `Parse`, `TryParse`,
+  JSON and `Add` alike, and `StringSet<T>` checks the element's text form. Before 10.0 the set
+  parsed and failed when it was saved.
 - **Before 10.0, `GuidSet` read `Guid.Parse`'s grammar.** `{(6f9619ff-8b86-d011-b42d-00c04fc964ff)}`
   parsed, `{" 6f9619ff-8b86-d011-b42d-00c04fc964ff"}` was trimmed, and the hyphen-group form failed.
 

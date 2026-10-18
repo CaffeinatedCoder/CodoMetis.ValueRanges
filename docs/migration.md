@@ -248,6 +248,8 @@ most likely to affect you:
 - **UUID text that `Guid.Parse` accepts and PostgreSQL rejects now throws `FormatException`.** This
   covers the `(…)` form and whitespace inside a quoted element
   ([details](#read-uuids-as-postgresql-reads-them)).
+- **A string element holding a NUL character now throws.** `From` and `Add` throw
+  `ArgumentException`, and parsing it fails ([details](#keep-nul-out-of-string-elements)).
 
 ### Read UUIDs as PostgreSQL reads them
 
@@ -271,6 +273,22 @@ GuidSet.From(Guid.Parse(text));   // any format Guid.Parse reads
 
 A `GuidSet<T>` hands your element's `Parse` the `D` form, whatever spelling the literal used. An
 element whose `Parse` only accepts another form now throws on every read.
+
+### Keep NUL out of string elements
+
+PostgreSQL `text` cannot hold U+0000. Before, `StringSet.From("a\0b")` built the set and the
+failure came from the server when the row was saved: `invalid byte sequence for encoding "UTF8":
+0x00`. Now the set refuses the element where the text comes in, with a message naming the rule:
+
+```csharp
+StringSet.From("a\0b");                 // ArgumentException
+StringSet.Parse("{a\0b}", null);        // FormatException
+StringSet.TryParse("{a\0b}", null, out _);   // false
+```
+
+`StringSet<T>` applies the rule to the element's text form, in `From`, `Add` and on every read. If
+your data carries NUL as a delimiter, split it before building the set. Every other character,
+including control characters and non-ASCII whitespace, is text as before.
 
 ## Migration from v8.x
 

@@ -876,20 +876,6 @@
   },
   {
     "oracle": "LiteralCorpusProbeTests",
-    "row": "StringSet NUL ",
-    "family": "a NUL character PostgreSQL text cannot hold",
-    "issue": "#133",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "StringSet<TextKey> NUL ",
-    "family": "a NUL character PostgreSQL text cannot hold",
-    "issue": "#133",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
     "row": "DateRange infinity bound ",
     "family": "a discrete bound exclusive at ±infinity is canonicalized one step inside the domain",
     "issue": "#117",
