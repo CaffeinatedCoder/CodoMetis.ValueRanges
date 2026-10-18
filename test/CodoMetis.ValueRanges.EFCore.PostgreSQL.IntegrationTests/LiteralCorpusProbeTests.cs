@@ -53,7 +53,10 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 /// server's own output (<c>docs/architecture.md#domain-width-and-the-boundary</c>). <b>Documented</b>:
 /// a family <c>docs/serialization.md</c> says the library refuses although PostgreSQL reads it — the
 /// strict ISO 8601 temporal grammar (claim J07) and the <c>numeric</c> grammar of sign, digits, point
-/// and exponent (J06). Both are counted; acceptance of such a literal is still compared.
+/// and exponent (J06). Both are counted; acceptance of such a literal is still compared. One difference
+/// depends on the server: empty arrays nested to one depth (<c>{{}}</c>) are <c>{}</c> on PostgreSQL 17
+/// and later and rejected by 16, while the sets read them as <c>{}</c> (S21). Below 17, read from
+/// <c>server_version_num</c>, those rows require exactly that and are counted as documented (#216).
 /// </para>
 /// <para>
 /// One <c>[DynamicData]</c> row per type, so a candidate is scoped by the type's label. A failure line
@@ -169,7 +172,8 @@ public sealed class LiteralCorpusProbeTests
         var storeType = mapping.StoreType;
         var isWrapper = closedSibling is not null;
 
-        var server = await ReadOnServer(connection, storeType, grammar, [.. corpus.Select(c => c.Literal)]);
+        var server  = await ReadOnServer(connection, storeType, grammar, [.. corpus.Select(c => c.Literal)]);
+        var version = await ServerVersion(connection);
 
         int cells = 0, bothRefuse = 0, domain = 0, documented = 0, compared = 0;
         var writeBack = new List<(int Index, string Leg, string Text)>();
@@ -195,6 +199,21 @@ public sealed class LiteralCorpusProbeTests
 
             // --- against the server ---------------------------------------------------------------
             var pg = server[i];
+            if (grammar == Grammar.Array && NestedEmptyArrays.Contains(literal) && version < 170000)
+            {
+                // docs/value-sets.md#parse-and-print-literals (#128, #216): the sets read empty arrays nested
+                // to one depth as {}, as PostgreSQL 17 and later do, and PostgreSQL 16 rejects them. Below 17
+                // the row is that documented difference, not parity: the server must reject it and the library
+                // must read it as the empty set. A library that rejects it too would otherwise count as
+                // agreement here, and a defect in the nested-empty reading would pass on 16.
+                if (pg.Valid)
+                    failures.Add($"{head} PostgreSQL {version} reads it as {Show(pg.Text!)}, which the documented split says it rejects");
+                else if (!parse.Accepted || !Equals(parse.Value, StringOverloads.Parse<TSelf>("{}", Invariant)))
+                    failures.Add($"{head} library {parse.Text}, which the documented split says reads as {{}} although PostgreSQL {version} rejects it");
+                else documented++;
+                continue;
+            }
+
             if (!pg.Valid)
             {
                 if (parse.Accepted) failures.Add($"{head} library {parse.Text}, PostgreSQL refuses");
@@ -355,6 +374,16 @@ public sealed class LiteralCorpusProbeTests
     }
 
     private static bool SubMicrosecond(string family, Kind kind) => family == "sub-microsecond" && IsTemporal(kind);
+
+    /// <summary>The corpus rows that PostgreSQL 17 and later read as <c>{}</c> and PostgreSQL 16 rejects (#128).</summary>
+    private static readonly HashSet<string> NestedEmptyArrays = new(StringComparer.Ordinal) { "{{}}", "{{},{}}", "{ {} }", "{{{},{}}}", "{{{}},{{}}}" };
+
+    /// <summary>The server's own version, <c>server_version_num</c> (160004 for 16.4), never the image's name.</summary>
+    private static async Task<int> ServerVersion(NpgsqlConnection connection)
+    {
+        await using var command = new NpgsqlCommand("SELECT current_setting('server_version_num')::int", connection);
+        return (int)(await command.ExecuteScalarAsync())!;
+    }
 
     // =========================================================================
     // The server

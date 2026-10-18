@@ -1,0 +1,18 @@
+Seed: value sets stop reading empty arrays nested to one depth ({{}}, {{},{}}) as the empty set, and reject them as multi-dimensional
+Oracles: LiteralCorpusProbeTests, LiteralGrammarParityTests
+Fails: the five nested-empty rows of every value set type — on PostgreSQL 17 and 18 as parity (PostgreSQL reads {}), on 16 as the documented split (the library must read {} where PostgreSQL rejects it); NestedEmptyArrays_ReadAsPostgres17AndLaterReadThem_AndPostgres16Rejects
+History: on 16 a library that rejected them read as agreement until the probe learned the version split (#216)
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+index 588c201..c83e6f6 100644
+--- a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+@@ -47,7 +47,7 @@ internal static class SetFormat
+ 
+         // Not trimmed: a trailing escaped space ({a\ }) belongs to the last element.
+         var inner = s[1..^1];
+-        if (LiteralWhiteSpace.Trim(inner).IsEmpty || !decorated && IsNestOfEmptyArrays(s))
++        if (LiteralWhiteSpace.Trim(inner).IsEmpty || !decorated && false)
+         {
+             // A decoration names at least one element, and array_in refuses it on {} and {{}} alike.
+             if (decorated)
