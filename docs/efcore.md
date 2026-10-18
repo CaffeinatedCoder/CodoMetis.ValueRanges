@@ -331,6 +331,10 @@ Good to know:
 - **Your parameterized-collection setting is kept.** A context set to
   `UseParameterizedCollectionMode(ParameterTranslationMode.Constant)`, and a list wrapped in
   `EF.Constant`, still put the sets into the SQL as literals.
+- **An empty list matches nothing.** `Contains` is `false`, `Any` with a condition is `false` and
+  `Count` with a condition is `0`, as in memory. Before 10.0.0, `Any` and `Count` over an empty
+  list threw (`InvalidOperationException`, "Empty collections are not supported as inline query
+  roots").
 - **Before 9.1.0 a captured list failed.** Npgsql sent it as one array parameter and threw
   (`InvalidCastException`) because it couldn't write the array of arrays. A constant list and an
   inline `new[] { … }` already worked.

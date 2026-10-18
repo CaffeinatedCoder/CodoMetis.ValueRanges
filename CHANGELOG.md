@@ -25,6 +25,10 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 - Value sets: every core wrapper set checks that an element's text form reads back as the same element, on every write and read, and throws naming the text-form contract. `Int32Set<T>` whose element formats `V + 1` wrote `{124}` for 123 and read back 124, silently ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#keep-the-text-form-of-the-underlying-type)).
 - Literals: decimal text that names a number `decimal` can't hold, such as a 29th significant digit or `1e-30`, throws `FormatException` from `DecimalRange`, `RangeSet<DecimalRange>`, `DecimalSet` and `DecimalSet<T>`, in a literal, JSON and configuration, where it was rounded: `[1.00000000000000000000000000001,2)` read as `[1.0000000000000000000000000000,2)` and contained 1 ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#parse-a-literal)).
 
+### Fixed
+
+- EF Core: `Any` or `Count` with a predicate over an empty captured list of value sets, or of ranges beside a `Contains`, returns `false` or `0`, as in memory. It threw `InvalidOperationException` ("Empty collections are not supported as inline query roots") ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+
 ## [9.1.0] — 2026-10-17
 
 ### Added

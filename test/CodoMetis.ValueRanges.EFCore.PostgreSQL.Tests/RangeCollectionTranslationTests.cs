@@ -83,6 +83,22 @@ public sealed class RangeCollectionTranslationTests
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
+    /// <summary>
+    /// An empty captured collection sent one parameter per range expands to a <c>VALUES</c> with no
+    /// rows, which EF Core's SQL generator refuses (#137). It reads no rows instead: one row of typed
+    /// <c>NULL</c>s under <c>FALSE</c>, with the predicate folded away under it. <c>Contains</c> over it
+    /// is EF Core's own <c>FALSE</c>, folded out of the <c>OR</c>.
+    /// </summary>
+    [TestMethod]
+    public void AnyBesideContains_OverAnEmptyCapturedList_ReadsNoRows()
+    {
+        var wanted = new List<Int32Range>();
+
+        Assert.AreEqual(
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::int4range)) AS w(\"Value\")     WHERE FALSE)",
+            Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
+    }
+
     [TestMethod]
     public void Contains_OverEFParameter_IsRefusedWithWhatToWriteInstead()
     {

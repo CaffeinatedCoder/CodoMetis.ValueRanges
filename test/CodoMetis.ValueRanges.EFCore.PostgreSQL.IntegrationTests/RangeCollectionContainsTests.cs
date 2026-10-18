@@ -173,6 +173,26 @@ public sealed class RangeCollectionContainsTests
         Assert.AreEqual(0, await Rows(context).CountAsync(r => wanted.Contains(r.Seats)));
     }
 
+    /// <summary>
+    /// With no ranges in the list and a <c>Contains</c> reading it, the list goes out one parameter per
+    /// range — none — and <c>Any</c>/<c>Count</c> read a <c>VALUES</c> with no rows, which EF Core could
+    /// not write (#137). They read no rows now: <see langword="false"/> and <c>0</c>, as in memory.
+    /// </summary>
+    [TestMethod]
+    public async Task AnEmptyCollectionBesideContains_AnyAndCountAnswerAsInMemory()
+    {
+        await using var context = await Context();
+        var wanted = new List<Int32Range>();
+
+        CollectionAssert.AreEqual(
+            Array.Empty<int>(),
+            await Rows(context).Where(r => wanted.Contains(r.Seats) || wanted.Any(w => w.Overlaps(r.Seats))).Select(r => r.Id).ToListAsync());
+
+        var counts = await Rows(context).Select(r => new { Found = wanted.Contains(r.Seats), Overlapping = wanted.Count(w => w.Overlaps(r.Seats)) }).ToListAsync();
+        Assert.AreEqual(2, counts.Count);
+        Assert.IsTrue(counts.All(c => !c.Found && c.Overlapping == 0));
+    }
+
     [TestMethod]
     public async Task AnyBesideContainsOverTheCollection_AnswersAsInMemory()
     {

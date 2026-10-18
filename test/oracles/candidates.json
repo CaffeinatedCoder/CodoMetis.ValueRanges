@@ -810,11 +810,5 @@
     "family": "a range collection no Contains reads goes out as one parameter Npgsql types as a multirange: unnest merges and drops empties, Any(==) fails with 42809, timerange cannot be written",
     "issue": "#76",
     "method": "Ranges_AnswerAsInMemory"
-  },
-  {
-    "oracle": "CapturedCollectionProbeTests",
-    "row": " over empty as ",
-    "family": "an empty captured collection cannot be a VALUES query root",
-    "issue": "#137"
   }
 ]
