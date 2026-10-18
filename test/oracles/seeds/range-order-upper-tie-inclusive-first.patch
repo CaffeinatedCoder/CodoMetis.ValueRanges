@@ -1,0 +1,17 @@
+Seed: the range order breaks a tie between upper bounds at the same value with the inclusive bound first, as it does for lower bounds
+Oracles: RangeOrderParityTests
+Fails: every continuous range and multirange pair whose upper bounds differ only in inclusivity ([lo,hi] against [lo,hi)), and ORDER BY over the shape list
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeOrder.cs b/src/CodoMetis.ValueRanges/Internals/RangeOrder.cs
+index c2a2dbe..67c7def 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeOrder.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeOrder.cs
+@@ -62,7 +62,7 @@ internal static class RangeOrder
+         if (a.Inclusive == b.Inclusive) return 0;
+ 
+         // [5 holds 5 and (5 does not, so [5 starts first; 5] holds 5 and 5) does not, so 5) ends first.
+-        return a.Inclusive == isLower ? -1 : 1;
++        return a.Inclusive ? -1 : 1;
+     }
+ 
+     // The pair is passed through only to name it if a shape nobody wrote an arm for turns up.

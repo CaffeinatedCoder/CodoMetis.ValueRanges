@@ -297,6 +297,40 @@ Int32Range.CreateFinite(1, 5).DoesNotExtendRightOf(Int32Range.CreateFinite(1, 10
 Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10));  // true
 ```
 
+### Sort ranges
+
+Every range type implements `IComparable<TRange>`, so `Order()`, `List.Sort()` and `SortedSet` work
+with no comparer. The order is PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
+
+```csharp
+var ranges = new[]
+{
+    DecimalRange.CreateFinite(1m, 5m, false, false),  // (1,5)
+    DecimalRange.CreateFinite(1m, 5m, true, true),    // [1,5]
+    DecimalRange.CreateUnboundedStart(3m),            // (,3)
+    DecimalRange.CreateFinite(1m, 5m),                // [1,5)
+    DecimalRange.Empty
+};
+
+ranges.Order();  // empty, (,3), [1,5), [1,5], (1,5)
+```
+
+The empty range sorts first. Every other range sorts by its lower bound, then by its upper bound. A
+missing bound is the smallest lower bound and the largest upper bound. At the same value, an
+inclusive lower bound sorts first and an inclusive upper bound sorts last.
+
+`CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct
+range. `null` sorts before every range.
+
+Good to know:
+
+- **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
+  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`.
+- **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
+  nullable column, the two orders differ only in where the nulls go.
+- **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
+  the lower bound, so it ties `[1,5]` with `[1,9]` ([Sort ranges the way a set does](#sort-ranges-the-way-a-set-does)).
+
 ### Read the bounds
 
 These methods are PostgreSQL's `lower`, `upper`, `lower_inc` and `upper_inc`, and they work on any
@@ -462,7 +496,24 @@ new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
 - **`RangeIntersectAgg()`** returns the intersection of all the ranges, or `null` when the
   sequence is empty.
 
-In an EF Core query, both run as the SQL aggregates inside a `GroupBy` projection. See
+Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:
+
+```csharp
+IntSet[] blocked =
+[
+    IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(20, 25)]),
+    IntSet.From([Int32Range.CreateFinite(3, 22)])
+];
+
+blocked.RangeAgg();           // { [1, 25] } — every value of every set
+blocked.RangeIntersectAgg();  // { [3, 5], [20, 22] } — the values every set holds
+```
+
+Over sets, `RangeIntersectAgg()` returns a `RangeSet`, again `null` for an empty sequence. An empty
+set among the inputs makes it the empty set. These two are generic, so they work for every range
+type, the NodaTime ones included.
+
+In an EF Core query, all four run as the SQL aggregates inside a `GroupBy` projection. See
 [Entity Framework Core](efcore.md).
 
 ## RangeSet — multirange support
@@ -507,7 +558,7 @@ set.IsUnboundedEnd();    // false
 set.IsFinite();          // true  — non-empty and bounded at both ends
 set.IsInfinity();        // false — only the set covering the whole domain answers true
 
-// Set-operand comparisons — the full multirange operator matrix
+// Set-operand comparisons — with a range on the left too, see below
 set.Contains(IntSet.From([Int32Range.CreateFinite(2, 8)]));   // true   (@>)
 set.Overlaps(IntSet.From([Int32Range.CreateFinite(25, 40)])); // true   (&&)
 set.IsStrictlyLeftOf(Int32Range.CreateFinite(40, 50));        // true   (<<)
@@ -529,7 +580,8 @@ What the example shows:
 - **`Complement()`** returns every value the set does not cover.
 - **The state checks** match PostgreSQL's `isempty`, `lower_inf` and `upper_inf`. `IsFinite()`
   and `IsInfinity()` are the two derived shapes.
-- **The comparisons** also take a whole set, so you get the full multirange operator matrix.
+- **The comparisons** also take a whole set. With the range on either side, you get every range and
+  multirange operator PostgreSQL has ([Compare a range with a set](#compare-a-range-with-a-set)).
 
 ### Adjacency counts only at the outer edges
 
@@ -573,6 +625,40 @@ IntSet.Infinite.IsInfinity();  // true — the only set that covers everything
 
 Creating a set collapses any `Infinity` input to the one-element `Infinite` set. So that set is the
 only way to represent full coverage. That is what makes the check exact, both in memory and in SQL.
+
+### Compare a range with a set
+
+You can call the comparisons on a range and pass a set. Each one is the PostgreSQL operator with the
+range on the left:
+
+```csharp
+var blocked = IntSet.From([Int32Range.CreateFinite(3, 4), Int32Range.CreateFinite(8, 9)]);
+
+Int32Range.CreateFinite(1, 10).Contains(blocked);             // true   (@>)
+Int32Range.CreateFinite(8, 9).IsContainedBy(blocked);         // true   (<@)
+Int32Range.CreateFinite(5, 7).Overlaps(blocked);              // false  (&&) — 5 to 7 is a gap
+Int32Range.CreateFinite(1, 2).IsStrictlyLeftOf(blocked);      // true   (<<)
+Int32Range.CreateFinite(5, 7).DoesNotExtendRightOf(blocked);  // true   (&<) — 7 ≤ 9
+Int32Range.CreateFinite(5, 7).DoesNotExtendLeftOf(blocked);   // true   (&>) — 5 ≥ 3
+Int32Range.CreateFinite(10, 12).IsAdjacentTo(blocked);        // true   (-|-)
+
+blocked.IsContainedBy(Int32Range.CreateFinite(3, 9));         // true   (<@)
+blocked.IsContainedBy(blocked | Int32Range.CreateFinite(20, 30)); // true   (<@)
+```
+
+A range compares with a set through the set's outer elements. `IsStrictlyLeftOf` and
+`DoesNotExtendLeftOf` read the first element, and `IsStrictlyRightOf` and `DoesNotExtendRightOf`
+read the last. `Contains` is `true` when the range holds the first and the last element, and so
+everything between them.
+
+Good to know:
+
+- **`&<` and `&>` are not the set's methods turned around.** `range.DoesNotExtendRightOf(set)`
+  compares upper bounds, while `set.DoesNotExtendLeftOf(range)` compares lower bounds. So
+  `[4,5) &< {[3,9)}` is `true` and `{[3,9)} &> [4,5)` is `false`.
+- **An empty set is contained by every range**, the empty range included. With an empty set on
+  either side, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendLeftOf`,
+  `DoesNotExtendRightOf`, `Overlaps` and `IsAdjacentTo` return `false`.
 
 ### Find the free slots in a set
 
@@ -642,6 +728,11 @@ a.Equals(b);  // true — both normalize to { [1, 10] }
 a == b;       // true — same value semantics as the ranges themselves
 ```
 
+Sets implement `IComparable<RangeSet<TRange, T>>` in PostgreSQL's multirange order. Two sets compare
+element by element in the [range order](#sort-ranges), and a set that runs out of elements first
+sorts first. So the empty set sorts before every other set, and `{[1,3]}` before `{[1,3],[5,7]}`.
+As for ranges, `CompareTo` returns 0 exactly when the two sets are equal.
+
 ### Sort ranges the way a set does
 
 `RangeSet<TRange, T>.LowerBoundComparer` sorts ranges by lower bound, in the same order the set uses
@@ -694,6 +785,9 @@ static T Load<T>(ReadOnlySpan<char> literal) where T : ISpanParsable<T>
     => T.Parse(literal, CultureInfo.InvariantCulture);
 ```
 
-To sort ranges in generic code, use `RangeLowerBoundComparer<TRange, T>`, an `IComparer<TRange>`
-singleton. It gives you the same lower-bound order the set uses inside. See
+`IRangeFactory<TRange, T>` also extends `IComparable<TRange>`, so generic code can sort any range
+type in the [range order](#sort-ranges).
+
+For the lower-bound order the set uses inside, use `RangeLowerBoundComparer<TRange, T>`, an
+`IComparer<TRange>` singleton. See
 [Sort ranges the way a set does](#sort-ranges-the-way-a-set-does).

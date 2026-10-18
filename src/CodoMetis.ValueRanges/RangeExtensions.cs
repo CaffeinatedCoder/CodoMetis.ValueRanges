@@ -532,6 +532,120 @@ public static class RangeExtensions
             };
         }
 
+        // ---------------------------------------------------------------------
+        // A multirange operand: the range-receiver half of PostgreSQL's
+        // range × multirange operators. Each reads the outermost elements of the
+        // set — PostgreSQL compares a multirange through its bounds — and hands
+        // the pair to the range-against-range predicate, which decides on both
+        // shapes. None switches on the receiver's shape.
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Determines whether every value of <paramref name="other"/> is contained in this range —
+        /// the PostgreSQL <c>anyrange @&gt; anymultirange</c> operator.
+        /// </summary>
+        /// <remarks>
+        /// A range has no gaps, so it contains the set exactly when it contains the set's first and
+        /// last elements, and so everything between them.
+        /// </remarks>
+        /// <param name="other">The set to test.</param>
+        /// <returns>
+        /// <see langword="true"/> if each element of <paramref name="other"/> lies inside this range;
+        /// always <see langword="true"/> when <paramref name="other"/> is empty, as the empty set is
+        /// contained by every range, the empty range included.
+        /// </returns>
+        public bool Contains(RangeSet<TRange, T> other) =>
+            other.IsEmpty() || (range.Contains(other[0]) && range.Contains(other[^1]));
+
+        /// <summary>
+        /// Determines whether every value of this range is contained in <paramref name="other"/> —
+        /// the PostgreSQL <c>anyrange &lt;@ anymultirange</c> operator. Equivalent to
+        /// <c>other.Contains(this)</c>.
+        /// </summary>
+        /// <param name="other">The set that should contain this range.</param>
+        /// <returns>
+        /// <see langword="true"/> if one element of <paramref name="other"/> contains this range;
+        /// always <see langword="true"/> for the empty range.
+        /// </returns>
+        public bool IsContainedBy(RangeSet<TRange, T> other) => other.Contains(range);
+
+        /// <summary>
+        /// Determines whether this range shares at least one value with <paramref name="other"/> —
+        /// the PostgreSQL <c>anyrange &amp;&amp; anymultirange</c> operator. Equivalent to
+        /// <c>other.Overlaps(this)</c>.
+        /// </summary>
+        /// <param name="other">The set to test against.</param>
+        /// <returns><see langword="true"/> if some element of <paramref name="other"/> overlaps this range.</returns>
+        public bool Overlaps(RangeSet<TRange, T> other) => other.Overlaps(range);
+
+        /// <summary>
+        /// Determines whether this range ends strictly before <paramref name="other"/> begins — the
+        /// PostgreSQL <c>anyrange &lt;&lt; anymultirange</c> operator, decided by the set's first element.
+        /// </summary>
+        /// <param name="other">The set to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if this range is strictly left of the first element of
+        /// <paramref name="other"/>; always <see langword="false"/> when either is empty.
+        /// </returns>
+        public bool IsStrictlyLeftOf(RangeSet<TRange, T> other) =>
+            !other.IsEmpty() && range.IsStrictlyLeftOf(other[0]);
+
+        /// <summary>
+        /// Determines whether this range begins strictly after <paramref name="other"/> ends — the
+        /// PostgreSQL <c>anyrange &gt;&gt; anymultirange</c> operator, decided by the set's last element.
+        /// </summary>
+        /// <param name="other">The set to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if this range is strictly right of the last element of
+        /// <paramref name="other"/>; always <see langword="false"/> when either is empty.
+        /// </returns>
+        public bool IsStrictlyRightOf(RangeSet<TRange, T> other) =>
+            !other.IsEmpty() && range.IsStrictlyRightOf(other[^1]);
+
+        /// <summary>
+        /// Determines whether this range does not extend to the right of <paramref name="other"/> —
+        /// the PostgreSQL <c>anyrange &amp;&lt; anymultirange</c> operator, comparing this range's upper
+        /// bound with the upper bound of the set's last element.
+        /// </summary>
+        /// <remarks>
+        /// This is not a converse of a set-receiver method: <c>other.DoesNotExtendLeftOf(this)</c>
+        /// compares lower bounds, so <c>[4,5) &amp;&lt; {[3,9)}</c> is <see langword="true"/> while
+        /// <c>{[3,9)} &amp;&gt; [4,5)</c> is <see langword="false"/>.
+        /// </remarks>
+        /// <param name="other">The set to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if the upper bound of this range does not exceed the set's;
+        /// always <see langword="false"/> when either is empty.
+        /// </returns>
+        public bool DoesNotExtendRightOf(RangeSet<TRange, T> other) =>
+            !other.IsEmpty() && range.DoesNotExtendRightOf(other[^1]);
+
+        /// <summary>
+        /// Determines whether this range does not extend to the left of <paramref name="other"/> —
+        /// the PostgreSQL <c>anyrange &amp;&gt; anymultirange</c> operator, comparing this range's lower
+        /// bound with the lower bound of the set's first element.
+        /// </summary>
+        /// <param name="other">The set to compare against.</param>
+        /// <returns>
+        /// <see langword="true"/> if the lower bound of this range is not below the set's;
+        /// always <see langword="false"/> when either is empty.
+        /// </returns>
+        public bool DoesNotExtendLeftOf(RangeSet<TRange, T> other) =>
+            !other.IsEmpty() && range.DoesNotExtendLeftOf(other[0]);
+
+        /// <summary>
+        /// Determines whether this range and <paramref name="other"/> are adjacent — the PostgreSQL
+        /// <c>anyrange -|- anymultirange</c> operator. Equivalent to <c>other.IsAdjacentTo(this)</c>:
+        /// the range must end where the set's first element begins, or begin where its last element
+        /// ends.
+        /// </summary>
+        /// <param name="other">The set to test against.</param>
+        /// <returns>
+        /// <see langword="true"/> if this range attaches seamlessly before or after the set;
+        /// always <see langword="false"/> when either is empty or infinite.
+        /// </returns>
+        public bool IsAdjacentTo(RangeSet<TRange, T> other) => other.IsAdjacentTo(range);
+
         /// <summary>
         /// Returns the smallest single range containing both this range and
         /// <paramref name="other"/> — equivalent to the PostgreSQL <c>range_merge</c> function.

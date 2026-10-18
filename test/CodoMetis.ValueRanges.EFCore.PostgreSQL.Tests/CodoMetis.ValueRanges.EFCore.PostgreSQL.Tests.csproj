@@ -22,6 +22,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The process-wide zone switch the local-kind tests run under (#119); one copy, linked. -->
+        <Compile Include="..\CodoMetis.ValueRanges.Tests\LocalTimeZone.cs" Link="LocalTimeZone.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.EFCore.PostgreSQL\CodoMetis.ValueRanges.EFCore.PostgreSQL.csproj" />
     </ItemGroup>
 
