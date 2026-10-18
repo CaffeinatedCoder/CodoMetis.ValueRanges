@@ -791,6 +791,21 @@
     ]
   },
   {
+    "id": "E45-compareto-runs-as-comparison-operator",
+    "source": "docs/efcore.md#query-ranges-with-linq",
+    "quote": "**`CompareTo` against 0** becomes `<`, `<=`, `>`, `>=` or `=`, for a range and a multirange, in the order `OrderBy` sorts by",
+    "claim": "A range or multirange CompareTo compared with 0 in a predicate translates to <, <=, >, >= or = between the operands, OrderBy on a range or multirange column translates to ORDER BY the column, and the rows returned match the same predicate and sort in memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "RangeOrderParityTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -1685,6 +1700,20 @@
     ]
   },
   {
+    "id": "M12-multirange-order",
+    "source": "docs/ranges.md#read-and-compare-sets",
+    "quote": "Two sets compare element by element in the [range order](#sort-ranges), and a set that runs out of elements first sorts first.",
+    "claim": "RangeSet.CompareTo gives the sign PostgreSQL's multirange <, = and > give for every pair, and sorts a list of sets as ORDER BY sorts the multirange values; it returns 0 exactly when Equals is true, and is antisymmetric and transitive.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests",
+      "RangeCompareToTests"
+    ]
+  },
+  {
     "id": "R01-createfinite-degenerate-is-empty",
     "source": "docs/ranges.md#create-a-range",
     "quote": "**An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form an empty or inverted interval. Examples are `start > end`, or equal bounds that are both exclusive.",
@@ -2165,6 +2194,52 @@
     ],
     "heldBy": [
       "NodaTimeInteropTests"
+    ]
+  },
+  {
+    "id": "R26-range-order-is-postgres-order",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "The empty range sorts first. Every other range sorts by its lower bound, then by its upper bound.",
+    "claim": "For every range type and every ordered pair of shapes built from two values with every inclusivity, CompareTo gives the sign PostgreSQL's <, = and > give, and sorting the list gives the order ORDER BY gives.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests",
+      "RangeCompareToTests",
+      "NodaTimeRangeOrderTests"
+    ]
+  },
+  {
+    "id": "R27-range-order-zero-is-equals",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "`CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct range.",
+    "claim": "For every pair of ranges, CompareTo returns 0 exactly when Equals returns true (including equal values spelled differently, such as two offsets of one instant or 1.0 and 1.00), the order is antisymmetric and transitive, and a SortedSet built from the ranges holds every distinct one.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.CompareTo",
+      "*Range.Equals"
+    ],
+    "heldBy": [
+      "RangeCompareToTests",
+      "RangeOrderParityTests",
+      "NodaTimeRangeOrderTests"
+    ]
+  },
+  {
+    "id": "R28-range-order-null-first",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "`null` sorts before every range.",
+    "claim": "CompareTo(null) is positive for every range and every RangeSet, and the default comparer sorts a null range first.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeCompareToTests",
+      "NodaTimeRangeOrderTests"
     ]
   },
   {

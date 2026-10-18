@@ -70,6 +70,8 @@ Each method becomes one PostgreSQL operator or function call:
 - **`IsStrictlyLeftOf`/`RightOf`** become `<<` and `>>`.
 - **`DoesNotExtendLeftOf`/`RightOf`** become `&<` and `&>`.
 - **`IsAdjacentTo`** becomes `-|-`.
+- **`CompareTo` against 0** becomes `<`, `<=`, `>`, `>=` or `=`, for a range and a multirange, in the
+  order `OrderBy` sorts by ([Sort ranges](ranges.md#sort-ranges)).
 - **`Intersect`** becomes `*`.
 - **`Union` and `Except`** turn both ranges into multiranges first, then use `+` and `-`. That
   matches their `RangeSet` return type. A union of two ranges that don't touch is a real
@@ -599,6 +601,7 @@ parameters:
 |---|---|---|
 | Ranges | `Contains`, `IsContainedBy`, `Overlaps`, `IsAdjacentTo` | `@>`, `<@`, `&&`, `-\|-` |
 | | `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf` | `<<`, `>>`, `&<`, `&>` |
+| | `CompareTo` against 0, `OrderBy` | `<`, `<=`, `>`, `>=`, `=`, `ORDER BY` |
 | | `Intersect`, `Union`, `Except`, `Merge` | `*`, `+`, `-`, `range_merge` |
 | | `IsEmpty`, `IsUnboundedStart`/`End`, `IsInfinity`, `IsFinite` | `isempty`, `lower_inf`, `upper_inf`, and combinations |
 | | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |

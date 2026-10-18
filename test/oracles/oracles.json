@@ -286,5 +286,14 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "RangeOrderParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "PostgreSQL's <, = and > for every ordered pair of range and multirange shapes of every discovered range type, and ORDER BY over the whole list",
+    "needs": [
+      "docker"
+    ]
   }
 ]

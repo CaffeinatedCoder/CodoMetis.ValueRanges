@@ -115,6 +115,39 @@ public sealed class QueryTranslationTests
         StringAssert.Contains(sql, $"b.\"Period\" -|- {RangeLiteral}");
     }
 
+    // -------------------------------------------------------------------------
+    // The range order: CompareTo against 0 is the btree comparison operator
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void CompareTo_AgainstZero_IsTheComparisonOperator()
+    {
+        Assert.Contains($"b.\"Period\" < {RangeLiteral}", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(Range) < 0)));
+        Assert.Contains($"b.\"Period\" <= {RangeLiteral}", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(Range) <= 0)));
+        Assert.Contains($"b.\"Period\" > {RangeLiteral}", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(Range) > 0)));
+        Assert.Contains($"b.\"Period\" >= {RangeLiteral}", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(Range) >= 0)));
+        Assert.Contains($"b.\"Period\" = {RangeLiteral}", Sql(db => db.Bookings.Where(b => b.Period.CompareTo(Range) == 0)));
+        Assert.Contains($"b.\"Period\" < {RangeLiteral}", Sql(db => db.Bookings.Where(b => 0 > b.Period.CompareTo(Range))));
+    }
+
+    [TestMethod]
+    public void CompareTo_OnAMultirange_IsTheComparisonOperator()
+    {
+        var blocked = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5)]);
+
+        Assert.Contains("b.\"SeatBlocks\" < @blocked", Sql(db => db.Bookings.Where(b => b.SeatBlocks.CompareTo(blocked) < 0)));
+        Assert.Contains("b.\"SeatBlocks\" <= @blocked", Sql(db => db.Bookings.Where(b => b.SeatBlocks.CompareTo(blocked) <= 0)));
+        Assert.Contains("b.\"SeatBlocks\" > @blocked", Sql(db => db.Bookings.Where(b => b.SeatBlocks.CompareTo(blocked) > 0)));
+        Assert.Contains("b.\"SeatBlocks\" >= @blocked", Sql(db => db.Bookings.Where(b => b.SeatBlocks.CompareTo(blocked) >= 0)));
+    }
+
+    [TestMethod]
+    public void OrderBy_ARangeColumn_IsOrderByTheColumn()
+    {
+        StringAssert.Contains(Sql(db => db.Bookings.OrderBy(b => b.Seats).Select(b => (object?)b.Id)), "ORDER BY b.\"Seats\"");
+        StringAssert.Contains(Sql(db => db.Bookings.OrderBy(b => b.SeatBlocks).Select(b => (object?)b.Id)), "ORDER BY b.\"SeatBlocks\"");
+    }
+
     [TestMethod]
     public void Works_ForAllRangeTypes()
     {
