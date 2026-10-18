@@ -943,12 +943,6 @@
     "method": "Ranges_AnswerAsInMemory"
   },
   {
-    "oracle": "CapturedCollectionProbeTests",
-    "row": " over empty as ",
-    "family": "an empty captured collection cannot be a VALUES query root",
-    "issue": "#137"
-  },
-  {
     "oracle": "SetWrapperParityTests",
     "row": "DecimalSet JSON read [\"",
     "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",

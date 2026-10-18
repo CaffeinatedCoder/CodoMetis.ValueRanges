@@ -20,6 +20,10 @@ Nothing was removed or renamed. Some calls answer differently, and the compiler 
 - Ranges: `IsUnboundedStart()` and `IsUnboundedEnd()` on a range answer `true` for the infinite range `(,)`, as PostgreSQL's `lower_inf` and `upper_inf`, the EF Core translation and `RangeSet` already did. They answered `false` in memory, so a query and the same predicate disagreed on every row holding `(,)`. To test for the half-unbounded shape alone, pattern-match on `IUnboundedStartRange<T>` or `IUnboundedEndRange<T>` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x)).
 - Ranges: `RangeSet.Overlaps` with a range or a set answers `true` on a continuous domain when the operand stops exactly where a later element starts and an earlier element shares values with it, as PostgreSQL's `&&` does. `{[1,4),[5,8)}.Overlaps([3,5))` answered `false` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x)).
 
+### Fixed
+
+- EF Core: `Any` or `Count` with a predicate over an empty captured list of value sets, or of ranges beside a `Contains`, returns `false` or `0`, as in memory. It threw `InvalidOperationException` ("Empty collections are not supported as inline query roots") ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+
 ## [9.1.0] — 2026-10-17
 
 ### Added
