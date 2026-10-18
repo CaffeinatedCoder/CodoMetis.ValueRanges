@@ -87,15 +87,7 @@ public class RangeVariantTypeConverter<TVariant, TRange, T> : LiteralTypeConvert
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
-    private protected override TVariant Parse(string s)
-    {
-        var parsed = TRange.Parse(s, CultureInfo.InvariantCulture);
-
-        return parsed as TVariant
-            ?? throw new FormatException(
-                   $"Cannot read '{LiteralExcerpt.Of(s)}' as {typeof(TRange).Name}.{typeof(TVariant).Name}: "
-                 + $"the literal is a {parsed.GetType().Name}.");
-    }
+    private protected override TVariant Parse(string s) => RangeFormat.ParseVariant<TRange, T, TVariant>(s);
 }
 
 /// <summary>

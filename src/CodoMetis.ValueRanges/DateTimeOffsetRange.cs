@@ -22,7 +22,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [JsonConverter(typeof(RangeJsonConverter<DateTimeOffsetRange, DateTimeOffset>))]
 [TypeConverter(typeof(RangeTypeConverter<DateTimeOffsetRange, DateTimeOffset>))]
-public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFactory<DateTimeOffsetRange, DateTimeOffset>
+public abstract partial record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFactory<DateTimeOffsetRange, DateTimeOffset>
 {
     private DateTimeOffsetRange()
     {
@@ -33,14 +33,14 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, DateTimeOffsetRange, DateTimeOffset>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, DateTimeOffsetRange, DateTimeOffset>))]
-    public sealed record EmptyRange : DateTimeOffsetRange, IEmptyRange<DateTimeOffset>;
+    public sealed partial record EmptyRange : DateTimeOffsetRange, IEmptyRange<DateTimeOffset>;
 
     /// <summary>
     /// Represents a <see cref="DateTimeOffsetRange"/> bounded on both sides.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Finite, DateTimeOffsetRange, DateTimeOffset>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Finite, DateTimeOffsetRange, DateTimeOffset>))]
-    public sealed record Finite : DateTimeOffsetRange, IFiniteRange<DateTimeOffset>
+    public sealed partial record Finite : DateTimeOffsetRange, IFiniteRange<DateTimeOffset>
     {
         internal Finite(DateTimeOffset start, DateTimeOffset end, bool startInclusive, bool endInclusive)
         {
@@ -86,7 +86,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, DateTimeOffsetRange, DateTimeOffset>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, DateTimeOffsetRange, DateTimeOffset>))]
-    public sealed record UnboundedStart(DateTimeOffset End, bool EndInclusive)
+    public sealed partial record UnboundedStart(DateTimeOffset End, bool EndInclusive)
         : DateTimeOffsetRange, IUnboundedStartRange<DateTimeOffset>;
 
     /// <summary>
@@ -97,7 +97,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, DateTimeOffsetRange, DateTimeOffset>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, DateTimeOffsetRange, DateTimeOffset>))]
-    public sealed record UnboundedEnd(DateTimeOffset Start, bool StartInclusive)
+    public sealed partial record UnboundedEnd(DateTimeOffset Start, bool StartInclusive)
         : DateTimeOffsetRange, IUnboundedEndRange<DateTimeOffset>;
 
     /// <summary>
@@ -105,7 +105,7 @@ public abstract record DateTimeOffsetRange : IRange<DateTimeOffset>, IRangeFacto
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, DateTimeOffsetRange, DateTimeOffset>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, DateTimeOffsetRange, DateTimeOffset>))]
-    public sealed record Infinity : DateTimeOffsetRange, IInfinityRange<DateTimeOffset>;
+    public sealed partial record Infinity : DateTimeOffsetRange, IInfinityRange<DateTimeOffset>;
 
     /// <summary>
     /// Creates a <see cref="DateTimeOffsetRange"/> unbounded on the left.

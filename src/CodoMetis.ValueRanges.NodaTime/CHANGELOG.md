@@ -5,7 +5,13 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
-No change in this package.
+### Breaking
+
+- ASP.NET Core: a minimal-API parameter typed as one shape, such as `LocalDateRange.Finite`, binds a literal of that shape and answers 400 for another shape, where it bound `null` and ran the handler for every literal that parsed. MVC was already correct ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+
+### Added
+
+- **`Parse` and `TryParse` on every shape** (`LocalDateRange.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
 
 ## [9.1.0] — 2026-10-17
 

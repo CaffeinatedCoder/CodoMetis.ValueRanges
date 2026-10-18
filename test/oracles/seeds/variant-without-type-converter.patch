@@ -11,6 +11,6 @@ index 7370988..471439c 100644
      /// </summary>
      [JsonConverter(typeof(RangeVariantJsonConverter<Finite, TimeRange, TimeOnly>))]
 -    [TypeConverter(typeof(RangeVariantTypeConverter<Finite, TimeRange, TimeOnly>))]
-     public sealed record Finite : TimeRange, IFiniteRange<TimeOnly>
+     public sealed partial record Finite : TimeRange, IFiniteRange<TimeOnly>
      {
          internal Finite(TimeOnly start, TimeOnly end, bool startInclusive, bool endInclusive)

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using CodoMetis.ValueRanges.Core;
@@ -197,6 +198,49 @@ internal static class RangeFormat
             result = TRange.Empty;
             return false;
         }
+    }
+
+    /// <summary>
+    /// A literal read as one shape: the range it names when that range is a <typeparamref name="TVariant"/>,
+    /// and a <see cref="FormatException"/> naming the shape it is otherwise. Behind every variant's
+    /// <c>Parse</c> and its <c>TypeConverter</c>.
+    /// </summary>
+    internal static TVariant ParseVariant<TRange, T, TVariant>(string? s)
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        where TVariant : class, TRange
+    {
+        var parsed = Parse<TRange, T>(s.AsSpan(), CultureInfo.InvariantCulture);
+
+        return parsed as TVariant
+            ?? throw new FormatException(
+                   $"Cannot read '{LiteralExcerpt.Of(s.AsSpan())}' as {typeof(TRange).Name}.{typeof(TVariant).Name}: "
+                 + $"the literal is a {parsed.GetType().Name}.");
+    }
+
+    /// <summary>
+    /// <see cref="ParseVariant{TRange,T,TVariant}"/> as a <c>TryParse</c>: <see langword="false"/> for
+    /// a literal that does not parse or names another shape.
+    /// </summary>
+    /// <remarks>
+    /// This is what binds a minimal-API parameter typed as one shape. Without it the binder found
+    /// the union's inherited <c>TryParse</c>, which succeeds, and then could not assign its result
+    /// to the parameter: a valid literal bound <see langword="null"/> and the request answered 200
+    /// (#116).
+    /// </remarks>
+    internal static bool TryParseVariant<TRange, T, TVariant>(string? s, [NotNullWhen(true)] out TVariant? result)
+        where TRange : IRangeFactory<TRange, T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        where TVariant : class, TRange
+    {
+        if (TryParse<TRange, T>(s.AsSpan(), CultureInfo.InvariantCulture, out var parsed) && parsed is TVariant variant)
+        {
+            result = variant;
+            return true;
+        }
+
+        result = null;
+        return false;
     }
 
     /// <summary>
