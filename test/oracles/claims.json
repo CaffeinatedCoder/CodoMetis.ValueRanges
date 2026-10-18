@@ -2960,14 +2960,17 @@
   {
     "id": "R40-float64-shift-is-ieee-addition",
     "source": "docs/ranges.md#move-or-widen-a-range",
-    "quote": "**A `Float64Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`, so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue` throws `OverflowException`, as for the other types. A `NaN` or infinite step throws `ArgumentException`.",
-    "claim": "Float64Range.Shift and Expand move each bound by one IEEE addition; a bound that would become an infinity throws OverflowException, one unit in the last place past MaxValue included; a NaN or infinite delta or amount throws ArgumentException; the grid of shapes agrees with the moved specification.",
+    "quote": "**A `Float64Range` or `Float32Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`, so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue` throws `OverflowException`, as for the other types. A `NaN` or infinite step throws `ArgumentException`.",
+    "claim": "Float64Range.Shift and Expand move each bound by one IEEE addition; a bound that would become an infinity throws OverflowException, one unit in the last place past MaxValue included; a NaN or infinite delta or amount throws ArgumentException; the grid of shapes agrees with the moved specification. Float32Range.Shift and Expand do the same over float, one unit in the last place past float.MaxValue throwing.",
     "oracle": "claim",
     "surfaces": [
       "Float64Range.Shift",
-      "Float64Range.Expand"
+      "Float64Range.Expand",
+      "Float32Range.Shift",
+      "Float32Range.Expand"
     ],
     "heldBy": [
+      "Float32DomainTests",
       "Float64DomainTests",
       "RangeArithmeticOracleTests"
     ]
@@ -2975,13 +2978,15 @@
   {
     "id": "R41-float64-split-rounds-once",
     "source": "docs/ranges.md#split-a-range-into-pieces",
-    "quote": "**A `Float64Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`, so the error doesn't build up from piece to piece. A step too small to move the start at its magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.",
-    "claim": "Float64Range.Split's nth boundary is Start + n * step rounded once ([0,1) by 0.1 starts its eighth piece at 0.7000000000000001); a step that does not move the start throws ArgumentOutOfRangeException at the call; near MaxValue the last piece ends at MaxValue; the pieces are adjacent and their union is the range.",
+    "quote": "**A `Float64Range` or `Float32Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`, so the error doesn't build up from piece to piece. A step too small to move the start at its magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.",
+    "claim": "Float64Range.Split's nth boundary is Start + n * step rounded once ([0,1) by 0.1 starts its eighth piece at 0.7000000000000001); a step that does not move the start throws ArgumentOutOfRangeException at the call; near MaxValue the last piece ends at MaxValue; the pieces are adjacent and their union is the range. Float32Range.Split behaves the same over float.",
     "oracle": "claim",
     "surfaces": [
-      "Float64Range.Split"
+      "Float64Range.Split",
+      "Float32Range.Split"
     ],
     "heldBy": [
+      "Float32DomainTests",
       "Float64DomainTests",
       "RangeSplitOracleTests"
     ]

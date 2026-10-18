@@ -273,4 +273,52 @@ public sealed class Float32DomainTests
         Assert.AreEqual("[1,50,10000000,00)", range.ToString("F2", CultureInfo.GetCultureInfo("de-DE")));
         Assert.AreEqual("[1.5,1e+07)", range.ToString(null, CultureInfo.GetCultureInfo("de-DE")));
     }
+
+    /// <summary>Shift, Expand and Split take finite operands, like every other float operand.</summary>
+    [TestMethod]
+    public void ShiftExpandSplit_RefuseANonFiniteStep()
+    {
+        var range = Float32Range.CreateFinite(0f, 10f);
+        foreach (var value in NotFinite)
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => range.Shift(value));
+            Assert.ThrowsExactly<ArgumentException>(() => range.Expand(value));
+            Assert.ThrowsExactly<ArgumentException>(() => range.Split(value));
+        }
+    }
+
+    /// <summary>A bound moved past float.MaxValue throws, never becomes an infinity; each moved bound is one float addition.</summary>
+    [TestMethod]
+    public void ShiftAndExpand_PastTheFiniteValues_Throw()
+    {
+        Assert.ThrowsExactly<OverflowException>(() => Float32Range.CreateFinite(1f, float.MaxValue, true, true).Shift(float.MaxValue));
+        Assert.ThrowsExactly<OverflowException>(() => Float32Range.CreateFinite(float.MinValue, 0f).Expand(float.MaxValue));
+        Assert.AreEqual(Float32Range.CreateFinite(0.1f + 0.2f, 1.2f), Float32Range.CreateFinite(0.1f, 1f).Shift(0.2f));
+    }
+
+    /// <summary>Each boundary is Start + n × step in float, rounded once; a step that cannot move the start throws.</summary>
+    [TestMethod]
+    public void Split_RoundsEachBoundaryOnce_AndStopsAtTheFiniteEdge()
+    {
+        var tenths = Float32Range.CreateFinite(0f, 1f).Split(0.1f).ToList();
+        Assert.HasCount(10, tenths);
+        Assert.AreEqual(7 * 0.1f, tenths[7].LowerBound());
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => Float32Range.CreateFinite(1e9f, 2e9f).Split(1f));
+
+        var ulp  = MathF.ScaleB(1f, 104);
+        var edge = Float32Range.CreateFinite(float.MaxValue - 3 * ulp, float.MaxValue, true, true).Split(2 * ulp).ToList();
+        Assert.HasCount(2, edge);
+        Assert.AreEqual(float.MaxValue, edge[^1].UpperBound());
+    }
+
+    /// <summary>PostgreSQL's range order over finite floats; -0 and 0 compare equal.</summary>
+    [TestMethod]
+    public void CompareTo_IsTheRangeOrder()
+    {
+        Assert.IsLessThan(0, Float32Range.Empty.CompareTo(Float32Range.CreateFinite(-1e38f, 0f)));
+        Assert.IsLessThan(0, Float32Range.CreateFinite(1f, 5f).CompareTo(Float32Range.CreateFinite(1f, 5f, true, true)));
+        Assert.AreEqual(0, Float32Range.CreateFinite(-0f, 1f).CompareTo(Float32Range.CreateFinite(0f, 1f)));
+        Assert.IsGreaterThan(0, Float32Range.CreateFinite(0f, 1f).CompareTo(null));
+    }
 }
