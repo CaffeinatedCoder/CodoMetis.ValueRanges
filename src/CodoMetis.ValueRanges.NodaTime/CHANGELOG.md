@@ -12,6 +12,7 @@ covers all four packages, which share one version number and release together.
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`LocalDateRange.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **`IComparable<TRange>` on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`**, in PostgreSQL's range order: empty first, then by lower bound, then by upper bound ([Sort ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#sort-ranges)).
 
 ## [9.1.0] — 2026-10-17
 
