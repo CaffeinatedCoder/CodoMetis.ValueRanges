@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -208,23 +209,84 @@ public class SetElementBridgeTests
     /// The counterexample. A wrapper that swallows the format argument answers with its own
     /// default form — here the invariant culture's, which drops the sub-seconds. Until 9.0.0 that
     /// literal still parsed, through the element's own lenient <c>Parse</c>, into a truncated value:
-    /// a silent loss in the pure model. The family now reads the text strictly as ISO 8601 before
-    /// the element sees it, so the culture form is refused, as the NodaTime twin already was
-    /// (<c>WrapperLocalDateSet_ElementIgnoringTheFormat_LeaksTheCultureForm</c>). The EF Core bridge
-    /// refuses it too, before a truncated value could reach a column (<c>SqlLiteralTests</c>).
+    /// a silent loss in the pure model. Since 9.0.0 the family reads the text strictly as ISO 8601
+    /// before the element sees it, so the culture form is refused on parse; since 10.0.0 it is refused
+    /// on write too, naming the text-form contract, because the text the element gives cannot be read
+    /// back (#53). The EF Core bridge refuses it as well (<c>SqlLiteralTests</c>).
     /// </summary>
     [TestMethod]
-    public void WrapperDateTimeSet_ElementIgnoringTheFormat_IsRefusedOnParse()
+    public void WrapperDateTimeSet_ElementIgnoringTheFormat_IsRefusedOnWriteAndOnParse()
     {
         var precise = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified).AddTicks(1_234_567);
         var set     = DateTimeSet<TestLossyStamp>.From(new TestLossyStamp(precise));
 
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(() => set.ToString());
+        StringAssert.Contains(refusal.Message, nameof(TestLossyStamp));
+        StringAssert.Contains(refusal.Message, "must format to exactly the backing primitive's text form");
+
         // Quoted, because the culture form contains a space — itself a hint that the element is
         // not answering with anything the store would recognize.
-        Assert.AreEqual("{\"06/15/2024 10:30:00\"}", set.ToString());
-
         Assert.ThrowsExactly<FormatException>(
-            () => DateTimeSet<TestLossyStamp>.Parse(set.ToString(), CultureInfo.InvariantCulture));
+            () => DateTimeSet<TestLossyStamp>.Parse("{\"06/15/2024 10:30:00\"}", CultureInfo.InvariantCulture));
+    }
+
+    // -----------------------------------------------------------------------
+    // The round trip of the element's text form (#53): Parse(Format(x)) must equal x
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// An element whose text form is a different number passes the integer grammar; only the round
+    /// trip tells. Until 10.0.0 <c>{124}</c> was written for 123 and read back as 124, silently.
+    /// </summary>
+    [TestMethod]
+    public void WrapperIntSet_ElementWhoseTextIsAnotherNumber_IsRefusedOnWriteAndOnRead()
+    {
+        var set = Int32Set<TestOffByOne>.From(new TestOffByOne(123));
+
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(() => set.ToString());
+        StringAssert.Contains(refusal.Message, nameof(TestOffByOne));
+        StringAssert.Contains(refusal.Message, "'124'");
+        StringAssert.Contains(refusal.Message, "reads back as a different element");
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Serialize(set));
+
+        // Data written before the check: read back as a different element, so it is refused too.
+        var read = Assert.ThrowsExactly<FormatException>(() => Int32Set<TestOffByOne>.Parse("{124}", CultureInfo.InvariantCulture));
+        StringAssert.Contains(read.Message, "text form");
+        Assert.IsFalse(Int32Set<TestOffByOne>.TryParse("{124}", CultureInfo.InvariantCulture, out _));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int32Set<TestOffByOne>>("[124]"));
+
+        // A display format is not the wire form and is not checked.
+        Assert.AreEqual("{124}", ((IFormattable)set).ToString("D", CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>Every text is a valid string, so the string arity can only tell by the round trip.</summary>
+    [TestMethod]
+    public void WrapperStringSet_ElementKeepingItsDecoration_IsRefusedOnWriteAndOnRead()
+    {
+        var set = StringSet<TestLenientKey>.From(new TestLenientKey("123"));
+
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(() => set.ToString());
+        StringAssert.Contains(refusal.Message, "'CUST-123'");
+        StringAssert.Contains(refusal.Message, "text form");
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Serialize(set));
+
+        Assert.ThrowsExactly<FormatException>(() => StringSet<TestLenientKey>.Parse("{CUST-123}", CultureInfo.InvariantCulture));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<StringSet<TestLenientKey>>("[\"CUST-123\"]"));
+    }
+
+    /// <summary>
+    /// The check is on the element, not the text: an element that normalizes on parse — trims and
+    /// lowercases, as the documented <c>AccessRight</c> does — stores one value and reads it back,
+    /// so a literal in the un-normalized form still parses.
+    /// </summary>
+    [TestMethod]
+    public void WrapperStringSet_ElementNormalizingOnParse_StillRoundTrips()
+    {
+        var set = StringSet<TestPermission>.From(TestPermission.Parse(" Users.Read ", null));
+
+        Assert.AreEqual("{users.read}", set.ToString());
+        Assert.AreEqual(set, StringSet<TestPermission>.Parse("{users.read}", CultureInfo.InvariantCulture));
+        Assert.AreEqual(set, StringSet<TestPermission>.Parse("{\" Users.Read \"}", CultureInfo.InvariantCulture));
     }
 
     // -----------------------------------------------------------------------

@@ -199,6 +199,22 @@ public string ToString(string? format, IFormatProvider? provider)
 A wrapper that ignores the argument and returns its own form is rejected. Its values are never
 stored cut off.
 
+The set checks the whole round trip, not only the grammar: your `Parse` must read the text your
+`ToString` gives back as the same value. The check runs whenever a set is written (`ToString`,
+JSON, the SQL literal and the bound parameter in EF Core) and whenever one is read (`Parse`,
+`TryParse`, JSON, a column). A failure throws, and the message names the element type, its text
+and this rule:
+
+- **On write**, `InvalidOperationException` (`JsonException` from the JSON converter). An
+  `Int32Set<T>` whose element formats `V + 1` is refused instead of stored as the next number.
+- **On read**, `FormatException`, so `TryParse` returns `false`. That also catches data written
+  before the check existed: a `StringSet<T>` whose `Parse` keeps a `CUST-` prefix reads `{CUST-123}`
+  as a value that would format as `CUST-CUST-123`, and is refused.
+- **Normalizing is fine.** The check compares values, not text, so an element that trims or
+  lowercases in `Parse`, as `AccessRight` does, passes: `{" Users.Read "}` reads as `users.read`.
+- **Before 10.0, only the grammar was checked.** `Int32Set<T>` with a `V + 1` text form wrote
+  `{124}` for 123 and read it back as 124, and the `CUST-` prefix grew on every round trip, silently.
+
 Reading works the other way round, and the family decides it, not your element. Each version first
 reads the text with the grammar of its underlying type:
 

@@ -100,14 +100,14 @@
   {
     "family": "core wrapper arities",
     "unit": "GuidSet<TElement>",
-    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "member": "ParseElement(string)",
     "kind": "lone body",
     "reason": "the same shape as the numeric arities — the family's grammar first, then the element gets the primitive's invariant text — but Guid has no ToString(IFormatProvider), so the D form (what uuid_out prints) is named"
   },
   {
     "family": "core wrapper arities",
     "unit": "StringSet<TElement>",
-    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "member": "ParseElement(string)",
     "kind": "lone body",
     "reason": "text is its own literal: textin applies no grammar and keeps every character, so the element's Parse sees the raw text; every other arity parses the primitive's grammar first"
   },
