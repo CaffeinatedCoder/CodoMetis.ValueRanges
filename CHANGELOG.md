@@ -31,6 +31,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 ### Added
 
 - **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **Docs: PostgreSQL 18 temporal keys over a range column**, `UNIQUE (… WITHOUT OVERLAPS)` and `FOREIGN KEY (… PERIOD …)`, declared through `EFCore.ComplexIndexes.PostgreSQL`'s `HasTemporalConstraint` and `HasTemporalForeignKey`, and `UseNpgsqlComplexIndexes()` as the way to have `EnsureCreated()` create them ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18)).
 
 ### Fixed
 

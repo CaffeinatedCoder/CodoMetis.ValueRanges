@@ -195,9 +195,9 @@ Plan for this early, because your application code can't do it. Checking for an 
 inserting is a race between a read and a write. Under concurrency, two requests can both find the
 slot free. Only a database constraint is atomic.
 
-In PostgreSQL, that constraint is an exclusion constraint.
+In PostgreSQL, that constraint is an exclusion constraint, or on PostgreSQL 18 a temporal key.
 [Indexing a range column, and preventing overlaps](efcore.md#indexing-a-range-column-and-preventing-overlaps)
-shows how to declare one on a column this package maps.
+shows how to declare either on a column this package maps.
 
 ## What runs in memory only
 
