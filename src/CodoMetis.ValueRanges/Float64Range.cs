@@ -272,8 +272,9 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     /// <c>generate_series</c> returns rows, not a value.
     /// <para>
     /// The <c>n</c>th boundary is <c>Start + n × step</c>, each rounded to the nearest double, so the error
-    /// does not accumulate from piece to piece. A step too small to move the start at its magnitude
-    /// throws rather than looping.
+    /// does not accumulate from piece to piece. Where <c>n × step</c> alone would overflow while the
+    /// boundary still fits, the boundary is the previous one plus the step. A step too small to move
+    /// the start at its magnitude throws rather than looping.
     /// </para>
     /// </remarks>
     /// <param name="step">The length of each piece; it must be positive and finite.</param>
@@ -284,7 +285,7 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     public IEnumerable<Float64Range> Split(double step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(RequireFinite(step, nameof(step)));
-        return RangeSplitting.Split<Float64Range, double>(this, RangeSplitting.Steps<double>(this, (start, n) => Moved(start + n * step)));
+        return RangeSplitting.Split<Float64Range, double>(this, RangeSplitting.Steps<double>(this, (start, n) => Moved(start + n * step), previous => Moved(previous + step)));
     }
 
     /// <summary>
@@ -369,6 +370,10 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
     /// </returns>
     public int CompareTo(Float64Range? other) => RangeOrder.Compare<double>(this, other);
+
+    /// <inheritdoc cref="CompareTo(Float64Range)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="Float64Range"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<Float64Range>(this, other, static (a, b) => a.CompareTo(b));
 
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their

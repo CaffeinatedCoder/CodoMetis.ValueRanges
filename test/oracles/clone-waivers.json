@@ -595,6 +595,34 @@
     "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
   },
   {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "EndMoved($T, Period)",
+    "kind": "extra",
+    "reason": "a period of months moves a closed date range's upper bound as its exclusive end, as PostgreSQL stores a daterange (#223); LocalDateTimeRange stores its end exclusive already, InstantRange steps by an exact Duration and YearMonthRange by whole months, so none needs it"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "EndIsInfinity($T)",
+    "kind": "extra",
+    "reason": "a closed date range's end stands for infinity) the day before the maximum, where its exclusive end is the extreme (#117, #224); LocalDateTimeRange and InstantRange are continuous, and YearMonthRange's month before the last stores as a finite date"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "IsInfinity($T)",
+    "kind": "lone body",
+    "reason": "an Instant's extremes are MinValue and MaxValue, which NodaStoreTemporal writes as -infinity and infinity; the local types have MinIsoValue and MaxIsoValue"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "IsInfinity($T)",
+    "kind": "lone body",
+    "reason": "YearMonth has no MinIsoValue or MaxIsoValue; the type's own MinIso and MaxIso are the months of LocalDate's ISO extremes, which the store writes as -infinity and infinity"
+  },
+  {
     "family": "efcore wrapper bridges",
     "unit": "DateSet<>",
     "member": "formatPrimitive",
@@ -1041,6 +1069,13 @@
     "member": "Split($T)",
     "kind": "lone body",
     "reason": "its boundaries come from checked integer arithmetic, which throws past the last value; the float pair checks an IEEE result for an infinity instead (Moved, #153), and the two float bodies agreeing makes this one look drifted"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "EndIsInfinity($T)",
+    "kind": "extra",
+    "reason": "a closed date range's end stands for infinity) the day before the maximum, where its exclusive end is the extreme (#117, #224); the timestamp siblings store their end as written, so the extreme alone stands for infinity"
   },
   {
     "family": "efcore wrapper bridges",
