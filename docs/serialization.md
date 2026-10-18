@@ -104,6 +104,12 @@ rounded to the nearest value. PostgreSQL keeps every digit, so a rounded value w
 number from the server's. Before 10.0, `[1.00000000000000000000000000001,2)` read as
 `[1.0000000000000000000000000000,2)` and contained 1, where the server's range doesn't.
 
+A literal whose lower bound is greater than its upper bound fails (`FormatException`), as it does
+in PostgreSQL. `TryParse` returns `false`, and JSON and the `TypeConverter` throw. Equal bounds that
+aren't both inclusive are fine and read as `empty`, so `[5,5)` is `empty` and `[5,1)` fails. Before
+10.0, `[5,1)` read as `empty`, and an inverted range inside a multirange literal disappeared from the
+set.
+
 Discrete types are normalized when you parse them. `"[1,10)"` and `"[1,9]"` hold the same values,
 and both parse to the same closed range `[1, 9]`:
 
@@ -141,6 +147,15 @@ and the forms PostgreSQL prints in its default ISO `DateStyle`, and nothing else
   PostgreSQL writes its historical local-mean-time offsets. You get that instant at offset zero.
 - **`infinity` and `-infinity`** read as `MaxValue` and `MinValue`. That is what Npgsql gives you
   when it reads them.
+- **An exclusive `infinity` excludes the extreme.** `[2026-01-01,infinity)` reads as
+  `[2026-01-01,9999-12-30]` for `DateRange` and `LocalDateRange`, as the same value read from a
+  column does. The extreme stands for the infinity, so PostgreSQL's range also holds a 9999-12-31 that
+  has no value of its own here ([Domain width](architecture.md#domain-width-and-the-boundary)).
+- **More than six fraction digits are three values.** `10:00:00.1234567` is .1234567 here.
+  PostgreSQL reads the same text rounded to the microsecond, .123457, and the EF Core package stores
+  it truncated, .123456, as Npgsql binds it. They are at most 1 µs apart. Your own values keep every
+  digit through their literal and JSON, so round to the microsecond yourself if a value must equal
+  what the server reads from its text ([Domain width](architecture.md#domain-width-and-the-boundary)).
 
 The `DateTime` rule is PostgreSQL's own rule for `timestamp` input, and it is what a `tsrange`
 stores. So one literal is one value on every machine, and a local value round-trips with its kind.
@@ -244,6 +259,11 @@ Good to know:
   `InvalidOperationException`.
 - **A property typed as one shape rejects the others.** A `DateRange.Finite` property fails on a
   literal of another shape.
+- **A minimal-API parameter typed as one shape binds only that shape.** Each shape has its own
+  `Parse` and `TryParse`, so `(DateRange.Finite period) => …` binds
+  `?period=[2026-01-01,2026-06-30]` and answers 400 for `(,2026-06-30]` or for text that doesn't
+  parse. Before 10.0, such a parameter bound `null` for every literal that parsed, and the handler
+  ran.
 - **Before 9.0 there was no converter.** Configuration binding of a range property produced `null`,
   with no error. ASP.NET Core model binding was never affected: minimal APIs and MVC bind query,
   route and form values through the static `TryParse`.

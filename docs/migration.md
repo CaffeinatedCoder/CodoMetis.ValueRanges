@@ -242,9 +242,20 @@ stored and queried as the empty range, and nothing threw. It now throws.
 
 ## Migration from v9.x
 
-No signature changed. What changed is which text parses. Check these in order, starting with the
-most likely to affect you:
+Nothing was removed. Some calls return a different value, and each one now matches PostgreSQL
+where the two sides disagreed before. Text that PostgreSQL rejects is now rejected here too, and each
+range shape gained its own `Parse` and `TryParse`. The compiler can't show you where, so check these
+in order, starting with the most likely to affect you:
 
+- **`IsUnboundedStart()` and `IsUnboundedEnd()` return `true` for the infinite range.** A query
+  and the same call in memory already disagreed on it
+  ([details](#check-isunboundedstart-and-isunboundedend-on-the-infinite-range)).
+- **`RangeSet.Overlaps` on a continuous element type returns `true` for more inputs.** A query and
+  the same call in memory already disagreed on them
+  ([details](#check-rangesetoverlaps-on-a-continuous-element-type)).
+- **EF Core: `Any` and `Count` over a captured list of ranges return the in-memory answer.** The
+  query already disagreed with memory for lists with overlapping, adjacent or empty ranges, and
+  `EF.Parameter(wanted)` there now throws ([details](#check-any-and-count-over-a-captured-list-of-ranges)).
 - **UUID text that `Guid.Parse` accepts and PostgreSQL rejects now throws `FormatException`.** This
   covers the `(…)` form and whitespace inside a quoted element
   ([details](#read-uuids-as-postgresql-reads-them)).
@@ -258,6 +269,85 @@ most likely to affect you:
   ([details](#check-that-your-elements-text-form-round-trips)).
 - **Decimal text with more precision than `decimal` holds now throws**, where it was rounded
   ([details](#decimal-text-is-read-exactly-or-refused)).
+- **A range literal whose lower bound is greater than its upper bound now throws**, where it read as
+  `empty` ([details](#write-range-literals-with-the-lower-bound-first)).
+- **A minimal-API parameter typed as one shape answers 400 for another shape**, where it bound
+  `null` and ran the handler ([details](#bind-a-shape-typed-parameter)).
+
+### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
+
+Check code that calls `IsUnboundedStart()` or `IsUnboundedEnd()` on a single range to pick out the
+`(-∞, end]` or `[start, +∞)` shape, and could meet the infinite range `(,)`.
+
+Before 10.0.0 the two methods tested the kind of range, so both returned `false` for `(,)`.
+PostgreSQL's `lower_inf` and `upper_inf`, which they run as in SQL, return `true` for it, and so
+does a `RangeSet` holding it. A query through EF Core therefore matched every row holding `(,)`
+where the same call in memory did not. Now memory and SQL agree:
+
+```csharp
+Int32Range.Infinite.IsUnboundedStart();   // v9: false   v10: true
+Int32Range.Infinite.IsUnboundedEnd();     // v9: false   v10: true
+Int32Range.CreateUnboundedStart(5).IsUnboundedEnd();   // false in both
+```
+
+If you meant the kind of range, pattern-match on it. The shape interfaces are exact, and the
+compiler checks them:
+
+```csharp
+if (range is IUnboundedStartRange<int> s) { … s.End … }   // (-∞, end] only, never (,)
+```
+
+`IsInfinity()` and `IsFinite()` are unchanged. `(,)` is the only range for which `IsInfinity()`
+returns `true`, and `IsFinite()` returns `false` for it, as before.
+
+### Check `RangeSet.Overlaps` on a continuous element type
+
+Check code that calls `Overlaps` on a `RangeSet` over `decimal`, `DateTime`, `DateTimeOffset`,
+`TimeOnly`, `LocalDateTime` or `Instant`, passes a range or a set, and acts on `false`.
+
+Before 10.0.0, `Overlaps` returned `false` when the range you passed stopped exactly where a later
+element started, with one side exclusive, although an earlier element shared values with it. It
+tested only the element that starts where your range stops. PostgreSQL's `&&` returns `true` for
+the same values, so a query through EF Core and the same call in memory disagreed on those rows.
+
+```csharp
+var set = RangeSet<DecimalRange, decimal>.From([DecimalRange.CreateFinite(1, 4), DecimalRange.CreateFinite(5, 8)]);
+// {[1,4),[5,8)}
+
+set.Overlaps(DecimalRange.CreateFinite(3, 5));              // v9: false   v10: true — shares [3,4)
+set.Overlaps(DecimalRange.CreateUnboundedStart(5, false));  // v9: false   v10: true — (,5) covers [1,4)
+set.Intersect(DecimalRange.CreateFinite(3, 5));             // {[3,4)} in both, which is why true is right
+```
+
+Discrete types (`Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange`) are
+unaffected: their closed canonical form has no exclusive end to stop on.
+
+### Check `Any` and `Count` over a captured list of ranges
+
+Check queries that call `Any`, `Count` or another LINQ operator over a captured list, array or
+other collection of ranges, without a `Contains` on the same list in the same query.
+
+Before 10.0.0 such a list went to PostgreSQL as one parameter, which Npgsql typed as a multirange.
+A multirange merges overlapping and adjacent ranges and drops empty ones, so the query counted the
+merged ranges. Now each range goes as its own parameter and the query reads them from `VALUES`,
+the same way a `Contains` already did:
+
+```csharp
+var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8) };
+// row: Seats = [1,5]
+db.Reservations.Select(r => wanted.Count(w => w.Overlaps(r.Seats)));   // v9: 1   v10: 2, as in memory
+db.Reservations.Select(r => wanted.Count(w => w == r.Seats));          // v9: 0   v10: 1
+
+var withEmpty = new List<Int32Range> { Int32Range.Empty, Int32Range.CreateFinite(1, 5) };
+db.Reservations.Select(r => withEmpty.Any(w => w.IsEmpty()));          // v9: false   v10: true
+```
+
+Two more things change with it:
+
+- **`EF.Parameter(wanted).Any(…)` throws** (`InvalidOperationException`), as
+  `EF.Parameter(wanted).Contains(…)` did since 9.1.0. The message says to remove `EF.Parameter`.
+- **`EF.Constant(wanted)` keeps working.** It was the workaround the EF Core guide gave; you can
+  remove the wrapper or leave it.
 
 ### Read UUIDs as PostgreSQL reads them
 
@@ -371,6 +461,51 @@ A column holding more precision was already loud: Npgsql throws `OverflowExcepti
 
 If you receive such text, decide what to keep before parsing: round it yourself with
 `decimal.Round`, or store it as `numeric` text.
+
+### Write range literals with the lower bound first
+
+Every range type and `RangeSet` reject a literal whose lower bound is greater than its upper bound,
+as PostgreSQL does. This holds for `Parse`, `TryParse`, JSON, the `TypeConverter` and configuration
+binding, and an EF Core JSON column. Before, the literal read as `empty`, so a swapped period in a
+query string or a JSON body matched nothing, silently:
+
+| Literal | 9.x | 10.0 | PostgreSQL |
+|---|---|---|---|
+| `[5,1)` | `empty` | `FormatException` | rejects |
+| `[2026-06-30,2026-01-01]` | `empty` | `FormatException` | rejects |
+| `{[5,1),[7,9]}` | `{[7,9]}`, the inverted range dropped | `FormatException` | rejects |
+| `[5,5)`, `(5,5)` | `empty` | `empty` | `empty` |
+
+`TryParse` returns `false`, a minimal API or MVC binding answers 400, and a JSON body fails with
+`JsonException`. `CreateFinite(5, 1)` still returns `Empty`: a factory call has computed bounds, and
+that rule hasn't changed. If your input can arrive swapped, order the bounds before you build the
+literal, or call `CreateFinite` with the parsed bounds.
+
+### Bind a shape-typed parameter
+
+Every shape of every range type now has its own `Parse` and `TryParse`, which read only a literal of
+that shape. Minimal APIs bind a parameter through `TryParse`, so a parameter typed as one shape now
+binds:
+
+```csharp
+app.MapGet("/bookings", (DateRange.Finite period) => …);
+```
+
+| Request | 9.x | 10.0 |
+|---|---|---|
+| `?period=[2026-01-01,2026-06-30]` | 200, `period` is `null` | 200, `period` is the range |
+| `?period=(,2026-06-30]` | 200, `period` is `null` | 400 |
+| `?period=garbage` | 400 | 400 |
+
+This holds for the query, a route value and a form field, and for a nullable parameter. Before, the
+binder found the union's inherited `TryParse`, which succeeded, and then couldn't assign the result,
+so the handler ran with `null` even when the parameter wasn't nullable. A client that sends another
+shape now gets a 400. If an endpoint should take any shape, type the parameter as the union
+(`DateRange`) and switch on it. MVC and JSON bodies already behaved this way.
+
+`DateRange.Finite.Parse` now returns a `DateRange.Finite` and throws `FormatException` for another
+shape, where it was the union's `Parse` and returned any shape. Code that called `Parse` through a
+shape's name for a literal of another shape should call it on the union.
 
 ## Migration from v8.x
 

@@ -1,0 +1,17 @@
+Seed: a discrete column's exclusive -infinity lower bound is read as the inclusive domain minimum, so (,) - (,-infinity], which PostgreSQL computes as (-infinity,), loads holding the minimum the subtraction removed
+Oracles: DifferentialFuzzParityTests
+Fails: Except, Complement and operator - at the domain edge for DateRange and LocalDateRange, memory against the column
+History: never shipped; the reading #117 proposed, tried and rejected (the date extremes stand for the infinities)
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeProviderConversion.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeProviderConversion.cs
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeProviderConversion.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeProviderConversion.cs
+@@ -52,6 +52,8 @@
+         where T : struct, IComparable<T>, IEquatable<T>
+     {
+         if (value.IsEmpty) return TRange.Empty;
++        if (TRange.IsDiscrete && !value.LowerBoundInfinite && !value.LowerBoundIsInclusive && TRange.PreviousValueBefore(value.LowerBound) is null)
++            value = new NpgsqlRange<T>(value.LowerBound, true, false, value.UpperBound, value.UpperBoundIsInclusive, value.UpperBoundInfinite);
+ 
+         return (value.LowerBoundInfinite, value.UpperBoundInfinite) switch
+                {

@@ -27,7 +27,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [JsonConverter(typeof(RangeJsonConverter<InstantRange, Instant>))]
 [TypeConverter(typeof(RangeTypeConverter<InstantRange, Instant>))]
-public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRange, Instant>
+public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<InstantRange, Instant>
 {
     private InstantRange()
     {
@@ -38,14 +38,14 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, InstantRange, Instant>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, InstantRange, Instant>))]
-    public sealed record EmptyRange : InstantRange, IEmptyRange<Instant>;
+    public sealed partial record EmptyRange : InstantRange, IEmptyRange<Instant>;
 
     /// <summary>
     /// Represents an <see cref="InstantRange"/> bounded on both sides.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Finite, InstantRange, Instant>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Finite, InstantRange, Instant>))]
-    public sealed record Finite : InstantRange, IFiniteRange<Instant>
+    public sealed partial record Finite : InstantRange, IFiniteRange<Instant>
     {
         internal Finite(Instant start, Instant end, bool startInclusive, bool endInclusive)
         {
@@ -91,7 +91,7 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
     /// <param name="EndInclusive"><see langword="true"/> to include <paramref name="End"/> in the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, InstantRange, Instant>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, InstantRange, Instant>))]
-    public sealed record UnboundedStart(Instant End, bool EndInclusive) : InstantRange, IUnboundedStartRange<Instant>;
+    public sealed partial record UnboundedStart(Instant End, bool EndInclusive) : InstantRange, IUnboundedStartRange<Instant>;
 
     /// <summary>
     /// Represents an <see cref="InstantRange"/> unbounded on the right:
@@ -101,14 +101,14 @@ public abstract record InstantRange : IRange<Instant>, IRangeFactory<InstantRang
     /// <param name="StartInclusive"><see langword="true"/> to include <paramref name="Start"/> in the range.</param>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, InstantRange, Instant>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, InstantRange, Instant>))]
-    public sealed record UnboundedEnd(Instant Start, bool StartInclusive) : InstantRange, IUnboundedEndRange<Instant>;
+    public sealed partial record UnboundedEnd(Instant Start, bool StartInclusive) : InstantRange, IUnboundedEndRange<Instant>;
 
     /// <summary>
     /// Represents an <see cref="InstantRange"/> unbounded on both sides: <c>(-∞, +∞)</c>.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, InstantRange, Instant>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, InstantRange, Instant>))]
-    public sealed record Infinity : InstantRange, IInfinityRange<Instant>;
+    public sealed partial record Infinity : InstantRange, IInfinityRange<Instant>;
 
     /// <summary>
     /// Creates an <see cref="InstantRange"/> unbounded on the left.

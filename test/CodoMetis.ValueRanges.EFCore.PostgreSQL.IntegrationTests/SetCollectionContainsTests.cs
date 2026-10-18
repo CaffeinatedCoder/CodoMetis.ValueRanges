@@ -233,6 +233,35 @@ public sealed class SetCollectionContainsTests
         Assert.AreEqual(0, await Rows(context).CountAsync(r => wanted.Contains(r.Tags)));
     }
 
+    /// <summary>
+    /// With no sets in the list, <c>Any</c> is <see langword="false"/> and <c>Count</c> is <c>0</c>
+    /// in memory. On the server the list is a <c>VALUES</c> with no rows, which EF Core could not
+    /// write (#137); it reads no rows now.
+    /// </summary>
+    [TestMethod]
+    public async Task AnEmptyCollection_AnyAndCountAnswerAsInMemory()
+    {
+        await using var context = await Context();
+        var wanted = new List<StringSet>();
+        var loaded = await Rows(context).AsNoTracking().ToListAsync();
+
+        Assert.IsFalse(loaded.Any(r => wanted.Any(w => w.Overlaps(r.Tags))), "the data must give memory nothing to find");
+        CollectionAssert.AreEqual(
+            Array.Empty<int>(),
+            await Rows(context).Where(r => wanted.Any(w => w.Overlaps(r.Tags))).Select(r => r.Id).ToListAsync());
+
+        var counts = await Rows(context).OrderBy(r => r.Id)
+                                        .Select(r => new { r.Id, Subsets = wanted.Count(w => w.IsSubsetOf(r.Tags)), Overlapping = wanted.Count(w => w.Overlaps(r.Tags)) })
+                                        .ToListAsync();
+        Assert.AreEqual(loaded.Count, counts.Count);
+        Assert.IsTrue(counts.All(c => c.Subsets == 0 && c.Overlapping == 0), "Count over no sets is 0 on every row");
+
+        CollectionAssert.AreEqual(
+            loaded.Select(r => r.Id).Order().ToList(),
+            await Rows(context).Where(r => wanted.All(w => w.Overlaps(r.Tags))).Select(r => r.Id).OrderBy(id => id).ToListAsync(),
+            "All over no sets is true, as in memory");
+    }
+
     [TestMethod]
     public async Task AnyAndCountOverTheCollection_AnswerAsInMemory()
     {

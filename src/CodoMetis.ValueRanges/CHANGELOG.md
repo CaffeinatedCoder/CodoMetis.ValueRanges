@@ -5,7 +5,28 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
-No change in this package.
+Nothing was removed or renamed. Some calls answer differently, text that parsed is refused where PostgreSQL refuses it, and a wrapper element's text form is checked, so some calls that answered now throw: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).
+
+### Breaking
+
+- Ranges: `IsUnboundedStart()` and `IsUnboundedEnd()` on a range answer `true` for the infinite range `(,)`, as PostgreSQL's `lower_inf` and `upper_inf`, the EF Core translation and `RangeSet` already did. They answered `false` in memory, so a query and the same predicate disagreed on every row holding `(,)`. To test for the half-unbounded shape alone, pattern-match on `IUnboundedStartRange<T>` or `IUnboundedEndRange<T>` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x)).
+- Ranges: `RangeSet.Overlaps` with a range or a set answers `true` on a continuous domain when the operand stops exactly where a later element starts and an earlier element shares values with it, as PostgreSQL's `&&` does. `{[1,4),[5,8)}.Overlaps([3,5))` answered `false` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x)).
+- Literals: `GuidSet` and `GuidSet<T>` read PostgreSQL's `uuid_in` grammar: 32 hex digits, a hyphen allowed after any group of four, optional braces. `{6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff}` parses, where it threw; `{(6f9619ff-…)}` and whitespace inside a quoted element throw `FormatException`, where they parsed ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#parse-and-print-literals)).
+- Literals: `StringSet` and `StringSet<T>` refuse an element holding a NUL character (U+0000), which PostgreSQL `text` cannot hold: `From` and `Add` throw `ArgumentException`, `Parse`, the `TypeConverter` and JSON throw, and `TryParse` returns `false`, where the set was built and failed when saved ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#parse-and-print-literals)).
+- JSON: `Int16Set<T>`, `Int32Set<T>`, `Int64Set<T>` and `DecimalSet<T>` read a quoted number only under `JsonNumberHandling.AllowReadingFromString`, with System.Text.Json's grammar, and `GuidSet<T>` reads only the hyphenated form, exactly as the plain sets do. `["7"]`, `[" 7 "]` and `["{6f9619ff-…}"]` threw `JsonException` for the plain set and read for the wrapper ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#how-your-element-types-sort-and-serialize)).
+- Value sets: every core wrapper set checks that an element's text form reads back as the same element, on every write and read, and throws naming the text-form contract. `Int32Set<T>` whose element formats `V + 1` wrote `{124}` for 123 and read back 124, silently ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#keep-the-text-form-of-the-underlying-type)).
+- Literals: decimal text that names a number `decimal` can't hold, such as a 29th significant digit or `1e-30`, throws `FormatException` from `DecimalRange`, `RangeSet<DecimalRange>`, `DecimalSet` and `DecimalSet<T>`, in a literal, JSON and configuration, where it was rounded: `[1.00000000000000000000000000001,2)` read as `[1.0000000000000000000000000000,2)` and contained 1 ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#parse-a-literal)).
+- Literals: a range or multirange literal whose lower bound is greater than its upper bound, such as `[5,1)`, throws `FormatException` from `Parse`, JSON and the `TypeConverter`, and `TryParse` returns `false`, where it read as `empty` and vanished from a multirange. `CreateFinite` still returns `Empty` ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#parse-a-literal)).
+- ASP.NET Core: a minimal-API parameter typed as one shape, such as `DateRange.Finite`, binds a literal of that shape and answers 400 for another shape, where it bound `null` and ran the handler for every literal that parsed. MVC was already correct ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+
+### Added
+
+- **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+
+### Fixed
+
+- Docs: an exclusive `infinity` or `-infinity` date bound excludes the date extreme, which stands for the infinity, so `[2026-01-01,infinity)` is `[2026-01-01,9999-12-30]` from a column and from the literal alike. Ask other tools to write an open end as absent or inclusive ([Domain width](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/architecture.md#domain-width-and-the-boundary)).
+- Docs: a temporal literal with more than six fraction digits keeps them in memory, while PostgreSQL reads the same text rounded to the microsecond and the EF Core package stores it truncated, so the three can be 1 µs apart ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#dates-and-times-are-strict-iso-8601)).
 
 ## [9.1.0] — 2026-10-17
 

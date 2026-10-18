@@ -30,7 +30,7 @@ namespace CodoMetis.ValueRanges;
 [DebuggerDisplay("{ToString(),nq}")]
 [JsonConverter(typeof(RangeJsonConverter<LocalDateRange, LocalDate>))]
 [TypeConverter(typeof(RangeTypeConverter<LocalDateRange, LocalDate>))]
-public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDateRange, LocalDate>
+public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDateRange, LocalDate>
 {
     private LocalDateRange()
     {
@@ -44,14 +44,14 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, LocalDateRange, LocalDate>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<EmptyRange, LocalDateRange, LocalDate>))]
-    public sealed record EmptyRange : LocalDateRange, IEmptyRange<LocalDate>;
+    public sealed partial record EmptyRange : LocalDateRange, IEmptyRange<LocalDate>;
 
     /// <summary>
     /// Represents a <see cref="LocalDateRange"/> bounded on both sides.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Finite, LocalDateRange, LocalDate>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Finite, LocalDateRange, LocalDate>))]
-    public sealed record Finite : LocalDateRange, IFiniteRange<LocalDate>
+    public sealed partial record Finite : LocalDateRange, IFiniteRange<LocalDate>
     {
         internal Finite(LocalDate start, LocalDate end)
         {
@@ -89,7 +89,7 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedStart, LocalDateRange, LocalDate>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedStart, LocalDateRange, LocalDate>))]
-    public sealed record UnboundedStart : LocalDateRange, IUnboundedStartRange<LocalDate>
+    public sealed partial record UnboundedStart : LocalDateRange, IUnboundedStartRange<LocalDate>
     {
         /// <summary>
         /// Creates a range unbounded on the left with the inclusive upper bound
@@ -118,7 +118,7 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<UnboundedEnd, LocalDateRange, LocalDate>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<UnboundedEnd, LocalDateRange, LocalDate>))]
-    public sealed record UnboundedEnd : LocalDateRange, IUnboundedEndRange<LocalDate>
+    public sealed partial record UnboundedEnd : LocalDateRange, IUnboundedEndRange<LocalDate>
     {
         /// <summary>
         /// Creates a range unbounded on the right with the inclusive lower bound
@@ -146,7 +146,7 @@ public abstract record LocalDateRange : IRange<LocalDate>, IRangeFactory<LocalDa
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<Infinity, LocalDateRange, LocalDate>))]
     [TypeConverter(typeof(RangeVariantTypeConverter<Infinity, LocalDateRange, LocalDate>))]
-    public sealed record Infinity : LocalDateRange, IInfinityRange<LocalDate>;
+    public sealed partial record Infinity : LocalDateRange, IInfinityRange<LocalDate>;
 
     /// <summary>
     /// Creates a <see cref="LocalDateRange"/> unbounded on the left.

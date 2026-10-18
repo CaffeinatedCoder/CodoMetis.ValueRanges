@@ -52,6 +52,55 @@ difference stays a known property. This is also the one place a `ShapeMatrixPari
 wrong to write: matching element domains are not sufficient, because the disagreement is about the
 sentinel rather than the domain.
 
+**Precision.** The BCL temporal types hold 100 ns and NodaTime's 1 ns; PostgreSQL holds a
+microsecond. A literal keeps every digit the type can hold, so a value round-trips through its own
+text (claim S08). PostgreSQL's text input rounds more than six fraction digits half-to-even, while
+Npgsql truncates a parameter toward 2000-01-01, and the plugin's store text follows Npgsql
+(`StoreTemporal`, `NodaStoreTemporal`). So `2026-01-01 10:00:00.1234567` is three values — .1234567
+in memory, .123457 on the server read from that text, .123456 stored — at most 1 µs apart (#126).
+Rounding on parse would remove the second gap and break the first promise; it would also disagree
+with every parameter. `DomainBoundaryDivergenceTests` pins the three values.
+
+**The date extremes are sentinels on the server.** Npgsql writes `DateOnly.MinValue` / `MaxValue` and
+`LocalDate.MinIsoValue` / `MaxIsoValue` as `-infinity` / `infinity` (the store rule, `StoreTemporal`),
+so a `daterange` bounded at an extreme holds a sentinel where the model holds a date. Every operator
+that compares the sentinel with itself still agrees — equality, containment, the bound accessors, and
+anything read back, since the reader turns the sentinel into the extreme again. Adjacency is the one
+that does not: no finite date is next to `-infinity`, so the model's step from `0001-01-01` to
+`0001-01-02` has no counterpart there.
+
+| Construction | This model | PostgreSQL (`Npgsql.DisableDateTimeInfinityConversions` off) |
+|---|---|---|
+| `[0001-01-01,0001-01-01] -\|- [0001-01-02,)` | adjacent | `[-infinity,-infinity] -\|- [0001-01-02,)` — **not** adjacent |
+| `[9999-12-30,9999-12-30] -\|- [9999-12-31,)` | adjacent | `[9999-12-30,9999-12-31) -\|- [infinity,)` — **not** adjacent |
+| the same pairs one day inside the extremes | adjacent | adjacent |
+
+The model keeps its answer on purpose: with the switch set, the extremes reach the server as dates
+and `-|-` answers `true` there (`InfinityConversionsDisabledTests`), so a model that stopped
+stepping across an extreme would disagree with that configuration instead. `DifferentialFuzzParityTests`
+sets an adjacency row at a date extreme aside only when it disagrees in exactly this shape — memory
+`true`, both database legs `false` — and counts it; `RangeSet` merges across the extreme on both
+sides because the reader canonicalizes what it loads.
+
+**An exclusive infinite bound excludes the extreme.** The same store rule means the server's real
+9999-12-31 and 0001-01-01 have no value of their own here: the extreme *is* the infinity. So an
+exclusive infinite bound excludes the extreme, and every path reads it alike — a column, the
+server's text through `Parse`, and the literal as written:
+
+| PostgreSQL value | This model | The server's range also holds |
+|---|---|---|
+| `[2026-01-01,infinity)` | `[2026-01-01,9999-12-30]` | 9999-12-31 |
+| `(-infinity,2026-01-02)` | `[0001-01-02,2026-01-01]` | 0001-01-01 |
+| `[2026-01-01,infinity]` | `[2026-01-01,9999-12-31]` | — |
+
+Reading the exclusive bound as the inclusive extreme instead would keep that last date, but it can't
+be done consistently (#117). On the upper side a column can't tell `infinity)` from `9999-12-31)`,
+which is how PostgreSQL stores `[x,9999-12-30]`. On the lower side the server's own algebra produces
+the exclusive form: `(,) - (,-infinity]` is `(-infinity,)`, which excludes exactly the minimum that
+was subtracted. Ranges another tool wrote this way load one day short
+([Rows written by other tools](efcore.md#rows-written-by-other-tools)).
+`DomainBoundaryDivergenceTests` asserts that the column and the text agree for every form.
+
 **Calendars.** NodaTime equality includes the calendar system, and of its nineteen calendars only ISO
 and Gregorian can represent `9999-12-31` at all. Gregorian shares ISO's arithmetic but is a distinct
 `CalendarSystem` instance, so a Gregorian-spelled domain maximum compares unequal to

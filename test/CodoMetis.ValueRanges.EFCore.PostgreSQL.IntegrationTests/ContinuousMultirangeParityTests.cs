@@ -4,9 +4,10 @@ using Npgsql;
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
 /// <summary>
-/// Sweeps the continuous multirange algebra against <c>nummultirange</c> — every subset of a small
-/// universe of fragments, and every ordered pair of those subsets, through <c>+</c>, <c>-</c>,
-/// <c>*</c> and the complement.
+/// Sweeps the continuous multirange algebra and predicates against <c>nummultirange</c> — every
+/// subset of a small universe of fragments, and every ordered pair of those subsets, through
+/// <c>+</c>, <c>-</c>, <c>*</c> and the complement, and through <c>@&gt;</c>, <c>&amp;&amp;</c>,
+/// <c>&lt;&lt;</c>, <c>&gt;&gt;</c>, <c>&amp;&lt;</c>, <c>&amp;&gt;</c> and <c>-|-</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -157,6 +158,138 @@ public sealed class ContinuousMultirangeParityTests
     }
 
     /// <summary>
+    /// The eight multirange predicates, paired with the method that must agree with each. Both
+    /// operand orders are generated, so a one-directional method is exercised from both sides.
+    /// </summary>
+    private static readonly (string Name, string Operator)[] Predicates =
+    [
+        ("Contains",             "@>"),
+        ("Overlaps",             "&&"),
+        ("IsStrictlyLeftOf",     "<<"),
+        ("IsStrictlyRightOf",    ">>"),
+        ("DoesNotExtendRightOf", "&<"),
+        ("DoesNotExtendLeftOf",  "&>"),
+        ("IsAdjacentTo",         "-|-")
+    ];
+
+    private static bool InMemory(string predicate, RangeSet<DecimalRange, decimal> set, RangeSet<DecimalRange, decimal> other)
+        => predicate switch
+        {
+            "Contains"             => set.Contains(other),
+            "Overlaps"             => set.Overlaps(other),
+            "IsStrictlyLeftOf"     => set.IsStrictlyLeftOf(other),
+            "IsStrictlyRightOf"    => set.IsStrictlyRightOf(other),
+            "DoesNotExtendRightOf" => set.DoesNotExtendRightOf(other),
+            "DoesNotExtendLeftOf"  => set.DoesNotExtendLeftOf(other),
+            "IsAdjacentTo"         => set.IsAdjacentTo(other),
+            _                      => throw new ArgumentOutOfRangeException(nameof(predicate))
+        };
+
+    private static bool InMemory(string predicate, RangeSet<DecimalRange, decimal> set, DecimalRange other)
+        => predicate switch
+        {
+            "Contains"             => set.Contains(other),
+            "Overlaps"             => set.Overlaps(other),
+            "IsStrictlyLeftOf"     => set.IsStrictlyLeftOf(other),
+            "IsStrictlyRightOf"    => set.IsStrictlyRightOf(other),
+            "DoesNotExtendRightOf" => set.DoesNotExtendRightOf(other),
+            "DoesNotExtendLeftOf"  => set.DoesNotExtendLeftOf(other),
+            "IsAdjacentTo"         => set.IsAdjacentTo(other),
+            _                      => throw new ArgumentOutOfRangeException(nameof(predicate))
+        };
+
+    /// <summary>
+    /// The predicates over every ordered pair of subsets, multirange against multirange.
+    /// </summary>
+    /// <remarks>
+    /// The algebra sweeps above compare values; this compares the answers of the binary-search
+    /// and outer-edge shortcuts each predicate takes over a canonical set, which is where a wrong
+    /// candidate hides behind a right translation. <c>RangeSet.Overlaps</c> shipped choosing its
+    /// candidate element by the operand's upper bound value alone: for <c>{[0,1),[2,2]}</c> against
+    /// <c>{(,2)}</c> that is <c>[2,2]</c>, which shares nothing with <c>(,2)</c>, and the element
+    /// before it, which does, was never asked (#106). A discrete universe cannot reach the case,
+    /// because its canonical closed form moves every exclusive end one step back onto a value.
+    /// </remarks>
+    [TestMethod]
+    public async Task EveryOrderedPairOfSubsets_PredicatesAgreeWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var labels = new List<(string Label, bool Model)>();
+        var sql    = new List<string>();
+
+        for (var leftMask = 0; leftMask < Subsets; leftMask++)
+        {
+            var left     = Build(leftMask);
+            var leftSql  = Constructor(leftMask);
+            var leftName = Name(leftMask);
+
+            for (var rightMask = 0; rightMask < Subsets; rightMask++)
+            {
+                var right     = Build(rightMask);
+                var rightSql  = Constructor(rightMask);
+                var rightName = Name(rightMask);
+
+                foreach (var (predicate, @operator) in Predicates)
+                {
+                    labels.Add(($"{predicate} {leftName} ⋄ {rightName}", InMemory(predicate, left, right)));
+                    sql.Add($"{leftSql} {@operator} {rightSql}");
+                }
+            }
+        }
+
+        await AssertPredicatesAgree(labels, sql);
+    }
+
+    /// <summary>
+    /// The predicates over every subset against a single range: the fragments, and operands that
+    /// stop or start exactly at a fragment's bound with the other inclusivity, which is what the
+    /// set-against-set sweep can only reach through a merged subset.
+    /// </summary>
+    [TestMethod]
+    public async Task EverySubsetAgainstEveryRange_PredicatesAgreeWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        (string Name, DecimalRange Range)[] operands =
+        [
+            .. Universe,
+            ("empty", DecimalRange.Empty),
+            ("(,)",   DecimalRange.Infinite),
+            ("(,2)",  DecimalRange.CreateUnboundedStart(2m, false)),
+            ("(,2]",  DecimalRange.CreateUnboundedStart(2m, true)),
+            ("(,1]",  DecimalRange.CreateUnboundedStart(1m, true)),
+            ("[0,2)", DecimalRange.CreateFinite(0m, 2m)),
+            ("(0,2]", DecimalRange.CreateFinite(0m, 2m, false, true)),
+            ("[1,2]", DecimalRange.CreateFinite(1m, 2m, true, true)),
+            ("(0,1)", DecimalRange.CreateFinite(0m, 1m, false, false)),
+            ("[1,1]", DecimalRange.CreateFinite(1m, 1m, true, true)),
+            ("[0,)",  DecimalRange.CreateUnboundedEnd(0m)),
+            ("[2,)",  DecimalRange.CreateUnboundedEnd(2m)),
+            ("(1,)",  DecimalRange.CreateUnboundedEnd(1m, false))
+        ];
+
+        var labels = new List<(string Label, bool Model)>();
+        var sql    = new List<string>();
+
+        for (var mask = 0; mask < Subsets; mask++)
+        {
+            var set     = Build(mask);
+            var setSql  = Constructor(mask);
+            var setName = Name(mask);
+
+            foreach (var (operandName, operand) in operands)
+            foreach (var (predicate, @operator) in Predicates)
+            {
+                labels.Add(($"{predicate} {setName} ⋄ {operandName}", InMemory(predicate, set, operand)));
+                sql.Add($"{setSql} {@operator} '{Literal(operand)}'::numrange");
+            }
+        }
+
+        await AssertPredicatesAgree(labels, sql);
+    }
+
+    /// <summary>
     /// The one case in this file worth stating rather than sweeping: a difference that leaves a
     /// single value stranded between two intervals. Both implementations produce it, and it is the
     /// shape a merge that was slightly too eager would quietly swallow.
@@ -213,6 +346,32 @@ public sealed class ContinuousMultirangeParityTests
         Assert.AreEqual(
             0, disagreements.Count,
             $"{disagreements.Count} of {labels.Count} nummultirange results disagree with PostgreSQL:\n"
+          + string.Join("\n", disagreements.Take(20))
+          + (disagreements.Count > 20 ? $"\n  … and {disagreements.Count - 20} more" : ""));
+    }
+
+    private static async Task AssertPredicatesAgree(List<(string Label, bool Model)> labels, List<string> sql)
+    {
+        var server        = await EvaluateText(sql);
+        var disagreements = new List<string>();
+
+        for (var index = 0; index < labels.Count; index++)
+        {
+            var (label, model) = labels[index];
+            var answer = server[index] switch
+            {
+                "true"  => true,
+                "false" => false,
+                var text => throw new InvalidOperationException($"'{label}' did not evaluate to a boolean: '{text}'.")
+            };
+
+            if (answer != model)
+                disagreements.Add($"  {label}: model={model}, PostgreSQL={answer}");
+        }
+
+        Assert.AreEqual(
+            0, disagreements.Count,
+            $"{disagreements.Count} of {labels.Count} nummultirange predicates disagree with PostgreSQL:\n"
           + string.Join("\n", disagreements.Take(20))
           + (disagreements.Count > 20 ? $"\n  … and {disagreements.Count - 20} more" : ""));
     }

@@ -687,17 +687,18 @@
     ]
   },
   {
-    "id": "E38-captured-range-collection-any-count-workaround",
+    "id": "E38-captured-range-collection-any-count",
     "source": "docs/efcore.md#match-a-column-against-a-list-of-ranges",
-    "quote": "Without a `Contains` in the same query, the list still goes out as one parameter that PostgreSQL reads as a multirange. A multirange merges overlapping and adjacent ranges and drops empty ones. Wrap the list in `EF.Constant` until 10.0.0 fixes this: `bookings.Select(b => EF.Constant(wanted).Count(w => w.Overlaps(b.Seats)))`.",
-    "claim": "Any or Count over a captured range collection with no Contains reading it in the same query still translates through unnest of the single parameter (unchanged in 9.1.0, issue #76); wrapped in EF.Constant, Count(w => w.Overlaps(column)) over overlapping ranges returns the in-memory count; beside a Contains on the same collection, the collection is read from VALUES and answers as in memory.",
+    "quote": "`Any` and `Count` over the list read the ranges from `VALUES`, so overlapping, adjacent, duplicate and empty ranges stay what they are. An empty list matches nothing: `Contains` is `false`, `Any` with a condition is `false` and `Count` with a condition is `0`.",
+    "claim": "For every range family, Any and Count with a predicate over a captured array, List, HashSet or IEnumerable of ranges — alone or beside a Contains — read the collection from VALUES, one parameter per range, and return the in-memory answer for lists holding overlapping, adjacent, duplicate or empty ranges and for Any(w => w == column); an empty collection gives false and 0; EF.Parameter(wanted) throws InvalidOperationException in translation naming the remedy; EF.Constant keeps its literals and answers alike.",
     "oracle": "differential",
     "surfaces": [
       "ValueRangesQueryExpressionInterceptor.QueryCompilationStarting"
     ],
     "heldBy": [
       "RangeCollectionContainsTests",
-      "RangeCollectionTranslationTests"
+      "RangeCollectionTranslationTests",
+      "CapturedCollectionProbeTests"
     ]
   },
   {
@@ -771,6 +772,22 @@
     ],
     "heldBy": [
       "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E44-date-extremes-adjacent-to-nothing-in-sql",
+    "source": "docs/efcore.md#store-timestamp-ranges",
+    "quote": "**A date at the extreme is adjacent to nothing in the database.** Npgsql also writes `DateOnly.MinValue` and `MaxValue`, and `LocalDate.MinIsoValue` and `MaxIsoValue`, as `-infinity` and `infinity`, and no date is next to those. So `IsAdjacentTo` returns `false` in SQL for `[0001-01-01,0001-01-01]` and `[0001-01-02,)`, and `true` in memory, where 0001-01-01 is a day like any other. One day inside the extremes the two sides agree. If you set `Npgsql.DisableDateTimeInfinityConversions`, the extremes stay dates and the two sides agree there too.",
+    "claim": "With Npgsql's infinity conversions on, a DateRange or LocalDateRange bounded at an extreme is adjacent to its neighbour in memory and not on the server (as a literal, a parameter and through EF Core), one day inside the extremes both agree, and with Npgsql.DisableDateTimeInfinityConversions set both agree at the extremes too.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "DomainBoundaryDivergenceTests",
+      "InfinityConversionsDisabledTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
@@ -1411,6 +1428,67 @@
     ],
     "heldBy": [
       "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "J35-inverted-literal-refused",
+    "source": "docs/serialization.md#parse-a-literal",
+    "quote": "A literal whose lower bound is greater than its upper bound fails (`FormatException`), as it does\nin PostgreSQL. `TryParse` returns `false`, and JSON and the `TypeConverter` throw. Equal bounds that\naren't both inclusive are fine and read as `empty`, so `[5,5)` is `empty` and `[5,1)` fails.",
+    "claim": "Every range type and RangeSet refuse, through Parse, TryParse, the span overloads, JSON, the TypeConverter and the EF Core JSON document reader, a finite literal (or multirange element) whose lower bound text is greater than its upper bound text, as range_in does, while equal bounds not both inclusive read as empty and CreateFinite keeps returning Empty for inverted bounds.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.TryParse"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests",
+      "LiteralGrammarParityTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "J36-exclusive-infinity-excludes-the-extreme",
+    "source": "docs/serialization.md#dates-and-times-are-strict-iso-8601",
+    "quote": "`[2026-01-01,infinity)` reads as\n  `[2026-01-01,9999-12-30]` for `DateRange` and `LocalDateRange`, as the same value read from a\n  column does.",
+    "claim": "For every form of an infinite date bound (exclusive or inclusive, upper or lower, finite or unbounded on the other side), DateRange and LocalDateRange read the server's value through a column and through its text (Parse, and a multirange literal) as the same value, treating the extreme as the infinity.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.Parse"
+    ],
+    "heldBy": [
+      "DomainBoundaryDivergenceTests",
+      "LiteralCorpusProbeTests",
+      "DifferentialFuzzParityTests"
+    ]
+  },
+  {
+    "id": "J37-sub-microsecond-text-three-values",
+    "source": "docs/serialization.md#dates-and-times-are-strict-iso-8601",
+    "quote": "`10:00:00.1234567` is .1234567 here.\n  PostgreSQL reads the same text rounded to the microsecond, .123457, and the EF Core package stores\n  it truncated, .123456, as Npgsql binds it. They are at most 1 µs apart.",
+    "claim": "A temporal literal with more than six fraction digits parses to every digit the type holds (100 ns BCL, 1 ns NodaTime) and round-trips through its own literal; PostgreSQL reads the same text rounded half-to-even to the microsecond; the EF Core SQL constant and JSON document carry it truncated toward 2000-01-01; the three differ by at most 1 µs.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.Parse"
+    ],
+    "heldBy": [
+      "DomainBoundaryDivergenceTests",
+      "LiteralCorpusProbeTests",
+      "TemporalStoreParityTests"
+    ]
+  },
+  {
+    "id": "J38-variant-minimal-api-binds-its-shape",
+    "source": "docs/serialization.md#bind-a-range-from-configuration",
+    "quote": "Each shape has its own\n  `Parse` and `TryParse`, so `(DateRange.Finite period) => …` binds\n  `?period=[2026-01-01,2026-06-30]` and answers 400 for `(,2026-06-30]` or for text that doesn't\n  parse.",
+    "claim": "Every shape of every range type has a static Parse(string, IFormatProvider) and TryParse(string, IFormatProvider, out shape) that read only a literal of that shape; a minimal-API parameter typed as the shape binds a literal of that shape from the query, a nullable query, a route value and a form field under every request culture, and answers 400 for another shape or a literal that does not parse.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range+*.Parse",
+      "*Range+*.TryParse"
+    ],
+    "heldBy": [
+      "HostCultureProbeTests",
+      "RangeParseFormatTests"
     ]
   },
   {

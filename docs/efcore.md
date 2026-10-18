@@ -147,19 +147,24 @@ Each range in your list goes to PostgreSQL as its own parameter, and `Contains` 
 get exactly the rows whose range equals one in your list, the same rows as in memory. This works
 for a list, an array or any other collection you capture, and for every range type, `TimeRange`
 and the NodaTime ranges included.
+`Any` and `Count` over the list read the ranges from `VALUES`, so overlapping, adjacent, duplicate
+and empty ranges stay what they are. An empty list matches nothing: `Contains` is `false`, `Any`
+with a condition is `false` and `Count` with a condition is `0`.
 
 Good to know:
 
-- **`EF.Parameter(wanted).Contains(…)` throws.** It asks for the whole list as one parameter, and
-  Npgsql would send that as a multirange rather than as an array of ranges. Remove `EF.Parameter`.
+- **`EF.Parameter(wanted)` throws.** It asks for the whole list as one parameter, and Npgsql would
+  send that as a multirange rather than as an array of ranges. Remove `EF.Parameter`, and the list
+  goes out one parameter per range.
 - **Before 9.1.0 a captured list failed.** PostgreSQL rejected the parameter
   (`42809 op ANY/ALL (array) requires array on right side`), and for `TimeRange` Npgsql threw
   (`InvalidCastException`). A constant list and an inline `new[] { … }` already worked.
-- **`Any` or `Count` alone over a captured list of ranges can return a different answer from
-  memory.** Without a `Contains` in the same query, the list still goes out as one parameter that
-  PostgreSQL reads as a multirange. A multirange merges overlapping and adjacent ranges and drops
-  empty ones. Wrap the list in `EF.Constant` until 10.0.0 fixes this:
-  `bookings.Select(b => EF.Constant(wanted).Count(w => w.Overlaps(b.Seats)))`.
+- **Before 10.0.0, `Any` or `Count` alone over a captured list returned a different answer from
+  memory.** Without a `Contains` in the same query, the list went out as one parameter that
+  PostgreSQL read as a multirange, which merges overlapping and adjacent ranges and drops empty
+  ones. `wanted.Count(w => w.Overlaps(b.Seats))` over `[1,5]` and `[3,8]` was 1 where memory says
+  2. If you wrapped the list in `EF.Constant` to avoid that, you can remove the wrapper; it still
+  works.
 - **A list of `RangeSet` values needs nothing.** It goes out as one array of multiranges, which is
   what it is.
 
@@ -179,6 +184,13 @@ column:
   `MaxValue` to PostgreSQL's `-infinity` and `infinity`. So a *finite* bound of `DateTime.MaxValue`
   becomes an explicit `infinity` bound in the database. That is still different from an
   *unbounded* end (`upper_inf` stays `false`), so the shape checks behave consistently.
+- **A date at the extreme is adjacent to nothing in the database.** Npgsql also writes
+  `DateOnly.MinValue` and `MaxValue`, and `LocalDate.MinIsoValue` and `MaxIsoValue`, as
+  `-infinity` and `infinity`, and no date is next to those. So `IsAdjacentTo` returns `false` in
+  SQL for `[0001-01-01,0001-01-01]` and `[0001-01-02,)`, and `true` in memory, where 0001-01-01 is
+  a day like any other. One day inside the extremes the two sides agree. If you set
+  `Npgsql.DisableDateTimeInfinityConversions`, the extremes stay dates and the two sides agree
+  there too.
 
 ## Indexing a range column, and preventing overlaps
 
@@ -324,6 +336,10 @@ Good to know:
 - **Your parameterized-collection setting is kept.** A context set to
   `UseParameterizedCollectionMode(ParameterTranslationMode.Constant)`, and a list wrapped in
   `EF.Constant`, still put the sets into the SQL as literals.
+- **An empty list matches nothing.** `Contains` is `false`, `Any` with a condition is `false` and
+  `Count` with a condition is `0`, as in memory. Before 10.0.0, `Any` and `Count` over an empty
+  list threw (`InvalidOperationException`, "Empty collections are not supported as inline query
+  roots").
 - **Before 9.1.0 a captured list failed.** Npgsql sent it as one array parameter and threw
   (`InvalidCastException`) because it couldn't write the array of arrays. A constant list and an
   inline `new[] { … }` already worked.
@@ -428,6 +444,17 @@ Two members depend on every writer storing canonical form:
 
 `IsEmpty` isn't affected. An array is empty exactly when it has no elements, however many times
 any of them repeats.
+
+A date range that another tool wrote with an exclusive infinite bound loads one day short. For
+example, `daterange('2026-01-01', 'infinity')` loads as `[2026-01-01,9999-12-30]`, and
+`(-infinity,2026-01-01]` as starting on 0001-01-02. `DateOnly.MaxValue` and `MinValue` stand for
+`infinity` and `-infinity`, so the range can hold the extreme only when it includes the infinity.
+The literal, JSON and a JSON column read the same text the same way.
+
+If other tools write open-ended dates into your tables, have them write an absent bound
+(`daterange('2026-01-01', NULL)`, which loads as `[2026-01-01,)`) or an inclusive one
+(`'[2026-01-01,infinity]'`, which loads as `[2026-01-01,9999-12-31]`). The same holds for
+`LocalDateRange` ([Domain width](architecture.md#domain-width-and-the-boundary)).
 
 The difference comes from reading rows normalized while leaving them as written. The alternatives
 are rewriting other tools' rows on read, or not translating `Count` at all, and neither is worth it

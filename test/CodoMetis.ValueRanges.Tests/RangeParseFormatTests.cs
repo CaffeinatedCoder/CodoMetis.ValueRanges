@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Globalization;
+using System.Text.Json;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -191,6 +193,92 @@ public class RangeParseFormatTests
     public void Parse_InvalidFormat_ThrowsFormatException()
         => Assert.ThrowsExactly<FormatException>(
             () => Int32Range.Parse("not-a-range", CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// #114: PostgreSQL's <c>range_in</c> refuses a literal whose lower bound is greater than its
+    /// upper bound. Every entry point refuses it too; it read as <c>empty</c> until 10.0.0. The
+    /// factory keeps its own rule, and equal bounds that are not both inclusive stay empty.
+    /// </summary>
+    [TestMethod]
+    [DataRow("[5,1)")]
+    [DataRow("(5,1]")]
+    [DataRow("[5,1]")]
+    [DataRow("[2,1)")]
+    public void Parse_InvertedLiteral_IsRefusedByEveryEntryPoint(string literal)
+    {
+        var message = Assert.ThrowsExactly<FormatException>(() => Int32Range.Parse(literal, CultureInfo.InvariantCulture)).Message;
+        StringAssert.Contains(message, "lower bound is greater than the upper bound");
+        Assert.ThrowsExactly<FormatException>(() => Int32Range.Parse(literal.AsSpan(), CultureInfo.InvariantCulture));
+        Assert.IsFalse(Int32Range.TryParse(literal, CultureInfo.InvariantCulture, out _));
+        Assert.IsFalse(Int32Range.TryParse(literal.AsSpan(), CultureInfo.InvariantCulture, out _));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int32Range>(JsonSerializer.Serialize(literal)));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int32Range.Finite>(JsonSerializer.Serialize(literal)));
+        Assert.Throws<Exception>(() => TypeDescriptor.GetConverter(typeof(Int32Range)).ConvertFromInvariantString(literal));
+        Assert.IsFalse(RangeSet<Int32Range, int>.TryParse($"{{{literal},[7,9]}}", CultureInfo.InvariantCulture, out _));
+    }
+
+    [TestMethod]
+    [DataRow("[2026-06-30,2026-01-01]")]
+    [DataRow("[infinity,2026-01-01)")]
+    [DataRow("(2026-01-01,-infinity]")]
+    public void Parse_InvertedTemporalLiteral_IsRefused(string literal)
+    {
+        Assert.ThrowsExactly<FormatException>(() => DateRange.Parse(literal, CultureInfo.InvariantCulture));
+        Assert.IsFalse(DateRange.TryParse(literal, CultureInfo.InvariantCulture, out _));
+    }
+
+    [TestMethod]
+    public void Parse_InvertedContinuousLiteral_IsRefused()
+    {
+        Assert.ThrowsExactly<FormatException>(() => DecimalRange.Parse("[1.5,1.25)", CultureInfo.InvariantCulture));
+        Assert.ThrowsExactly<FormatException>(() => DateTimeOffsetRange.Parse(
+            "[2026-01-01 10:00:00+00,2026-01-01 11:00:00+02)", CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>Equal bounds are not inverted: empty unless both are inclusive, on both sides.</summary>
+    [TestMethod]
+    [DataRow("[5,5)", "empty")]
+    [DataRow("(5,5]", "empty")]
+    [DataRow("(5,5)", "empty")]
+    [DataRow("[5,5]", "[5,5]")]
+    [DataRow("(1,2)", "empty")]
+    public void Parse_EqualOrClosingBounds_AreNotInverted(string literal, string expected)
+        => Assert.AreEqual(expected, Int32Range.Parse(literal, CultureInfo.InvariantCulture).ToString());
+
+    /// <summary>
+    /// #116: every shape parses only a literal of its own shape, so a minimal-API parameter typed as
+    /// one binds it (the union's inherited TryParse bound null). HostCultureProbeTests sweeps every type.
+    /// </summary>
+    [TestMethod]
+    public void ShapeParse_ReadsOnlyItsOwnShape()
+    {
+        Int32Range.Finite finite = Int32Range.Finite.Parse("[1,5)", null);
+        Assert.AreEqual(Int32Range.CreateFinite(1, 4), finite);
+        Assert.IsTrue(Int32Range.Finite.TryParse("[1,5)", null, out var tried));
+        Assert.AreEqual(finite, tried);
+
+        var message = Assert.ThrowsExactly<FormatException>(() => Int32Range.Finite.Parse("(,5]", null)).Message;
+        StringAssert.Contains(message, "the literal is a UnboundedStart");
+        Assert.IsFalse(Int32Range.Finite.TryParse("(,5]", null, out var wrong));
+        Assert.IsNull(wrong);
+        Assert.IsFalse(Int32Range.Finite.TryParse("garbage", null, out _));
+        Assert.IsFalse(Int32Range.Finite.TryParse(null, null, out _));
+
+        Assert.IsInstanceOfType<Int32Range.UnboundedStart>(Int32Range.UnboundedStart.Parse("(,5]", null));
+        Assert.IsInstanceOfType<Int32Range.UnboundedEnd>(Int32Range.UnboundedEnd.Parse("[5,)", null));
+        Assert.IsInstanceOfType<Int32Range.Infinity>(Int32Range.Infinity.Parse("(,)", null));
+        Assert.IsInstanceOfType<Int32Range.EmptyRange>(Int32Range.EmptyRange.Parse("empty", null));
+        Assert.IsTrue(DateRange.EmptyRange.TryParse("[5,5)".Replace("5", "2026-01-01"), null, out _));
+        Assert.IsFalse(DateRange.Infinity.TryParse("[2026-01-01,)", null, out _));
+
+        // The union's own overload is still reachable through a shape's name.
+        Assert.IsTrue(Int32Range.Finite.TryParse("(,5]", null, out Int32Range union));
+        Assert.IsInstanceOfType<Int32Range.UnboundedStart>(union);
+    }
+
+    [TestMethod]
+    public void CreateFinite_InvertedBounds_StaysEmpty()
+        => Assert.AreEqual(Int32Range.Empty, Int32Range.CreateFinite(5, 1));
 
     /// <summary>
     /// Each structural check of the literal on its own: the length, both brackets, and nothing after

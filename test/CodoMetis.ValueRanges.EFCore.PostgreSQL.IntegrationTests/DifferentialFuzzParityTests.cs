@@ -265,8 +265,25 @@ public sealed class DifferentialFuzzParityTests
         };
 
         foreach (var lines in await Task.WhenAll(sweeps)) failures.AddRange(lines);
+
+        // A discrete date whose extremes Npgsql writes as ±infinity is one step from its neighbour in
+        // memory and adjacent to nothing on the server: no finite date is next to -infinity
+        // (docs/architecture.md#domain-width-and-the-boundary, DomainBoundaryDivergenceTests). Those
+        // rows are set aside only in the shape the document states — memory true, both database legs
+        // false — and counted; an adjacency row at the edge that disagrees any other way still fails.
+        if (TRange.IsDiscrete && domain.Extremes.Any(e => Lit(TRange.CreateUnboundedEnd(e, true)).Contains("infinity", StringComparison.Ordinal)))
+        {
+            var setAside = failures.RemoveAll(IsAdjacencyAcrossAnInfinityExtreme);
+            test.WriteLine($"{subject}: {setAside} adjacency rows at the date extremes set aside (documented divergence, docs/architecture.md#domain-width-and-the-boundary).");
+        }
+
         return failures;
     }
+
+    private static bool IsAdjacencyAcrossAnInfinityExtreme(string line)
+        => line.Contains(" IsAdjacentTo", StringComparison.Ordinal)
+        && line.Contains(" at the domain edge ", StringComparison.Ordinal)
+        && line.Contains("memory=true, EF=false, PostgreSQL=false", StringComparison.Ordinal);
 
     /// <summary>
     /// An element as SQL, typed by the range: the lower bound of <c>[e,)</c>. Typed this way it needs
@@ -492,6 +509,7 @@ public sealed class DifferentialFuzzParityTests
         };
 
         foreach (var lines in await Task.WhenAll(sweeps)) failures.AddRange(lines);
+
         return failures;
     }
 
