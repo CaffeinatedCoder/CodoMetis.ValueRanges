@@ -135,6 +135,15 @@
     ]
   },
   {
+    "class": "ExecutedQueryTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "the in-memory answer, for each translated range and multirange predicate, accessor and operation over seeded rows of every shape",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "DifferentialFuzzParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",

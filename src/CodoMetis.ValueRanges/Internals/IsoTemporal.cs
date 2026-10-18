@@ -98,8 +98,9 @@ internal static class IsoTemporal
     }
 
     /// <summary>
-    /// The length of a trailing <c>±HH</c>, <c>±HH:mm</c> or <c>±HH:mm:ss</c> offset of at most 14 hours,
-    /// or 0 — only after the time, so the date's own hyphens are never mistaken for one.
+    /// The length of a trailing <c>±HH</c>, <c>±HH:mm</c> or <c>±HH:mm:ss</c> offset of at most
+    /// <see cref="MaxOffsetHours"/> hours, or 0 — only after the time, so the date's own hyphens are never
+    /// mistaken for one.
     /// </summary>
     private static int OffsetLength(ReadOnlySpan<char> s)
     {
@@ -109,7 +110,7 @@ internal static class IsoTemporal
 
             var tail = s[^length..];
             if (tail[0] is not ('+' or '-')
-                || !TryTwoDigits(tail[1..3], 14, out _)
+                || !TryTwoDigits(tail[1..3], MaxOffsetHours, out _)
                 || length >= 6 && (tail[3] != ':' || !TryTwoDigits(tail[4..6], 59, out _))
                 || length == 9 && (tail[6] != ':' || !TryTwoDigits(tail[7..9], 59, out _)))
                 continue;
@@ -120,6 +121,13 @@ internal static class IsoTemporal
         return 0;
     }
 
+    /// <summary>
+    /// PostgreSQL's <c>timestamp</c> and <c>timestamptz</c> input read an offset up to <c>±15:59:59</c>
+    /// (measured on 16 and 18); <c>±16</c> is refused. Until 10.0.0 this grammar stopped at 14 hours,
+    /// where <see cref="DateTimeOffset"/> does, so <c>+15:00</c> threw here (#131).
+    /// </summary>
+    private const int MaxOffsetHours = 15;
+
     private static bool TryTwoDigits(ReadOnlySpan<char> s, int max, out int value)
         => int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out value) && value <= max;
 
@@ -129,33 +137,36 @@ internal static class IsoTemporal
 
         var trimmed = TruncateFraction(s);
         return DateTimeOffset.TryParseExact(trimmed, DateTimeOffsetFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
-            || TryParseSecondsOffset(trimmed, out value)
+            || TryParseWideOffset(trimmed, out value)
             ? value
             : throw new FormatException(
                 "Expected an ISO 8601 date and time with an offset, yyyy-MM-dd then T or a space then "
               + "HH:mm[:ss[.fffffff]] then Z, ±HH, ±HH:mm or ±HH:mm:ss, or infinity / -infinity.");
     }
 
-    // The date-time part of a value whose offset carries seconds, read as a wall clock.
+    // The date-time part of a value whose offset DateTimeOffset cannot hold, read as a wall clock.
     private static readonly string[] WallClockFormats =
     [
         "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF", "yyyy-MM-dd' 'HH:mm:ss.FFFFFFF",
         "yyyy-MM-dd'T'HH:mm",            "yyyy-MM-dd' 'HH:mm"
     ];
 
-    /// <summary>A trailing <c>±HH:mm:ss</c> offset, applied to the wall clock and kept as offset zero.</summary>
-    private static bool TryParseSecondsOffset(ReadOnlySpan<char> s, out DateTimeOffset value)
+    /// <summary>
+    /// A trailing offset <see cref="DateTimeOffset"/> cannot hold — one with seconds (<c>±HH:mm:ss</c>), or
+    /// beyond <c>±14:00</c> up to <see cref="MaxOffsetHours"/> — applied to the wall clock and kept as
+    /// offset zero.
+    /// </summary>
+    private static bool TryParseWideOffset(ReadOnlySpan<char> s, out DateTimeOffset value)
     {
         value = default;
-        if (s.Length < 10) return false;
+        var length = OffsetLength(s);
+        if (length == 0) return false;
 
-        var tail = s[^9..];
-        if (tail[0] is not ('+' or '-') || tail[3] != ':' || tail[6] != ':'
-            || !int.TryParse(tail[1..3], NumberStyles.None, CultureInfo.InvariantCulture, out var hours)
-            || !int.TryParse(tail[4..6], NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
-            || !int.TryParse(tail[7..9], NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
-            || hours > 14 || minutes > 59 || seconds > 59
-            || !DateTime.TryParseExact(s[..^9], WallClockFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var wall))
+        var tail    = s[^length..];
+        var hours   = int.Parse(tail[1..3], NumberStyles.None, CultureInfo.InvariantCulture);
+        var minutes = length >= 6 ? int.Parse(tail[4..6], NumberStyles.None, CultureInfo.InvariantCulture) : 0;
+        var seconds = length == 9 ? int.Parse(tail[7..9], NumberStyles.None, CultureInfo.InvariantCulture) : 0;
+        if (!DateTime.TryParseExact(s[..^length], WallClockFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var wall))
             return false;
 
         var offset = new TimeSpan(hours, minutes, seconds);
