@@ -240,6 +240,213 @@ One change still matters here. `IRangeFactory.ToString` used to format a range i
 as `"empty"`. That is the literal PostgreSQL reads back as the empty range. So such a value was
 stored and queried as the empty range, and nothing threw. It now throws.
 
+## Migration from v8.x
+
+No signature changed. What changed is what existing calls write, accept and run as SQL. Check these
+in order, starting with the most likely to affect you:
+
+- **Your JSON changes shape if you never called `AddRangeConverters()`.** Every type now writes its
+  literal by default ([details](#check-json-payloads-if-you-never-called-addrangeconverters)).
+- **Input that used to parse now throws `FormatException`.** This covers non-ISO temporal text, a
+  `DateTimeOffset` without an offset, culture-formatted numbers, and literals that PostgreSQL itself
+  rejects ([culture](#parse-culture-formatted-text-yourself),
+  [ISO 8601](#write-temporal-text-as-strict-iso-8601)).
+- **Queries that ran now throw `InvalidOperationException`.** This covers any query over a value set
+  `Union` computed in the database, other than projecting it or testing containment and overlap.
+  Those queries were already returning wrong rows
+  ([details](#rewrite-the-remaining-queries-over-a-database-computed-union)).
+- **A `DateTime` with an offset keeps its wall clock.** It no longer converts into the machine's time
+  zone. NodaTime values in a non-ISO calendar are rejected on write
+  ([ISO 8601](#write-temporal-text-as-strict-iso-8601), [JSON](#check-three-changes-to-json-converters)).
+- **Temporal constants and JSON-column values reach the database truncated to the microsecond**, as a
+  parameter always did ([details](#temporal-values-reach-the-database-truncated-to-the-microsecond)).
+
+### Check JSON payloads if you never called `AddRangeConverters()`
+
+If you already call `AddRangeConverters()`, or register `RangeJsonConverterFactory`, your JSON does
+not change, and you can keep the call. Every range type, each of its kinds of range,
+`RangeSet<TRange, T>` and every value set now carries its own converter.
+
+If you did not, your JSON changes from a property dump to the literal:
+
+| Type | 8.x without registration | 9.0 |
+|---|---|---|
+| `DateRange` | `{"Length":181}` | `"[2026-01-01,2026-06-30]"` |
+| range through `object` | `{"Start":…,"End":…,"StartInclusive":true,…}` | the literal |
+| `RangeSet<Int32Range, int>` | `[{"Length":5}]` | `"{[1,5]}"` |
+| `StringSet` | `{"Values":["a","b"],"Count":2,"IsEmpty":false}` | `["a","b"]` |
+
+To keep an old shape for a property, put your own `[JsonConverter]` on it, or register one on the
+options. Both take precedence over the type's attribute.
+
+None of the old forms could be read back. So only code that writes and never reads can depend on
+them, such as a client reading `Length` from a response, or a stored document nobody deserializes.
+
+### Parse culture-formatted text yourself
+
+If you parsed culture-specific text, such as `[01.01.2025,31.03.2025]` with `de-DE`, parse the bounds
+yourself and pass them to the factories:
+
+```csharp
+var de    = CultureInfo.GetCultureInfo("de-DE");
+var range = DateRange.CreateFinite(DateOnly.Parse("01.01.2025", de), DateOnly.Parse("31.03.2025", de));
+```
+
+`Parse(s, provider)` and `TryParse(s, provider, …)` now read the invariant literal and ignore the
+provider. `ToString(null, provider)` always writes the invariant literal. So do
+`ToString("", provider)`, string interpolation and `string.Format`. A provider still applies when you
+pass an explicit, non-empty format string.
+
+Before, the provider reached each bound:
+
+- **`DateRange.Parse(s, th-TH)`** was 543 years early.
+- **`DecimalRange.Parse("[1.5,2.5)", de-DE)`** was `[15,25)`.
+- **`$"{decimalRange}"` under `de-DE`** wrote `[1,5,2)`, which parsed back as `[1,52)`.
+
+Good to know:
+
+- **Decimal bounds now parse with PostgreSQL's `numeric` grammar.** `"1,000"`, `"(5)"` and currency
+  symbols throw `FormatException`. Before, they parsed as 1000, −5 and 5.
+- **The wrapper sets follow the same grammar.** `DecimalSet<T>` and the integer ones read the element
+  text with the plain type's grammar before your element's `Parse` sees it. So a generated `Parse`
+  that accepts group separators no longer turns `{"1,5"}` into fifteen.
+- **`DecimalSet<T>` now reads exponent notation** (`{1e3}`, or a JSON `1.5e1`), as `DecimalSet` does.
+
+### Write temporal text as strict ISO 8601
+
+Write every temporal bound and element as ISO 8601, the way this library and PostgreSQL write it.
+This applies to `Parse`, `TryParse`, JSON, the `TypeConverter` and configuration binding. The BCL
+parser used before read whatever the invariant culture could, month first. These inputs now throw
+`FormatException`:
+
+| Input | Was read as | Write instead |
+|---|---|---|
+| `01.02.2027`, `01/02/2027`, `Feb 1 2027` | January 2 | `2027-02-01` |
+| `2027-02-01` for a `DateTime` or `DateTimeOffset` | midnight | `2027-02-01T00:00` |
+| a `DateTimeOffset` without an offset | the parsing machine's offset | append `Z` or the offset |
+| `9:30 AM`, `9:30` | 09:30 | `09:30` |
+| the same forms as JSON elements of a `DateTimeOffsetSet`, `DateTimeSet` or `TimeSet` | as above — System.Text.Json's converter read the offset-less ones in the machine's offset | as above, or register a converter for the element type |
+
+**If a payload carries offsets because it means instants, use `DateTimeOffsetRange` (`tstzrange`).**
+Or convert explicitly with `ToUniversalTime()` before you build a `DateTimeRange`.
+
+A `DateTime` bound or element with an offset, such as `2026-01-01T09:30+05:30`, now keeps the wall
+clock as written, with `DateTimeKind.Local`. That is what PostgreSQL's `timestamp` input does. It
+used to be converted into the parsing machine's time zone: 05:00 in Berlin, 04:00 on a UTC server.
+A `tsrange` stores that wall clock. Offsets are `±HH`, `±HH:mm` or `±HH:mm:ss`. `+0530` and `+5:30`
+are rejected.
+
+Good to know:
+
+- **These forms are accepted:** `HH:mm` without seconds, PostgreSQL's space-separated output, any
+  number of fraction digits (truncated to 100 ns), and `infinity` / `-infinity`.
+- **An empty or blank bound is no longer infinite.** A bound that is a quoted `""` or only
+  whitespace, such as `["",5)` or `( , )`, now throws `FormatException`, as in PostgreSQL. Only an
+  absent bound, as in `(,5)`, is infinite.
+- **A backslash outside quotes escapes the next character**, in a range bound and in an array element
+  alike, as in PostgreSQL. `StringSet.Parse(@"{a\,b}")` is the one element `a,b`. It used to be the
+  two elements `a\` and `b`.
+- **An array literal that PostgreSQL rejects, or reads as multi-dimensional, throws
+  `FormatException`.** Examples are `{{a,b}}`, `{a}b}` and `{a"b}`. `{{a,b}}` used to be the set
+  `{"{a","b}"}`.
+- **Only ASCII whitespace is skipped** around elements and bounds. A no-break space is now kept as
+  element text, and rejected inside a range bound. It used to be trimmed.
+- **The temporal wrapper sets read the text as their plain type first.** So a lenient generated
+  element `Parse` no longer sees non-ISO text. An element that ignores the format specifier now
+  fails on read, instead of silently truncating.
+- **The NodaTime types were already strict, and now also accept `HH:mm`** wherever the BCL types do:
+  a `LocalTime`, the time part of a `LocalDateTime`, and an `Instant` written with its offset or `Z`.
+  So `LocalTimeSet.Parse("{09:00}")` reads like `TimeRange.Parse("[09:00,17:00)")` instead of
+  throwing.
+
+### Temporal values reach the database truncated to the microsecond
+
+The EF Core package now writes a temporal SQL constant, and a temporal value inside a JSON column, as
+the value Npgsql would bind. That is the value truncated to the microsecond toward 2000-01-01, with
+the extremes written as `-infinity` / `infinity`. A constant used to carry seven fraction digits,
+which the server rounded. So it could miss the row that a parameter matched.
+
+If you need to `ExecuteUpdate` a value set inside a JSON column, set the whole complex property that
+contains the set instead. Updating the value set itself now throws, however the setter reaches the
+property. It would have written a document that the row could no longer be loaded from.
+
+Good to know:
+
+- **Elements less than a microsecond apart are stored as one.** A temporal set with such elements is
+  now stored with one of them. The column could only ever hold one value, and the stored array's
+  `cardinality` disagreed with the set's `Count`.
+
+### Rewrite the remaining queries over a database-computed `Union`
+
+If a query uses a value set `Union` computed in the database in one of these ways, rewrite it. Use
+`IsSubsetOf` and `IsSupersetOf` together for set equality, or load the rows first. These queries now
+throw `InvalidOperationException`, and the message names the fix:
+
+```csharp
+db.Rows.Select(r => r.Tags.Union(x) == target);                    // was: false where memory says true
+db.Rows.Where(r => (r.Id > 0 ? r.Tags.Union(x) : r.Tags) == target); // and the ?? form: was 0 rows
+db.Rows.GroupBy(r => r.Tags.Union(x));                             // was: one group per operand order
+db.Rows.Select(r => r.Tags.Union(x)).Distinct();                   // was: duplicates kept
+db.Rows.OrderBy(r => r.Tags.Union(x));
+db.Rows.Where(r => (r.OptionalTags ?? r.Tags.Union(x)).Count == 3); // was: duplicates counted
+db.Rows.ExecuteUpdate(s => s.SetProperty(r => r.Tags, r => r.Tags.Union(x)));  // was: stored {a,c,a,b}
+```
+
+**A query that ran into one of these was already returning wrong rows.** `Union` runs in the
+database as `array_cat`, a concatenation. 8.0 rejected `==`/`Equals` over it in predicates, and
+`Count` over a bare union. Everything else ran and returned a different result from memory.
+
+These keep working: projecting the union itself, and combining it with `Contains`, `Overlaps`, the
+subset/superset family, `Remove` and `IsEmpty`.
+
+**If you ran an `ExecuteUpdate` of a union**, the rows it wrote compare and count wrongly on the
+server until they are rewritten. Load them and save them through `SaveChanges` to make them
+deduplicated and sorted again.
+
+**If you replace `IRelationalParameterBasedSqlProcessorFactory`** after `UseValueRanges()`, wrap the
+registered factory instead. This applies whether you use `ReplaceService` or another library does it.
+Otherwise every query with a `Union` that runs in the database now fails with
+`function valueranges_union_without_sql_guard(…) does not exist`. The check runs from that service,
+and a translated `Union` only becomes `array_cat` once the check has run.
+
+### Check three changes to JSON converters
+
+These change which converter writes a value, and which properties get one:
+
+- **A converter you register on the options for a range type now also handles its kinds of range.**
+  Before, a range serialized through `object`, an `object` collection, or a property typed as one kind
+  of range skipped your converter and wrote the literal. Now it goes through your converter, so one
+  payload no longer mixes two JSON forms. If you relied on the mixed form, declare those properties as
+  a type your converter does not handle.
+- **A property declared as `IRange<T>`, a shape interface or `IValueSet<T>`** now writes the literal
+  (or array) of its runtime type. It used to write `{}` or a property dump. Reading one still cannot
+  work, because the concrete type is unknown, and now throws `NotSupportedException`. Declare the
+  concrete type instead.
+- **NodaTime: convert non-ISO values with `WithCalendar(CalendarSystem.Iso)` before you write them.** A
+  bare `LocalDate`, `LocalDateTime` or `YearMonth` in a non-ISO calendar is now rejected on write
+  (`ArgumentException`). Before, it was written in its own calendar's fields and read back days off.
+  The same holds for an element of `LocalDateSet<T>`, `LocalDateTimeSet<T>` or `YearMonthSet<T>`, in
+  memory and through EF Core. Also, `AddNodaTimeRangeConverters()` no longer takes precedence over
+  `ConfigureForNodaTime` when you register it first.
+
+### Ranges can be dictionary keys
+
+`Dictionary<DateRange, …>` used to throw `NotSupportedException`. It now writes the literal as the
+property name. Nothing to change, unless you caught that exception.
+
+### Things that start working
+
+No edit is needed. They are listed so you can remove a workaround:
+
+- **Configuration binding** of a range, multirange or value set property from its literal used to bind
+  `null`, with no error. Every type now carries a `TypeConverter`, so the property binds.
+- **A range, multirange or value set inside an EF Core `ToJson()` column** could not be saved.
+  `SaveChanges` threw `NullReferenceException` from inside EF Core. Now the value is stored as the
+  literal, and queries into the document run in the database.
+- **Native AOT.** `RangeSet` and the wrapper sets failed with "missing native code". The core and
+  NodaTime packages now build with `IsAotCompatible`. Your project needs only the source-generated
+  JSON context that AOT always needs.
+
 ## Migration from v9.x
 
 Nothing was removed. Some calls return a different value, and each one now matches PostgreSQL
@@ -533,210 +740,3 @@ On PostgreSQL 14 or 15 you can meet these:
 
 PostgreSQL 14 receives fixes until November 2026. PostgreSQL 16 is supported until November 2028,
 which is when support for .NET 10 ends too.
-
-## Migration from v8.x
-
-No signature changed. What changed is what existing calls write, accept and run as SQL. Check these
-in order, starting with the most likely to affect you:
-
-- **Your JSON changes shape if you never called `AddRangeConverters()`.** Every type now writes its
-  literal by default ([details](#check-json-payloads-if-you-never-called-addrangeconverters)).
-- **Input that used to parse now throws `FormatException`.** This covers non-ISO temporal text, a
-  `DateTimeOffset` without an offset, culture-formatted numbers, and literals that PostgreSQL itself
-  rejects ([culture](#parse-culture-formatted-text-yourself),
-  [ISO 8601](#write-temporal-text-as-strict-iso-8601)).
-- **Queries that ran now throw `InvalidOperationException`.** This covers any query over a value set
-  `Union` computed in the database, other than projecting it or testing containment and overlap.
-  Those queries were already returning wrong rows
-  ([details](#rewrite-the-remaining-queries-over-a-database-computed-union)).
-- **A `DateTime` with an offset keeps its wall clock.** It no longer converts into the machine's time
-  zone. NodaTime values in a non-ISO calendar are rejected on write
-  ([ISO 8601](#write-temporal-text-as-strict-iso-8601), [JSON](#check-three-changes-to-json-converters)).
-- **Temporal constants and JSON-column values reach the database truncated to the microsecond**, as a
-  parameter always did ([details](#temporal-values-reach-the-database-truncated-to-the-microsecond)).
-
-### Check JSON payloads if you never called `AddRangeConverters()`
-
-If you already call `AddRangeConverters()`, or register `RangeJsonConverterFactory`, your JSON does
-not change, and you can keep the call. Every range type, each of its kinds of range,
-`RangeSet<TRange, T>` and every value set now carries its own converter.
-
-If you did not, your JSON changes from a property dump to the literal:
-
-| Type | 8.x without registration | 9.0 |
-|---|---|---|
-| `DateRange` | `{"Length":181}` | `"[2026-01-01,2026-06-30]"` |
-| range through `object` | `{"Start":…,"End":…,"StartInclusive":true,…}` | the literal |
-| `RangeSet<Int32Range, int>` | `[{"Length":5}]` | `"{[1,5]}"` |
-| `StringSet` | `{"Values":["a","b"],"Count":2,"IsEmpty":false}` | `["a","b"]` |
-
-To keep an old shape for a property, put your own `[JsonConverter]` on it, or register one on the
-options. Both take precedence over the type's attribute.
-
-None of the old forms could be read back. So only code that writes and never reads can depend on
-them, such as a client reading `Length` from a response, or a stored document nobody deserializes.
-
-### Parse culture-formatted text yourself
-
-If you parsed culture-specific text, such as `[01.01.2025,31.03.2025]` with `de-DE`, parse the bounds
-yourself and pass them to the factories:
-
-```csharp
-var de    = CultureInfo.GetCultureInfo("de-DE");
-var range = DateRange.CreateFinite(DateOnly.Parse("01.01.2025", de), DateOnly.Parse("31.03.2025", de));
-```
-
-`Parse(s, provider)` and `TryParse(s, provider, …)` now read the invariant literal and ignore the
-provider. `ToString(null, provider)` always writes the invariant literal. So do
-`ToString("", provider)`, string interpolation and `string.Format`. A provider still applies when you
-pass an explicit, non-empty format string.
-
-Before, the provider reached each bound:
-
-- **`DateRange.Parse(s, th-TH)`** was 543 years early.
-- **`DecimalRange.Parse("[1.5,2.5)", de-DE)`** was `[15,25)`.
-- **`$"{decimalRange}"` under `de-DE`** wrote `[1,5,2)`, which parsed back as `[1,52)`.
-
-Good to know:
-
-- **Decimal bounds now parse with PostgreSQL's `numeric` grammar.** `"1,000"`, `"(5)"` and currency
-  symbols throw `FormatException`. Before, they parsed as 1000, −5 and 5.
-- **The wrapper sets follow the same grammar.** `DecimalSet<T>` and the integer ones read the element
-  text with the plain type's grammar before your element's `Parse` sees it. So a generated `Parse`
-  that accepts group separators no longer turns `{"1,5"}` into fifteen.
-- **`DecimalSet<T>` now reads exponent notation** (`{1e3}`, or a JSON `1.5e1`), as `DecimalSet` does.
-
-### Write temporal text as strict ISO 8601
-
-Write every temporal bound and element as ISO 8601, the way this library and PostgreSQL write it.
-This applies to `Parse`, `TryParse`, JSON, the `TypeConverter` and configuration binding. The BCL
-parser used before read whatever the invariant culture could, month first. These inputs now throw
-`FormatException`:
-
-| Input | Was read as | Write instead |
-|---|---|---|
-| `01.02.2027`, `01/02/2027`, `Feb 1 2027` | January 2 | `2027-02-01` |
-| `2027-02-01` for a `DateTime` or `DateTimeOffset` | midnight | `2027-02-01T00:00` |
-| a `DateTimeOffset` without an offset | the parsing machine's offset | append `Z` or the offset |
-| `9:30 AM`, `9:30` | 09:30 | `09:30` |
-| the same forms as JSON elements of a `DateTimeOffsetSet`, `DateTimeSet` or `TimeSet` | as above — System.Text.Json's converter read the offset-less ones in the machine's offset | as above, or register a converter for the element type |
-
-**If a payload carries offsets because it means instants, use `DateTimeOffsetRange` (`tstzrange`).**
-Or convert explicitly with `ToUniversalTime()` before you build a `DateTimeRange`.
-
-A `DateTime` bound or element with an offset, such as `2026-01-01T09:30+05:30`, now keeps the wall
-clock as written, with `DateTimeKind.Local`. That is what PostgreSQL's `timestamp` input does. It
-used to be converted into the parsing machine's time zone: 05:00 in Berlin, 04:00 on a UTC server.
-A `tsrange` stores that wall clock. Offsets are `±HH`, `±HH:mm` or `±HH:mm:ss`. `+0530` and `+5:30`
-are rejected.
-
-Good to know:
-
-- **These forms are accepted:** `HH:mm` without seconds, PostgreSQL's space-separated output, any
-  number of fraction digits (truncated to 100 ns), and `infinity` / `-infinity`.
-- **An empty or blank bound is no longer infinite.** A bound that is a quoted `""` or only
-  whitespace, such as `["",5)` or `( , )`, now throws `FormatException`, as in PostgreSQL. Only an
-  absent bound, as in `(,5)`, is infinite.
-- **A backslash outside quotes escapes the next character**, in a range bound and in an array element
-  alike, as in PostgreSQL. `StringSet.Parse(@"{a\,b}")` is the one element `a,b`. It used to be the
-  two elements `a\` and `b`.
-- **An array literal that PostgreSQL rejects, or reads as multi-dimensional, throws
-  `FormatException`.** Examples are `{{a,b}}`, `{a}b}` and `{a"b}`. `{{a,b}}` used to be the set
-  `{"{a","b}"}`.
-- **Only ASCII whitespace is skipped** around elements and bounds. A no-break space is now kept as
-  element text, and rejected inside a range bound. It used to be trimmed.
-- **The temporal wrapper sets read the text as their plain type first.** So a lenient generated
-  element `Parse` no longer sees non-ISO text. An element that ignores the format specifier now
-  fails on read, instead of silently truncating.
-- **The NodaTime types were already strict, and now also accept `HH:mm`** wherever the BCL types do:
-  a `LocalTime`, the time part of a `LocalDateTime`, and an `Instant` written with its offset or `Z`.
-  So `LocalTimeSet.Parse("{09:00}")` reads like `TimeRange.Parse("[09:00,17:00)")` instead of
-  throwing.
-
-### Temporal values reach the database truncated to the microsecond
-
-The EF Core package now writes a temporal SQL constant, and a temporal value inside a JSON column, as
-the value Npgsql would bind. That is the value truncated to the microsecond toward 2000-01-01, with
-the extremes written as `-infinity` / `infinity`. A constant used to carry seven fraction digits,
-which the server rounded. So it could miss the row that a parameter matched.
-
-If you need to `ExecuteUpdate` a value set inside a JSON column, set the whole complex property that
-contains the set instead. Updating the value set itself now throws, however the setter reaches the
-property. It would have written a document that the row could no longer be loaded from.
-
-Good to know:
-
-- **Elements less than a microsecond apart are stored as one.** A temporal set with such elements is
-  now stored with one of them. The column could only ever hold one value, and the stored array's
-  `cardinality` disagreed with the set's `Count`.
-
-### Rewrite the remaining queries over a database-computed `Union`
-
-If a query uses a value set `Union` computed in the database in one of these ways, rewrite it. Use
-`IsSubsetOf` and `IsSupersetOf` together for set equality, or load the rows first. These queries now
-throw `InvalidOperationException`, and the message names the fix:
-
-```csharp
-db.Rows.Select(r => r.Tags.Union(x) == target);                    // was: false where memory says true
-db.Rows.Where(r => (r.Id > 0 ? r.Tags.Union(x) : r.Tags) == target); // and the ?? form: was 0 rows
-db.Rows.GroupBy(r => r.Tags.Union(x));                             // was: one group per operand order
-db.Rows.Select(r => r.Tags.Union(x)).Distinct();                   // was: duplicates kept
-db.Rows.OrderBy(r => r.Tags.Union(x));
-db.Rows.Where(r => (r.OptionalTags ?? r.Tags.Union(x)).Count == 3); // was: duplicates counted
-db.Rows.ExecuteUpdate(s => s.SetProperty(r => r.Tags, r => r.Tags.Union(x)));  // was: stored {a,c,a,b}
-```
-
-**A query that ran into one of these was already returning wrong rows.** `Union` runs in the
-database as `array_cat`, a concatenation. 8.0 rejected `==`/`Equals` over it in predicates, and
-`Count` over a bare union. Everything else ran and returned a different result from memory.
-
-These keep working: projecting the union itself, and combining it with `Contains`, `Overlaps`, the
-subset/superset family, `Remove` and `IsEmpty`.
-
-**If you ran an `ExecuteUpdate` of a union**, the rows it wrote compare and count wrongly on the
-server until they are rewritten. Load them and save them through `SaveChanges` to make them
-deduplicated and sorted again.
-
-**If you replace `IRelationalParameterBasedSqlProcessorFactory`** after `UseValueRanges()`, wrap the
-registered factory instead. This applies whether you use `ReplaceService` or another library does it.
-Otherwise every query with a `Union` that runs in the database now fails with
-`function valueranges_union_without_sql_guard(…) does not exist`. The check runs from that service,
-and a translated `Union` only becomes `array_cat` once the check has run.
-
-### Check three changes to JSON converters
-
-These change which converter writes a value, and which properties get one:
-
-- **A converter you register on the options for a range type now also handles its kinds of range.**
-  Before, a range serialized through `object`, an `object` collection, or a property typed as one kind
-  of range skipped your converter and wrote the literal. Now it goes through your converter, so one
-  payload no longer mixes two JSON forms. If you relied on the mixed form, declare those properties as
-  a type your converter does not handle.
-- **A property declared as `IRange<T>`, a shape interface or `IValueSet<T>`** now writes the literal
-  (or array) of its runtime type. It used to write `{}` or a property dump. Reading one still cannot
-  work, because the concrete type is unknown, and now throws `NotSupportedException`. Declare the
-  concrete type instead.
-- **NodaTime: convert non-ISO values with `WithCalendar(CalendarSystem.Iso)` before you write them.** A
-  bare `LocalDate`, `LocalDateTime` or `YearMonth` in a non-ISO calendar is now rejected on write
-  (`ArgumentException`). Before, it was written in its own calendar's fields and read back days off.
-  The same holds for an element of `LocalDateSet<T>`, `LocalDateTimeSet<T>` or `YearMonthSet<T>`, in
-  memory and through EF Core. Also, `AddNodaTimeRangeConverters()` no longer takes precedence over
-  `ConfigureForNodaTime` when you register it first.
-
-### Ranges can be dictionary keys
-
-`Dictionary<DateRange, …>` used to throw `NotSupportedException`. It now writes the literal as the
-property name. Nothing to change, unless you caught that exception.
-
-### Things that start working
-
-No edit is needed. They are listed so you can remove a workaround:
-
-- **Configuration binding** of a range, multirange or value set property from its literal used to bind
-  `null`, with no error. Every type now carries a `TypeConverter`, so the property binds.
-- **A range, multirange or value set inside an EF Core `ToJson()` column** could not be saved.
-  `SaveChanges` threw `NullReferenceException` from inside EF Core. Now the value is stored as the
-  literal, and queries into the document run in the database.
-- **Native AOT.** `RangeSet` and the wrapper sets failed with "missing native code". The core and
-  NodaTime packages now build with `IsAotCompatible`. Your project needs only the source-generated
-  JSON context that AOT always needs.

@@ -29,6 +29,26 @@ public sealed class ChangelogConventionTests
         [RepoLayout.RootChangelog, .. RepoLayout.PackableProjects.Select(ChangelogOf)];
 
     /// <summary>
+    /// <c>docs/migration.md</c> files its sections by the major a reader migrates from, oldest first, so
+    /// the newest is always last. The 10.0.0 work filed "Migration from v9.x" above v8.x, and a reader
+    /// coming from 8.x scrolled past it (#201).
+    /// </summary>
+    [TestMethod]
+    public void MigrationSections_RunFromTheOldestMajorToTheNewest()
+    {
+        var migration = File.ReadAllText(Path.Combine(RepoLayout.Root.FullName, "docs", "migration.md"));
+        var majors    = Regex.Matches(migration, @"^## Migration from v(?<major>\d+)\.x", RegexOptions.Multiline)
+                             .Select(match => int.Parse(match.Groups["major"].Value, System.Globalization.CultureInfo.InvariantCulture))
+                             .ToList();
+
+        Assert.IsGreaterThan(1, majors.Count, "docs/migration.md has no 'Migration from vN.x' sections.");
+        CollectionAssert.AreEqual(
+            majors.Order().ToList(), majors,
+            $"docs/migration.md files its sections out of order ({string.Join(", ", majors.Select(major => $"v{major}.x"))}). "
+          + "They run from the oldest major a reader migrates from to the newest, so the newest is last.");
+    }
+
+    /// <summary>
     /// Matches a floating heading like <c>## [Unreleased]</c>: any bracketed heading that is not a
     /// version, a preview's included.
     /// </summary>
