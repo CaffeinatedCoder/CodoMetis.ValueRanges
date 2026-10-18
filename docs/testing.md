@@ -349,13 +349,17 @@ disagreements are candidates in `candidates.json`: #141 (wrapper JSON reads acce
 primitive refuses) and #109 (`IsUnboundedStart`/`IsUnboundedEnd` on `(,)`), found again here between
 a range and its own multirange.
 
-**The `Parse(string)` trap.** In generic code constrained on `IRangeFactory` or `IValueSetFactory`,
-`TSet.Parse(text, provider)` with a `string` argument calls the *span* overload. Both interfaces derive
-from `ISpanParsable<TSelf>`. Overload resolution drops the base interface's `IParsable<TSelf>`
-candidate whenever the derived interface's span candidate applies, and the implicit string-to-span
-conversion makes it apply. So a sweep that means to compare the two overloads compares the span one
-with itself. Call the string overloads through `StringOverloads` (constrained on `IParsable<TSelf>`
-alone). The parity sweeps do this, and their `TryParse` seed was missed until they did.
+**The `Parse(string)` trap.** In generic code constrained on `IRangeFactory`, `IValueSetFactory` or
+`ISpanParsable<TSelf>` itself, `TSet.Parse(text, provider)` with a `string` argument calls the *span*
+overload. Overload resolution drops the base interface's `IParsable<TSelf>` candidate whenever the
+derived interface's span candidate applies, and the implicit string-to-span conversion makes it apply.
+So a sweep that means to compare the two overloads compares the span one with itself. Until #142, 33
+calls in ten test classes did this, so no generic sweep ever called a type's string `Parse` or `TryParse`.
+Call the string overloads through `StringOverloads` (`test/oracles/StringOverloads.cs`, linked like
+`Candidates.cs`, constrained on `IParsable<TSelf>` alone). `StringOverloadConventionTests` binds every
+`Parse`/`TryParse` call in every test project with Roslyn and fails on one that reaches
+`ISpanParsable`'s span overload with a string. The seed `string-parse-localizes-decimal-separator`
+breaks only `DecimalRange.Parse(string)`, and the literal sweeps missed it until #142.
 
 ### Shape-Combination Matrix
 

@@ -181,7 +181,7 @@ public sealed class LiteralEntryPointParityTests
         var label  = $"RangeSet<{typeof(TRange).Name}>";
         var checks = 0;
 
-        var ranges = RangeLiterals<TRange, T>().Where(literal => TRange.TryParse(literal, CultureInfo.InvariantCulture, out _))
+        var ranges = RangeLiterals<TRange, T>().Where(literal => StringOverloads.TryParse<TRange>(literal, CultureInfo.InvariantCulture, out _))
                                                 .Select(literal => literal.Trim())
                                                 .Distinct()
                                                 .ToList();

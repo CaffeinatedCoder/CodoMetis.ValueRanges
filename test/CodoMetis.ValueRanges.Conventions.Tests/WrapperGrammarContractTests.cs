@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using NodaTime;
+using CodoMetis.ValueRanges.Oracles;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
@@ -155,11 +156,11 @@ public sealed class WrapperGrammarContractTests
         foreach (var text in texts)
         {
             var literal  = $"{{\"{text.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"}}";
-            var expected = Outcome(() => TPrimitiveSet.Parse(literal, CultureInfo.InvariantCulture));
+            var expected = Outcome(() => StringOverloads.Parse<TPrimitiveSet>(literal, CultureInfo.InvariantCulture));
 
-            Compare("Parse", Outcome(() => TWrapperSet.Parse(literal, CultureInfo.InvariantCulture)));
+            Compare("Parse", Outcome(() => StringOverloads.Parse<TWrapperSet>(literal, CultureInfo.InvariantCulture)));
             Compare("Parse(span)", Outcome(() => TWrapperSet.Parse(literal.AsSpan(), CultureInfo.InvariantCulture)));
-            Compare("TryParse", TWrapperSet.TryParse(literal, CultureInfo.InvariantCulture, out var tried)
+            Compare("TryParse", StringOverloads.TryParse<TWrapperSet>(literal, CultureInfo.InvariantCulture, out var tried)
                                     ? tried.ToString(null, CultureInfo.InvariantCulture)
                                     : Refused);
             Compare("TypeConverter", Outcome(() => (TWrapperSet)TypeDescriptor.GetConverter(typeof(TWrapperSet))

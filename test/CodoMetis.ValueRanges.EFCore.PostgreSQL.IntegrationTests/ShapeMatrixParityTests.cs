@@ -1,6 +1,7 @@
 using System.Globalization;
 using CodoMetis.ValueRanges.Core;
 using Npgsql;
+using CodoMetis.ValueRanges.Oracles;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -329,7 +330,7 @@ public sealed class ShapeMatrixParityTests
             {
                 asModel = isSet
                               ? RangeSet<TRange, T>.Parse(text, CultureInfo.InvariantCulture).ToString()
-                              : Literal(TRange.Parse(text, CultureInfo.InvariantCulture)!);
+                              : Literal(StringOverloads.Parse<TRange>(text, CultureInfo.InvariantCulture)!);
             }
             catch (Exception exception)
             {

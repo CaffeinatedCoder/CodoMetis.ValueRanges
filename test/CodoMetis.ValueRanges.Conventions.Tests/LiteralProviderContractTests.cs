@@ -1,5 +1,6 @@
 using System.Globalization;
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Oracles;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
@@ -61,9 +62,9 @@ public sealed class LiteralProviderContractTests
                         $"{label} as RangeSet: ToString({Show(format)}, {provider.Name}) is not the invariant literal.");
                 }
 
-                Assert.AreEqual(range, TRange.Parse(literal, provider),
+                Assert.AreEqual(range, StringOverloads.Parse<TRange>(literal, provider),
                     $"{label}: Parse(literal, {provider.Name}) read a different range.");
-                Assert.IsTrue(TRange.TryParse(literal, provider, out var tried) && Equals(tried, range),
+                Assert.IsTrue(StringOverloads.TryParse<TRange>(literal, provider, out var tried) && Equals(tried, range),
                     $"{label}: TryParse(literal, {provider.Name}) read a different range.");
                 Assert.AreEqual(range, TRange.Parse(literal.AsSpan(), provider),
                     $"{label}: Parse(span, {provider.Name}) read a different range.");
@@ -96,7 +97,7 @@ public sealed class LiteralProviderContractTests
                     $"{typeof(TSet).Name}: ToString({Show(format)}, {provider.Name}) is not the invariant literal.");
             }
 
-            Assert.AreEqual(set, TSet.Parse(literal, provider),
+            Assert.AreEqual(set, StringOverloads.Parse<TSet>(literal, provider),
                 $"{typeof(TSet).Name}: Parse(literal, {provider.Name}) read a different set.");
         }
     }
