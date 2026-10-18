@@ -127,43 +127,50 @@ internal static class SetFormat
     }
 
     /// <summary>
-    /// Whether the literal is empty arrays nested to one depth, <c>{{}}</c> or <c>{{},{}}</c>, which
-    /// PostgreSQL 17 and later read as the empty array <c>{}</c> (PostgreSQL 16 refuses them). Mixed
-    /// depths, <c>{{},{{}}}</c>, and any element make it a multi-dimensional literal instead.
+    /// Whether the literal is a rectangular nest of empty arrays, <c>{{}}</c>, <c>{{},{}}</c> or
+    /// <c>{{{},{}},{{},{}}}</c>, which PostgreSQL 17 and later read as the empty array <c>{}</c>
+    /// (PostgreSQL 16 refuses them). Every sibling must have the same shape, the same count at every level
+    /// below it, not only the same depth: <c>{{{},{}},{{}}}</c> is refused by every version, and until
+    /// #231 it read as <c>{}</c> here. Mixed depths, <c>{{},{{}}}</c>, and any element make it a
+    /// multi-dimensional literal instead.
     /// </summary>
     private static bool IsNestOfEmptyArrays(ReadOnlySpan<char> s)
     {
         var position = 0;
-        return Depth(s, ref position) > 1 && position == s.Length;
+        return Shape(s, ref position) is { } shape && shape.Contains(',') && position == s.Length;
 
-        static int Depth(ReadOnlySpan<char> s, ref int position)
+        // The nest's shape as a signature, "0" for {} and "n×child" for n siblings of one shape, or null
+        // when it is not a rectangular nest of empty arrays.
+        static string? Shape(ReadOnlySpan<char> s, ref int position)
         {
-            if (position == s.Length || s[position] != '{') return -1;
+            if (position == s.Length || s[position] != '{') return null;
             position++;
             Skip(s, ref position);
             if (position < s.Length && s[position] == '}')
             {
                 position++;
-                return 1;
+                return "0";
             }
 
-            var depth = Depth(s, ref position);
-            while (depth > 0)
+            var child = Shape(s, ref position);
+            var count = 1;
+            while (child is not null)
             {
                 Skip(s, ref position);
-                if (position == s.Length) return -1;
+                if (position == s.Length) return null;
                 if (s[position] == '}')
                 {
                     position++;
-                    return depth + 1;
+                    return $"{count},{child}";
                 }
 
-                if (s[position++] != ',') return -1;
+                if (s[position++] != ',') return null;
                 Skip(s, ref position);
-                if (Depth(s, ref position) != depth) return -1;
+                if (Shape(s, ref position) != child) return null;
+                count++;
             }
 
-            return -1;
+            return null;
         }
 
         static void Skip(ReadOnlySpan<char> s, ref int position)
