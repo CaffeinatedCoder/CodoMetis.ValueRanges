@@ -37,14 +37,13 @@ public sealed class JsonDefaultContractTests
     [TestMethod]
     public void Discovery_FindsEveryRangeAndSetType()
     {
-        // 7 core + 4 NodaTime ranges; 10 core + 5 NodaTime set families, each in two arities.
-        const int knownRangeTypes = 11;
-        const int knownSetTypes   = 30;
+        // The ranges against the census, which counts them without the interface discovery reads;
+        // 10 core + 5 NodaTime set families, each in two arities.
+        const int knownSetTypes = 30;
 
-        var ranges = RangeProbes.AllRangeTypes().Count();
-        var sets   = SetProbes.AllSetTypes().Count();
+        RangeCensus.AssertReachedEveryUnion(RangeProbes.AllRangeTypes().Select(pair => pair.Range), "Range discovery");
 
-        Assert.IsTrue(ranges >= knownRangeTypes, $"Range discovery found {ranges}, fewer than {knownRangeTypes}.");
+        var sets = SetProbes.AllSetTypes().Count();
         Assert.IsTrue(sets >= knownSetTypes, $"Set discovery found {sets}, fewer than {knownSetTypes}.");
     }
 
