@@ -27,6 +27,18 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     }
 
     /// <summary>
+    /// The copy constructor a <c>with</c> expression on a variant chains to.
+    /// </summary>
+    /// <remarks>
+    /// A record's copy constructor cannot be private, so this check, not the private constructor
+    /// above, is what keeps the union closed: a type declared outside the nested variants is
+    /// refused here, before it can reach a switch.
+    /// </remarks>
+    /// <param name="original">The variant being copied.</param>
+    /// <exception cref="InvalidOperationException">The runtime type is not one of the nested variants.</exception>
+    protected Int64Range(Int64Range original) => ClosedUnion.Require(this);
+
+    /// <summary>
     /// Represents an empty <see cref="Int64Range"/> that contains no values.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, Int64Range, long>))]

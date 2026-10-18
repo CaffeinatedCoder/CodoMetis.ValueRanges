@@ -2669,6 +2669,23 @@
     ]
   },
   {
+    "id": "R32-union-closed-at-construction",
+    "source": "docs/ranges.md#why-the-discard-arm-must-throw",
+    "quote": "The five shapes are the only ranges that can exist. A record derived from a range type compiles, because C# gives every record a protected copy constructor, but the first `new` of it throws (`InvalidOperationException`). Only the five variants nested in the type can be constructed.",
+    "claim": "For every range union, constructing a type derived from it outside the union — chaining to the copy constructor as a derived record does — throws InvalidOperationException naming the union, while a `with` on each of the five variants still yields an equal value of the same variant.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Empty",
+      "*Range.Infinite",
+      "*Range.CreateFinite",
+      "*Range.CreateUnboundedStart",
+      "*Range.CreateUnboundedEnd"
+    ],
+    "heldBy": [
+      "ClosedUnionContractTests"
+    ]
+  },
+  {
     "id": "S01-canonical-set",
     "source": "docs/value-sets.md#value-sets",
     "quote": "Every set is immutable and deduplicated, sorted, and free of nulls.",

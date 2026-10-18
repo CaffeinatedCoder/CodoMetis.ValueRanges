@@ -87,9 +87,10 @@ A continuous type has no two-value form, on purpose. If you passed only the boun
 
 ### Why the discard arm must throw
 
-The five shapes are the only ranges that can exist. The abstract base record has a private
-constructor, so no code outside the assembly can declare another subtype. Your five arms are
-complete in fact, and the discard arm can never run.
+The five shapes are the only ranges that can exist. A record derived from a range type compiles,
+because C# gives every record a protected copy constructor, but the first `new` of it throws
+(`InvalidOperationException`). Only the five variants nested in the type can be constructed. Your
+five arms are complete in fact, and the discard arm can never run.
 
 C# can't prove that, though. Its exhaustiveness check doesn't reason about a closed class
 hierarchy. So a switch *expression* over the shapes warns `CS8509` unless it has a discard arm.
