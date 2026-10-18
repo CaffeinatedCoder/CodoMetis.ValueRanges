@@ -80,7 +80,9 @@ Each method becomes one PostgreSQL operator or function call:
   calls inside a guard. As in memory, a start after the end gives you an empty range.
 
 Since v4 the eight predicates above (`Contains` through `IsAdjacentTo`) also work on a `RangeSet`,
-with either a range or a multirange on the other side.
+with either a range or a multirange on the other side. Since 10.0.0 they also work on a range with a
+multirange on the other side, as the operator with the range on the left
+(`b."Period" &< b."Blocked"`), and `RangeSet.IsContainedBy` runs as `<@`.
 
 ### Read bounds, merge ranges and aggregate
 
@@ -607,7 +609,7 @@ parameters:
 | | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |
 | | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
 | | `RangeAgg`, `RangeIntersectAgg` | `range_agg`, `range_intersect_agg` |
-| `RangeSet` | the same operations over multirange columns, plus `Complement` | the multirange forms, and `'{(,)}' - x` |
+| `RangeSet` | the same operations over multirange columns, plus `Complement` and `IsContainedBy` | the multirange forms, and `'{(,)}' - x` |
 | Value sets | `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, and the proper variants | `@>`, `&&`, `<@` |
 | | `Count`, `IsEmpty` | `cardinality` |
 | | `Union`, `Remove` | `array_cat`, `array_remove` |

@@ -190,6 +190,117 @@ public sealed class ShapeMatrixParityTests
         ]);
     }
 
+    // -------------------------------------------------------------------------
+    // A range on the left, a multirange on the right
+    // -------------------------------------------------------------------------
+
+    private static bool InMemory<TRange, T>(string predicate, TRange a, RangeSet<TRange, T> b)
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+        => predicate switch
+        {
+            "Contains"             => a.Contains(b),
+            "IsContainedBy"        => a.IsContainedBy(b),
+            "Overlaps"             => a.Overlaps(b),
+            "IsStrictlyLeftOf"     => a.IsStrictlyLeftOf(b),
+            "IsStrictlyRightOf"    => a.IsStrictlyRightOf(b),
+            "DoesNotExtendRightOf" => a.DoesNotExtendRightOf(b),
+            "DoesNotExtendLeftOf"  => a.DoesNotExtendLeftOf(b),
+            "IsAdjacentTo"         => a.IsAdjacentTo(b),
+            _                      => throw new ArgumentOutOfRangeException(nameof(predicate))
+        };
+
+    /// <summary>
+    /// The eight predicates with a range on the left and a multirange on the right
+    /// (<c>anyrange op anymultirange</c>), plus <c>RangeSet.IsContainedBy</c> against a range
+    /// (<c>anymultirange &lt;@ anyrange</c>), over every range shape and every set built from at
+    /// most two shapes — so every set has a first and a last element that differ.
+    /// </summary>
+    private static async Task AssertRangeSetMatrixAgrees<TRange, T>(
+        string rangeType,
+        string multirangeType,
+        (string Name, TRange Range)[] shapes
+    )
+        where TRange : IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        var sets = new List<(string Name, RangeSet<TRange, T> Set)> { ("{}", RangeSet<TRange, T>.Empty) };
+        for (var i = 0; i < shapes.Length; i++)
+        for (var j = i; j < shapes.Length; j++)
+            sets.Add(($"{{{shapes[i].Name} {shapes[j].Name}}}", RangeSet<TRange, T>.From([shapes[i].Range, shapes[j].Range])));
+
+        var cases = new List<(string Label, bool Expected)>();
+        var sql   = new List<string>();
+
+        foreach (var (rangeName, range) in shapes)
+        foreach (var (setName, set) in sets)
+        {
+            string a = $"'{Literal(range!)}'::{rangeType}", m = $"'{set}'::{multirangeType}";
+
+            foreach (var (predicate, @operator) in Predicates)
+            {
+                cases.Add(($"{predicate}: '{rangeName}' vs set '{setName}'", InMemory<TRange, T>(predicate, range, set)));
+                sql.Add($"({a} {@operator} {m})");
+            }
+
+            cases.Add(($"RangeSet.IsContainedBy: set '{setName}' vs '{rangeName}'", set.IsContainedBy(range)));
+            sql.Add($"({m} <@ {a})");
+        }
+
+        var server = await Evaluate(sql);
+
+        var disagreements = cases
+           .Select((c, index) => (c.Label, Model: c.Expected, Server: server[index]))
+           .Where(row => row.Model != row.Server)
+           .Select(row => $"{row.Label}: model={row.Model}, PostgreSQL={row.Server}")
+           .ToList();
+
+        Assert.AreEqual(
+            0, disagreements.Count,
+            $"{disagreements.Count} of {cases.Count} {rangeType} × {multirangeType} comparisons disagree with PostgreSQL:\n"
+          + string.Join("\n", disagreements));
+    }
+
+    [TestMethod]
+    public async Task Int32Range_EveryShapeAgainstEverySet_AgreesWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await AssertRangeSetMatrixAgrees<Int32Range, int>("int4range", "int4multirange",
+        [
+            ("empty",   Int32Range.Empty),
+            ("[1,5]",   Int32Range.CreateFinite(1, 5)),
+            ("[6,10]",  Int32Range.CreateFinite(6, 10)),
+            ("[3,8]",   Int32Range.CreateFinite(3, 8)),
+            ("[20,30]", Int32Range.CreateFinite(20, 30)),
+            ("(,0]",    Int32Range.CreateUnboundedStart(0)),
+            ("(,5]",    Int32Range.CreateUnboundedStart(5)),
+            ("[6,)",    Int32Range.CreateUnboundedEnd(6)),
+            ("[25,)",   Int32Range.CreateUnboundedEnd(25)),
+            ("(,)",     Int32Range.Infinite)
+        ]);
+    }
+
+    [TestMethod]
+    public async Task DateRange_EveryShapeAgainstEverySet_AgreesWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        DateOnly D(int month, int day) => new(2024, month, day);
+
+        await AssertRangeSetMatrixAgrees<DateRange, DateOnly>("daterange", "datemultirange",
+        [
+            ("empty",     DateRange.Empty),
+            ("[Jan,Mar]", DateRange.CreateFinite(D(1, 1), D(3, 31))),
+            ("[Apr,Jun]", DateRange.CreateFinite(D(4, 1), D(6, 30))),
+            ("[Mar,May]", DateRange.CreateFinite(D(3, 1), D(5, 31))),
+            ("[Nov,Dec]", DateRange.CreateFinite(D(11, 1), D(12, 31))),
+            ("(,Mar]",    DateRange.CreateUnboundedStart(D(3, 31))),
+            ("[Apr,)",    DateRange.CreateUnboundedEnd(D(4, 1))),
+            ("(,)",       DateRange.Infinite)
+        ]);
+    }
+
     /// <summary>
     /// The empty range is contained by every range and every set, itself included — ∅ ⊆ S holds
     /// vacuously, and it is what PostgreSQL's <c>@&gt;</c> answers. Asserted here across both

@@ -439,6 +439,31 @@ public sealed class RangeSet<TRange, T>
     }
 
     /// <summary>
+    /// Determines whether every value of the set is contained in <paramref name="other"/> — the
+    /// multirange <c>&lt;@</c> operator with a range on the right. Equivalent to
+    /// <c>other.Contains(this)</c>.
+    /// </summary>
+    /// <param name="other">The range that should contain the set.</param>
+    /// <returns>
+    /// <see langword="true"/> if every element lies inside <paramref name="other"/>; always
+    /// <see langword="true"/> for the empty set.
+    /// </returns>
+    public bool IsContainedBy(IRange<T> other) =>
+        // A range has no gaps, so it holds the set exactly when it holds the outermost elements.
+        _elements.IsEmpty || (other.Contains(_elements[0]) && other.Contains(_elements[^1]));
+
+    /// <summary>
+    /// Determines whether every value of the set is contained in <paramref name="other"/> — the
+    /// multirange <c>&lt;@</c> operator. Equivalent to <c>other.Contains(this)</c>.
+    /// </summary>
+    /// <param name="other">The set that should contain this set.</param>
+    /// <returns>
+    /// <see langword="true"/> if every element lies inside an element of <paramref name="other"/>;
+    /// always <see langword="true"/> for the empty set.
+    /// </returns>
+    public bool IsContainedBy(RangeSet<TRange, T> other) => other.Contains(this);
+
+    /// <summary>
     /// Determines whether <paramref name="range"/> shares at least one value with the set.
     /// </summary>
     /// <param name="range">The range to test.</param>

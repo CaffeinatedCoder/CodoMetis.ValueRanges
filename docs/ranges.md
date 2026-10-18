@@ -514,7 +514,7 @@ set.IsUnboundedEnd();    // false
 set.IsFinite();          // true  — non-empty and bounded at both ends
 set.IsInfinity();        // false — only the set covering the whole domain answers true
 
-// Set-operand comparisons — the full multirange operator matrix
+// Set-operand comparisons — with a range on the left too, see below
 set.Contains(IntSet.From([Int32Range.CreateFinite(2, 8)]));   // true   (@>)
 set.Overlaps(IntSet.From([Int32Range.CreateFinite(25, 40)])); // true   (&&)
 set.IsStrictlyLeftOf(Int32Range.CreateFinite(40, 50));        // true   (<<)
@@ -536,7 +536,8 @@ What the example shows:
 - **`Complement()`** returns every value the set does not cover.
 - **The state checks** match PostgreSQL's `isempty`, `lower_inf` and `upper_inf`. `IsFinite()`
   and `IsInfinity()` are the two derived shapes.
-- **The comparisons** also take a whole set, so you get the full multirange operator matrix.
+- **The comparisons** also take a whole set. With the range on either side, you get every range and
+  multirange operator PostgreSQL has ([Compare a range with a set](#compare-a-range-with-a-set)).
 
 ### Adjacency counts only at the outer edges
 
@@ -580,6 +581,40 @@ IntSet.Infinite.IsInfinity();  // true — the only set that covers everything
 
 Creating a set collapses any `Infinity` input to the one-element `Infinite` set. So that set is the
 only way to represent full coverage. That is what makes the check exact, both in memory and in SQL.
+
+### Compare a range with a set
+
+You can call the comparisons on a range and pass a set. Each one is the PostgreSQL operator with the
+range on the left:
+
+```csharp
+var blocked = IntSet.From([Int32Range.CreateFinite(3, 4), Int32Range.CreateFinite(8, 9)]);
+
+Int32Range.CreateFinite(1, 10).Contains(blocked);             // true   (@>)
+Int32Range.CreateFinite(8, 9).IsContainedBy(blocked);         // true   (<@)
+Int32Range.CreateFinite(5, 7).Overlaps(blocked);              // false  (&&) — 5 to 7 is a gap
+Int32Range.CreateFinite(1, 2).IsStrictlyLeftOf(blocked);      // true   (<<)
+Int32Range.CreateFinite(5, 7).DoesNotExtendRightOf(blocked);  // true   (&<) — 7 ≤ 9
+Int32Range.CreateFinite(5, 7).DoesNotExtendLeftOf(blocked);   // true   (&>) — 5 ≥ 3
+Int32Range.CreateFinite(10, 12).IsAdjacentTo(blocked);        // true   (-|-)
+
+blocked.IsContainedBy(Int32Range.CreateFinite(3, 9));         // true   (<@)
+blocked.IsContainedBy(blocked | Int32Range.CreateFinite(20, 30)); // true   (<@)
+```
+
+A range compares with a set through the set's outer elements. `IsStrictlyLeftOf` and
+`DoesNotExtendLeftOf` read the first element, and `IsStrictlyRightOf` and `DoesNotExtendRightOf`
+read the last. `Contains` is `true` when the range holds the first and the last element, and so
+everything between them.
+
+Good to know:
+
+- **`&<` and `&>` are not the set's methods turned around.** `range.DoesNotExtendRightOf(set)`
+  compares upper bounds, while `set.DoesNotExtendLeftOf(range)` compares lower bounds. So
+  `[4,5) &< {[3,9)}` is `true` and `{[3,9)} &> [4,5)` is `false`.
+- **An empty set is contained by every range**, the empty range included. With an empty set on
+  either side, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendLeftOf`,
+  `DoesNotExtendRightOf`, `Overlaps` and `IsAdjacentTo` return `false`.
 
 ### Build a set with a collection expression
 
