@@ -208,13 +208,14 @@ public sealed class GuidSet<TElement> :
 
     /// <summary>
     /// The JSON fallback for elements that carry no converter of their own: a JSON string holding
-    /// the same text form as <see cref="FormatValue"/>, so the wrapper serializes exactly like the
-    /// primitive it wraps and <see cref="ParseValue"/> re-runs its validation on the way in.
-    /// Consulted only when nothing else has claimed <typeparamref name="TElement"/> — see
+    /// the same text form as <see cref="FormatValue"/>, read as System.Text.Json reads a
+    /// <see cref="Guid"/> (the hyphenated form only), so the wrapper serializes and deserializes
+    /// exactly like the primitive it wraps and <see cref="ParseValue"/> re-runs its validation on
+    /// the way in. Consulted only when nothing else has claimed <typeparamref name="TElement"/> — see
     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
     /// </summary>
     static JsonConverter<TElement>? IValueSetFactory<GuidSet<TElement>, TElement>.ElementJsonConverter
-        => ValueSetTextElementJsonConverter<GuidSet<TElement>, TElement>.Instance;
+        => ValueSetGuidElementJsonConverter<GuidSet<TElement>, TElement>.Instance;
 
     /// <summary>
     /// Parses a PostgreSQL array literal into a <see cref="GuidSet{TElement}"/>, re-validating

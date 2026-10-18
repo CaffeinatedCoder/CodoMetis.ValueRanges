@@ -475,9 +475,10 @@ at all. So a converter you register by any of the three usual routes still wins.
 - **The five NodaTime sets define one too.**
 
 For the non-temporal families that makes the JSON byte for byte the same: `Int32Set<OrderId>` and
-`Int32Set` are indistinguishable. The temporal versions write the same value in slightly different
-text (seven fraction digits, and `+` escaped by the default encoder). See
-[value sets](value-sets.md#how-your-element-types-sort-and-serialize).
+`Int32Set` are indistinguishable, and they accept the same payloads: a quoted number only under
+`JsonNumberHandling.AllowReadingFromString`, a Guid only in its hyphenated form. The temporal
+versions write the same value in slightly different text (seven fraction digits, and `+` escaped
+by the default encoder). See [value sets](value-sets.md#how-your-element-types-sort-and-serialize).
 
 That fallback is why the NodaTime sets need no configuration:
 

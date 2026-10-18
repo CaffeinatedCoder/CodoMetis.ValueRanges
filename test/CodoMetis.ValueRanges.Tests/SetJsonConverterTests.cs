@@ -289,22 +289,31 @@ public class SetJsonConverterTests
     }
 
     /// <summary>
-    /// The string payload the writer now produces must read back, which it does through the
-    /// converters' unconditional string branch rather than through the option.
+    /// The string payload the writer produces reads back under
+    /// <see cref="JsonNumberHandling.AllowReadingFromString"/>, as the primitive sibling's does — and
+    /// under <see cref="JsonNumberHandling.WriteAsString"/> alone it is refused by both, as
+    /// System.Text.Json refuses a quoted <see cref="long"/> there. Until 10.0.0 the wrapper read it
+    /// through an unconditional string branch, so swapping the arity changed what the endpoint accepted (#141).
     /// </summary>
     [TestMethod]
-    public void WrapperSet_NumericBacked_RoundTripsUnderWriteAsString()
+    public void WrapperSet_NumericBacked_RoundTripsUnderWriteAsString_ExactlyAsItsPrimitiveDoes()
     {
-        var options = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString }
-                     .AddRangeConverters();
+        var writeOnly = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString }.AddRangeConverters();
+        var both      = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString }.AddRangeConverters();
 
         var longs = Int64Set<TestLongId>.From(new TestLongId(9_007_199_254_740_993L));
         var money = DecimalSet<TestMoney>.From(new TestMoney(12.50m));
+        var longsJson = JsonSerializer.Serialize(longs, writeOnly);
+        var moneyJson = JsonSerializer.Serialize(money, writeOnly);
 
-        Assert.AreEqual(longs, JsonSerializer.Deserialize<Int64Set<TestLongId>>(
-            JsonSerializer.Serialize(longs, options), options));
-        Assert.AreEqual(money, JsonSerializer.Deserialize<DecimalSet<TestMoney>>(
-            JsonSerializer.Serialize(money, options), options));
+        Assert.AreEqual(longs, JsonSerializer.Deserialize<Int64Set<TestLongId>>(longsJson, both));
+        Assert.AreEqual(money, JsonSerializer.Deserialize<DecimalSet<TestMoney>>(moneyJson, both));
+        Assert.AreEqual(Int64Set.From(9_007_199_254_740_993L), JsonSerializer.Deserialize<Int64Set>(longsJson, both));
+
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int64Set>(longsJson, writeOnly));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int64Set<TestLongId>>(longsJson, writeOnly));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<DecimalSet>(moneyJson, writeOnly));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<DecimalSet<TestMoney>>(moneyJson, writeOnly));
     }
 
     /// <summary>
@@ -328,11 +337,109 @@ public class SetJsonConverterTests
             JsonSerializer.Serialize(DateSet<TestDay>.From(new TestDay(new DateOnly(2024, 6, 15))), options));
     }
 
+    private static readonly JsonSerializerOptions ReadingFromString =
+        new JsonSerializerOptions { NumberHandling = JsonNumberHandling.AllowReadingFromString }.AddRangeConverters();
+
+    /// <summary>A quoted number is read under <c>AllowReadingFromString</c>, and refused without it, as for the primitive.</summary>
     [TestMethod]
-    public void WrapperSet_IntegerBacked_ReadsNumbersWrittenAsStrings()
-        => Assert.AreEqual(
+    public void WrapperSet_IntegerBacked_ReadsNumbersWrittenAsStrings_OnlyWhenTheOptionsAllowIt()
+    {
+        Assert.AreEqual(
             Int32Set<TestIntId>.From(new TestIntId(1), new TestIntId(3)),
-            JsonSerializer.Deserialize<Int32Set<TestIntId>>("[\"1\",\"3\"]", Options));
+            JsonSerializer.Deserialize<Int32Set<TestIntId>>("[\"1\",\"3\"]", ReadingFromString));
+
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int32Set>("[\"1\",\"3\"]", Options));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int32Set<TestIntId>>("[\"1\",\"3\"]", Options));
+    }
+
+    /// <summary>
+    /// Inside the quotes the grammar is System.Text.Json's for the primitive, not the array literal's:
+    /// a sign and digits for an integer; sign, digits, point and exponent for a decimal; never
+    /// whitespace. Each token reads, or throws, for the wrapper exactly as for its primitive (#141).
+    /// </summary>
+    [TestMethod]
+    [DataRow("\"7\"")]
+    [DataRow("\"+7\"")]
+    [DataRow("\"-7\"")]
+    [DataRow("\"007\"")]
+    [DataRow("\" 7 \"")]
+    [DataRow("\"7.0\"")]
+    [DataRow("\"1e2\"")]
+    [DataRow("\"\"")]
+    [DataRow("\"NaN\"")]
+    [DataRow("7.0")]
+    [DataRow("1e2")]
+    [DataRow("true")]
+    public void WrapperSet_IntegerBacked_ReadsEachTokenAsItsPrimitiveDoes(string token)
+    {
+        foreach (var options in new[] { Options, ReadingFromString })
+        {
+            Assert.AreEqual(
+                Outcome(() => JsonSerializer.Deserialize<Int32Set>($"[{token}]", options)!.ToString()),
+                Outcome(() => JsonSerializer.Deserialize<Int32Set<TestIntId>>($"[{token}]", options)!.ToString()),
+                $"{token} under NumberHandling={options.NumberHandling}");
+            Assert.AreEqual(
+                Outcome(() => JsonSerializer.Deserialize<Int16Set>($"[{token}]", options)!.ToString()),
+                Outcome(() => JsonSerializer.Deserialize<Int16Set<TestSmallId>>($"[{token}]", options)!.ToString()),
+                $"{token} under NumberHandling={options.NumberHandling}");
+        }
+    }
+
+    [TestMethod]
+    [DataRow("\"1.5\"")]
+    [DataRow("\"1.50\"")]
+    [DataRow("\"+1.5\"")]
+    [DataRow("\"1e2\"")]
+    [DataRow("\"1.5E+1\"")]
+    [DataRow("\".5\"")]
+    [DataRow("\" 1.5 \"")]
+    [DataRow("\"1,5\"")]
+    [DataRow("\"\"")]
+    [DataRow("1.50")]
+    [DataRow("true")]
+    public void WrapperSet_DecimalBacked_ReadsEachTokenAsItsPrimitiveDoes(string token)
+    {
+        foreach (var options in new[] { Options, ReadingFromString })
+        {
+            Assert.AreEqual(
+                Outcome(() => JsonSerializer.Deserialize<DecimalSet>($"[{token}]", options)!.ToString()),
+                Outcome(() => JsonSerializer.Deserialize<DecimalSet<TestMoney>>($"[{token}]", options)!.ToString()),
+                $"{token} under NumberHandling={options.NumberHandling}");
+        }
+    }
+
+    /// <summary>
+    /// A wrapper Guid reads what System.Text.Json reads for a <see cref="Guid"/>: the hyphenated form,
+    /// in either case, and nothing else — not the braces, the undashed form or the padding that the
+    /// array literal's <c>uuid_in</c> grammar or <c>Guid.Parse</c> would take.
+    /// </summary>
+    [TestMethod]
+    [DataRow("\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"")]
+    [DataRow("\"6F9619FF-8B86-D011-B42D-00C04FC964FF\"")]
+    [DataRow("\"{6f9619ff-8b86-d011-b42d-00c04fc964ff}\"")]
+    [DataRow("\"6f9619ff8b86d011b42d00c04fc964ff\"")]
+    [DataRow("\"6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff\"")]
+    [DataRow("\" 6f9619ff-8b86-d011-b42d-00c04fc964ff \"")]
+    [DataRow("\"(6f9619ff-8b86-d011-b42d-00c04fc964ff)\"")]
+    [DataRow("\"\"")]
+    [DataRow("7")]
+    public void WrapperSet_GuidBacked_ReadsEachTokenAsItsPrimitiveDoes(string token)
+        => Assert.AreEqual(
+            Outcome(() => JsonSerializer.Deserialize<GuidSet>($"[{token}]", Options)!.ToString()),
+            Outcome(() => JsonSerializer.Deserialize<GuidSet<TestId>>($"[{token}]", Options)!.ToString()),
+            token);
+
+    private static string Outcome(Func<string> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex)
+        {
+            return $"throws {ex.GetType().Name}";
+        }
+    }
 
     [TestMethod]
     public void WrapperSet_IntegerBacked_NonNumericToken_Throws()

@@ -1282,6 +1282,20 @@
     ]
   },
   {
+    "id": "J29-wrapper-reads-what-the-primitive-reads",
+    "source": "docs/value-sets.md#how-your-element-types-sort-and-serialize",
+    "quote": "Reading is the same too. A wrapper accepts exactly the payloads the plain set accepts:\n\n- **A quoted number** such as `[\"7\"]` is read only when the options set\n  `JsonNumberHandling.AllowReadingFromString`, as ASP.NET Core's web defaults do, and then with\n  System.Text.Json's grammar for the number: a sign and digits for an integer, sign, digits, point\n  and exponent for a decimal, never whitespace.\n- **A Guid** is the hyphenated form, in either case. Braces, the undashed form and padding fail.",
+    "claim": "For every JSON element token (a number, a quoted number with or without sign, padding, point or exponent, a Guid in the hyphenated, braced, undashed or padded form, an empty string, a mistyped token), Int16Set<T>, Int32Set<T>, Int64Set<T>, DecimalSet<T> and GuidSet<T> read the same value as, or throw the same exception type as, their primitive sibling, under the default options and under AllowReadingFromString.",
+    "oracle": "differential",
+    "surfaces": [
+      "IValueSetFactory.ElementJsonConverter"
+    ],
+    "heldBy": [
+      "SetJsonConverterTests",
+      "SetWrapperParityTests"
+    ]
+  },
+  {
     "id": "J29-wrapper-temporal-same-value-different-text",
     "source": "docs/value-sets.md#how-your-element-types-sort-and-serialize",
     "quote": "Each payload still reads into the other's type.",

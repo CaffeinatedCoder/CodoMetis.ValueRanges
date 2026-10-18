@@ -99,13 +99,6 @@
   },
   {
     "family": "core wrapper arities",
-    "unit": "DecimalSet<TElement>",
-    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
-    "kind": "lone body",
-    "reason": "a decimal-backed wrapper writes a JSON number keeping its scale, not a string (AGENTS.md, ElementJsonConverter); the integer arities have their own number converter and the rest write text"
-  },
-  {
-    "family": "core wrapper arities",
     "unit": "GuidSet<TElement>",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
