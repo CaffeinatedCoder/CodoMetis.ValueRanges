@@ -36,6 +36,18 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     {
     }
 
+    /// <summary>
+    /// The copy constructor a <c>with</c> expression on a variant chains to.
+    /// </summary>
+    /// <remarks>
+    /// A record's copy constructor cannot be private, so this check, not the private constructor
+    /// above, is what keeps the union closed: a type declared outside the nested variants is
+    /// refused here, before it can reach a switch.
+    /// </remarks>
+    /// <param name="original">The variant being copied.</param>
+    /// <exception cref="InvalidOperationException">The runtime type is not one of the nested variants.</exception>
+    protected LocalDateRange(LocalDateRange original) => ClosedUnion.Require(this);
+
     private static LocalDate ToIso(LocalDate value)
         => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso);
 
