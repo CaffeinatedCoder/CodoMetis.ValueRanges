@@ -1,0 +1,18 @@
+Seed: DateSet.ParseValue hands the element to the ISO grammar without the input-function trim its temporal siblings apply, so {" 2026-01-01"} throws for date[] alone where date_in reads it
+Oracles: CloneDivergenceTests, SetElementWhiteSpaceContractTests
+Fails: core value sets · DateSet · ParseValue: a lone body beside the TimeSet, DateTimeSet and DateTimeOffsetSet cluster, which no waiver explains; the strips rows of DateSet and its arity
+History: the shape of the 9.1.0 fix for #70, which reached the set elements in a second commit after the range bounds — one sibling fixed, the others not yet
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/DateSet.cs b/src/CodoMetis.ValueRanges/Sets/DateSet.cs
+index 6aa65b8..ffefc6b 100644
+--- a/src/CodoMetis.ValueRanges/Sets/DateSet.cs
++++ b/src/CodoMetis.ValueRanges/Sets/DateSet.cs
+@@ -71,7 +71,7 @@ public sealed class DateSet : IValueSet<DateOnly>, IValueSetFactory<DateSet, Dat
+     /// <remarks>Strict ISO 8601 — the forms this library writes and PostgreSQL's ISO output, plus
+     /// <c>infinity</c> / <c>-infinity</c> as the maximum / minimum value; the provider is ignored. A lenient parse read <c>01.02.2027</c> month first.</remarks>
+     public static DateOnly ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
+-        => IsoTemporal.ParseDate(LiteralWhiteSpace.TrimAsInputFunction(s));
++        => IsoTemporal.ParseDate(s);
+ 
+     /// <summary>Formats a <see cref="DateOnly"/> value using ISO 8601 (<c>yyyy-MM-dd</c>) by default.</summary>
+     public static string FormatValue(DateOnly value, string? format, IFormatProvider? provider)

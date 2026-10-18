@@ -1,11 +1,20 @@
 #:property PublishAot=false
 #:package Testcontainers.PostgreSql@4.16.0
 #:package Npgsql@10.0.0
+#:package Microsoft.CodeAnalysis.CSharp@5.9.0
 // The oracle machinery's local tool. Never part of CI; the convention tests hold the catalogue.
 //
 //   dotnet run tools/oracles.cs seeds [name filter]   prove that every seed is caught
 //   dotnet run tools/oracles.cs status                the catalogue's worklist
 //   dotnet run tools/oracles.cs pg-surface [image]    regenerate test/oracles/postgres-surface.catalog.txt
+//   dotnet run tools/oracles.cs clones [filter]       the clone-divergence sweep over the hand-copied families
+//
+// `clones`: every hand-copied type family under src/ (test/oracles/CloneSweep.cs, compiled in through
+// tools/Directory.Build.props and linked into the conventions tests), each sibling normalized and compared
+// with the family's consensus. One block per divergence — WAIVED with its reason from clone-waivers.json,
+// or UNWAIVED with the JSON line to paste once understood — then the stale waivers, then the counts.
+// Exit code 1 if anything is unwaived or stale, which is what CloneDivergenceTests fails on in CI. The
+// filter matches the family or the unit name.
 //
 // `seeds`: for each test/oracles/seeds/<defect>.patch, a scratch copy of the working tree (bin/, obj/
 // and .git/ left out, so uncommitted work is included) under the OS temp directory, the patch applied,
@@ -34,13 +43,46 @@ return command switch
     "seeds"      => Seeds(args.Length > 1 ? args[1] : ""),
     "status"     => Status(),
     "pg-surface" => PgSurface(args.Length > 1 ? args[1] : "postgres:18-alpine"),
+    "clones"     => Clones(args.Length > 1 ? args[1] : ""),
     _            => Usage()
 };
 
 int Usage()
 {
-    Console.Error.WriteLine("usage: dotnet run tools/oracles.cs seeds [filter] | status | pg-surface [image]");
+    Console.Error.WriteLine("usage: dotnet run tools/oracles.cs seeds [filter] | status | pg-surface [image] | clones [filter]");
     return 2;
+}
+
+int Clones(string filter)
+{
+    var families    = CodoMetis.ValueRanges.Oracles.CloneSweep.DiscoverFamilies(root);
+    var waivers     = CodoMetis.ValueRanges.Oracles.CloneSweep.LoadWaivers(root);
+    var divergences = families.SelectMany(CodoMetis.ValueRanges.Oracles.CloneSweep.Compare).ToList();
+    var shown       = divergences.Where(d => d.Family.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                                          || d.Unit.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    foreach (var family in families)
+    {
+        var count = shown.Count(d => d.Family == family.Name);
+        if (filter.Length > 0 && count == 0 && !family.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
+        Console.WriteLine($"## {family.Name}: {family.Units.Count} siblings ({string.Join(", ", family.Units.Select(u => u.Name))}), {count} divergence(s)");
+        foreach (var d in shown.Where(d => d.Family == family.Name))
+        {
+            var waiver = waivers.FirstOrDefault(w => w.Matches(d));
+            Console.WriteLine($"  {(waiver is null ? "UNWAIVED" : "WAIVED  ")} {d.Unit} · {d.Member} · {d.Kind}");
+            Console.WriteLine($"           {d.Detail}");
+            Console.WriteLine(waiver is null ? $"           {d.WaiverJson}" : $"           reason: {waiver.Reason}");
+        }
+        Console.WriteLine();
+    }
+
+    var stale = waivers.Where(w => !divergences.Any(w.Matches)).ToList();
+    foreach (var w in stale)
+        Console.WriteLine($"STALE WAIVER {w.Key}: no divergence matches it any more — remove the entry");
+
+    var unwaived = divergences.Count(d => !waivers.Any(w => w.Matches(d)));
+    Console.WriteLine($"{divergences.Count} divergence(s) in {families.Count} families: {divergences.Count - unwaived} waived, {unwaived} unwaived, {stale.Count} stale waiver(s)");
+    return unwaived == 0 && stale.Count == 0 ? 0 : 1;
 }
 
 int Seeds(string filter)
