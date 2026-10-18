@@ -2531,5 +2531,20 @@
       "SqlLiteralTests",
       "DecorativeElementContractTests"
     ]
+  },
+  {
+    "id": "S20-array-dimension-decoration",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "The decoration must count the elements as written, duplicates included, or the parse fails (`FormatException`), as it does on the server.",
+    "claim": "Every value set type reads array_in's one-dimension decoration ([l:u]= or [u]=) and drops it, accepts and rejects the same decorated text as PostgreSQL 16 and 18, and reads empty arrays nested to one depth ({{}}, {{},{}}) as empty, as PostgreSQL 17 and 18 do.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetDimensionDecorationTests",
+      "LiteralCorpusProbeTests"
+    ]
   }
 ]

@@ -722,6 +722,17 @@ public sealed class LiteralCorpusProbeTests
             yield return ("dimensions", literal);
         foreach (var literal in new[] { $"[1:1]={{{a}}}", $"[0:1]={{{a},{b}}}", $"[1:2]={{{a}}}", "{{}}", "{{},{}}" })
             yield return ("dimension decoration", literal);
+        // array_in's decoration at its edges (#128), measured on PostgreSQL 16 and 18: bounds as signed
+        // decimal int4 with upper + 1 representable, the count as written (duplicates included), and
+        // empty arrays nested to one depth, which 17 and later read as {} (16 refuses them).
+        foreach (var literal in new[] { $"[-5:-4]={{{a},{b}}}", $"[1]={{{a}}}", $"[+1:+1]={{{a}}}", $"[01:01]={{{a}}}", $" [1:1] = {{{a}}}",
+                                        $"[1:2]={{{a},{a}}}", $"[2147483646:2147483646]={{{a}}}", "{ {} }", "{{{},{}}}", "{{{}},{{}}}" })
+            yield return ("dimension decoration", literal);
+        foreach (var literal in new[] { $"[2]={{{a}}}", $"[1:1]={{{a},{a}}}", "[1:0]={}", "[1:1]={}", "[1:1]={{}}", $"[ 1:1]={{{a}}}",
+                                        $"[2147483647:2147483647]={{{a}}}", $"[-2147483649:-2147483649]={{{a}}}", $"[0x1:0x1]={{{a}}}",
+                                        $"[1:1]=={{{a}}}", $"[1:1]{{{a}}}", $"[:1]={{{a}}}", $"[]={{{a}}}", $"[1:1]={{{a}}}x", $"[1:1]=\u00A0{{{a}}}",
+                                        "{{},{{}}}", "{{},}", $"{{{{}},{{{a}}}}}" })
+            yield return ("malformed dimension decoration", literal);
         foreach (var literal in new[] { $"{{{a}}}x", $"{{{a}", a, $"{{{a},}}", $"{{,{a}}}", $"{{{a},,{b}}}", $"{{{a}}}}}", $"{{{{{a}}}", $"{{{a}}};", $"x{{{a}}}", $"{{{a}}}{{{b}}}" })
             yield return ("junk", literal);
         foreach (var literal in new[] { $" {{{a}}} ", $"{{ {a} }}", $"{{ {a} , {b} }}", $"{{\" {a}\"}}", $"{{\"{a} \"}}", $"{{\\ {a}}}", $"\u00A0{{{a}}}", $"{{{a}}}\u2003", $"\t{{{a}}}\n", $"{{{a}\u00A0}}" })
