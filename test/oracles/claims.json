@@ -2709,6 +2709,23 @@
     ]
   },
   {
+    "id": "R32-union-closed-at-construction",
+    "source": "docs/ranges.md#why-the-discard-arm-must-throw",
+    "quote": "The five shapes are the only ranges that can exist. A record derived from a range type compiles, because C# gives every record a protected copy constructor, but the first `new` of it throws (`InvalidOperationException`). Only the five variants nested in the type can be constructed.",
+    "claim": "For every range union, constructing a type derived from it outside the union — chaining to the copy constructor as a derived record does — throws InvalidOperationException naming the union, while a `with` on each of the five variants still yields an equal value of the same variant.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Empty",
+      "*Range.Infinite",
+      "*Range.CreateFinite",
+      "*Range.CreateUnboundedStart",
+      "*Range.CreateUnboundedEnd"
+    ],
+    "heldBy": [
+      "ClosedUnionContractTests"
+    ]
+  },
+  {
     "id": "R33-iso-weeks-only",
     "source": "docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week",
     "quote": "A week starts on Monday, and week 1 is the week that holds the year's first Thursday. The current culture's first day of the week plays no part, the same way it plays no part in a literal.",
