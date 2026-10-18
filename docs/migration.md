@@ -242,25 +242,25 @@ stored and queried as the empty range, and nothing threw. It now throws.
 
 ## Migration from v9.x
 
-No signature changed. Some calls answer differently, and each one now agrees with PostgreSQL where
-the two sides disagreed before. The compiler can't show you where, so check these:
+No signature changed. Some calls return a different value, and each one now matches PostgreSQL
+where the two sides disagreed before. The compiler can't show you where, so check these:
 
-- **`IsUnboundedStart()` and `IsUnboundedEnd()` answer `true` for the infinite range.** A query
-  and the same predicate in memory already disagreed on it
+- **`IsUnboundedStart()` and `IsUnboundedEnd()` return `true` for the infinite range.** A query
+  and the same call in memory already disagreed on it
   ([details](#check-isunboundedstart-and-isunboundedend-on-the-infinite-range)).
-- **`RangeSet.Overlaps` on a continuous domain answers `true` for more operands.** A query and the
-  same predicate in memory already disagreed on them
-  ([details](#check-rangesetoverlaps-on-a-continuous-domain)).
+- **`RangeSet.Overlaps` on a continuous element type returns `true` for more inputs.** A query and
+  the same call in memory already disagreed on them
+  ([details](#check-rangesetoverlaps-on-a-continuous-element-type)).
 
 ### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
 
 Check code that calls `IsUnboundedStart()` or `IsUnboundedEnd()` on a single range to pick out the
 `(-∞, end]` or `[start, +∞)` shape, and could meet the infinite range `(,)`.
 
-Before 10.0.0 the two methods tested the variant, so `(,)` answered `false` to both. PostgreSQL's
-`lower_inf` and `upper_inf`, which they translate to, answer `true` for it, and so does a
-`RangeSet` holding it. A query through EF Core therefore matched every row holding `(,)` where the
-same predicate in memory did not. Now the range answers as the server does:
+Before 10.0.0 the two methods tested the kind of range, so both returned `false` for `(,)`.
+PostgreSQL's `lower_inf` and `upper_inf`, which they run as in SQL, return `true` for it, and so
+does a `RangeSet` holding it. A query through EF Core therefore matched every row holding `(,)`
+where the same call in memory did not. Now memory and SQL agree:
 
 ```csharp
 Int32Range.Infinite.IsUnboundedStart();   // v9: false   v10: true
@@ -268,25 +268,25 @@ Int32Range.Infinite.IsUnboundedEnd();     // v9: false   v10: true
 Int32Range.CreateUnboundedStart(5).IsUnboundedEnd();   // false in both
 ```
 
-If you meant the shape, pattern-match on it. The variant interfaces are exact, and the compiler
-checks them:
+If you meant the kind of range, pattern-match on it. The shape interfaces are exact, and the
+compiler checks them:
 
 ```csharp
 if (range is IUnboundedStartRange<int> s) { … s.End … }   // (-∞, end] only, never (,)
 ```
 
-`IsInfinity()` and `IsFinite()` are unchanged: `(,)` is the only range that answers `IsInfinity()`,
-and it never answered `IsFinite()`.
+`IsInfinity()` and `IsFinite()` are unchanged. `(,)` is the only range for which `IsInfinity()`
+returns `true`, and `IsFinite()` returns `false` for it, as before.
 
-### Check `RangeSet.Overlaps` on a continuous domain
+### Check `RangeSet.Overlaps` on a continuous element type
 
 Check code that calls `Overlaps` on a `RangeSet` over `decimal`, `DateTime`, `DateTimeOffset`,
-`TimeOnly`, `LocalDateTime` or `Instant` with a range or set operand, and acts on `false`.
+`TimeOnly`, `LocalDateTime` or `Instant`, passes a range or a set, and acts on `false`.
 
-Before 10.0.0, `Overlaps` answered `false` when the operand stopped exactly where a later element
-started, with one side exclusive, although an earlier element shared values with it. It tested only
-the element that starts where the operand stops. PostgreSQL's `&&` answered `true` for the same
-values, so a query through EF Core and the same call in memory disagreed on those rows.
+Before 10.0.0, `Overlaps` returned `false` when the range you passed stopped exactly where a later
+element started, with one side exclusive, although an earlier element shared values with it. It
+tested only the element that starts where your range stops. PostgreSQL's `&&` returns `true` for
+the same values, so a query through EF Core and the same call in memory disagreed on those rows.
 
 ```csharp
 var set = RangeSet<DecimalRange, decimal>.From([DecimalRange.CreateFinite(1, 4), DecimalRange.CreateFinite(5, 8)]);
