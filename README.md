@@ -21,7 +21,7 @@ dotnet add package CodoMetis.ValueRanges
 ```
 
 You need .NET 10 or later. To run your LINQ queries as SQL, add the EF Core package,
-[`CodoMetis.ValueRanges.EFCore.PostgreSQL`](docs/efcore.md). For NodaTime types, add the
+[`CodoMetis.ValueRanges.EFCore.PostgreSQL`](docs/efcore.md). It needs PostgreSQL 16 or later. For NodaTime types, add the
 [NodaTime packages](#nodatime).
 
 Good to know:
@@ -117,8 +117,10 @@ value](docs/why.md#unboundedness-is-a-shape-not-a-bound-value).
 | `DateTimeRange`        | `tsrange`             | `DateTime`       | —        |
 | `DateTimeOffsetRange`  | `tstzrange`           | `DateTimeOffset` | —        |
 | `TimeRange`            | `timerange` (custom)  | `TimeOnly`       | —        |
+| `Float64Range`         | `float8range` (custom) | `double`, finite only | —   |
+| `Float32Range`         | `float4range` (custom) | `float`, finite only  | —   |
 
-Each range type has a `RangeSet<TRange, T>` multirange counterpart. There are also ten value set
+Each range type has a `RangeSet<TRange, T>` multirange counterpart. There are also twelve value set
 families (`StringSet`, `GuidSet`, `Int32Set`, … — [full table](docs/value-sets.md)). Each family
 has a version for validated wrapper types, such as the ones Vogen, Metalama or StronglyTypedId
 generate, or ones you write by hand.
@@ -136,8 +138,13 @@ Good to know:
 - **PostgreSQL has no built-in `timerange`.** The EF Core package maps `TimeRange` to the custom type
   that people conventionally create for this. See [TimeRange and the custom timerange
   type](docs/efcore.md#timerange-and-the-custom-timerange-type).
+- **`Float64Range` and `Float32Range` hold finite numbers only.** Creating, parsing or loading a
+  range with `NaN` or an infinity in it throws. Like `timerange`, PostgreSQL has no built-in
+  `float8range` or `float4range`. See [Custom
+  range types](docs/efcore.md#custom-range-types).
 - **The element types are a deliberately vetted list, not a generic `IComparable<T>` constraint.**
-  See [why `double`, `float` and `Guid` are absent](docs/why.md#why-these-element-types).
+  See [why these element types](docs/why.md#why-these-element-types), including why a `double` range
+  is finite only and why there is no `Guid` range.
 
 ### NodaTime
 
@@ -201,7 +208,8 @@ The library promises you identical results in memory and as SQL. Three test laye
 2. **Translation suite.** It checks the exact SQL that every LINQ construct generates, through
    `ToQueryString()`, without a database.
 3. **Live-PostgreSQL parity suite.** A Testcontainers-based project runs the translated SQL against
-   a real PostgreSQL instance and checks that the results agree with the in-memory ones. It covers
+   a real PostgreSQL instance and checks that the results agree with the in-memory ones. CI runs it on
+   PostgreSQL 16, the oldest supported version, and 18 for every change. It covers
    round-trips for every range and multirange column type, the timestamp normalization and precision
    rules at the Npgsql boundary, and operation-level parity for the full algebra.
 

@@ -630,20 +630,6 @@
     "reason": "the one family whose element text (2024-06) differs from its store text (2024-06-01): a JSON document holds the dates and is read back through LocalDateSet"
   },
   {
-    "family": "core value sets",
-    "unit": "StringSet",
-    "member": "IValueSet<$T>.NormalizeElement($T)",
-    "kind": "extra",
-    "reason": "text has one rule the column enforces and the others do not: a NUL character cannot be stored, so Contains, Add and Remove refuse the probe From refuses (TextElement, #133); the other families' elements are valid by type"
-  },
-  {
-    "family": "core wrapper arities",
-    "unit": "StringSet<TElement>",
-    "member": "IValueSet<$T>.NormalizeElement($T)",
-    "kind": "extra",
-    "reason": "the element's text form is what the text column holds, so the NUL rule applies to it on every construction path (TextElement, #133); the other arities' primitives are valid by type"
-  },
-  {
     "family": "core wrapper arities",
     "unit": "StringSet<TElement>",
     "member": "RequireText($T)",
@@ -656,5 +642,411 @@
     "member": "arity only: RequireText($T)",
     "kind": "extra",
     "reason": "the arity checks the element's text form for a NUL character through one helper; the closed set checks the string itself inline (TextElement, #133)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Int16Set + Int32Set + Int64Set",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer families read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ones read strict ISO 8601 (IsoTemporal), the others their own grammar"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer ranges read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ranges read strict ISO 8601 (IsoTemporal)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Int16Set<TElement> + Int32Set<TElement> + Int64Set<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "integer-backed wrappers write a JSON number through the integer element converter, as their primitive siblings do; text-backed and temporal ones write a JSON string"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DecimalSet<TElement> + GuidSet<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "each has a converter of its own for the token its primitive writes: a number keeping scale for decimal, the hyphenated uuid string for Guid; they share only the naming pattern"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DateTimeOffsetSet<TElement> + DateTimeSet<TElement> + TimeSet<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "the temporal arities pin the round-trip O format because the default text form drops sub-seconds (and the DateTime Kind); the others' default already round-trips (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DecimalRange + Int64Range",
+    "member": "FiniteLength($T, $T)",
+    "kind": "extra",
+    "reason": "the two ranges whose span can exceed their own element type compute it without overflowing and return null when it would; Int32Range counts in long, the temporal ranges measure a TimeSpan"
+  },
+  {
+    "family": "efcore range definitions",
+    "unit": "InstantRange + LocalDateTimeRange",
+    "member": "storeValue",
+    "kind": "lone body",
+    "reason": "the NodaTime temporal ranges truncate to the store's microsecond with NodaStoreTemporal, the BCL ones with StoreTemporal: the same rule over different types"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "InstantSet + LocalDateSet + LocalDateTimeSet + LocalTimeSet",
+    "member": "literalText",
+    "kind": "extra",
+    "reason": "the NodaTime temporal sets write their SQL literal through NodaStoreTemporal.Literal, because Npgsql's NodaTime literal carries nine fraction digits the server rounds; the BCL sets use the shared SetProviderText"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "arity only: RequireIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime arities refuse an element whose wrapped value is not ISO (IsoWrapperElement), which a wrapper cannot convert; their primitive sets convert it instead (ToIso)"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "primitive only: ToIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime primitive sets convert an element to the ISO calendar; their arities cannot convert a wrapped value and refuse it (RequireIso)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "Values($T)",
+    "kind": "extra",
+    "reason": "Every discrete range has Values(step), but only on the integer ranges is the step the element type itself. DateRange steps in int days, LocalDateRange in a Period and YearMonthRange in int months, so their overloads don't normalize to Values($T)."
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float64Set",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "PostgreSQL's float8in grammar for a finite number (FloatLiteral): refuses NaN, the infinities, hexadecimal, and a number double.Parse would round to infinity or zero where the server reports it out of range (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "G17 reads back as the same double for every value; .NET's default shortest form does not for 2^-25 and 2^-958, so a wrapper asked for it would store them one unit lower (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "Length",
+    "kind": "lone body",
+    "reason": "a double span, the IEEE difference End - Start: it may be +Infinity for [MinValue, MaxValue], an answer and not a bound, where the temporal siblings measure a TimeSpan (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "PostgreSQL's float8in grammar for a finite number (FloatLiteral): refuses NaN, the infinities, hexadecimal, and a number double.Parse would round to infinity or zero where the server reports it out of range (#153)"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "Float64Set<>",
+    "member": "formatPrimitive",
+    "kind": "lone body",
+    "reason": "G17 reads back as the same double for every value; the default form does not for 2^-25 and 2^-958 (#153)"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "DecimalSet / DecimalSet<TElement> + GuidSet / GuidSet<TElement> + Int16Set / Int16Set<TElement> + Int32Set / Int32Set<TElement> + Int64Set / Int64Set<TElement>",
+    "member": "arity only: FormatValue($T, string?, IFormatProvider?)",
+    "kind": "extra",
+    "reason": "these primitives' default text form is already their literal, so they take the interface's FormatValue; their arities declare one to check the text-form contract (WrapperElement, #53). The temporal, float and string primitives pin a format of their own, so both sides of those pairs declare it"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "InstantSet / InstantSet<TElement> + LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement> + LocalTimeSet / LocalTimeSet<TElement> + YearMonthSet / YearMonthSet<TElement>",
+    "member": "primitive only: IValueSetFactory<$TYPE, $T>.ElementJsonConverter",
+    "kind": "extra",
+    "reason": "System.Text.Json has no converter for a NodaTime element, so the NodaTime primitive sets supply one; their arities supply their own under the arity's key, which the pairing reads as a different member"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "lone body",
+    "reason": "text has one rule the column enforces and the others do not: a NUL character cannot be stored, so Contains, Add and Remove refuse the probe From refuses (TextElement, #133); the float families refuse NaN and the infinities instead (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "lone body",
+    "reason": "the element's text form is what the text column holds, so the NUL rule applies to it on every construction path (TextElement, #133); the float arities refuse an element wrapping NaN or an infinity instead (#153)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float32Set",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "PostgreSQL's float4in grammar for a finite number (FloatLiteral.ParseSingle), read straight to float as strtof does: a detour through double would round twice; Float64Set reads float8in's"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "PostgreSQL's float4in grammar for a finite number (FloatLiteral.ParseSingle), read straight to float as strtof does: a detour through double would round twice; Float64Range reads float8in's"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range",
+    "member": "Length",
+    "kind": "lone body",
+    "reason": "a float span, the IEEE difference End - Start, which may be +Infinity for [MinValue, MaxValue]: an answer, not a bound (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "G9 reads back as the same float for every value; Float64Set<TElement> pins G17 for double (#153)"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "Float32Set<>",
+    "member": "formatPrimitive",
+    "kind": "lone body",
+    "reason": "G9 reads back as the same float for every value, as G17 does for the double bridge (#153)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float32Set + Float64Set",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "refuses NaN and the infinities (RequireFinite): PostgreSQL sorts NaN above every number and .NET below, so no order over one could agree (#153); the other families' elements are valid by type The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float32Set + Float64Set",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "refuses NaN and the infinities (RequireFinite): PostgreSQL sorts NaN above every number and .NET below, so no order over one could agree (#153); the other families' elements are valid by type The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float32Set + Float64Set",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the text PostgreSQL's float8out prints (FloatLiteral): .NET's shortest form differs in its digits for about one double in three hundred and does not read back at all for 2^-25 and 2^-958 (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float32Set + Float64Set",
+    "member": "RequireFinite($T)",
+    "kind": "extra",
+    "reason": "the finite guard From and NormalizeElement share (#153); the other families' elements are valid by type The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement> + Float64Set<TElement>",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "refuses an element wrapping NaN or an infinity, as Float64Set refuses the double (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement> + Float64Set<TElement>",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "refuses an element wrapping NaN or an infinity, as Float64Set refuses the double (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement> + Float64Set<TElement>",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "asks the element for G17, then writes the text float8out prints for the double it wraps, so the literal is Float64Set's: the element's own G17 text is exact but not PostgreSQL's (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement> + Float64Set<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "a JSON number holding the text float8out prints, as Float64Set writes it; the decimal converter would read through decimal, which has neither the range nor the binary fractions of a double The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement> + Float64Set<TElement>",
+    "member": "ParseElement(string)",
+    "kind": "lone body",
+    "reason": "hands the element the parsed double's G17 text: the default form reads back as a different double for 2^-25 and 2^-958 (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement> + Float64Set<TElement>",
+    "member": "RequireFinite($T)",
+    "kind": "extra",
+    "reason": "the finite guard From and NormalizeElement share, read through the element's G17 text (#153); the other arities' primitives are valid by type The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "CreateFinite($T, $T, bool, bool)",
+    "kind": "lone body",
+    "reason": "refuses NaN and the infinities before comparing: under CompareTo [5,NaN) is inverted and empty, while PostgreSQL holds it as a range containing 1e308 (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the text PostgreSQL's float8out prints (FloatLiteral): .NET's shortest form differs in its digits for about one double in three hundred and does not read back at all for 2^-25 and 2^-958 (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "IRange<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "a NaN or infinite operand of Contains and Clamp is refused, not answered: [0,) contains NaN in PostgreSQL and not under CompareTo (#153); every other range's element type is valid by type The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "RequireFinite($T, string)",
+    "kind": "extra",
+    "reason": "the finite guard every factory, both unbounded constructors and NormalizeElement share (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedEnd..ctor($T, bool)",
+    "kind": "extra",
+    "reason": "checks the bound is finite; a positional record has no constructor body to check it in, and its init accessor would let `with { Start = double.NaN }` past any check (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedEnd.<type>",
+    "kind": "lone body",
+    "reason": "not a positional record, so the finite check in its constructor cannot be bypassed through `with` (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedEnd.Deconstruct($T, bool)",
+    "kind": "extra",
+    "reason": "the Deconstruct a positional record synthesizes, written out because this one is not positional (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedEnd.Start",
+    "kind": "extra",
+    "reason": "the property a positional record synthesizes, get-only because this one is not positional: no init accessor to bypass the finite check (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedEnd.StartInclusive",
+    "kind": "lone body",
+    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedStart..ctor($T, bool)",
+    "kind": "extra",
+    "reason": "checks the bound is finite; a positional record has no constructor body to check it in, and its init accessor would let `with { End = double.NaN }` past any check (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedStart.<type>",
+    "kind": "lone body",
+    "reason": "not a positional record, so the finite check in its constructor cannot be bypassed through `with` (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedStart.Deconstruct($T, bool)",
+    "kind": "extra",
+    "reason": "the Deconstruct a positional record synthesizes, written out because this one is not positional (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedStart.End",
+    "kind": "extra",
+    "reason": "the property a positional record synthesizes, get-only because this one is not positional: no init accessor to bypass the finite check (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "UnboundedStart.EndInclusive",
+    "kind": "lone body",
+    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "Moved($T)",
+    "kind": "extra",
+    "reason": "IEEE addition overflows to an infinity rather than throwing, so a moved bound or split boundary is checked here and an infinity becomes the OverflowException the other range types throw past their last value (#153) The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "Shift($T)",
+    "kind": "lone body",
+    "reason": "refuses a NaN or infinite delta (an operand like any other, #153) and moves through Moved, because double addition overflows to an infinity where the siblings' checked arithmetic throws The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range + Float64Range",
+    "member": "Expand($T)",
+    "kind": "lone body",
+    "reason": "refuses a NaN or infinite amount (an operand like any other, #153) and moves through Moved, because double addition overflows to an infinity where the siblings' checked arithmetic throws The float family over real shares it: Float32 differs from the siblings exactly as Float64 does (#153)."
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float32Set + Float64Set + StringSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "the two families with an element the column cannot hold refuse the probe From refuses: a string with a NUL character (TextElement, #133), a NaN or infinite double or float (#153); the other families' elements are valid by type"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement> + Float64Set<TElement> + StringSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "the two arities whose element can wrap a value the column cannot hold refuse it on every construction path: text with a NUL character (TextElement, #133), a NaN or infinite double or float (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DecimalRange",
+    "member": "Split($T)",
+    "kind": "lone body",
+    "reason": "its boundaries come from checked decimal arithmetic, which throws past the last value; the float pair checks an IEEE result for an infinity instead (Moved, #153), and the two float bodies agreeing makes this one look drifted"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range",
+    "member": "Split($T)",
+    "kind": "lone body",
+    "reason": "its boundaries come from checked integer arithmetic, which throws past the last value; the float pair checks an IEEE result for an infinity instead (Moved, #153), and the two float bodies agreeing makes this one look drifted"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int64Range",
+    "member": "Split($T)",
+    "kind": "lone body",
+    "reason": "its boundaries come from checked integer arithmetic, which throws past the last value; the float pair checks an IEEE result for an infinity instead (Moved, #153), and the two float bodies agreeing makes this one look drifted"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "InstantSet<> + LocalDateSet<> + LocalDateTimeSet<> + LocalTimeSet<> + YearMonthSet<>",
+    "member": "literalText",
+    "kind": "extra",
+    "reason": "the NodaTime bridges write their SQL literal through NodaStoreTemporal.Literal, because Npgsql's NodaTime literal carries nine fraction digits the server rounds; the core bridges take the shared SetProviderText"
   }
 ]

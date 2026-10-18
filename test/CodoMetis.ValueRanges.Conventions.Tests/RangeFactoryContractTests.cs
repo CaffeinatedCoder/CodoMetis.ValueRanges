@@ -36,6 +36,8 @@ public sealed class RangeFactoryContractTests
         [typeof(int)]            = 0,
         [typeof(long)]           = 0L,
         [typeof(decimal)]        = 0m,
+        [typeof(double)]         = 0d,
+        [typeof(float)]          = 0f,
         [typeof(DateOnly)]       = new DateOnly(2024, 6, 15),
         [typeof(TimeOnly)]       = new TimeOnly(9, 30),
         [typeof(DateTime)]       = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Unspecified),

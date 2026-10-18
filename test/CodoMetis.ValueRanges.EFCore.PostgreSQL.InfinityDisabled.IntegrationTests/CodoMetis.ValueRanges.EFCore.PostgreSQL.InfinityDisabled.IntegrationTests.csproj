@@ -32,6 +32,8 @@
         <!-- A wrapper arity's element type, shared rather than copied — see the other integration project. -->
         <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\WrapperElements.cs"
                  Link="WrapperElements.cs" />
+        <!-- The shared container's image and the 10.x floor, one definition for both projects (#215). -->
+        <Compile Include="..\CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests\PostgresServer.cs" Link="PostgresServer.cs" />
     </ItemGroup>
 
     <ItemGroup>

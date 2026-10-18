@@ -195,6 +195,60 @@ internal readonly record struct TestMoney : IFormattable, IParsable<TestMoney>, 
     public int CompareTo(TestMoney other) => _value.CompareTo(other._value);
 }
 
+/// <summary>A double-backed score. Forwards the format argument, as a generated wrapper does.</summary>
+internal readonly record struct TestScore : IFormattable, IParsable<TestScore>, IComparable<TestScore>
+{
+    private readonly double _value;
+
+    public TestScore(double value) => _value = value;
+
+    public double Value => _value;
+
+    public static TestScore Parse(string s, IFormatProvider? provider)
+        => new(double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestScore result)
+    {
+        var ok = double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value);
+        result = new TestScore(value);
+        return ok;
+    }
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+
+    public int CompareTo(TestScore other) => _value.CompareTo(other._value);
+}
+
+/// <summary>A float-backed weight. Forwards the format argument, as a generated wrapper does.</summary>
+internal readonly record struct TestWeight : IFormattable, IParsable<TestWeight>, IComparable<TestWeight>
+{
+    private readonly float _value;
+
+    public TestWeight(float value) => _value = value;
+
+    public float Value => _value;
+
+    public static TestWeight Parse(string s, IFormatProvider? provider)
+        => new(float.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TestWeight result)
+    {
+        var ok = float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value);
+        result = new TestWeight(value);
+        return ok;
+    }
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+
+    public int CompareTo(TestWeight other) => _value.CompareTo(other._value);
+}
+
 /// <summary>A DateOnly-backed business date. Forwards the format argument.</summary>
 internal readonly record struct TestDay : IFormattable, IParsable<TestDay>, IComparable<TestDay>
 {

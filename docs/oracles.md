@@ -111,6 +111,14 @@ diff --git a/src/CodoMetis.ValueRanges/RangeExtensions.cs b/src/CodoMetis.ValueR
   one `CAUGHT` / `MISSED` / `ERROR` line per (seed, oracle), exit code 1 unless everything is caught.
   Oracles that need Docker run against a container like the integration suite does. It is not part of
   CI — a build and a run per seed — and it is run before a release.
+- An oracle catches a seed when one of its tests fails with a row that is not a known candidate. The
+  rule is per row (`test/oracles/SeedVerdict.cs`, compiled into the tool and held by
+  `SeedVerdictTests`): until 10.0.0 one `[known candidate:` anywhere in a message discarded the whole
+  test, so a seed that broke a row beside a known one read as missed (#55).
+- A seed can still apply and plant nothing, once the code it changes no longer decides the answer.
+  `OracleSeedTests` cannot see that; only the run can. In 10.0.0 `parser-reads-the-current-culture`
+  handed the current culture to element parsers that had stopped reading any culture, and was
+  re-planted where one still does.
 
 ### `candidates.json` — disagreements found but not fixed
 
@@ -408,10 +416,17 @@ is Roslyn's canonical one. String literals stay: a format constant that differs 
 operator, a nested variant's header, a registration's constructor parameter):
 
 - *missing* — present in at least max(3, *N* − 2) siblings, absent here;
-- *extra* — present here and nowhere else;
-- *lone body* — a body no sibling shares, when two or more siblings share a body that is near it: at
+- *extra* — present only in a minority: here alone, or in a group smaller than a third of the family;
+- *lone body* — a body only such a minority shares, when more siblings share a body that is near it: at
   least half similar by token sequence over the body alone, or behind an identical signature. A member
   that is bespoke in signature and body (`Length`, typed per range) is near nothing and stays silent.
+
+A divergence a group shares is reported once, its sibling the group's names joined with ` + ` in ordinal
+order (`Int16Set + Int32Set + Int64Set`), and waived once under that name. Until 10.0.0 only a single
+sibling counted, so two siblings that drifted together went quiet: when the second float family arrived,
+every divergence the first had been waived for disappeared (#200). The seed
+`hash-by-reference-copied-into-two-sets.patch` copies one wrong `GetHashCode` into `Int32Set` and
+`Int64Set` and is caught as `Int32Set + Int64Set`; the single-sibling sweep passed it.
 
 **`clone-waivers.json`** holds every divergence that is right as it is, by family, sibling, member and
 rule, with the reason — the ordinal comparer of `StringSet`, `yyyy-MM-dd` for a date, `RequireIso`
@@ -426,7 +441,9 @@ issue and a `candidates.json` entry like any other finding. The seed
 `sibling-drops-input-function-trim.patch` removes one temporal set's `LiteralWhiteSpace.TrimAsInputFunction`
 call — the shape of the 9.1.0 fix — and is caught as a lone body beside the three siblings that kept it.
 
-What it does not see: a divergence shared by every sibling (nothing to diverge from), behaviour in the
+What it does not see: a divergence shared by every sibling (nothing to diverge from), one shared by a
+third of the family or more (a sub-family the rules cannot tell from a consensus — the temporal sets'
+`ParseValue`, the integer arities' element converter), behaviour in the
 shared engines under `Internals/` (one copy, held by the oracles above), and whether a waived difference
 is still the right one — the reason is the reviewer's, and `EveryWaiver_StillMatchesADivergence` only
 says the difference is still there.

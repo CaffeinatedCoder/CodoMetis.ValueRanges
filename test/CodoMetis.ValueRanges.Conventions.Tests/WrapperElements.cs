@@ -21,6 +21,8 @@ internal static class WrapperElements
         "Int32Set`1"          => typeof(SmallCode),
         "Int64Set`1"          => typeof(LargeCode),
         "DecimalSet`1"        => typeof(Money),
+        "Float64Set`1"        => typeof(Score),
+        "Float32Set`1"        => typeof(Weight),
         "DateSet`1"           => typeof(BusinessDate),
         "TimeSet`1"           => typeof(ShiftTime),
         "DateTimeSet`1"       => typeof(AuditStamp),
@@ -193,6 +195,56 @@ public readonly record struct Money : IFormattable, IParsable<Money>, IComparabl
     }
 
     public int CompareTo(Money other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+// Score forwards the format specifier, as a generated double wrapper does; the family asks for G17.
+public readonly record struct Score : IFormattable, IParsable<Score>, IComparable<Score>
+{
+    private readonly double _value;
+
+    private Score(double value) => _value = value;
+
+    public static Score Parse(string s, IFormatProvider? provider)
+        => new(double.Parse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out Score result)
+    {
+        var parsed = double.TryParse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = parsed ? new Score(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(Score other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+// Weight forwards the format specifier, as a generated float wrapper does; the family asks for G17.
+public readonly record struct Weight : IFormattable, IParsable<Weight>, IComparable<Weight>
+{
+    private readonly float _value;
+
+    private Weight(float value) => _value = value;
+
+    public static Weight Parse(string s, IFormatProvider? provider)
+        => new(float.Parse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out Weight result)
+    {
+        var parsed = float.TryParse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = parsed ? new Weight(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(Weight other) => _value.CompareTo(other._value);
 
     public string ToString(string? format, IFormatProvider? formatProvider)
         => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);

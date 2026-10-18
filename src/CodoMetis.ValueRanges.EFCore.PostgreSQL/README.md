@@ -10,7 +10,8 @@ the database as SQL, and they return the same results as the same code in memory
 dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL
 ```
 
-You turn it on with one line. You don't configure value converters, comparers or column types:
+It needs PostgreSQL 16 or later. You turn it on with one line. You don't configure value converters,
+comparers or column types:
 
 ```csharp
 options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
@@ -27,6 +28,10 @@ EF Core picks the column from the property type:
 | `DateRange`                     | `daterange`                              |
 | `RangeSet<DateRange, DateOnly>` | `datemultirange`                         |
 | `TimeRange`                     | `timerange` (custom type — see below)    |
+| `Float64Range`                  | `float8range` (custom type — see below)  |
+| `Float32Range`                  | `float4range` (custom type — see below)  |
+| `Float64Set`                    | `double precision[]`                     |
+| `Float32Set`                    | `real[]`                                 |
 | `StringSet`                     | `text[]`                                 |
 | `GuidSet`                       | `uuid[]`                                 |
 | … and so on for every type      |                                          |
@@ -42,6 +47,10 @@ Good to know:
   `HasPostgresRange` to create the type, and `EnableUnmappedTypes` on the data source. The EF Core
   guide shows both in
   [TimeRange and the custom timerange type](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#timerange-and-the-custom-timerange-type).
+- **`Float64Range` and `Float32Range` need the same two opt-ins.** Create the types with
+  `HasPostgresRange("float8range", "double precision")`, without a `subtype_diff`, which overflows a
+  GiST index over very large values, and `HasPostgresRange("float4range", "real")`. Rows holding `NaN` or an infinity throw when loaded. See
+  [Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types).
 - **Sets are mapped as single values (scalars).** The package brings its own mappings and
   translators for them. EF Core's primitive-collection support is never involved.
 - **Inside a `ToJson()` column, a value is stored as its PostgreSQL text.** This applies to a range,

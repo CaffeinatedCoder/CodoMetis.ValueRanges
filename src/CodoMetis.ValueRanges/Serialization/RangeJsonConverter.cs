@@ -275,6 +275,12 @@ public sealed class Int64RangeJsonConverter : RangeJsonConverter<Int64Range, lon
 /// <summary>JSON converter for <see cref="DecimalRange"/>.</summary>
 public sealed class DecimalRangeJsonConverter : RangeJsonConverter<DecimalRange, decimal>;
 
+/// <summary>JSON converter for <see cref="Float64Range"/>.</summary>
+public sealed class Float64RangeJsonConverter : RangeJsonConverter<Float64Range, double>;
+
+/// <summary>JSON converter for <see cref="Float32Range"/>.</summary>
+public sealed class Float32RangeJsonConverter : RangeJsonConverter<Float32Range, float>;
+
 /// <summary>JSON converter for <see cref="DateRange"/>.</summary>
 public sealed class DateRangeJsonConverter : RangeJsonConverter<DateRange, DateOnly>;
 
@@ -295,6 +301,12 @@ public sealed class Int64RangeSetJsonConverter : RangeSetJsonConverter<Int64Rang
 
 /// <summary>JSON converter for <see cref="RangeSet{TRange,T}"/> of <see cref="DecimalRange"/>.</summary>
 public sealed class DecimalRangeSetJsonConverter : RangeSetJsonConverter<DecimalRange, decimal>;
+
+/// <summary>JSON converter for <see cref="RangeSet{TRange,T}"/> of <see cref="Float64Range"/>.</summary>
+public sealed class Float64RangeSetJsonConverter : RangeSetJsonConverter<Float64Range, double>;
+
+/// <summary>JSON converter for <see cref="RangeSet{TRange,T}"/> of <see cref="Float32Range"/>.</summary>
+public sealed class Float32RangeSetJsonConverter : RangeSetJsonConverter<Float32Range, float>;
 
 /// <summary>JSON converter for <see cref="RangeSet{TRange,T}"/> of <see cref="DateRange"/>.</summary>
 public sealed class DateRangeSetJsonConverter : RangeSetJsonConverter<DateRange, DateOnly>;

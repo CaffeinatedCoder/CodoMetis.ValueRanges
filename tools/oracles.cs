@@ -19,7 +19,7 @@
 // `seeds`: for each test/oracles/seeds/<defect>.patch, a scratch copy of the working tree (bin/, obj/
 // and .git/ left out, so uncommitted work is included) under the OS temp directory, the patch applied,
 // and each oracle class the patch's `Oracles:` line names run in its project. A seed is caught by an
-// oracle when at least one of its tests fails with a message that is not a known candidate; one line
+// oracle when at least one of its tests fails with a row that is not a known candidate (SeedVerdict); one line
 // per (seed, oracle), and exit code 1 unless every pair is CAUGHT. Oracles that need Docker are run
 // too — start Docker first, or pass a filter that leaves them out.
 //
@@ -34,6 +34,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using CodoMetis.ValueRanges.Oracles;
 
 var root = FindRoot();
 var oraclesDir = Path.Combine(root, "test", "oracles");
@@ -151,11 +152,13 @@ string Verdict(string trx, string oracle)
     var failed = results.Where(r => (string?)r.Attribute("outcome") == "Failed")
                         .Select(r => ((string?)r.Attribute("testName") ?? "?", r.Descendants(ns + "Message").FirstOrDefault()?.Value ?? ""))
                         .ToList();
-    var caught = failed.Where(f => !f.Item2.Contains("[known candidate:", StringComparison.Ordinal)).ToList();
+    var caught = failed.Where(f => SeedVerdict.Catches(f.Item2)).ToList();
     var inconclusive = results.Count(r => (string?)r.Attribute("outcome") is "NotExecuted" or "Inconclusive");
     if (caught.Count > 0) return $"CAUGHT  {caught.Count} of {results.Count} tests fail, e.g. {caught[0].Item1}";
     if (inconclusive == results.Count) return $"ERROR   all {results.Count} tests inconclusive (no database?)";
-    return $"MISSED  all {results.Count} tests pass with the defect planted";
+    return failed.Count == 0
+        ? $"MISSED  all {results.Count} tests pass with the defect planted"
+        : $"MISSED  {failed.Count} of {results.Count} tests fail, every row a known candidate";
 }
 
 int Status()

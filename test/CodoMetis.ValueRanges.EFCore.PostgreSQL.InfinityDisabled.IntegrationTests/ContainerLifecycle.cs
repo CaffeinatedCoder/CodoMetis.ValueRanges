@@ -1,3 +1,4 @@
+using CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 using Testcontainers.PostgreSql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.InfinityDisabled.IntegrationTests;
@@ -14,6 +15,9 @@ public sealed class ContainerLifecycle
 
     private static string? _unavailableReason;
 
+    // A server below the 10.x floor fails every test, in CI or not: the sweeps would compare nothing.
+    private static string? _belowFloor;
+
     internal static string? ConnectionString { get; private set; }
 
     [AssemblyInitialize]
@@ -21,8 +25,10 @@ public sealed class ContainerLifecycle
     {
         try
         {
-            _container = new PostgreSqlBuilder("postgres:17-alpine").Build();
+            _container = new PostgreSqlBuilder(PostgresServer.Image).Build();
             await _container.StartAsync();
+            _belowFloor = await PostgresServer.BelowFloor(_container.GetConnectionString());
+            if (_belowFloor is not null) return;
             ConnectionString = _container.GetConnectionString();
 
             await using var context = new InfinityDisabledDbContext();
@@ -43,6 +49,7 @@ public sealed class ContainerLifecycle
 
     internal static void RequireDatabase()
     {
+        if (_belowFloor is not null) Assert.Fail(_belowFloor);
         if (ConnectionString is not null) return;
 
         var message = $"PostgreSQL test container unavailable ({_unavailableReason ?? "unknown"}). "

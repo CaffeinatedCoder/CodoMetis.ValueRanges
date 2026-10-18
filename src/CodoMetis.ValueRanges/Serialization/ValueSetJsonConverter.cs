@@ -39,6 +39,8 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
             var element = strict
                               ? typeof(T) == typeof(decimal)
                                     ? ValueSetElementJson.Parse<TSet, T>(ValueSetElementJson.ReadDecimalText<T>(ref reader, options))
+                                    : IsFloat
+                                        ? ValueSetElementJson.Parse<TSet, T>(ValueSetElementJson.ReadFloatText<T>(ref reader, options))
                                     : reader.TokenType == JsonTokenType.String
                                         ? ValueSetElementJson.Parse<TSet, T>(reader.GetString()!)
                                         : throw new JsonException($"Expected a JSON string for a {typeof(T).Name} element of {typeof(TSet).Name}.")
@@ -67,11 +69,14 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     {
         var fallback = ResolveElementConverter(options);
         var info     = fallback is null ? ElementTypeInfo(options) : null;
+        var asFloat  = IsFloat && ReadsThroughTheLiteralGrammar(options);
 
         writer.WriteStartArray();
         foreach (var element in ((IValueSet<T>)value).Values)
         {
-            if (fallback is null)
+            if (asFloat)
+                ValueSetElementJson.WriteFloatText(writer, ValueSetElementJson.Format<TSet, T>(element), options);
+            else if (fallback is null)
                 JsonSerializer.Serialize(writer, element, info!);
             else
                 fallback.Write(writer, element, options);
@@ -97,7 +102,7 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     /// fallback, which would property-dump the element, hands over.
     /// </summary>
     /// <summary>
-    /// Whether a BCL temporal or <see cref="decimal"/> element would be read by System.Text.Json's own
+    /// Whether a BCL temporal, <see cref="decimal"/> or floating-point element would be read by System.Text.Json's own
     /// converter — in which case it is read through the family's strict
     /// <see cref="IValueSetFactory{TSet,T}.ParseValue"/> instead, the grammar its literal uses.
     /// </summary>
@@ -108,7 +113,9 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
     /// <see cref="decimal"/> converter rounds a number beyond 28 significant digits without a word, where
     /// the literal refuses it (#115); a decimal is read from the token's own text, a quoted one only under
     /// <see cref="JsonNumberHandling.AllowReadingFromString"/> as the converter would. The write side is
-    /// unchanged: System.Text.Json's output is text the literal grammar reads. Compared by converter type,
+    /// unchanged for those: System.Text.Json's output is text the literal grammar reads. A <see cref="double"/>
+    /// or <see cref="float"/> is read the same way, and written through the family's text as well
+    /// (<see cref="IsFloat"/>). Compared by converter type,
     /// so a converter registered on the options — or one a source-generated context substitutes — still
     /// reads, as for every other element type.
     /// </remarks>
@@ -132,7 +139,17 @@ public class ValueSetJsonConverter<TSet, T> : JsonConverter<TSet>
       : typeof(T) == typeof(DateOnly)       ? JsonMetadataServices.DateOnlyConverter.GetType()
       : typeof(T) == typeof(TimeOnly)       ? JsonMetadataServices.TimeOnlyConverter.GetType()
       : typeof(T) == typeof(decimal)        ? JsonMetadataServices.DecimalConverter.GetType()
+      : typeof(T) == typeof(double)         ? JsonMetadataServices.DoubleConverter.GetType()
+      : typeof(T) == typeof(float)          ? JsonMetadataServices.SingleConverter.GetType()
       : null;
+
+    /// <summary>
+    /// Whether the element is a <see cref="double"/> or <see cref="float"/>, which — when System.Text.Json's
+    /// own converter would handle it — is also <em>written</em> through the family's text: that converter
+    /// writes .NET's shortest form, which reads back as a different double for 2^-25 and 2^-958, and the
+    /// family writes the text PostgreSQL prints.
+    /// </summary>
+    private static readonly bool IsFloat = typeof(T) == typeof(double) || typeof(T) == typeof(float);
 
     private static JsonConverter<T>? ResolveElementConverter(JsonSerializerOptions options)
     {
@@ -171,6 +188,12 @@ public sealed class Int64SetJsonConverter : ValueSetJsonConverter<Int64Set, long
 
 /// <summary>JSON converter for <see cref="DecimalSet"/>.</summary>
 public sealed class DecimalSetJsonConverter : ValueSetJsonConverter<DecimalSet, decimal>;
+
+/// <summary>JSON converter for <see cref="Float64Set"/>.</summary>
+public sealed class Float64SetJsonConverter : ValueSetJsonConverter<Float64Set, double>;
+
+/// <summary>JSON converter for <see cref="Float32Set"/>.</summary>
+public sealed class Float32SetJsonConverter : ValueSetJsonConverter<Float32Set, float>;
 
 /// <summary>JSON converter for <see cref="DateSet"/>.</summary>
 public sealed class DateSetJsonConverter : ValueSetJsonConverter<DateSet, DateOnly>;

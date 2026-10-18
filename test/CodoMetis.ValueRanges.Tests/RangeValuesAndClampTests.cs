@@ -108,7 +108,7 @@ public class RangeValuesAndClampTests
 
         foreach (var continuous in new[]
                  {
-                     typeof(DecimalRange), typeof(DateTimeRange),
+                     typeof(DecimalRange), typeof(Float64Range), typeof(Float32Range), typeof(DateTimeRange),
                      typeof(DateTimeOffsetRange), typeof(TimeRange)
                  })
             Assert.IsNull(
