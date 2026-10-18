@@ -210,8 +210,10 @@ public abstract record DecimalRange : IRange<decimal>, IRangeFactory<DecimalRang
         => start < 0m && end > decimal.MaxValue + start ? null : end - start;
 
     /// <inheritdoc />
+    /// <remarks>PostgreSQL's <c>numeric</c> grammar, refused where <see cref="decimal"/> would round the number
+    /// the text spells (<see cref="DecimalLiteral"/>); the provider is ignored.</remarks>
     public static decimal ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => decimal.Parse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture);
+        => DecimalLiteral.Parse(s);
 
     /// <summary>
     /// Parses a PostgreSQL range literal (e.g. <c>[1.5,9.9)</c>, <c>empty</c>, <c>(,)</c>)

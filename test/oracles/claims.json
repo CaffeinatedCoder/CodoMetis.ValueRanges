@@ -1298,6 +1298,20 @@
     ]
   },
   {
+    "id": "J29-wrapper-reads-what-the-primitive-reads",
+    "source": "docs/value-sets.md#how-your-element-types-sort-and-serialize",
+    "quote": "Reading is the same too. A wrapper accepts exactly the payloads the plain set accepts:\n\n- **A quoted number** such as `[\"7\"]` is read only when the options set\n  `JsonNumberHandling.AllowReadingFromString`, as ASP.NET Core's web defaults do, and then with\n  System.Text.Json's grammar for the number: a sign and digits for an integer, sign, digits, point\n  and exponent for a decimal, never whitespace.\n- **A Guid** is the hyphenated form, in either case. Braces, the undashed form and padding fail.",
+    "claim": "For every JSON element token (a number, a quoted number with or without sign, padding, point or exponent, a Guid in the hyphenated, braced, undashed or padded form, an empty string, a mistyped token), Int16Set<T>, Int32Set<T>, Int64Set<T>, DecimalSet<T> and GuidSet<T> read the same value as, or throw the same exception type as, their primitive sibling, under the default options and under AllowReadingFromString.",
+    "oracle": "differential",
+    "surfaces": [
+      "IValueSetFactory.ElementJsonConverter"
+    ],
+    "heldBy": [
+      "SetJsonConverterTests",
+      "SetWrapperParityTests"
+    ]
+  },
+  {
     "id": "J29-wrapper-temporal-same-value-different-text",
     "source": "docs/value-sets.md#how-your-element-types-sort-and-serialize",
     "quote": "Each payload still reads into the other's type.",
@@ -1311,6 +1325,23 @@
     ],
     "heldBy": [
       "SetJsonConverterTests"
+    ]
+  },
+  {
+    "id": "J30-decimal-read-exactly-or-refused",
+    "source": "docs/serialization.md#parse-a-literal",
+    "quote": "A decimal bound or element is read exactly or not at all. Text that names a number `decimal` can't\nhold, such as a 29th significant digit or `1e-30`, fails (`FormatException`) rather than being\nrounded to the nearest value.",
+    "claim": "DecimalRange, RangeSet<DecimalRange>, DecimalSet and DecimalSet<T> refuse, through Parse, TryParse, the span overloads, JSON (a number token, and a quoted one under AllowReadingFromString), the TypeConverter and the EF Core JSON document reader, any decimal text whose number decimal cannot hold exactly (a 29th significant digit, a scale beyond 28, 1e-30) with FormatException or JsonException, and read every spelling of a number it holds exactly, keeping the text's scale; a magnitude beyond decimal overflows as before.",
+    "oracle": "exception",
+    "surfaces": [
+      "DecimalRange.ParseValue",
+      "DecimalSet.ParseValue",
+      "DecimalRange.Parse",
+      "DecimalSet.Parse"
+    ],
+    "heldBy": [
+      "DecimalPrecisionTests",
+      "LiteralCorpusProbeTests"
     ]
   },
   {
@@ -2383,6 +2414,60 @@
       "SetElementWhiteSpaceContractTests",
       "LiteralGrammarParityTests",
       "SetParseFormatTests"
+    ]
+  },
+  {
+    "id": "S17-uuid-in-grammar",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "**A UUID follows PostgreSQL's `uuid_in` grammar.** That is 32 hex digits, with a hyphen allowed\n  after any group of four, optionally in braces. `{6f96-19ff-8b86-d011-b42d-00c0-4fc9-64ff}` parses,\n  and so does `{\"{6f9619ff-8b86-d011-b42d-00c04fc964ff}\"}`. Parentheses, and whitespace inside a\n  quoted element, fail (`FormatException`), as they do on the server. `GuidSet<T>` reads the same\n  grammar and hands your `Parse` the `D` form.",
+    "claim": "GuidSet.Parse and GuidSet<T>.Parse read 32 hex digits with a hyphen after any group of four or none, in either case, optionally in braces, as one value; they refuse the (…) and X forms, a hyphen after two digits or after the last group, whitespace at either end of a quoted or escaped element and urn:uuid:, with FormatException, through Parse, TryParse, the span overloads and the TypeConverter, agreeing with PostgreSQL's uuid_in; the wrapper's element Parse receives the D form.",
+    "oracle": "exception",
+    "surfaces": [
+      "GuidSet.ParseValue",
+      "GuidSet.Parse",
+      "GuidSet.TryParse"
+    ],
+    "heldBy": [
+      "SetParseFormatTests",
+      "SetElementWhiteSpaceContractTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "S18-nul-refused",
+    "source": "docs/value-sets.md#parse-and-print-literals",
+    "quote": "**A NUL character is refused.** PostgreSQL `text` can't hold U+0000, so `StringSet.From(\"a\\0b\")`\n  throws `ArgumentException` and `{a\\0b}` fails (`FormatException`), through `Parse`, `TryParse`,\n  JSON and `Add` alike, and `StringSet<T>` checks the element's text form.",
+    "claim": "StringSet and StringSet<T> refuse an element holding U+0000 on every construction path: From (ArgumentException), Add/Contains/Remove (ArgumentException), Parse and the TypeConverter (FormatException), TryParse (false) and JSON (JsonException), with a message naming NUL; every other character is kept as text, agreeing with PostgreSQL's textin, which refuses only a NUL byte.",
+    "oracle": "exception",
+    "surfaces": [
+      "StringSet.ParseValue",
+      "StringSet.From",
+      "StringSet.Parse",
+      "StringSet.TryParse",
+      "ValueSetExtensions.Add"
+    ],
+    "heldBy": [
+      "SetParseFormatTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "S19-text-form-round-trip-checked",
+    "source": "docs/value-sets.md#keep-the-text-form-of-the-underlying-type",
+    "quote": "The set checks the whole round trip, not only the grammar: your `Parse` must read the text your\n`ToString` gives back as the same value. The check runs whenever a set is written (`ToString`,\nJSON, the SQL literal and the bound parameter in EF Core) and whenever one is read (`Parse`,\n`TryParse`, JSON, a column).",
+    "claim": "For every core wrapper arity, an element whose invariant text form the family's own parser reads back as a different element, or cannot read, is refused with an exception naming the element type, its text and the text-form contract: InvalidOperationException from ToString, JsonException from the JSON write, InvalidOperationException or ArgumentException from the SQL literal and the bound parameter, FormatException from Parse and the TypeConverter, false from TryParse, JsonException from the JSON read; an element that normalizes on parse is accepted.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Set.FormatValue",
+      "*Set.ParseValue",
+      "*Set.ToString",
+      "*Set.Parse",
+      "*Set.TryParse"
+    ],
+    "heldBy": [
+      "SetElementBridgeTests",
+      "SqlLiteralTests",
+      "DecorativeElementContractTests"
     ]
   }
 ]

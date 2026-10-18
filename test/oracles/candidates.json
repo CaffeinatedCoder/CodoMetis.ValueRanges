@@ -1,59 +1,5 @@
 [
   {
-    "oracle": "DecorativeElementContractTests",
-    "row": "StringSet<DecoratedText>: JSON write accepted",
-    "family": "string arity writes a decorated element",
-    "issue": "#53",
-    "method": "StringArity_RefusesADecoratedElement_AtEveryWriteBoundary"
-  },
-  {
-    "oracle": "DecorativeElementContractTests",
-    "row": "StringSet<DecoratedText>: SQL literal accepted",
-    "family": "string arity writes a decorated element",
-    "issue": "#53",
-    "method": "StringArity_RefusesADecoratedElement_AtEveryWriteBoundary"
-  },
-  {
-    "oracle": "DecorativeElementContractTests",
-    "row": "StringSet<DecoratedText>: bound parameter accepted",
-    "family": "string arity writes a decorated element",
-    "issue": "#53",
-    "method": "StringArity_RefusesADecoratedElement_AtEveryWriteBoundary"
-  },
-  {
-    "oracle": "DecorativeElementContractTests",
-    "row": "Int32Set<OffByOne>: literal round trip changed the set",
-    "family": "wrapper arity does not check that the element's text form round-trips",
-    "issue": "#53",
-    "method": "IntegerArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip"
-  },
-  {
-    "oracle": "DecorativeElementContractTests",
-    "row": "StringSet<Lenient>: literal round trip changed the set",
-    "family": "wrapper arity does not check that the element's text form round-trips",
-    "issue": "#53",
-    "method": "StringArity_ReadsBackTheSetItWrote_WhenTheElementTextFormDoesNotRoundTrip"
-  },
-  {
-    "oracle": "SetElementWhiteSpaceContractTests",
-    "row": "GuidSet: accepts whitespace uuid_in rejects",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78"
-  },
-  {
-    "oracle": "SetElementWhiteSpaceContractTests",
-    "row": "GuidSet<TenantId>: accepts whitespace uuid_in rejects",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78"
-  },
-  {
-    "oracle": "LiteralGrammarParityTests",
-    "row": "uuid[] GuidSet ",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78",
-    "method": "ElementWhitespace_ReadsAsPostgresReadsIt"
-  },
-  {
     "oracle": "HostCultureProbeTests",
     "row": "DateRange variant minimal TryParse ",
     "family": "minimal API binds a variant-typed parameter through the union's TryParse: 200 with null for a valid literal and for another shape",
@@ -129,20 +75,6 @@
     "family": "minimal API binds a variant-typed parameter through the union's TryParse: 200 with null for a valid literal and for another shape",
     "issue": "#116",
     "method": "EveryHostEntryPoint_BindsTheInvariantValue_UnderEveryRequestCulture"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet whitespace ",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet<TenantId> whitespace ",
-    "family": "Guid.Parse trims whitespace uuid_in rejects",
-    "issue": "#78",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
   },
   {
     "oracle": "LiteralCorpusProbeTests",
@@ -282,27 +214,6 @@
     "row": "TimeRange inverted ",
     "family": "an inverted range literal parses as empty; PostgreSQL rejects it",
     "issue": "#114",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "DecimalRange beyond 28 digits ",
-    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
-    "issue": "#115",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "DecimalSet beyond 28 digits ",
-    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
-    "issue": "#115",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "RangeSet<DecimalRange> beyond 28 digits ",
-    "family": "decimal text beyond 28 significant digits is rounded; PostgreSQL keeps it",
-    "issue": "#115",
     "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
   },
   {
@@ -797,34 +708,6 @@
   },
   {
     "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet hyphen groups ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet parentheses ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet<TenantId> hyphen groups ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "GuidSet<TenantId> parentheses ",
-    "family": "Guid.Parse's grammar, not uuid_in's",
-    "issue": "#129",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
     "row": "LocalDateTimeRange offset ",
     "family": "LocalDateTime refuses Z and an offset that timestamp input drops",
     "issue": "#130",
@@ -895,20 +778,6 @@
   },
   {
     "oracle": "LiteralCorpusProbeTests",
-    "row": "StringSet NUL ",
-    "family": "a NUL character PostgreSQL text cannot hold",
-    "issue": "#133",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
-    "row": "StringSet<TextKey> NUL ",
-    "family": "a NUL character PostgreSQL text cannot hold",
-    "issue": "#133",
-    "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
-  },
-  {
-    "oracle": "LiteralCorpusProbeTests",
     "row": "DateRange infinity bound ",
     "family": "a discrete bound exclusive at ±infinity is canonicalized one step inside the domain",
     "issue": "#117",
@@ -947,40 +816,5 @@
     "row": " over empty as ",
     "family": "an empty captured collection cannot be a VALUES query root",
     "issue": "#137"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "DecimalSet JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "Int16Set JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "Int32Set JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "Int64Set JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "GuidSet JSON read [\" ",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
   }
 ]

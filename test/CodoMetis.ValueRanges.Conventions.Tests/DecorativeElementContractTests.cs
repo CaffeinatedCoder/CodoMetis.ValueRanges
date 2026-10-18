@@ -24,13 +24,14 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// element's message rather than the contract's.
 /// </para>
 /// <para>
-/// The integer arity refuses only decoration that is not numeric. An element whose text form is a
-/// <em>different number</em> (<c>ToString</c> gives <c>V + 1</c>, <c>Parse</c> gives <c>V</c>) is
-/// written as <c>{124}</c> and read back as 124: the set that comes back is not equal to the one
-/// written, and nothing throws. A string element whose <c>Parse</c> keeps any text is written as
-/// <c>{CUST-123}</c> and read back as <c>{CUST-CUST-123}</c>. Neither arity checks that an
-/// element's text form round-trips (#53); both are candidate rows here, per arity so that a seeded
-/// defect in one cannot be read as the other's known failure.
+/// The integer grammar alone refuses only decoration that is not numeric. An element whose text
+/// form is a <em>different number</em> (<c>ToString</c> gives <c>V + 1</c>, <c>Parse</c> gives
+/// <c>V</c>) was written as <c>{124}</c> and read back as 124 until 10.0.0: the set that came back
+/// was not equal to the one written, and nothing threw. A string element whose <c>Parse</c> keeps
+/// any text was written as <c>{CUST-123}</c> and read back as <c>{CUST-CUST-123}</c>. Since 10.0.0
+/// every core arity checks the round trip of the element's text form on write and on read
+/// (<c>WrapperElement</c>, #53), and the EF Core bridge through the store primitive; the rows below
+/// are per arity so that a seeded defect in one cannot be read as the other's known failure.
 /// </para>
 /// <para>
 /// The temporal and NodaTime arities are held for the same sentence by <c>SqlLiteralTests</c>,

@@ -46,14 +46,14 @@
     "unit": "DecimalSet",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
-    "reason": "numeric reads a decimal point and an exponent (NumberStyles.Float); the integer siblings refuse both (NumberStyles.Integer)"
+    "reason": "numeric reads a decimal point and an exponent, and refuses text decimal would round (DecimalLiteral); the integer siblings read NumberStyles.Integer, which overflows rather than rounds"
   },
   {
     "family": "core value sets",
     "unit": "GuidSet",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
-    "reason": "Guid.Parse reads its own grammar and trims its own whitespace, where the integer siblings go through NumberStyles; the mismatch with uuid_in is #78 and #129, both scheduled for 10.0.0"
+    "reason": "uuid_in's grammar (UuidLiteral): 32 hex digits, a hyphen after any group of four, optional braces, no whitespace; the integer siblings go through NumberStyles"
   },
   {
     "family": "core value sets",
@@ -99,10 +99,17 @@
   },
   {
     "family": "core wrapper arities",
-    "unit": "DecimalSet<TElement>",
-    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "unit": "GuidSet<TElement>",
+    "member": "ParseElement(string)",
     "kind": "lone body",
-    "reason": "a decimal-backed wrapper writes a JSON number keeping its scale, not a string (AGENTS.md, ElementJsonConverter); the integer arities have their own number converter and the rest write text"
+    "reason": "the same shape as the numeric arities — the family's grammar first, then the element gets the primitive's invariant text — but Guid has no ToString(IFormatProvider), so the D form (what uuid_out prints) is named"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "ParseElement(string)",
+    "kind": "lone body",
+    "reason": "text is its own literal: textin applies no grammar and keeps every character, so the element's Parse sees the raw text; every other arity parses the primitive's grammar first"
   },
   {
     "family": "core wrapper arities",
@@ -228,7 +235,7 @@
     "unit": "DecimalRange",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
-    "reason": "numeric reads a decimal point and an exponent (NumberStyles.Float); the integer siblings refuse both (NumberStyles.Integer)"
+    "reason": "numeric reads a decimal point and an exponent, and refuses text decimal would round (DecimalLiteral); the integer siblings read NumberStyles.Integer, which overflows rather than rounds"
   },
   {
     "family": "core ranges",
@@ -393,13 +400,6 @@
   },
   {
     "family": "efcore wrapper bridges",
-    "unit": "GuidSet<>",
-    "member": "parsePrimitive",
-    "kind": "lone body",
-    "reason": "calls Guid.Parse directly instead of GuidSet.ParseValue, which is the same call today; a third site for #129's uuid_in grammar, named there so the fix reaches all of them"
-  },
-  {
-    "family": "efcore wrapper bridges",
     "unit": "DateSet<>",
     "member": "parsePrimitive",
     "kind": "lone body",
@@ -425,5 +425,33 @@
     "member": "parseStoreText",
     "kind": "extra",
     "reason": "the one family whose element text (2024-06) differs from its store text (2024-06-01): a JSON document holds the dates and is read back through LocalDateSet"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "text has one rule the column enforces and the others do not: a NUL character cannot be stored, so Contains, Add and Remove refuse the probe From refuses (TextElement, #133); the other families' elements are valid by type"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "the element's text form is what the text column holds, so the NUL rule applies to it on every construction path (TextElement, #133); the other arities' primitives are valid by type"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "RequireText($T)",
+    "kind": "extra",
+    "reason": "the element's text form is what the text column holds, so the NUL rule applies to it on every construction path (TextElement, #133); the other arities' primitives are valid by type"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "StringSet / StringSet<TElement>",
+    "member": "arity only: RequireText($T)",
+    "kind": "extra",
+    "reason": "the arity checks the element's text form for a NUL character through one helper; the closed set checks the string itself inline (TextElement, #133)"
   }
 ]

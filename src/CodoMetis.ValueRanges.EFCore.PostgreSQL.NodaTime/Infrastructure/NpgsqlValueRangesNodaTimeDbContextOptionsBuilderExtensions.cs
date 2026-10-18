@@ -97,10 +97,12 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
     // produces it, so a wrapper that forwards its format argument — which is what the
     // generators emit — needs no configuration.
     //
-    // The three calendar-bearing families also set requireRoundTrip. The ISO pattern formats a
-    // value in its own calendar's fields, so an element backed by a Julian 2024-01-01 (ISO
-    // 2024-01-14) would bind, inline and store as ISO 2024-01-01. The sets refuse such an element
-    // at construction; requireRoundTrip refuses it as a bare operand (`column @> ARRAY[@p]`) too.
+    // Every family sets requireRoundTrip, as the core families do since 10.0.0 (#53): the element's
+    // text, read back through the store primitive, must be the same element. For the three
+    // calendar-bearing families it is also what refuses a non-ISO calendar as a bare operand
+    // (`column @> ARRAY[@p]`): the ISO pattern formats a value in its own calendar's fields, so an
+    // element backed by a Julian 2024-01-01 (ISO 2024-01-14) would otherwise bind, inline and store
+    // as ISO 2024-01-01. The sets refuse such an element at construction.
     private static readonly (Type Family, Func<Type, ISetTypeDefinition> Factory)[] SetFamilies =
         [
             // literalText is passed explicitly on every one of these, for the same reason the
@@ -124,12 +126,12 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             (typeof(InstantSet<>), SetTypeRegistry.Bridged(
                  "timestamp with time zone", InstantPattern.ExtendedIso.PatternText,
                  ParseWith(InstantPattern.ExtendedIso), InstantPattern.ExtendedIso.Format,
-                 NodaStoreTemporal.Literal, NodaStoreTemporal.Truncate, storeText: true)),
+                 NodaStoreTemporal.Literal, NodaStoreTemporal.Truncate, storeText: true, requireRoundTrip: true)),
 
             (typeof(LocalTimeSet<>), SetTypeRegistry.Bridged(
                  "time without time zone", LocalTimePattern.ExtendedIso.PatternText,
                  ParseWith(LocalTimePattern.ExtendedIso), LocalTimePattern.ExtendedIso.Format,
-                 LocalTimePattern.ExtendedIso.Format, NodaStoreTemporal.Truncate, storeText: true)),
+                 LocalTimePattern.ExtendedIso.Format, NodaStoreTemporal.Truncate, storeText: true, requireRoundTrip: true)),
 
             // The one family whose element text form and store text form differ: the element
             // speaks 2024-06 and the column holds 2024-06-01. formatPrimitive therefore feeds
