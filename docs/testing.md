@@ -95,7 +95,7 @@ Three further parity sweeps close the gaps the 8.0.0 audit left, each the struct
 
 Everything is discovered — projects by globbing `src/`, types by reflection — so a new package or type is covered without editing the tests. Two consequences worth knowing:
 
-- Both discovery-driven classes assert a **floor** on how many types they find. This is not padding: the mapping parity tests were passing while iterating an empty list, because the range unions are abstract records and the predicate filtered abstract types out. The floor caught it on the first run.
+- Both discovery-driven classes assert a **floor** on how many types they find. This is not padding: the mapping parity tests were passing while iterating an empty list, because the range unions are abstract records and the predicate filtered abstract types out. The floor caught it on the first run. Range discovery goes one step further since 10.0.0: every range sweep asserts that it reached every union of `RangeCensus`, which finds unions by structure (a nested sealed variant implementing `IEmptyRange<T>`) rather than by the interface the sweep reads, so a stale count cannot hide a missing type (#222).
 - The probe values in `ValueSetContractTests` are load-bearing. Probes that ordinal and culture comparison order identically let the `CanonicalOrder` rule pass while broken — `"Zebra"`/`"apple"` split the two orders, and `TextKey` compares culture-sensitively on purpose, because an ordinal `IComparable` made the element agree with canonical order by accident.
 
 Every test in this project has been verified by seeding the defect it claims to catch and confirming it — and only it — fails.

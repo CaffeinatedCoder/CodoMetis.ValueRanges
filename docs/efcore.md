@@ -534,6 +534,12 @@ example, `daterange('2026-01-01', 'infinity')` loads as `[2026-01-01,9999-12-30]
 `infinity` and `-infinity`, so the range can hold the extreme only when it includes the infinity.
 The literal, JSON and a JSON column read the same text the same way.
 
+`Shift` and `Expand` keep a bound that stands for an infinity where it is, so a row read from
+`tsrange('2026-01-01', 'infinity')`, moved and saved, still ends at `infinity`
+([Move or widen a range](ranges.md#move-or-widen-a-range)). A `daterange` with an exclusive
+`infinity)` is the exception on the way back: it loads as `[x,9999-12-30]`, and that saves as
+`[x,9999-12-31)`, a finite date, whether or not you moved it.
+
 If other tools write open-ended dates into your tables, have them write an absent bound
 (`daterange('2026-01-01', NULL)`, which loads as `[2026-01-01,)`) or an inclusive one
 (`'[2026-01-01,infinity]'`, which loads as `[2026-01-01,9999-12-31]`). The same holds for

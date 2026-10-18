@@ -61,7 +61,7 @@ public sealed class CapturedCollectionProbeTests
     public async Task Ranges_AnswerAsInMemory()
     {
         ContainerLifecycle.RequireDatabase();
-        Assert.IsGreaterThanOrEqualTo(11, FuzzTypes.Ranges.Count, "range type discovery found too few types");
+        RangeCensus.AssertReachedEveryUnion(FuzzTypes.Ranges.Select(t => t.Range), nameof(Ranges_AnswerAsInMemory));
 
         var method = typeof(CapturedCollectionProbeTests).GetMethod(nameof(SweepRange), BindingFlags.NonPublic | BindingFlags.Static)!;
         var lines  = await RunAll(FuzzTypes.Ranges.Select(t => (Func<Task<List<string>>>)(

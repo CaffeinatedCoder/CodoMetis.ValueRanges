@@ -1,0 +1,66 @@
+Seed: Split and Values(step) end when n × step alone overflows, though start + n × step still fits, on Int64Range, DecimalRange, Float64Range and Float32Range
+Oracles: RangeSplitOracleTests
+Fails: the half-domain row of each of the four types: the walk stops one or two steps early and the last piece is wider than the step
+History: shipped in the 10.0.0 previews, found by the pre-tag analysis, fixed in 10.0.0 (#219)
+
+diff --git a/src/CodoMetis.ValueRanges/DecimalRange.cs b/src/CodoMetis.ValueRanges/DecimalRange.cs
+index 2142507..defcf7b 100644
+--- a/src/CodoMetis.ValueRanges/DecimalRange.cs
++++ b/src/CodoMetis.ValueRanges/DecimalRange.cs
+@@ -202,7 +202,7 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
+     public IEnumerable<DecimalRange> Split(decimal step)
+     {
+         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
+-        return RangeSplitting.Split<DecimalRange, decimal>(this, RangeSplitting.Steps<decimal>(this, (start, n) => checked(start + n * step), previous => checked(previous + step)));
++        return RangeSplitting.Split<DecimalRange, decimal>(this, RangeSplitting.Steps<decimal>(this, (start, n) => checked(start + n * step)));
+     }
+ 
+     /// <summary>
+diff --git a/src/CodoMetis.ValueRanges/Float32Range.cs b/src/CodoMetis.ValueRanges/Float32Range.cs
+index 198a2f8..9c640cf 100644
+--- a/src/CodoMetis.ValueRanges/Float32Range.cs
++++ b/src/CodoMetis.ValueRanges/Float32Range.cs
+@@ -285,7 +285,7 @@ public abstract partial record Float32Range : IRange<float>, IRangeFactory<Float
+     public IEnumerable<Float32Range> Split(float step)
+     {
+         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(RequireFinite(step, nameof(step)));
+-        return RangeSplitting.Split<Float32Range, float>(this, RangeSplitting.Steps<float>(this, (start, n) => Moved(start + n * step), previous => Moved(previous + step)));
++        return RangeSplitting.Split<Float32Range, float>(this, RangeSplitting.Steps<float>(this, (start, n) => Moved(start + n * step)));
+     }
+ 
+     /// <summary>
+diff --git a/src/CodoMetis.ValueRanges/Float64Range.cs b/src/CodoMetis.ValueRanges/Float64Range.cs
+index 269642c..7ccbf2b 100644
+--- a/src/CodoMetis.ValueRanges/Float64Range.cs
++++ b/src/CodoMetis.ValueRanges/Float64Range.cs
+@@ -285,7 +285,7 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
+     public IEnumerable<Float64Range> Split(double step)
+     {
+         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(RequireFinite(step, nameof(step)));
+-        return RangeSplitting.Split<Float64Range, double>(this, RangeSplitting.Steps<double>(this, (start, n) => Moved(start + n * step), previous => Moved(previous + step)));
++        return RangeSplitting.Split<Float64Range, double>(this, RangeSplitting.Steps<double>(this, (start, n) => Moved(start + n * step)));
+     }
+ 
+     /// <summary>
+diff --git a/src/CodoMetis.ValueRanges/Int64Range.cs b/src/CodoMetis.ValueRanges/Int64Range.cs
+index 7cf830d..87d2e3a 100644
+--- a/src/CodoMetis.ValueRanges/Int64Range.cs
++++ b/src/CodoMetis.ValueRanges/Int64Range.cs
+@@ -231,7 +231,7 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
+     public IEnumerable<Int64Range> Split(long step)
+     {
+         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
+-        return RangeSplitting.Split<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step)), previous => checked(previous + step)));
++        return RangeSplitting.Split<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+     }
+ 
+     /// <summary>
+@@ -249,7 +249,7 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
+     public IEnumerable<long> Values(long step)
+     {
+         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
+-        return RangeSplitting.Values<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step)), previous => checked(previous + step)));
++        return RangeSplitting.Values<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+     }
+ 
+     /// <summary>
