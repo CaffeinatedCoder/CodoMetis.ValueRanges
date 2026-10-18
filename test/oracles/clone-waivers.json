@@ -1251,5 +1251,12 @@
     "member": "storeValue",
     "kind": "extra",
     "reason": "the bridges with a time part truncate to the store's microsecond as Npgsql does (StoreTemporal / NodaStoreTemporal); the others are stored as they are"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange + DateTimeOffsetRange + DateTimeRange",
+    "member": "IsInfinity($T)",
+    "kind": "extra",
+    "reason": "Only the temporal ranges have extremes that stand for PostgreSQL ±infinity, so only they keep such a bound fixed under Shift and Expand (#224). The integer, decimal and float extremes are ordinary values and overflow."
   }
 ]
