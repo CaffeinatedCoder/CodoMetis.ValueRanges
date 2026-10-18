@@ -37,20 +37,36 @@ public static class RangeExtensions
         public bool IsFinite()         => range is IFiniteRange<T>;
 
         /// <summary>
-        /// Returns <see langword="true"/> if the range has no lower bound but has an upper bound — equivalent to <c>(-∞, end]</c>.
+        /// Returns <see langword="true"/> if the range has no lower bound — equivalent to the PostgreSQL
+        /// <c>lower_inf</c> function.
         /// </summary>
         /// <returns>
-        /// <see langword="true"/> for <see cref="IUnboundedStartRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// <see langword="true"/> for <see cref="IUnboundedStartRange{T}"/> and <see cref="IInfinityRange{T}"/>;
+        /// <see langword="false"/> for all other shapes. To test for the <c>(-∞, end]</c> shape alone, pattern-match
+        /// on <see cref="IUnboundedStartRange{T}"/>.
         /// </returns>
-        public bool IsUnboundedStart() => range is IUnboundedStartRange<T>;
+        /// <remarks>
+        /// Before 10.0.0 this tested the variant, so the infinite range answered <see langword="false"/> while
+        /// <c>lower_inf('(,)')</c>, the EF Core translation and the one-element <see cref="RangeSet{TRange,T}"/>
+        /// all answered <see langword="true"/>.
+        /// </remarks>
+        public bool IsUnboundedStart() => range is IUnboundedStartRange<T> or IInfinityRange<T>;
 
         /// <summary>
-        /// Returns <see langword="true"/> if the range has a lower bound but no upper bound — equivalent to <c>[start, +∞)</c>.
+        /// Returns <see langword="true"/> if the range has no upper bound — equivalent to the PostgreSQL
+        /// <c>upper_inf</c> function.
         /// </summary>
         /// <returns>
-        /// <see langword="true"/> for <see cref="IUnboundedEndRange{T}"/>; <see langword="false"/> for all other shapes.
+        /// <see langword="true"/> for <see cref="IUnboundedEndRange{T}"/> and <see cref="IInfinityRange{T}"/>;
+        /// <see langword="false"/> for all other shapes. To test for the <c>[start, +∞)</c> shape alone, pattern-match
+        /// on <see cref="IUnboundedEndRange{T}"/>.
         /// </returns>
-        public bool IsUnboundedEnd()   => range is IUnboundedEndRange<T>;
+        /// <remarks>
+        /// Before 10.0.0 this tested the variant, so the infinite range answered <see langword="false"/> while
+        /// <c>upper_inf('(,)')</c>, the EF Core translation and the one-element <see cref="RangeSet{TRange,T}"/>
+        /// all answered <see langword="true"/>.
+        /// </remarks>
+        public bool IsUnboundedEnd()   => range is IUnboundedEndRange<T> or IInfinityRange<T>;
 
         /// <summary>
         /// Returns the lower bound of the range, or <see langword="null"/> when the range is

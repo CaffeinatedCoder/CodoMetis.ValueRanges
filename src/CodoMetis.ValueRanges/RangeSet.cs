@@ -444,10 +444,15 @@ public sealed class RangeSet<TRange, T>
     /// <returns><see langword="true"/> if some element overlaps <paramref name="range"/>.</returns>
     /// <remarks>
     /// Binary search on lower bounds narrows the test to a single candidate element in
-    /// O(log n). The candidate is the rightmost element whose lower bound is at or below
-    /// <paramref name="range"/>'s upper bound; if its upper bound is below the query's
-    /// lower bound, no element overlaps (upper bounds are strictly increasing in a
-    /// normalized set, so all earlier elements end even earlier).
+    /// O(log n). The candidate is the rightmost element that starts before
+    /// <paramref name="range"/> ends — a lower bound below the upper bound, or at it when both
+    /// are inclusive. Every later element starts where the query has already stopped, and if the
+    /// candidate's upper bound is below the query's lower bound, no element overlaps (upper
+    /// bounds are strictly increasing in a normalized set, so all earlier elements end even
+    /// earlier). Choosing the candidate by the bound value alone picked an element that starts
+    /// exactly where the query stops, <c>[5,8)</c> for <c>[3,5)</c>, and missed the element
+    /// before it; <c>Contains(IRange{T})</c> searches by the query's lower bound, where the
+    /// value alone is the right key.
     /// </remarks>
     public bool Overlaps(IRange<T> range)
     {
@@ -464,11 +469,12 @@ public sealed class RangeSet<TRange, T>
         if (range is IUnboundedEndRange<T>)
             return _elements[^1].Overlaps(range);
 
-        // Query has a finite upper bound E: find the last element whose lower bound ≤ E.
-        var (_, _, upperInfinite) = RangeSetHelpers.RangeUpperBound<T>(range);
+        // Query has a finite upper bound E: find the last element that starts before E — not the
+        // last whose lower bound is ≤ E, which on a continuous domain is an element starting at E
+        // that shares no value with a query ending there exclusively, while the element before it may.
+        var (upperValue, upperInclusive, upperInfinite) = RangeSetHelpers.RangeUpperBound<T>(range);
         if (upperInfinite) return false; // unreachable: handled by the IUnboundedEndRange branch above
-        var (upperValue, _, _) = RangeSetHelpers.RangeUpperBound<T>(range);
-        int idx = RangeSetHelpers.LastIndexWithLowerBoundAtOrBelow<TRange, T>(_elements, upperValue);
+        int idx = RangeSetHelpers.LastIndexStartingBefore<TRange, T>(_elements, upperValue, upperInclusive);
         return idx >= 0 && _elements[idx].Overlaps(range);
     }
 

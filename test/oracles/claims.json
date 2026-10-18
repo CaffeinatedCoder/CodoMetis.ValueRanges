@@ -687,17 +687,18 @@
     ]
   },
   {
-    "id": "E38-captured-range-collection-any-count-workaround",
+    "id": "E38-captured-range-collection-any-count",
     "source": "docs/efcore.md#match-a-column-against-a-list-of-ranges",
-    "quote": "Without a `Contains` in the same query, the list still goes out as one parameter that PostgreSQL reads as a multirange. A multirange merges overlapping and adjacent ranges and drops empty ones. Wrap the list in `EF.Constant` until 10.0.0 fixes this: `bookings.Select(b => EF.Constant(wanted).Count(w => w.Overlaps(b.Seats)))`.",
-    "claim": "Any or Count over a captured range collection with no Contains reading it in the same query still translates through unnest of the single parameter (unchanged in 9.1.0, issue #76); wrapped in EF.Constant, Count(w => w.Overlaps(column)) over overlapping ranges returns the in-memory count; beside a Contains on the same collection, the collection is read from VALUES and answers as in memory.",
+    "quote": "`Any` and `Count` over the list read the ranges from `VALUES`, so overlapping, adjacent, duplicate and empty ranges stay what they are. An empty list matches nothing: `Contains` is `false`, `Any` with a condition is `false` and `Count` with a condition is `0`.",
+    "claim": "For every range family, Any and Count with a predicate over a captured array, List, HashSet or IEnumerable of ranges — alone or beside a Contains — read the collection from VALUES, one parameter per range, and return the in-memory answer for lists holding overlapping, adjacent, duplicate or empty ranges and for Any(w => w == column); an empty collection gives false and 0; EF.Parameter(wanted) throws InvalidOperationException in translation naming the remedy; EF.Constant keeps its literals and answers alike.",
     "oracle": "differential",
     "surfaces": [
       "ValueRangesQueryExpressionInterceptor.QueryCompilationStarting"
     ],
     "heldBy": [
       "RangeCollectionContainsTests",
-      "RangeCollectionTranslationTests"
+      "RangeCollectionTranslationTests",
+      "CapturedCollectionProbeTests"
     ]
   },
   {
@@ -771,6 +772,22 @@
     ],
     "heldBy": [
       "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E44-date-extremes-adjacent-to-nothing-in-sql",
+    "source": "docs/efcore.md#store-timestamp-ranges",
+    "quote": "**A date at the extreme is adjacent to nothing in the database.** Npgsql also writes `DateOnly.MinValue` and `MaxValue`, and `LocalDate.MinIsoValue` and `MaxIsoValue`, as `-infinity` and `infinity`, and no date is next to those. So `IsAdjacentTo` returns `false` in SQL for `[0001-01-01,0001-01-01]` and `[0001-01-02,)`, and `true` in memory, where 0001-01-01 is a day like any other. One day inside the extremes the two sides agree. If you set `Npgsql.DisableDateTimeInfinityConversions`, the extremes stay dates and the two sides agree there too.",
+    "claim": "With Npgsql's infinity conversions on, a DateRange or LocalDateRange bounded at an extreme is adjacent to its neighbour in memory and not on the server (as a literal, a parameter and through EF Core), one day inside the extremes both agree, and with Npgsql.DisableDateTimeInfinityConversions set both agree at the extremes too.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "DomainBoundaryDivergenceTests",
+      "InfinityConversionsDisabledTests",
+      "DifferentialFuzzParityTests"
     ]
   },
   {
