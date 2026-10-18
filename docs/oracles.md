@@ -274,6 +274,43 @@ with the class as what varies it.
 nothing holds it. Ids are a letter (R ranges, M multirange, S sets, J literals/JSON/TypeConverter, E
 EF Core, A hosting/AOT), two digits and a slug, sorted.
 
+## Sibling parity
+
+The claims hold each promise where a document makes it, so they find a bug at the site they check
+and miss it at the sibling site that makes the same promise implicitly. The changelog shows that a
+bug at one site tends to come back at its siblings. The receiver-shaped dispatch went from
+`IsAdjacentTo` to `IsStrictlyLeftOf` to `RangeSet.Except(TRange)`, and the wrapper arities kept
+lagging their primitive set. A **sibling parity sweep** (`*ParityTests` in the conventions project,
+kind `differential`) runs two things that must agree on the same input and compares their answers.
+It needs no ground truth: when the siblings disagree, one of them is wrong.
+
+| Sweep | One side | The other side |
+|---|---|---|
+| `SetWrapperParityTests` | each primitive value set | its wrapper arity closed over an identity element (`Same<T>`, `SameText`) |
+| `RangeSetLiftParityTests` | each range operation, predicate and accessor | the same on the one-element `RangeSet` holding the range |
+| `LiteralEntryPointParityTests` | `Parse(string)` of a literal | the span overload, `TryParse`, JSON, the `TypeConverter` and configuration binding |
+
+The rules are the ones for any oracle, plus three of their own:
+
+- **The pair must be a promise.** Compare two sites only where a document says, or the design
+  requires, that they agree. Where the documents set them apart, compare through the documented
+  mapping, or leave the input out and cite the document in a comment. For example, a NodaTime
+  wrapper set refuses a non-ISO element that its primitive normalizes, and a `TypeConverter` reads
+  `""` as an absent value.
+- **The identity has to be real.** `SetWrapperParityTests` closes each family over an element that
+  adds nothing: it parses with the exact inverse of the primitive's text form (`DateTime` with
+  `RoundtripKind`, NodaTime with its ISO pattern) and compares as the primitive does. A wrapper that
+  added anything would turn a family defect into a harness defect.
+- **Make sure both sides really are distinct calls.** In generic code `TSet.Parse(string, …)` binds
+  to the span overload (see [testing.md](testing.md#the-sibling-parity-sweeps)), so a string-versus-span
+  comparison has to go through `StringOverloads`. A seed that breaks one side shows whether the sweep
+  reaches it.
+
+A disagreement goes through `Candidates.Verdict` like any other, with each failure line starting
+with the row's type name. A disagreement already filed against another oracle gets its own rows here
+under the same issue. #109 is the example: PostgreSQL disagrees with `IsUnboundedStart` on `(,)`, and
+so does the range's own one-element multirange.
+
 ## Generated operands
 
 Most sweeps enumerate their cases: shapes, small universes, five cultures. `DifferentialFuzzParityTests`

@@ -108,6 +108,24 @@
     "against": "construct(deconstruct(x)) == x, for every bounded variant of every discovered range type"
   },
   {
+    "class": "SetWrapperParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the primitive set, for its wrapper arity closed over an identity element: every operation, parse and format entry point, JSON both ways and the TypeConverter"
+  },
+  {
+    "class": "RangeSetLiftParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "the range itself, for the one-element RangeSet holding it: every predicate, operation and accessor over the shape matrix with the domain's extremes, for every discovered range type"
+  },
+  {
+    "class": "LiteralEntryPointParityTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "Parse(string), for the same literal through the span overload, TryParse, JSON, the TypeConverter and configuration binding, for every discovered range, variant, multirange and value set type"
+  },
+  {
     "class": "ShapeMatrixParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",

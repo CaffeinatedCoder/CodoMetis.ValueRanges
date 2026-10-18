@@ -295,6 +295,56 @@ overloads, `Add`, `Remove`, `Contains`, an unquoted `NULL` in the array literal,
 refuses rather than drops. It runs over families whose element type is a reference type, which is
 `StringSet` alone today and whatever is added later without anyone having to remember.
 
+### The Sibling Parity Sweeps
+
+A bug found at one API site tends to come back at a sibling site that makes the same promise. The
+changelog shows it repeatedly: `IsAdjacentTo` (6.2.1), then `IsStrictlyLeftOf` and `Except` (7.0.0),
+then `RangeSet.Except(TRange)` (8.0.0). The wrapper arities kept lagging their primitive set. And
+`==`/`!=` went untested on 18 of 20 set types. A claim-driven oracle checks each site against its own
+document, so it can't see a promise two sites share without saying so. These three sweeps
+(conventions project, one `[DynamicData]` row per discovered type) compare the two siblings directly.
+They assert no ground truth: when the siblings disagree, one of them is wrong, and the failure line
+names both answers.
+
+- **`SetWrapperParityTests`**: each primitive set against its wrapper arity closed over an
+  *identity* element (`Int32Set` against `Int32Set<Same<int>>`, `StringSet` against
+  `StringSet<SameText>`, in `IdentityWrappers.cs`). An identity element parses, formats and compares
+  exactly as its primitive does, so the family's own code is the only difference. That's the
+  opposite of `WrapperElements`, whose elements get something wrong on purpose. The sweep runs the
+  family's probes plus its extremes, every subset shape, array literals derived from the element
+  texts (quoted, whitespace-padded, duplicated, out of order, empty, `NULL`, malformed) and JSON
+  documents (reordered, mistyped, quoted, padded). It compares every operation, `ParseValue` and
+  `FormatValue`, both overloads of `Parse` and `TryParse`, `ToString` with each format and provider,
+  the `TypeConverter`, JSON token kinds, and each sibling reading the other's document. It wants the
+  same element texts in the same order, or the same exception type.
+- **`RangeSetLiftParityTests`**: each range against the one-element `RangeSet` holding it, over the
+  shape matrix `DomainParityOracleTests` uses (`RangeSpecs.cs`), extended with bounds at the domain's
+  minimum and maximum. For every ordered pair it compares each predicate with the set-set and
+  set-range overloads, and each operation with the named method and the operator (`|`, `&`, `-`).
+  For every range it compares each accessor, `Merge`, `Complement`, the literal, and `Contains(T)`
+  at every grid point. Results are compared as literals, so the bound values and inclusivity have to
+  match, not just a few `Contains` answers.
+- **`LiteralEntryPointParityTests`**: one literal through every entry point: `Parse` and `TryParse`
+  (string and span), a JSON string, the `TypeConverter` and `IConfiguration` binding. It covers every
+  range union and each sealed variant (the union's answer narrowed to the variant's shape), every
+  multirange (including its explicit `IParsable` implementation) and every value set. The entry
+  points must produce equal values, or all refuse. A value set's JSON is its element array, so it
+  skips the JSON step here; `SetWrapperParityTests` covers that array. The empty string is an absent
+  value to the `TypeConverter` and the binder by design, so the converter and the binder never see it.
+
+The sweeps run in a few seconds altogether. Each one is seeded (`test/oracles/seeds/`), and their
+disagreements are candidates in `candidates.json`: #141 (wrapper JSON reads accept tokens the
+primitive refuses) and #109 (`IsUnboundedStart`/`IsUnboundedEnd` on `(,)`), found again here between
+a range and its own multirange.
+
+**The `Parse(string)` trap.** In generic code constrained on `IRangeFactory` or `IValueSetFactory`,
+`TSet.Parse(text, provider)` with a `string` argument calls the *span* overload. Both interfaces derive
+from `ISpanParsable<TSelf>`. Overload resolution drops the base interface's `IParsable<TSelf>`
+candidate whenever the derived interface's span candidate applies, and the implicit string-to-span
+conversion makes it apply. So a sweep that means to compare the two overloads compares the span one
+with itself. Call the string overloads through `StringOverloads` (constrained on `IParsable<TSelf>`
+alone). The parity sweeps do this, and their `TryParse` seed was missed until they did.
+
 ### Shape-Combination Matrix
 
 Every binary operation test must cover all five range shapes: `Finite`, `UnboundedStart`, `UnboundedEnd`, `EmptyRange`, `Infinity`. Tests instantiate the "other" operand in each shape and verify the result type and value.
