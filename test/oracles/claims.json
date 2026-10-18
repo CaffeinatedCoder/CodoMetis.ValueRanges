@@ -2789,12 +2789,14 @@
   {
     "id": "R31-shift-by-months-follows-calendar",
     "source": "docs/ranges.md#move-or-widen-a-range",
-    "quote": "`LocalDateRange` and `LocalDateTimeRange` move by NodaTime's calendar arithmetic, which clips to the end of a shorter month.",
-    "claim": "LocalDateRange.Shift(Period.FromMonths(1)) of [2026-01-01,2026-01-31] is [2026-02-01,2026-02-28], and shifting it back gives [2026-01-01,2026-01-28]; a period with a time part throws ArgumentException.",
+    "quote": "A `LocalDateRange` moves the day after its last day, as PostgreSQL stores a `daterange`, so a whole month moves to a whole month: `LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1))` is `LocalDateRange.Month(2026, 3)`, and moving it back gives February again.",
+    "claim": "LocalDateRange.Shift and Expand by a period of months move the upper bound as its exclusive end and step back a day, so Month(y, m).Shift(P1M) is Month(y, m + 1), Quarter(y, q).Shift(P3M) the next quarter and Year(y).Shift(P1Y) the next year, for every month of a leap and a non-leap year, and the shift back restores the range, as PostgreSQL moves the daterange [first, next first) and LocalDateTimeRange moves [first, next first); a start on the 31st still clips to the shorter month; YearMonthRange.Quarter(y, q).Shift(3) is the next quarter; a period with a time part throws ArgumentException.",
     "oracle": "claim",
     "surfaces": [
       "LocalDateRange.Shift",
-      "LocalDateTimeRange.Shift"
+      "LocalDateRange.Expand",
+      "LocalDateTimeRange.Shift",
+      "YearMonthRange.Shift"
     ],
     "heldBy": [
       "NodaTimeShiftExpandTests"

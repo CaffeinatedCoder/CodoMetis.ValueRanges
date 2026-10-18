@@ -501,9 +501,11 @@ Good to know:
 - **A `DateTimeOffsetRange` keeps its offsets.** A day is exactly 24 hours, whatever a time zone
   does that night.
 - **A period of months follows the calendar.** `LocalDateRange` and `LocalDateTimeRange` move by
-  NodaTime's calendar arithmetic, which clips to the end of a shorter month. So
-  `[2026-01-01,2026-01-31]` moved by one month is `[2026-02-01,2026-02-28]`, and moving it back
-  gives `[2026-01-01,2026-01-28]`. A period of days or weeks moves back exactly.
+  NodaTime's calendar arithmetic, which clips to the end of a shorter month. A `LocalDateRange`
+  moves the day after its last day, as PostgreSQL stores a `daterange`, so a whole month moves to a
+  whole month: `LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1))` is
+  `LocalDateRange.Month(2026, 3)`, and moving it back gives February again. A start on the 31st
+  still clips: January 31 plus one month is February 28.
 - **They run in memory only.** PostgreSQL has no range arithmetic. See
   [What runs where](efcore.md#what-runs-where).
 

@@ -20,16 +20,61 @@ public class NodaTimeShiftExpandTests
         Assert.AreEqual("[2026-05-31,2026-06-08]", week.Expand(Period.FromDays(1)).ToString());
     }
 
+    /// <summary>
+    /// A period of months moves the exclusive end, the day after the last, so a whole month lands on a
+    /// whole month, as the <c>daterange</c> <c>[2026-02-01,2026-03-01)</c> moves in PostgreSQL and as
+    /// <c>LocalDateTimeRange</c> moves. Moving the closed last day instead turned February into
+    /// March 1 to 28 (#223). Every month of a leap and a non-leap year, both directions.
+    /// </summary>
     [TestMethod]
-    public void LocalDateRange_ShiftByMonths_ClipsToTheMonthEnd()
+    [DataRow(2024)]
+    [DataRow(2026)]
+    public void LocalDateRange_ShiftByMonths_MovesAWholeMonthToAWholeMonth(int year)
     {
-        var january = LocalDateRange.CreateFinite(new LocalDate(2026, 1, 1), new LocalDate(2026, 1, 31));
+        for (var month = 1; month <= 12; month++)
+        {
+            var current = LocalDateRange.Month(year, month);
+            var next    = LocalDateRange.Month(new YearMonth(year, month).PlusMonths(1).OnDayOfMonth(1));
+            var before  = LocalDateRange.Month(new YearMonth(year, month).PlusMonths(-1).OnDayOfMonth(1));
 
-        var february = january.Shift(Period.FromMonths(1));
-        Assert.AreEqual("[2026-02-01,2026-02-28]", february.ToString());
+            Assert.AreEqual(next, current.Shift(Period.FromMonths(1)), $"{current} + P1M");
+            Assert.AreEqual(before, current.Shift(Period.FromMonths(-1)), $"{current} - P1M");
+            Assert.AreEqual(current, current.Shift(Period.FromMonths(1)).Shift(Period.FromMonths(-1)), $"{current} round trip");
+        }
 
-        // Calendar arithmetic is not reversible: moving back gives January 1 to 28.
-        Assert.AreEqual("[2026-01-01,2026-01-28]", february.Shift(Period.FromMonths(-1)).ToString());
+        for (var quarter = 1; quarter <= 4; quarter++)
+        {
+            var current = LocalDateRange.Quarter(year, quarter);
+            var next    = quarter == 4 ? LocalDateRange.Quarter(year + 1, 1) : LocalDateRange.Quarter(year, quarter + 1);
+            Assert.AreEqual(next, current.Shift(Period.FromMonths(3)), $"{current} + P3M");
+        }
+
+        Assert.AreEqual(LocalDateRange.Year(year + 1), LocalDateRange.Year(year).Shift(Period.FromYears(1)));
+    }
+
+    [TestMethod]
+    public void LocalDateRange_ExpandByMonths_GrowsByWholeMonths()
+    {
+        Assert.AreEqual("[2026-01-01,2026-03-31]", LocalDateRange.Month(2026, 2).Expand(Period.FromMonths(1)).ToString());
+        Assert.AreEqual("[2024-01-01,2024-03-31]", LocalDateRange.Month(2024, 2).Expand(Period.FromMonths(1)).ToString());
+        Assert.AreEqual(LocalDateRange.Month(2026, 2), LocalDateRange.Quarter(2026, 1).Expand(Period.FromMonths(-1)));
+    }
+
+    [TestMethod]
+    public void LocalDateRange_ShiftByMonths_AStartOnThe31stStillClips()
+    {
+        var range = LocalDateRange.CreateFinite(new LocalDate(2026, 1, 31), new LocalDate(2026, 2, 27));
+
+        // The start clips to the shorter month; the end moves through its exclusive end: February 28 plus a month, less a day.
+        Assert.AreEqual("[2026-02-28,2026-03-27]", range.Shift(Period.FromMonths(1)).ToString());
+    }
+
+    [TestMethod]
+    public void YearMonthRange_ShiftByMonths_MovesAWholeQuarter()
+    {
+        for (var quarter = 1; quarter <= 4; quarter++)
+            Assert.AreEqual(quarter == 4 ? YearMonthRange.Quarter(2027, 1) : YearMonthRange.Quarter(2026, quarter + 1),
+                            YearMonthRange.Quarter(2026, quarter).Shift(3));
     }
 
     [TestMethod]

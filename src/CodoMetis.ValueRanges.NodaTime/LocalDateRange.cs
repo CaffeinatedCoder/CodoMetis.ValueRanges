@@ -515,16 +515,18 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="delta"/> moves the range down.
     /// A period with months or years follows NodaTime's calendar arithmetic, which clips to the end of a
-    /// shorter month: <c>2026-01-31</c> plus one month is <c>2026-02-28</c>, and moving back gives
-    /// <c>2026-01-28</c>. Days and weeks move every date by the same amount, so moving back restores
-    /// the range. A period with a time part throws <see cref="ArgumentException"/>, as
-    /// <see cref="LocalDate.Plus(Period)"/> does.
+    /// shorter month. The upper bound moves as the day after it, the exclusive end PostgreSQL stores,
+    /// so a whole month moves to a whole month: <c>Month(2026, 2).Shift(Period.FromMonths(1))</c> is
+    /// <c>Month(2026, 3)</c>, as the <c>daterange</c> <c>[2026-02-01,2026-03-01)</c> moves in PostgreSQL
+    /// and as <c>LocalDateTimeRange</c> moves. A start on the 31st still clips: <c>2026-01-31</c> plus
+    /// one month is <c>2026-02-28</c>. A period with a time part throws <see cref="ArgumentException"/>,
+    /// as <see cref="LocalDate.Plus(Period)"/> does.
     /// This runs in memory only: PostgreSQL has no range arithmetic.
     /// </remarks>
     /// <param name="delta">How far to move the range.</param>
     /// <returns>The moved range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDate"/> can hold.</exception>
-    public LocalDateRange Shift(Period delta) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+    public LocalDateRange Shift(Period delta) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => EndMoved(value, delta));
 
     /// <summary>
     /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
@@ -533,12 +535,23 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// <remarks>
     /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
-    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// unbounded side stays unbounded. The upper bound moves as its exclusive end, as in
+    /// <see cref="Shift(Period)"/>: <c>Month(2026, 2).Expand(Period.FromMonths(1))</c> is
+    /// <c>[2026-01-01,2026-03-31]</c>. This runs in memory only: PostgreSQL has no range arithmetic.
     /// </remarks>
     /// <param name="amount">How far to move each bound outward.</param>
     /// <returns>The grown, or shrunk, range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDate"/> can hold.</exception>
-    public LocalDateRange Expand(Period amount) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
+    public LocalDateRange Expand(Period amount) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => EndMoved(value, amount));
+
+    /// <summary>
+    /// Moves a closed upper bound as the exclusive end PostgreSQL stores for it — the day after —
+    /// and steps back a day, so a period of months carries the last day of a month to the last day
+    /// of the target month, where moving the last day itself clipped March 31 to March 28 (#223).
+    /// </summary>
+    /// <remarks>The last day of the calendar has no day after it, so it moves itself.</remarks>
+    private static LocalDate EndMoved(LocalDate end, Period delta)
+        => RangeArithmetic.Checked(() => end == LocalDate.MaxIsoValue ? end.Plus(delta) : end.PlusDays(1).Plus(delta).PlusDays(-1));
 
     /// <inheritdoc />
     public override sealed string ToString()

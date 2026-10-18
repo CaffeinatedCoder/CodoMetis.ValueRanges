@@ -595,6 +595,13 @@
     "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
   },
   {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "EndMoved($T, Period)",
+    "kind": "extra",
+    "reason": "a period of months moves a closed date range's upper bound as its exclusive end, as PostgreSQL stores a daterange (#223); LocalDateTimeRange stores its end exclusive already, InstantRange steps by an exact Duration and YearMonthRange by whole months, so none needs it"
+  },
+  {
     "family": "efcore wrapper bridges",
     "unit": "DateSet<>",
     "member": "formatPrimitive",
