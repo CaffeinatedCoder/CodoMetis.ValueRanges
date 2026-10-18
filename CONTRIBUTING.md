@@ -10,6 +10,10 @@ dotnet build CodoMetis.ValueRanges.slnx
 dotnet test
 ```
 
+`global.json` pins the SDK to the line's major (10.0.x on `main`), so install a .NET 10 SDK; a
+newer major on the machine is refused rather than silently used ([branches and
+releases](#branches-and-releases)).
+
 Shipping projects live under `src/`, test projects under `test/`.
 [AGENTS.md](AGENTS.md) is the architecture guide, with [docs/architecture.md](docs/architecture.md)
 and [docs/testing.md](docs/testing.md) behind it — worth reading before changing a range type, a

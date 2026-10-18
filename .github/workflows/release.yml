@@ -85,7 +85,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       # MSBuild evaluation rather than parsing the XML, so the value is exactly what the build
       # will stamp onto the packages.
@@ -195,6 +195,8 @@ jobs:
       id-token: write   # lets GitHub mint the OIDC token nuget.org validates
 
     steps:
+      # No checkout here, so no global.json to read: this job only pushes the verified packages
+      # and any SDK of the line can do that. Bump it with global.json when the line moves.
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
