@@ -250,6 +250,9 @@ most likely to affect you:
   ([details](#read-uuids-as-postgresql-reads-them)).
 - **A string element holding a NUL character now throws.** `From` and `Add` throw
   `ArgumentException`, and parsing it fails ([details](#keep-nul-out-of-string-elements)).
+- **A wrapper set reads only the JSON its plain set reads.** A quoted number needs
+  `AllowReadingFromString`, and a wrapper Guid is the hyphenated form
+  ([details](#send-a-wrapper-set-the-json-you-send-the-plain-set)).
 
 ### Read UUIDs as PostgreSQL reads them
 
@@ -289,6 +292,26 @@ StringSet.TryParse("{a\0b}", null, out _);   // false
 `StringSet<T>` applies the rule to the element's text form, in `From`, `Add` and on every read. If
 your data carries NUL as a delimiter, split it before building the set. Every other character,
 including control characters and non-ASCII whitespace, is text as before.
+
+### Send a wrapper set the JSON you send the plain set
+
+`Int32Set<OrderId>` and `Int32Set` have always written the same JSON. Now they read the same JSON
+too. Before, a wrapper read a quoted number under any options and with the array literal's grammar,
+and a wrapper Guid with the literal's `uuid_in` grammar:
+
+| Payload | `Int32Set` | `Int32Set<OrderId>` 9.x | 10.0 |
+|---|---|---|---|
+| `["7"]`, default options | `JsonException` | `{7}` | `JsonException` |
+| `["7"]`, `AllowReadingFromString` | `{7}` | `{7}` | `{7}` |
+| `[" 7 "]`, `AllowReadingFromString` | `JsonException` | `{7}` | `JsonException` |
+| `["{6f9619ff-8b86-d011-b42d-00c04fc964ff}"]` (`GuidSet` / `GuidSet<T>`) | `JsonException` | reads | `JsonException` |
+
+ASP.NET Core's web defaults set `AllowReadingFromString`, so an API that received `["7"]` keeps
+working. One that received padded or undashed text was relying on the wrapper alone, and now
+rejects the request with the same error the plain set gave.
+
+`WriteAsString` alone no longer round-trips a wrapper set, as it never did a plain one: set
+`AllowReadingFromString` too, or read the payload with the options that wrote it.
 
 ## Migration from v8.x
 

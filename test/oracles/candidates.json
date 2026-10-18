@@ -916,34 +916,6 @@
     "issue": "#137"
   },
   {
-    "oracle": "SetWrapperParityTests",
-    "row": "DecimalSet JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "Int16Set JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "Int32Set JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
-    "oracle": "SetWrapperParityTests",
-    "row": "Int64Set JSON read [\"",
-    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
-    "issue": "#141",
-    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
-  },
-  {
     "oracle": "RangeSetLiftParityTests",
     "row": "DateRange (,) IsUnboundedStart:",
     "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",

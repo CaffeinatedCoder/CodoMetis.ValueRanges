@@ -230,6 +230,17 @@ different JSON shape, give your type its own `[JsonConverter]`. It takes precede
 For the string, Guid, integer and decimal versions, the JSON is **byte for byte the same** as for
 the plain set. You can swap `Int32Set` for `Int32Set<OrderId>` and API clients see no difference.
 
+Reading is the same too. A wrapper accepts exactly the payloads the plain set accepts:
+
+- **A quoted number** such as `["7"]` is read only when the options set
+  `JsonNumberHandling.AllowReadingFromString`, as ASP.NET Core's web defaults do, and then with
+  System.Text.Json's grammar for the number: a sign and digits for an integer, sign, digits, point
+  and exponent for a decimal, never whitespace.
+- **A Guid** is the hyphenated form, in either case. Braces, the undashed form and padding fail.
+- **Before 10.0, a wrapper read more.** `Int32Set<OrderId>` read `["7"]`, `[" 7 "]` and `["+7"]`
+  under any options, and `GuidSet<TenantId>` read braces and the undashed form, where the plain
+  set threw `JsonException`.
+
 The four temporal versions and the five NodaTime ones write the same token type and the same value,
 but not the same bytes. They always write seven fraction digits, where System.Text.Json trims them.
 And the default encoder escapes `+` in a string the converter writes itself:

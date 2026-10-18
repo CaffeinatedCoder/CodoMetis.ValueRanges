@@ -33,6 +33,75 @@ internal static class ValueSetElementJson
     internal static bool WritesNumbersAsStrings(JsonSerializerOptions options)
         => (options.NumberHandling & JsonNumberHandling.WriteAsString) != 0;
 
+    /// <summary>
+    /// Whether a quoted number is read at all — <see cref="JsonNumberHandling.AllowReadingFromString"/>
+    /// on the options, which is what System.Text.Json's own number converters consult. Until 10.0.0
+    /// the wrapper converters read a string token unconditionally, so <c>Int32Set&lt;OrderId&gt;</c>
+    /// accepted <c>["7"]</c> where <c>Int32Set</c> refused it (#141).
+    /// </summary>
+    internal static bool ReadsNumbersFromStrings(JsonSerializerOptions options)
+        => (options.NumberHandling & JsonNumberHandling.AllowReadingFromString) != 0;
+
+    /// <summary>
+    /// The text of an integer token for the family's parser: a number's digits, or — only under
+    /// <see cref="JsonNumberHandling.AllowReadingFromString"/> — a string holding what System.Text.Json
+    /// reads for a quoted integer: an optional sign and digits, no whitespace, no point, no exponent.
+    /// The array-literal grammar is wider (it strips whitespace), so it is not consulted here.
+    /// </summary>
+    internal static string ReadIntegerText<T>(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.Number:
+                return reader.GetInt64().ToString(CultureInfo.InvariantCulture);
+
+            case JsonTokenType.String when ReadsNumbersFromStrings(options):
+                var text = reader.GetString()!;
+                if (!long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number))
+                    throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(text)}' as {typeof(T).Name}: a quoted number is an optional sign and digits.");
+                return number.ToString(CultureInfo.InvariantCulture);
+
+            case JsonTokenType.String:
+                throw new JsonException(
+                    $"Expected a JSON number for a {typeof(T).Name} value, got a string; a quoted number is read only under JsonNumberHandling.AllowReadingFromString.");
+
+            default:
+                throw new JsonException($"Expected a JSON number for a {typeof(T).Name} value, got {reader.TokenType}.");
+        }
+    }
+
+    /// <summary>
+    /// The text of a decimal token for the family's parser: the raw token text of a number (not
+    /// <c>GetDecimal().ToString()</c>, which would renormalize the scale), or — only under
+    /// <see cref="JsonNumberHandling.AllowReadingFromString"/> — a string holding what System.Text.Json
+    /// reads for a quoted decimal: sign, digits, point and exponent, no whitespace. The string's own
+    /// text is handed on, so its scale survives too.
+    /// </summary>
+    internal static string ReadDecimalText<T>(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.Number:
+                return Encoding.UTF8.GetString(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan);
+
+            case JsonTokenType.String when ReadsNumbersFromStrings(options):
+                var text = reader.GetString()!;
+                if (!decimal.TryParse(text, QuotedDecimal, CultureInfo.InvariantCulture, out _))
+                    throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(text)}' as {typeof(T).Name}: a quoted number is sign, digits, point and exponent.");
+                return text;
+
+            case JsonTokenType.String:
+                throw new JsonException(
+                    $"Expected a JSON number for a {typeof(T).Name} value, got a string; a quoted number is read only under JsonNumberHandling.AllowReadingFromString.");
+
+            default:
+                throw new JsonException($"Expected a JSON number for a {typeof(T).Name} value, got {reader.TokenType}.");
+        }
+    }
+
+    /// <summary>What System.Text.Json reads inside the quotes of a decimal: <see cref="NumberStyles.Float"/> without the whitespace.</summary>
+    private const NumberStyles QuotedDecimal = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
+
     internal static T Parse<TSet, T>(string s)
         where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
         where T : IEquatable<T>
@@ -78,6 +147,65 @@ internal sealed class ValueSetTextElementJsonConverter<TSet, T> : JsonConverter<
 }
 
 /// <summary>
+/// Writes a set element as a JSON string holding its invariant text form, and reads one exactly as
+/// System.Text.Json reads a <see cref="Guid"/>: the hyphenated <c>D</c> form only, in either case —
+/// the shape used by <c>GuidSet&lt;TElement&gt;</c>.
+/// </summary>
+/// <remarks>
+/// Separate from <see cref="ValueSetTextElementJsonConverter{TSet,T}"/> because that one hands the
+/// token to the family's element grammar, which for a uuid is <c>uuid_in</c>'s — braces and no
+/// hyphens included — while <c>GuidSet</c> reads its JSON elements through System.Text.Json's own
+/// converter, which takes 36 characters and nothing else. Until 10.0.0 <c>GuidSet&lt;TenantId&gt;</c>
+/// read <c>["{6f9619ff-…}"]</c> and <c>["6f9619ff8b86…"]</c> where <c>GuidSet</c> refused them (#141).
+/// The value is handed to the family's <see cref="IValueSetFactory{TSet,T}.ParseValue"/> as its
+/// <c>D</c> text, so the element's validation still runs.
+/// </remarks>
+/// <typeparam name="TSet">The value set family that owns the element's text form.</typeparam>
+/// <typeparam name="T">The element type.</typeparam>
+internal sealed class ValueSetGuidElementJsonConverter<TSet, T> : JsonConverter<T>
+    where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
+    where T : IEquatable<T>
+{
+    /// <summary>The shared instance — the converter is stateless.</summary>
+    internal static readonly ValueSetGuidElementJsonConverter<TSet, T> Instance = new();
+
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException($"Expected a JSON string for a {typeof(T).Name} value, got {reader.TokenType}.");
+
+        Guid value;
+        try
+        {
+            value = reader.GetGuid();
+        }
+        catch (FormatException)
+        {
+            throw new JsonException(
+                $"Cannot parse '{LiteralExcerpt.Of(reader.GetString())}' as {typeof(T).Name}: a JSON uuid is the hyphenated form, as for Guid.");
+        }
+
+        return ValueSetElementJson.Parse<TSet, T>(value.ToString("D", CultureInfo.InvariantCulture));
+    }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+    {
+        var text = TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
+
+        // The hyphenated form is what System.Text.Json writes for a Guid and the only form it — and
+        // Read above — takes back. An element formatting as N, B or P would otherwise write a payload
+        // neither sibling can read, so it is refused here naming the contract, as the integer
+        // converter refuses non-numeric text.
+        if (!Guid.TryParseExact(text, "D", out _))
+            throw new JsonException(
+                $"{typeof(T).Name} formats as '{LiteralExcerpt.Of(text)}', which is not the hyphenated uuid form. An element of "
+              + $"{typeof(TSet).Name} must format as exactly the text form of the primitive it wraps.");
+
+        writer.WriteStringValue(text);
+    }
+}
+
+/// <summary>
 /// Writes a set element as a JSON number — the shape used by the integer-backed families, so a
 /// validated wrapper serializes identically to the primitive it wraps and swapping
 /// <c>Int32Set</c> for <c>Int32Set&lt;TElement&gt;</c> does not change the payload.
@@ -86,10 +214,13 @@ internal sealed class ValueSetTextElementJsonConverter<TSet, T> : JsonConverter<
 /// Both legs go through the family's text form, which is the wrapper contract: the element's
 /// invariant text must be exactly the backing primitive's text. A wrapper that violates it —
 /// by padding, prefixing, or formatting non-numerically — surfaces as a <see cref="JsonException"/>
-/// naming the offending text rather than emitting malformed JSON. Reads accept a JSON string
-/// unconditionally, and writes honour <see cref="JsonNumberHandling.WriteAsString"/> on the
-/// options — without which a wrapper would emit a bare number where its primitive sibling emits a
-/// string, which is how an <see cref="long"/> above 2^53 loses digits at a JavaScript consumer.
+/// naming the offending text rather than emitting malformed JSON. Reads accept a JSON string only
+/// under <see cref="JsonNumberHandling.AllowReadingFromString"/>, with the grammar System.Text.Json
+/// reads for the primitive (see <see cref="ValueSetElementJson.ReadIntegerText{T}"/>), and writes
+/// honour <see cref="JsonNumberHandling.WriteAsString"/> on the options — without which a wrapper
+/// would emit a bare number where its primitive sibling emits a string, which is how an
+/// <see cref="long"/> above 2^53 loses digits at a JavaScript consumer. Both keep the payloads a
+/// wrapper arity accepts and writes the same as its primitive sibling's.
 /// </remarks>
 /// <typeparam name="TSet">The value set family that owns the element's text form.</typeparam>
 /// <typeparam name="T">The element type.</typeparam>
@@ -101,17 +232,7 @@ internal sealed class ValueSetIntegerElementJsonConverter<TSet, T> : JsonConvert
     internal static readonly ValueSetIntegerElementJsonConverter<TSet, T> Instance = new();
 
     public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        var text = reader.TokenType switch
-        {
-            JsonTokenType.Number => reader.GetInt64().ToString(CultureInfo.InvariantCulture),
-            JsonTokenType.String => reader.GetString()!,
-            var other            => throw new JsonException(
-                                        $"Expected a JSON number for a {typeof(T).Name} value, got {other}.")
-        };
-
-        return ValueSetElementJson.Parse<TSet, T>(text);
-    }
+        => ValueSetElementJson.Parse<TSet, T>(ValueSetElementJson.ReadIntegerText<T>(ref reader, options));
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
@@ -140,7 +261,8 @@ internal sealed class ValueSetIntegerElementJsonConverter<TSet, T> : JsonConvert
 /// </summary>
 /// <remarks>
 /// Both legs go through the family's text form, as in the integer converter, and
-/// <see cref="JsonNumberHandling.WriteAsString"/> is honoured the same way.
+/// <see cref="JsonNumberHandling.WriteAsString"/> and <see cref="JsonNumberHandling.AllowReadingFromString"/>
+/// are honoured the same way.
 /// Scale is preserved: <see cref="decimal"/> keeps trailing zeros through parse and format, so an
 /// element formatting as <c>12.50</c> is written as <c>12.50</c> — the same text
 /// <see cref="System.Text.Json"/> writes for the <see cref="decimal"/> it wraps.
@@ -155,22 +277,7 @@ internal sealed class ValueSetDecimalElementJsonConverter<TSet, T> : JsonConvert
     internal static readonly ValueSetDecimalElementJsonConverter<TSet, T> Instance = new();
 
     public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        var text = reader.TokenType switch
-        {
-            // The raw token text, not GetDecimal().ToString(): a round trip through decimal
-            // would renormalize the scale the payload was written with.
-            JsonTokenType.Number => Encoding.UTF8.GetString(
-                                        reader.HasValueSequence
-                                            ? reader.ValueSequence.ToArray()
-                                            : reader.ValueSpan),
-            JsonTokenType.String => reader.GetString()!,
-            var other            => throw new JsonException(
-                                        $"Expected a JSON number for a {typeof(T).Name} value, got {other}.")
-        };
-
-        return ValueSetElementJson.Parse<TSet, T>(text);
-    }
+        => ValueSetElementJson.Parse<TSet, T>(ValueSetElementJson.ReadDecimalText<T>(ref reader, options));
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
