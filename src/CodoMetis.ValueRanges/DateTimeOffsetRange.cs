@@ -279,6 +279,10 @@ public abstract partial record DateTimeOffsetRange : IRange<DateTimeOffset>, IRa
     /// </returns>
     public int CompareTo(DateTimeOffsetRange? other) => RangeOrder.Compare<DateTimeOffset>(this, other);
 
+    /// <inheritdoc cref="CompareTo(DateTimeOffsetRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="DateTimeOffsetRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<DateTimeOffsetRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[09:00,10:00).Shift(TimeSpan.FromDays(7))</c> is the same hour a week later, at the same offset.

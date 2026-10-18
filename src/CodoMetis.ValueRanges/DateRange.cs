@@ -450,6 +450,10 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     /// </returns>
     public int CompareTo(DateRange? other) => RangeOrder.Compare<DateOnly>(this, other);
 
+    /// <inheritdoc cref="CompareTo(DateRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="DateRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<DateRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="days"/>, in days: both bounds move together and keep their
     /// inclusiveness, so <c>[2026-06-01,2026-06-08].Shift(7)</c> is <c>[2026-06-08,2026-06-15]</c>.

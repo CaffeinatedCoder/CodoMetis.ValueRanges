@@ -353,7 +353,8 @@ Good to know:
   less throws `ArgumentOutOfRangeException`. So does a step too small to move the start, such as
   `0.5m` near `decimal.MaxValue`.
 - **A `Float64Range` or `Float32Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`,
-  so the error doesn't build up from piece to piece. A step too small to move the start at its
+  so the error doesn't build up from piece to piece. Near the top of the domain, where `n × step`
+  alone is too large for the type, a boundary is the one before it plus the step. A step too small to move the start at its
   magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.
 - **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
   a value ([What runs where](efcore.md#what-runs-where)).
@@ -399,8 +400,9 @@ Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10
 
 ### Sort ranges
 
-Every range type implements `IComparable<TRange>`, so `Order()`, `List.Sort()` and `SortedSet` work
-with no comparer. The order is PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
+Every range type implements `IComparable<TRange>` and `IComparable`, so `Order()`, `List.Sort()` and
+`SortedSet` work with no comparer, also on a `List<IRange<T>>` or an `ArrayList`. The order is
+PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
 
 ```csharp
 var ranges = new[]
@@ -420,12 +422,15 @@ missing bound is the smallest lower bound and the largest upper bound. At the sa
 inclusive lower bound sorts first and an inclusive upper bound sorts last.
 
 `CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct
-range. `null` sorts before every range.
+range. `null` sorts before every range. The non-generic `CompareTo(object)` throws `ArgumentException` for an
+argument that is not the same range type.
 
 Good to know:
 
 - **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
-  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`.
+  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`. With a
+  `null` range on the right, the query returns the rows memory returns: `> 0`, `>= 0` and `!= 0` hold
+  for every row, and `< 0`, `<= 0` and `== 0` for none.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
   nullable column, the two orders differ only in where the nulls go.
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
@@ -889,7 +894,7 @@ a.Equals(b);  // true — both normalize to { [1, 10] }
 a == b;       // true — same value semantics as the ranges themselves
 ```
 
-Sets implement `IComparable<RangeSet<TRange, T>>` in PostgreSQL's multirange order. Two sets compare
+Sets implement `IComparable<RangeSet<TRange, T>>` and `IComparable` in PostgreSQL's multirange order. Two sets compare
 element by element in the [range order](#sort-ranges), and a set that runs out of elements first
 sorts first. So the empty set sorts before every other set, and `{[1,3]}` before `{[1,3],[5,7]}`.
 As for ranges, `CompareTo` returns 0 exactly when the two sets are equal.

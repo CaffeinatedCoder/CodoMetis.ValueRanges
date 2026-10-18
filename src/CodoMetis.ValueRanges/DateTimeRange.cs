@@ -279,6 +279,10 @@ public abstract partial record DateTimeRange : IRange<DateTime>, IRangeFactory<D
     /// </returns>
     public int CompareTo(DateTimeRange? other) => RangeOrder.Compare<DateTime>(this, other);
 
+    /// <inheritdoc cref="CompareTo(DateTimeRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="DateTimeRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<DateTimeRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[09:00,10:00).Shift(TimeSpan.FromDays(7))</c> is the same hour a week later.

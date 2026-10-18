@@ -507,6 +507,10 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// </returns>
     public int CompareTo(LocalDateRange? other) => RangeOrder.Compare<LocalDate>(this, other);
 
+    /// <inheritdoc cref="CompareTo(LocalDateRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="LocalDateRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<LocalDateRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[2026-06-01,2026-06-08].Shift(Period.FromWeeks(1))</c> is <c>[2026-06-08,2026-06-15]</c>.

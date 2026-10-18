@@ -86,6 +86,24 @@ public class RangeSplitTests
         Assert.AreEqual(3, top.Split(1m).Count(), "[max-3,max-2), [max-2,max-1), [max-1,max]");
     }
 
+    /// <summary>
+    /// From a negative start, <c>n × step</c> overflows a step before <c>start + n × step</c> does. The
+    /// walk ended there, silently dropping the last values and widening the last piece (#219).
+    /// </summary>
+    [TestMethod]
+    public void Split_AStepProductPastTheMaximum_StillReachesTheEnd()
+    {
+        var wide = Int64Range.CreateFinite(-9_000_000_000_000_000_000, 9_000_000_000_000_000_000);
+
+        CollectionAssert.AreEqual(
+            new[] { -9_000_000_000_000_000_000, -5_000_000_000_000_000_000, -1_000_000_000_000_000_000, 3_000_000_000_000_000_000, 7_000_000_000_000_000_000 },
+            wide.Values(4_000_000_000_000_000_000).ToArray());
+        Assert.AreEqual("[7000000000000000000,9000000000000000000]", wide.Split(4_000_000_000_000_000_000).Last().ToString());
+
+        Assert.AreEqual(5, DecimalRange.CreateFinite(-7e28m, 7e28m).Split(3e28m).Count(), "-7e28, -4e28, -1e28, 2e28, 5e28");
+        Assert.AreEqual(4, Float64Range.CreateFinite(-1.7e308, 1.7e308).Split(1e308).Count(), "-1.7e308, -0.7e308, 0.3e308, 1.3e308");
+    }
+
     [TestMethod]
     public void Split_CanBeEnumeratedTwice()
     {

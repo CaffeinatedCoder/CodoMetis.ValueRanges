@@ -285,6 +285,10 @@ public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<Ins
     /// </returns>
     public int CompareTo(InstantRange? other) => RangeOrder.Compare<Instant>(this, other);
 
+    /// <inheritdoc cref="CompareTo(InstantRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="InstantRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<InstantRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[09:00Z,10:00Z).Shift(Duration.FromHours(1))</c> is <c>[10:00Z,11:00Z)</c>.

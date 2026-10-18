@@ -41,6 +41,23 @@ internal static class RangeOrder
                    : CompareBounds(Upper(left, left, right), Upper(right, left, right), isLower: false);
     }
 
+    // The non-generic IComparable: null sorts first, as above; an argument of another type throws,
+    // as the BCL's own non-generic CompareTo does ("Object must be of type Int32.").
+    internal static int CompareObject<TSelf>(TSelf self, object? other, Func<TSelf, TSelf, int> compare)
+        where TSelf : class
+        => other switch
+           {
+               null         => 1,
+               TSelf typed  => compare(self, typed),
+               _            => throw new ArgumentException(
+                                   $"Object must be of type {TypeName(typeof(TSelf))}, not {TypeName(other.GetType())}.", nameof(other))
+           };
+
+    private static string TypeName(Type type)
+        => type.IsGenericType
+               ? $"{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>"
+               : type.Name;
+
     private readonly record struct Bound<T>(T Value, bool Inclusive, bool Absent)
         where T : struct, IComparable<T>, IEquatable<T>;
 

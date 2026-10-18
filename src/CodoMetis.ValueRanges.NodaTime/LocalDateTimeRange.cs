@@ -349,6 +349,10 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     /// </returns>
     public int CompareTo(LocalDateTimeRange? other) => RangeOrder.Compare<LocalDateTime>(this, other);
 
+    /// <inheritdoc cref="CompareTo(LocalDateTimeRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="LocalDateTimeRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<LocalDateTimeRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[09:00,10:00).Shift(Period.FromWeeks(1))</c> is the same hour a week later.
