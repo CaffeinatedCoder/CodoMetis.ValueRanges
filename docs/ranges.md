@@ -51,6 +51,45 @@ Good to know:
   exclusive. Parsing is stricter: an inverted literal such as `[5,1)` fails, as it does in
   PostgreSQL ([Parse a literal](serialization.md#parse-a-literal)).
 
+### Create a month, a quarter, a year or a week
+
+The date ranges have factories for the calendar ranges you would otherwise build by hand:
+
+```csharp
+DateRange.Month(2026, 10);    // [2026-10-01,2026-10-31]
+DateRange.Quarter(2026, 4);   // [2026-10-01,2026-12-31]
+DateRange.Year(2026);         // [2026-01-01,2026-12-31]
+DateRange.IsoWeek(2026, 1);   // [2025-12-29,2026-01-04] — Monday to Sunday
+
+var today = new DateOnly(2026, 8, 15);
+DateRange.Month(today);       // [2026-08-01,2026-08-31] — the month that holds today
+DateRange.IsoWeek(today);     // [2026-08-10,2026-08-16]
+```
+
+Each factory takes either the numbers of the period or any day inside it. You get a `DateRange`
+like any other, so you can pass it to `Overlaps`, `Except` or `Gaps`.
+
+`LocalDateRange` in the NodaTime package has the same factories, taking a `LocalDate`.
+`YearMonthRange` has `Quarter` and `Year`: `YearMonthRange.Quarter(2026, 4)` is `[2026-10,2026-12]`.
+
+Good to know:
+
+- **Weeks are always ISO 8601, never your culture's.** A week starts on Monday, and week 1 is the
+  week that holds the year's first Thursday. The current culture's first day of the week plays no
+  part, the same way it plays no part in a literal.
+- **The week-year can differ from the calendar year.** January 1, 2027 is in week 53 of 2026, so
+  `DateRange.IsoWeek(new DateOnly(2027, 1, 1))` is `DateRange.IsoWeek(2026, 53)`. A week-year has
+  52 or 53 weeks.
+- **A number out of range throws.** A month outside 1 to 12, a quarter outside 1 to 4, or a week
+  past the last of its week-year throws `ArgumentOutOfRangeException`. So does a week that runs past
+  the last date the type can hold, such as week 52 of 9999.
+- **A `LocalDate` in another calendar is read as its ISO day.** `LocalDateRange.Month` returns the
+  ISO month that holds that day, as every bound of this type is ISO.
+- **In an EF Core query, pass values your code already has.** `b.Period.Overlaps(DateRange.Month(2026, 10))`
+  runs as SQL with the month as one constant. A factory that reads a column, such as
+  `DateRange.Month(b.Day)`, runs in memory only
+  ([What runs where](efcore.md#what-runs-where)).
+
 ## Pattern matching
 
 Every range is one of five kinds, which this page calls its *shape*: `Finite`, `UnboundedStart`,
@@ -87,9 +126,10 @@ A continuous type has no two-value form, on purpose. If you passed only the boun
 
 ### Why the discard arm must throw
 
-The five shapes are the only ranges that can exist. The abstract base record has a private
-constructor, so no code outside the assembly can declare another subtype. Your five arms are
-complete in fact, and the discard arm can never run.
+The five shapes are the only ranges that can exist. A record derived from a range type compiles,
+because C# gives every record a protected copy constructor, but the first `new` of it throws
+(`InvalidOperationException`). Only the five variants nested in the type can be constructed. Your
+five arms are complete in fact, and the discard arm can never run.
 
 C# can't prove that, though. Its exhaustiveness check doesn't reason about a closed class
 hierarchy. So a switch *expression* over the shapes warns `CS8509` unless it has a discard arm.
@@ -264,6 +304,59 @@ Good to know:
 
 - **An unbounded range throws at the call.** `Values()` throws `NotSupportedException` when you
   call it, not at the first iteration. So the error points at the line that was wrong.
+- **`Values(step)` skips ahead.** `Int32Range.CreateFinite(1, 10).Values(3)` gives 1, 4, 7, 10. The
+  step is in the element type's unit: days for `DateRange`, months for `YearMonthRange`, a `Period`
+  for `LocalDateRange`.
+
+### Split a range into pieces
+
+`Split` cuts a range into consecutive pieces of one step each, from its start. The last piece is
+clipped to the range's end:
+
+```csharp
+Int32Range.CreateFinite(1, 10).Split(4);   // [1,4] [5,8] [9,10]
+
+var hours = TimeRange.CreateFinite(new TimeOnly(9, 0), new TimeOnly(17, 30));
+hours.Split(TimeSpan.FromMinutes(30));     // 17 half-hour slots, 09:00–09:30 through 17:00–17:30
+```
+
+Pass a calendar factory instead of a step to cut at calendar boundaries. Each piece is one period,
+and the first and last are clipped to the range:
+
+```csharp
+var contract = DateRange.CreateFinite(new DateOnly(2026, 1, 15), new DateOnly(2026, 4, 14));
+contract.Split(DateRange.Month);
+// [2026-01-15,2026-01-31] [2026-02-01,2026-02-28] [2026-03-01,2026-03-31] [2026-04-01,2026-04-14]
+
+DateRange.Quarter(2026, 1).Split(DateRange.IsoWeek);   // 14 pieces, Monday to Sunday
+```
+
+The pieces are adjacent and hold exactly the values of the range. So
+`RangeSet<DateRange, DateOnly>.From(contract.Split(DateRange.Month))` is `{contract}` again.
+
+Good to know:
+
+- **Each range type takes its own step.** An `int` for `Int32Range`, a `double` for `Float64Range`, a number of days for
+  `DateRange`, a `TimeSpan` for the timestamp ranges and `TimeRange`, a `Period` for
+  `LocalDateRange` and `LocalDateTimeRange`, a `Duration` for `InstantRange`, and a number of months
+  for `YearMonthRange`.
+- **On a continuous type, the pieces are half-open.** Each one ends where the next begins. The last
+  piece keeps the range's own end, so `[0,10]` split by 5 is `[0,5) [5,10]`.
+- **Any period function works.** `Split` calls it with the first day of each piece, and the piece
+  runs to the end of the period it returns. A fiscal year or a billing cycle of your own works the
+  same way. The function must return a bounded range that holds the day it was given, or `Split`
+  throws `ArgumentException`.
+- **Weeks follow the same ISO 8601 rule as `IsoWeek`.** They never depend on the current culture.
+- **A period of months counts from the start.** `LocalDateRange.Split(Period.FromMonths(1))` from
+  January 31 starts its pieces on February 28, March 31 and April 30.
+- **Errors come at the call.** An unbounded range throws `NotSupportedException`. A step of zero or
+  less throws `ArgumentOutOfRangeException`. So does a step too small to move the start, such as
+  `0.5m` near `decimal.MaxValue`.
+- **A `Float64Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`,
+  so the error doesn't build up from piece to piece. A step too small to move the start at its
+  magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.
+- **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
+  a value ([What runs where](efcore.md#what-runs-where)).
 
 ### Clamp a value into a range
 
@@ -304,6 +397,40 @@ Int32Range.CreateFinite(1, 5).DoesNotExtendRightOf(Int32Range.CreateFinite(1, 10
 Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10));  // true
 ```
 
+### Sort ranges
+
+Every range type implements `IComparable<TRange>`, so `Order()`, `List.Sort()` and `SortedSet` work
+with no comparer. The order is PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
+
+```csharp
+var ranges = new[]
+{
+    DecimalRange.CreateFinite(1m, 5m, false, false),  // (1,5)
+    DecimalRange.CreateFinite(1m, 5m, true, true),    // [1,5]
+    DecimalRange.CreateUnboundedStart(3m),            // (,3)
+    DecimalRange.CreateFinite(1m, 5m),                // [1,5)
+    DecimalRange.Empty
+};
+
+ranges.Order();  // empty, (,3), [1,5), [1,5], (1,5)
+```
+
+The empty range sorts first. Every other range sorts by its lower bound, then by its upper bound. A
+missing bound is the smallest lower bound and the largest upper bound. At the same value, an
+inclusive lower bound sorts first and an inclusive upper bound sorts last.
+
+`CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct
+range. `null` sorts before every range.
+
+Good to know:
+
+- **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
+  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`.
+- **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
+  nullable column, the two orders differ only in where the nulls go.
+- **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
+  the lower bound, so it ties `[1,5]` with `[1,9]` ([Sort ranges the way a set does](#sort-ranges-the-way-a-set-does)).
+
 ### Read the bounds
 
 These methods are PostgreSQL's `lower`, `upper`, `lower_inc` and `upper_inc`, and they work on any
@@ -327,6 +454,58 @@ set.UpperBound();  // 9
 
 On a `RangeSet`, `LowerBound()` is the first element's lower bound, and `UpperBound()` the last
 element's upper bound.
+
+## Move or widen a range
+
+`Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the
+inclusiveness of each bound:
+
+```csharp
+var week = DateRange.CreateFinite(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 7));
+week.Shift(7);    // [2026-06-08,2026-06-14] — the same week, one week later
+week.Shift(-7);   // [2026-05-25,2026-05-31]
+
+var meeting = DateTimeRange.CreateFinite(nineAm, tenAm);           // [09:00, 10:00)
+meeting.Expand(TimeSpan.FromMinutes(15));                         // [08:45, 10:15) — a buffer on each side
+
+Int32Range.CreateFinite(1, 10).Expand(-2);                        // [3, 8] — a negative amount shrinks
+```
+
+Each range type takes the step its element type uses:
+
+| Range type | `Shift` and `Expand` take |
+|---|---|
+| `Int32Range`, `Int64Range`, `DecimalRange` | an `int`, a `long`, a `decimal` |
+| `Float64Range` | a finite `double` |
+| `DateRange` | a number of days |
+| `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange` | a `TimeSpan` |
+| `LocalDateRange`, `LocalDateTimeRange` | a NodaTime `Period` |
+| `InstantRange` | a NodaTime `Duration` |
+| `YearMonthRange` | a number of months |
+
+Good to know:
+
+- **An empty or infinite range comes back as it is.** It has no bound to move. An unbounded side
+  stays unbounded.
+- **Shrinking past the width gives you `Empty`.** `Expand` with a negative amount moves the bounds
+  inward, and bounds that cross make the empty range, as `CreateFinite` does.
+- **A bound moved past the last value throws.** `Shift` and `Expand` throw `OverflowException` when
+  a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They
+  never wrap around.
+- **A `Float64Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`,
+  so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue`
+  throws `OverflowException`, as for the other types. A `NaN` or infinite step throws
+  `ArgumentException`.
+- **A `TimeRange` can't cross midnight.** Moving a bound past the end of the day throws
+  `OverflowException`, where `TimeOnly.Add` would wrap to the next morning.
+- **A `DateTimeOffsetRange` keeps its offsets.** A day is exactly 24 hours, whatever a time zone
+  does that night.
+- **A period of months follows the calendar.** `LocalDateRange` and `LocalDateTimeRange` move by
+  NodaTime's calendar arithmetic, which clips to the end of a shorter month. So
+  `[2026-01-01,2026-01-31]` moved by one month is `[2026-02-01,2026-02-28]`, and moving it back
+  gives `[2026-01-01,2026-01-28]`. A period of days or weeks moves back exactly.
+- **They run in memory only.** PostgreSQL has no range arithmetic. See
+  [What runs where](efcore.md#what-runs-where).
 
 ## Combine two ranges
 
@@ -425,6 +604,33 @@ RangeSet<Int32Range, int>.From([a, b]).Merge(); // [1, 12]
 `Merge` ignores an empty range, and an unbounded edge stays unbounded in the result. On a
 `RangeSet`, `Merge()` covers the whole set.
 
+### Find the gap between two ranges
+
+```csharp
+var a = Int32Range.CreateFinite(1, 3);
+var b = Int32Range.CreateFinite(10, 12);
+
+a.Gap(b);  // [4, 9]
+b.Gap(a);  // [4, 9] — the order doesn't matter
+
+a.Gap(Int32Range.CreateFinite(4, 6));  // Empty — adjacent, nothing lies between them
+```
+
+`Gap` returns the range that lies between two ranges. It holds every value that `Merge` covers and
+neither range holds. So the two ranges and their gap together make up exactly `a.Merge(b)`.
+
+Good to know:
+
+- **No gap gives you `Empty`.** `Gap` returns `Empty` when the ranges overlap or are adjacent, and
+  when either of them is empty.
+- **Each bound of the gap flips at the edge it meets.** On a continuous type, `[1,3)` and `(3,5]`
+  leave the single value 3, so their gap is `[3,3]`.
+- **An unbounded range still has a gap on its bounded side.** `(-∞, 3]` and `[10, +∞)` leave
+  `[4, 9]`.
+- **`Gap` runs in the database.** In an EF Core query it becomes `range_merge` over the multirange
+  difference, because PostgreSQL has no gap function. See
+  [What runs where](efcore.md#what-runs-where).
+
 ### Aggregate a sequence of ranges
 
 `RangeAgg()` and `RangeIntersectAgg()` combine a sequence of ranges. They are the in-memory
@@ -442,7 +648,24 @@ new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
 - **`RangeIntersectAgg()`** returns the intersection of all the ranges, or `null` when the
   sequence is empty.
 
-In an EF Core query, both run as the SQL aggregates inside a `GroupBy` projection. See
+Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:
+
+```csharp
+IntSet[] blocked =
+[
+    IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(20, 25)]),
+    IntSet.From([Int32Range.CreateFinite(3, 22)])
+];
+
+blocked.RangeAgg();           // { [1, 25] } — every value of every set
+blocked.RangeIntersectAgg();  // { [3, 5], [20, 22] } — the values every set holds
+```
+
+Over sets, `RangeIntersectAgg()` returns a `RangeSet`, again `null` for an empty sequence. An empty
+set among the inputs makes it the empty set. These two are generic, so they work for every range
+type, the NodaTime ones included.
+
+In an EF Core query, all four run as the SQL aggregates inside a `GroupBy` projection. See
 [Entity Framework Core](efcore.md).
 
 ## RangeSet — multirange support
@@ -487,7 +710,7 @@ set.IsUnboundedEnd();    // false
 set.IsFinite();          // true  — non-empty and bounded at both ends
 set.IsInfinity();        // false — only the set covering the whole domain answers true
 
-// Set-operand comparisons — the full multirange operator matrix
+// Set-operand comparisons — with a range on the left too, see below
 set.Contains(IntSet.From([Int32Range.CreateFinite(2, 8)]));   // true   (@>)
 set.Overlaps(IntSet.From([Int32Range.CreateFinite(25, 40)])); // true   (&&)
 set.IsStrictlyLeftOf(Int32Range.CreateFinite(40, 50));        // true   (<<)
@@ -509,7 +732,8 @@ What the example shows:
 - **`Complement()`** returns every value the set does not cover.
 - **The state checks** match PostgreSQL's `isempty`, `lower_inf` and `upper_inf`. `IsFinite()`
   and `IsInfinity()` are the two derived shapes.
-- **The comparisons** also take a whole set, so you get the full multirange operator matrix.
+- **The comparisons** also take a whole set. With the range on either side, you get every range and
+  multirange operator PostgreSQL has ([Compare a range with a set](#compare-a-range-with-a-set)).
 
 ### Adjacency counts only at the outer edges
 
@@ -554,6 +778,67 @@ IntSet.Infinite.IsInfinity();  // true — the only set that covers everything
 Creating a set collapses any `Infinity` input to the one-element `Infinite` set. So that set is the
 only way to represent full coverage. That is what makes the check exact, both in memory and in SQL.
 
+### Compare a range with a set
+
+You can call the comparisons on a range and pass a set. Each one is the PostgreSQL operator with the
+range on the left:
+
+```csharp
+var blocked = IntSet.From([Int32Range.CreateFinite(3, 4), Int32Range.CreateFinite(8, 9)]);
+
+Int32Range.CreateFinite(1, 10).Contains(blocked);             // true   (@>)
+Int32Range.CreateFinite(8, 9).IsContainedBy(blocked);         // true   (<@)
+Int32Range.CreateFinite(5, 7).Overlaps(blocked);              // false  (&&) — 5 to 7 is a gap
+Int32Range.CreateFinite(1, 2).IsStrictlyLeftOf(blocked);      // true   (<<)
+Int32Range.CreateFinite(5, 7).DoesNotExtendRightOf(blocked);  // true   (&<) — 7 ≤ 9
+Int32Range.CreateFinite(5, 7).DoesNotExtendLeftOf(blocked);   // true   (&>) — 5 ≥ 3
+Int32Range.CreateFinite(10, 12).IsAdjacentTo(blocked);        // true   (-|-)
+
+blocked.IsContainedBy(Int32Range.CreateFinite(3, 9));         // true   (<@)
+blocked.IsContainedBy(blocked | Int32Range.CreateFinite(20, 30)); // true   (<@)
+```
+
+A range compares with a set through the set's outer elements. `IsStrictlyLeftOf` and
+`DoesNotExtendLeftOf` read the first element, and `IsStrictlyRightOf` and `DoesNotExtendRightOf`
+read the last. `Contains` is `true` when the range holds the first and the last element, and so
+everything between them.
+
+Good to know:
+
+- **`&<` and `&>` are not the set's methods turned around.** `range.DoesNotExtendRightOf(set)`
+  compares upper bounds, while `set.DoesNotExtendLeftOf(range)` compares lower bounds. So
+  `[4,5) &< {[3,9)}` is `true` and `{[3,9)} &> [4,5)` is `false`.
+- **An empty set is contained by every range**, the empty range included. With an empty set on
+  either side, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendLeftOf`,
+  `DoesNotExtendRightOf`, `Overlaps` and `IsAdjacentTo` return `false`.
+
+### Find the free slots in a set
+
+```csharp
+var booked = IntSet.From([
+    Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(20, 30), Int32Range.CreateFinite(35, 40)
+]);
+
+booked.Gaps();                                // { [11, 19], [31, 34] }
+booked.Complement();                          // { (-∞, 0], [11, 19], [31, 34], [41, +∞) }
+
+booked.Gaps(Int32Range.CreateFinite(5, 50));  // { [11, 19], [31, 34], [41, 50] }
+```
+
+`Gaps()` returns every value between the set's first and last element that the set doesn't cover.
+Unlike `Complement()`, it leaves out what lies before the first element and after the last.
+
+`Gaps(window)` returns the parts of `window` that the set doesn't cover, such as the free days of a
+month. It gives the same values as `Complement().Intersect(window)`.
+
+Good to know:
+
+- **A set with fewer than two elements has no gaps.** `Gaps()` returns the `Empty` set for it.
+- **An unbounded window keeps its open side.** `booked.Gaps(Int32Range.CreateUnboundedEnd(5))`
+  ends with `[41, +∞)`.
+- **Both run in the database.** `Gaps()` becomes `datemultirange(range_merge(x)) - x`, and
+  `Gaps(window)` becomes `datemultirange(window) - x`.
+
 ### Build a set with a collection expression
 
 ```csharp
@@ -594,6 +879,11 @@ var b = IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(6, 1
 a.Equals(b);  // true — both normalize to { [1, 10] }
 a == b;       // true — same value semantics as the ranges themselves
 ```
+
+Sets implement `IComparable<RangeSet<TRange, T>>` in PostgreSQL's multirange order. Two sets compare
+element by element in the [range order](#sort-ranges), and a set that runs out of elements first
+sorts first. So the empty set sorts before every other set, and `{[1,3]}` before `{[1,3],[5,7]}`.
+As for ranges, `CompareTo` returns 0 exactly when the two sets are equal.
 
 ### Sort ranges the way a set does
 
@@ -647,6 +937,9 @@ static T Load<T>(ReadOnlySpan<char> literal) where T : ISpanParsable<T>
     => T.Parse(literal, CultureInfo.InvariantCulture);
 ```
 
-To sort ranges in generic code, use `RangeLowerBoundComparer<TRange, T>`, an `IComparer<TRange>`
-singleton. It gives you the same lower-bound order the set uses inside. See
+`IRangeFactory<TRange, T>` also extends `IComparable<TRange>`, so generic code can sort any range
+type in the [range order](#sort-ranges).
+
+For the lower-bound order the set uses inside, use `RangeLowerBoundComparer<TRange, T>`, an
+`IComparer<TRange>` singleton. See
 [Sort ranges the way a set does](#sort-ranges-the-way-a-set-does).

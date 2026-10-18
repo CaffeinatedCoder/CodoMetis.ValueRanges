@@ -335,6 +335,13 @@ Good to know:
   throws `ArgumentException` and `{a\0b}` fails (`FormatException`), through `Parse`, `TryParse`,
   JSON and `Add` alike, and `StringSet<T>` checks the element's text form. Before 10.0 the set
   parsed and failed when it was saved.
+- **A dimension decoration is read and dropped.** PostgreSQL prints an array whose lower bound
+  isn't 1 with its bounds, as in `[0:1]={1,2}`, and `Int32Set.Parse("[0:1]={1,2}", null)` reads it
+  as `{1,2}`. The decoration must count the elements as written, duplicates included, or the parse
+  fails (`FormatException`), as it does on the server. Before 10.0 every decoration failed.
+- **Nested empty arrays read as empty.** `{{}}` and `{{},{}}` are `{}`. PostgreSQL 17 and later read
+  them as `{}`, and PostgreSQL 16 rejects them. A nested array that holds an element, such as `{{1}}`,
+  is two-dimensional and still fails (`FormatException`). Before 10.0 the empty ones failed too.
 - **Before 10.0, `GuidSet` read `Guid.Parse`'s grammar.** `{(6f9619ff-8b86-d011-b42d-00c04fc964ff)}`
   parsed, `{" 6f9619ff-8b86-d011-b42d-00c04fc964ff"}` was trimmed, and the hyphen-group form failed.
 

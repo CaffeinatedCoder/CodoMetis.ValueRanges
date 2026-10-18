@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using CodoMetis.ValueRanges.Oracles;
 using Npgsql;
 using NpgsqlTypes;
+using Testcontainers.PostgreSql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -285,6 +287,83 @@ public sealed class LiteralGrammarParityTests
         while (await reader.ReadAsync())
             elements.Add(reader.GetString(0));
         return elements;
+    }
+
+    /// <summary>
+    /// Empty arrays nested to one depth are where PostgreSQL versions disagree: 17 and 18 read
+    /// <c>{{}}</c> as <c>{}</c>, and 16 rejects it. The sets follow 17 and later (#128) and
+    /// <c>docs/value-sets.md</c> names the split, so this asks each version, the suite's own (17) and
+    /// two containers of this test's (16, 18), and fails when either side of the split moves, before the
+    /// sentence goes stale. A nested array holding an element is two-dimensional on every version, and
+    /// rejected here.
+    /// </summary>
+    [TestMethod]
+    public async Task NestedEmptyArrays_ReadAsPostgres17AndLaterReadThem_AndPostgres16Rejects()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        string[] empties = ["{{}}", "{{},{}}", "{ {} }", "{{{}},{{}}}", "{{{},{}}}"];
+        string[] nested  = ["{{1}}", "{{1},{2}}"];
+        string[] mixed   = ["{{},{{}}}", "{{},{1}}", "{{},}"];
+
+        var failures = new List<string>();
+        foreach (var (version, connectionString) in new[]
+                 {
+                     (16, await VersionServer("postgres:16-alpine")),
+                     (17, ContainerLifecycle.ConnectionString),
+                     (18, await VersionServer("postgres:18-alpine"))
+                 })
+        {
+            await using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+
+            foreach (var literal in empties)
+            {
+                var valid    = await ScalarAsync<bool>(connection, "SELECT pg_input_is_valid($1, 'int4[]')", literal);
+                var expected = version >= 17;
+                if (valid != expected)
+                    failures.Add($"  PostgreSQL {version} {(valid ? "reads" : "rejects")} {literal}, which the documented split says it {(expected ? "reads" : "rejects")}");
+                else if (valid && await ScalarAsync<string>(connection, "SELECT $1::int4[]::text", literal) is var text && text != "{}")
+                    failures.Add($"  PostgreSQL {version} reads {literal} as {text}, not {{}}");
+            }
+
+            foreach (var literal in nested)
+                if (await ScalarAsync<int?>(connection, "SELECT array_ndims($1::int4[])", literal) != 2)
+                    failures.Add($"  PostgreSQL {version} no longer reads {literal} as two-dimensional");
+
+            foreach (var literal in mixed)
+                if (await ScalarAsync<bool>(connection, "SELECT pg_input_is_valid($1, 'int4[]')", literal))
+                    failures.Add($"  PostgreSQL {version} reads {literal}, which it rejected");
+        }
+
+        foreach (var literal in empties)
+            if (!Int32Set.TryParse(literal, CultureInfo.InvariantCulture, out var set) || !set.IsEmpty)
+                failures.Add($"  Int32Set does not read {literal} as {{}}");
+        foreach (var literal in nested.Concat(mixed))
+            if (Int32Set.TryParse(literal, CultureInfo.InvariantCulture, out _))
+                failures.Add($"  Int32Set reads {literal}, which no version reads as a one-dimensional array");
+
+        Assert.IsEmpty(failures, "Nested empty arrays:\n" + string.Join("\n", failures));
+    }
+
+    private static readonly ConcurrentDictionary<string, Lazy<Task<PostgreSqlContainer>>> VersionServers = new();
+
+    private static async Task<string> VersionServer(string image)
+        => (await VersionServers.GetOrAdd(image, key => new Lazy<Task<PostgreSqlContainer>>(async () =>
+        {
+            var container = new PostgreSqlBuilder(key).Build();
+            await container.StartAsync();
+            return container;
+        })).Value).GetConnectionString();
+
+    [ClassCleanup]
+    public static async Task StopVersionServers()
+    {
+        foreach (var server in VersionServers.Values.Where(server => server.IsValueCreated))
+        {
+            try { await (await server.Value).DisposeAsync(); }
+            catch { /* a server that never started has nothing to stop */ }
+        }
     }
 
     private static NpgsqlCommand Command(NpgsqlConnection connection, string sql, string literal)

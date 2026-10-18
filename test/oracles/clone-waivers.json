@@ -245,6 +245,125 @@
     "reason": "DateOnly steps by AddDays(-1); the integer siblings step by - 1"
   },
   {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeek($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeek(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeekStartingOn($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Month($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Month(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Quarter($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Quarter(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Year($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Year(int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Split(Func<$T, $TYPE>)",
+    "kind": "extra",
+    "reason": "the calendar split (#100) exists only on the ranges of days and months, where the calendar factories of #48 give a period to cut at; DateRange is the one core range over calendar days"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Split(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeOnly boundary is built from ticks, because TimeOnly.Add wraps at midnight: a boundary past the end of the day must be null, where the timestamp siblings' AddTicks throws at their own extremes"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Split(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Values(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where the integer siblings step by their own element type"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Shift(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeRange cannot cross midnight, so a moved bound goes through AddWithinDay, which throws past either end of the day where TimeOnly.Add wraps; the other temporal types throw at their own extremes through Checked"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Expand(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeRange cannot cross midnight, so a moved bound goes through AddWithinDay, which throws past either end of the day where TimeOnly.Add wraps; the other temporal types throw at their own extremes through Checked"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Shift(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Expand(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
     "family": "nodatime ranges",
     "unit": "LocalDateRange",
     "member": "CreateUnboundedEnd($T, bool)",
@@ -392,6 +511,90 @@
     "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
   },
   {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "IsoWeek($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "IsoWeek(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Month($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Month(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Split(Duration)",
+    "kind": "extra",
+    "reason": "an instant steps by an exact Duration, where the local types step by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Split(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Values(Period)",
+    "kind": "extra",
+    "reason": "a date steps by a calendar Period, where YearMonthRange, the other discrete NodaTime range, steps by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Values(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Shift(Duration)",
+    "kind": "extra",
+    "reason": "an instant moves by an exact Duration, where the local types move by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Expand(Duration)",
+    "kind": "extra",
+    "reason": "an instant moves by an exact Duration, where the local types move by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Shift(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Expand(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
     "family": "efcore wrapper bridges",
     "unit": "DateSet<>",
     "member": "formatPrimitive",
@@ -443,9 +646,79 @@
   {
     "family": "core value sets",
     "unit": "Float64Set",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "refuses NaN and the infinities (RequireFinite): PostgreSQL sorts NaN above every number and .NET below, so no order over one could agree (#153); the other families' elements are valid by type"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float64Set",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "refuses NaN and the infinities (RequireFinite): PostgreSQL sorts NaN above every number and .NET below, so no order over one could agree (#153); the other families' elements are valid by type"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float64Set",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the text PostgreSQL's float8out prints (FloatLiteral): .NET's shortest form differs in its digits for about one double in three hundred and does not read back at all for 2^-25 and 2^-958 (#153)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float64Set",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
     "reason": "PostgreSQL's float8in grammar for a finite number (FloatLiteral): refuses NaN, the infinities, hexadecimal, and a number double.Parse would round to infinity or zero where the server reports it out of range (#153)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float64Set",
+    "member": "RequireFinite($T)",
+    "kind": "extra",
+    "reason": "the finite guard From and NormalizeElement share (#153); the other families' elements are valid by type"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement>",
+    "member": "From(IEnumerable<$T>)",
+    "kind": "lone body",
+    "reason": "refuses an element wrapping NaN or an infinity, as Float64Set refuses the double (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement>",
+    "member": "From(ReadOnlySpan<$T>)",
+    "kind": "lone body",
+    "reason": "refuses an element wrapping NaN or an infinity, as Float64Set refuses the double (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement>",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "asks the element for G17, then writes the text float8out prints for the double it wraps, so the literal is Float64Set's: the element's own G17 text is exact but not PostgreSQL's (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "a JSON number holding the text float8out prints, as Float64Set writes it; the decimal converter would read through decimal, which has neither the range nor the binary fractions of a double"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement>",
+    "member": "ParseElement(string)",
+    "kind": "lone body",
+    "reason": "hands the element the parsed double's G17 text: the default form reads back as a different double for 2^-25 and 2^-958 (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float64Set<TElement>",
+    "member": "RequireFinite($T)",
+    "kind": "extra",
+    "reason": "the finite guard From and NormalizeElement share, read through the element's G17 text (#153); the other arities' primitives are valid by type"
   },
   {
     "family": "core wrapper arities",
@@ -453,6 +726,27 @@
     "member": "RoundTripFormat",
     "kind": "lone body",
     "reason": "G17 reads back as the same double for every value; .NET's default shortest form does not for 2^-25 and 2^-958, so a wrapper asked for it would store them one unit lower (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "CreateFinite($T, $T, bool, bool)",
+    "kind": "lone body",
+    "reason": "refuses NaN and the infinities before comparing: under CompareTo [5,NaN) is inverted and empty, while PostgreSQL holds it as a range containing 1e308 (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "FormatValue($T, string?, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the text PostgreSQL's float8out prints (FloatLiteral): .NET's shortest form differs in its digits for about one double in three hundred and does not read back at all for 2^-25 and 2^-958 (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "IRange<$T>.NormalizeElement($T)",
+    "kind": "extra",
+    "reason": "a NaN or infinite operand of Contains and Clamp is refused, not answered: [0,) contains NaN in PostgreSQL and not under CompareTo (#153); every other range's element type is valid by type"
   },
   {
     "family": "core ranges",
@@ -469,11 +763,109 @@
     "reason": "PostgreSQL's float8in grammar for a finite number (FloatLiteral): refuses NaN, the infinities, hexadecimal, and a number double.Parse would round to infinity or zero where the server reports it out of range (#153)"
   },
   {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "RequireFinite($T, string)",
+    "kind": "extra",
+    "reason": "the finite guard every factory, both unbounded constructors and NormalizeElement share (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedEnd..ctor($T, bool)",
+    "kind": "extra",
+    "reason": "checks the bound is finite; a positional record has no constructor body to check it in, and its init accessor would let `with { Start = double.NaN }` past any check (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedEnd.<type>",
+    "kind": "lone body",
+    "reason": "not a positional record, so the finite check in its constructor cannot be bypassed through `with` (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedEnd.Deconstruct($T, bool)",
+    "kind": "extra",
+    "reason": "the Deconstruct a positional record synthesizes, written out because this one is not positional (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedEnd.Start",
+    "kind": "extra",
+    "reason": "the property a positional record synthesizes, get-only because this one is not positional: no init accessor to bypass the finite check (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedEnd.StartInclusive",
+    "kind": "lone body",
+    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedStart..ctor($T, bool)",
+    "kind": "extra",
+    "reason": "checks the bound is finite; a positional record has no constructor body to check it in, and its init accessor would let `with { End = double.NaN }` past any check (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedStart.<type>",
+    "kind": "lone body",
+    "reason": "not a positional record, so the finite check in its constructor cannot be bypassed through `with` (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedStart.Deconstruct($T, bool)",
+    "kind": "extra",
+    "reason": "the Deconstruct a positional record synthesizes, written out because this one is not positional (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedStart.End",
+    "kind": "extra",
+    "reason": "the property a positional record synthesizes, get-only because this one is not positional: no init accessor to bypass the finite check (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "UnboundedStart.EndInclusive",
+    "kind": "lone body",
+    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
+  },
+  {
     "family": "efcore wrapper bridges",
     "unit": "Float64Set<>",
     "member": "formatPrimitive",
     "kind": "lone body",
     "reason": "G17 reads back as the same double for every value; the default form does not for 2^-25 and 2^-958 (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "Moved($T)",
+    "kind": "extra",
+    "reason": "IEEE addition overflows to an infinity rather than throwing, so a moved bound or split boundary is checked here and an infinity becomes the OverflowException the other range types throw past their last value (#153)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "Shift($T)",
+    "kind": "lone body",
+    "reason": "refuses a NaN or infinite delta (an operand like any other, #153) and moves through Moved, because double addition overflows to an infinity where the siblings' checked arithmetic throws"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float64Range",
+    "member": "Expand($T)",
+    "kind": "lone body",
+    "reason": "refuses a NaN or infinite amount (an operand like any other, #153) and moves through Moved, because double addition overflows to an infinity where the siblings' checked arithmetic throws"
   },
   {
     "family": "core value sets",

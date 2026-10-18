@@ -1,0 +1,17 @@
+Seed: DateRange.IsoWeek(weekYear, week) trusts ISOWeek.ToDateTime with the week number, which reads week 53 of a 52-week year as week 1 of the next
+Oracles: CalendarRangeParityTests
+Fails: IsoWeek(y, 53) for every 52-week year y returns the first week of y + 1 instead of throwing, where LocalDateRange throws
+History: found while writing the calendar factories for 10.0.0, before they shipped
+
+diff --git a/src/CodoMetis.ValueRanges/DateRange.cs b/src/CodoMetis.ValueRanges/DateRange.cs
+index 2bcfddc..d353493 100644
+--- a/src/CodoMetis.ValueRanges/DateRange.cs
++++ b/src/CodoMetis.ValueRanges/DateRange.cs
+@@ -257,7 +257,6 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
+     {
+         // ISOWeek.ToDateTime accepts week 53 of a 52-week year and answers with week 1 of the next.
+         ArgumentOutOfRangeException.ThrowIfLessThan(week, 1);
+-        ArgumentOutOfRangeException.ThrowIfGreaterThan(week, ISOWeek.GetWeeksInYear(weekYear));
+ 
+         return IsoWeekStartingOn(DateOnly.FromDateTime(ISOWeek.ToDateTime(weekYear, week, DayOfWeek.Monday)));
+     }

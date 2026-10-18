@@ -273,4 +273,64 @@ public sealed class Float64DomainTests
         Assert.AreEqual("[1,50,1000000000000000,00)", range.ToString("F2", CultureInfo.GetCultureInfo("de-DE")));
         Assert.AreEqual("[1.5,1e+15)", range.ToString(null, CultureInfo.GetCultureInfo("de-DE")));
     }
+
+    /// <summary>Shift, Expand and Split take finite operands, like every other float operand.</summary>
+    [TestMethod]
+    public void ShiftExpandSplit_RefuseANonFiniteStep()
+    {
+        var range = Float64Range.CreateFinite(0, 10);
+        foreach (var value in NotFinite)
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => range.Shift(value));
+            Assert.ThrowsExactly<ArgumentException>(() => range.Expand(value));
+            Assert.ThrowsExactly<ArgumentException>(() => range.Split(value));
+            Assert.ThrowsExactly<ArgumentException>(() => Float64Range.Empty.Shift(value));
+        }
+    }
+
+    /// <summary>
+    /// IEEE addition overflows to an infinity rather than throwing; a bound moved past the finite values
+    /// throws <see cref="OverflowException"/>, as for the other range types, and never becomes a bound.
+    /// </summary>
+    [TestMethod]
+    public void ShiftAndExpand_PastTheFiniteValues_Throw()
+    {
+        var top = Float64Range.CreateFinite(1, double.MaxValue, true, true);
+
+        Assert.ThrowsExactly<OverflowException>(() => top.Shift(double.MaxValue));
+        Assert.ThrowsExactly<OverflowException>(() => Float64Range.CreateUnboundedStart(double.MaxValue).Expand(double.MaxValue));
+        Assert.ThrowsExactly<OverflowException>(() => Float64Range.CreateFinite(double.MinValue, 0).Shift(-double.MaxValue));
+        Assert.AreEqual(Float64Range.CreateFinite(0.30000000000000004, 1.2), Float64Range.CreateFinite(0.1, 1).Shift(0.2));
+        Assert.AreEqual(Float64Range.Empty, Float64Range.CreateFinite(1, 2).Expand(-0.5));
+    }
+
+    /// <summary>
+    /// Each boundary is Start + n × step, rounded once, so the error does not build up; a step too small to
+    /// move the start at its magnitude throws at the call; a boundary past MaxValue ends the split.
+    /// </summary>
+    [TestMethod]
+    public void Split_RoundsEachBoundaryOnce_AndStopsAtTheFiniteEdge()
+    {
+        var tenths = Float64Range.CreateFinite(0, 1).Split(0.1).ToList();
+        Assert.HasCount(10, tenths);
+        Assert.AreEqual(0.7000000000000001, tenths[7].LowerBound());   // 7 * 0.1, not 0.1 added seven times
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => Float64Range.CreateFinite(1e17, 2e17).Split(1));
+
+        var ulp  = Math.ScaleB(1.0, 971);
+        var edge = Float64Range.CreateFinite(double.MaxValue - 3 * ulp, double.MaxValue, true, true).Split(2 * ulp).ToList();
+        Assert.HasCount(2, edge);
+        Assert.AreEqual(double.MaxValue, edge[^1].UpperBound());
+    }
+
+    /// <summary>PostgreSQL's range order over finite doubles; -0 and 0 compare equal, as they are.</summary>
+    [TestMethod]
+    public void CompareTo_IsTheRangeOrder()
+    {
+        Assert.IsLessThan(0, Float64Range.Empty.CompareTo(Float64Range.CreateFinite(-1e308, 0)));
+        Assert.IsLessThan(0, Float64Range.CreateFinite(1, 5).CompareTo(Float64Range.CreateFinite(1, 5, true, true)));
+        Assert.IsLessThan(0, Float64Range.CreateUnboundedStart(0).CompareTo(Float64Range.CreateFinite(double.MinValue, 0)));
+        Assert.AreEqual(0, Float64Range.CreateFinite(-0.0, 1).CompareTo(Float64Range.CreateFinite(0.0, 1)));
+        Assert.IsGreaterThan(0, Float64Range.CreateFinite(0, 1).CompareTo(null));
+    }
 }

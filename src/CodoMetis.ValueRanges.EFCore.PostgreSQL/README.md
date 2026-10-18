@@ -76,6 +76,7 @@ bookings.Where(b => b.Period.Overlaps(other));      // b."Period" && @other
 bookings.Select(b => b.Period.Intersect(other));    // b."Period" * @other
 bookings.OrderBy(b => b.Period.LowerBound());       // ORDER BY lower(b."Period")
 bookings.Select(b => b.Period.Merge(other));        // range_merge(b."Period", @other)
+bookings.Select(b => b.BlockedDays.Gaps(month));    // datemultirange(@month) - b."BlockedDays"
 bookings.Where(b => b.BlockedDays == someSet);      // b."BlockedDays" = @set
 
 bookings.GroupBy(b => b.CustomerId)                 // range_agg(b."Period")

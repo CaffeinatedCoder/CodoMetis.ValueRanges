@@ -28,6 +28,18 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
     }
 
     /// <summary>
+    /// The copy constructor a <c>with</c> expression on a variant chains to.
+    /// </summary>
+    /// <remarks>
+    /// A record's copy constructor cannot be private, so this check, not the private constructor
+    /// above, is what keeps the union closed: a type declared outside the nested variants is
+    /// refused here, before it can reach a switch.
+    /// </remarks>
+    /// <param name="original">The variant being copied.</param>
+    /// <exception cref="InvalidOperationException">The runtime type is not one of the nested variants.</exception>
+    protected DecimalRange(DecimalRange original) => ClosedUnion.Require(this);
+
+    /// <summary>
     /// Represents an empty <see cref="DecimalRange"/> that contains no values.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, DecimalRange, decimal>))]
@@ -174,6 +186,26 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
         };
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="step"/> each, from its start:
+    /// <c>DecimalRange.CreateFinite(0m, 10m).Split(4m)</c> is <c>[0,4)</c>, <c>[4,8)</c>, <c>[8,10)</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. On a continuous type each piece but the last is half-open, so a closed range ends in a closed piece rather than a single point.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="step">The length of each piece; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<DecimalRange> Split(decimal step)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
+        return RangeSplitting.Split<DecimalRange, decimal>(this, RangeSplitting.Steps<decimal>(this, (start, n) => checked(start + n * step)));
+    }
+
+    /// <summary>
     /// The span between the bounds, or <see langword="null"/> when the range is unbounded or the
     /// span is too large to represent. The empty range measures 0.
     /// </summary>
@@ -239,6 +271,52 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
     /// </summary>
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out DecimalRange result)
         => RangeFormat.TryParse<DecimalRange, decimal>(s, provider, out result);
+
+    /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(DecimalRange? other) => RangeOrder.Compare<decimal>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[1.5,2).Shift(0.5m)</c> is <c>[2.0,2.5)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="decimal"/> can hold.</exception>
+    public DecimalRange Shift(decimal delta) => RangeArithmetic.Move<DecimalRange, decimal>(this, value => checked(value + delta), value => checked(value + delta));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[1,2).Expand(0.5m)</c> is <c>[0.5,2.5)</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="decimal"/> can hold.</exception>
+    public DecimalRange Expand(decimal amount) => RangeArithmetic.Move<DecimalRange, decimal>(this, value => checked(value - amount), value => checked(value + amount));
 
     /// <inheritdoc />
     public override sealed string ToString()
