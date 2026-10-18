@@ -93,8 +93,8 @@ the work, and close it from the PR (`Closes #n`).
   forward after every change, so nothing lands on `net11` that `main` should have. At the tag,
   `release/10.x` is cut from it and `net11` becomes `main`. After it, a change for both merges
   into `main` first and is cherry-picked (`-x`) into a PR against `release/10.x`; additions ship
-  as 10.x minors until `v11.0.0`, after which 10.x takes fixes only. An issue fixed only on a
-  release branch is closed by hand, because `Closes #n` acts only on `main`. SECURITY.md has one
+  as 10.x minors for six months after `v11.0.0`, after which 10.x takes fixes only. An issue
+  fixed only on a release branch is closed by hand, because `Closes #n` acts only on `main`. SECURITY.md has one
   row per line; the other line's latest release is `CompanionLineRelease` in
   `Directory.Build.props`. See CONTRIBUTING.md#branches-and-releases
 

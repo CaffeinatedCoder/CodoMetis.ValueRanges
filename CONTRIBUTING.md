@@ -122,9 +122,10 @@ no changes from then on, and a fix reaches 9.x users only by upgrading.
 - **`release/10.x`** is the LTS line. A change for both goes into `main` first and is cherry-picked
   with `-x` into a PR against `release/10.x` that links the `main` PR. A change for 10.x only, such
   as its version bump or a fix to code `main` no longer has, goes straight into `release/10.x`.
-- **Additions** ship as 10.x minors until `v11.0.0`, and always reach `main` first, so the LTS
-  line never carries something the current line lacks. After `v11.0.0`, 10.x takes fixes only:
-  loud ones in a patch or a minor, silent ones in a minor.
+- **Additions** ship as 10.x minors for six months after `v11.0.0`, and always reach `main`
+  first, so the LTS line never carries something the current line lacks. The cut-off date is
+  written here when `v11.0.0` is tagged (the tag date plus six months). After it, 10.x takes
+  fixes only: loud ones in a patch or a minor, silent ones in a minor.
 
 ### A fix that changes an answer
 
