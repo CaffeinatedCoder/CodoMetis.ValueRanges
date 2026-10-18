@@ -897,7 +897,8 @@
     ],
     "heldBy": [
       "SpanParsingTests",
-      "LiteralCorpusProbeTests"
+      "LiteralCorpusProbeTests",
+      "LiteralEntryPointParityTests"
     ]
   },
   {
@@ -937,7 +938,8 @@
     "heldBy": [
       "TypeConverterContractTests",
       "ConfigurationBindingTests",
-      "CultureEntryPointProbeTests"
+      "CultureEntryPointProbeTests",
+      "LiteralEntryPointParityTests"
     ]
   },
   {
@@ -1201,7 +1203,8 @@
       "*Set.From"
     ],
     "heldBy": [
-      "SetJsonConverterTests"
+      "SetJsonConverterTests",
+      "SetWrapperParityTests"
     ]
   },
   {
@@ -1353,7 +1356,8 @@
     ],
     "heldBy": [
       "RangeSetComparisonTests",
-      "ExecutedQueryTests"
+      "ExecutedQueryTests",
+      "RangeSetLiftParityTests"
     ]
   },
   {
@@ -1430,7 +1434,8 @@
     ],
     "heldBy": [
       "SmallModelOracleTests",
-      "RangeSetTests"
+      "RangeSetTests",
+      "RangeSetLiftParityTests"
     ]
   },
   {
@@ -2159,7 +2164,8 @@
       "WrapperGrammarContractTests",
       "SetParseFormatTests",
       "SetJsonConverterTests",
-      "TemporalLiteralStrictnessContractTests"
+      "TemporalLiteralStrictnessContractTests",
+      "SetWrapperParityTests"
     ]
   },
   {

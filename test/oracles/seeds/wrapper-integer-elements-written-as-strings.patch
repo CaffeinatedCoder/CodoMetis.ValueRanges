@@ -1,0 +1,17 @@
+Seed: Int64Set<TElement> serializes its elements through the text converter, so the wrapper arity writes JSON strings where Int64Set writes numbers
+Oracles: SetWrapperParityTests
+Fails: Int64Set: every JSON token kind, and each sibling reading the other's document
+
+diff --git a/src/CodoMetis.ValueRanges/Sets/Int64Set.cs b/src/CodoMetis.ValueRanges/Sets/Int64Set.cs
+index 210f5a0..f7ab8ff 100644
+--- a/src/CodoMetis.ValueRanges/Sets/Int64Set.cs
++++ b/src/CodoMetis.ValueRanges/Sets/Int64Set.cs
+@@ -209,7 +209,7 @@ public sealed class Int64Set<TElement> :
+     /// <see cref="IValueSetFactory{TSet,T}.ElementJsonConverter"/>.
+     /// </summary>
+     static JsonConverter<TElement>? IValueSetFactory<Int64Set<TElement>, TElement>.ElementJsonConverter
+-        => ValueSetIntegerElementJsonConverter<Int64Set<TElement>, TElement>.Instance;
++        => ValueSetTextElementJsonConverter<Int64Set<TElement>, TElement>.Instance;
+ 
+     /// <summary>
+     /// Parses a PostgreSQL array literal into an <see cref="Int64Set{TElement}"/>, re-validating

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Oracles;
-using NodaTime;
+using static CodoMetis.ValueRanges.Conventions.Tests.RangeSpecs;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
@@ -39,31 +39,7 @@ public sealed class DomainParityOracleTests
 {
     private const string OracleName = nameof(DomainParityOracleTests);
 
-    private enum Shape { Empty, Infinity, Finite, UnboundedStart, UnboundedEnd }
-
-    private sealed record Spec(Shape Shape, int Start, int End, bool StartInclusive, bool EndInclusive);
-
     private sealed record Case<TRange>(string Label, TRange Range, HashSet<int> Model) where TRange : notnull;
-
-    private static readonly DateTime      s_dateTimeOrigin = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
-    private static readonly LocalDateTime s_localOrigin    = new(2026, 1, 1, 0, 0);
-    private static readonly Instant       s_instantOrigin  = Instant.FromUtc(2026, 1, 1, 0, 0);
-
-    /// <summary>Grid index to element, order-preserving; a discrete type's step is one grid point.</summary>
-    private static readonly Dictionary<Type, Delegate> s_embeddings = new()
-    {
-        [typeof(int)]            = (Func<int, int>)(k => k),
-        [typeof(long)]           = (Func<int, long>)(k => k),
-        [typeof(decimal)]        = (Func<int, decimal>)(k => k * 0.5m),
-        [typeof(DateOnly)]       = (Func<int, DateOnly>)(k => new DateOnly(2026, 1, 1).AddDays(k)),
-        [typeof(TimeOnly)]       = (Func<int, TimeOnly>)(k => new TimeOnly(9, 0).AddMinutes(30 * k)),
-        [typeof(DateTime)]       = (Func<int, DateTime>)(k => s_dateTimeOrigin.AddMinutes(30 * k)),
-        [typeof(DateTimeOffset)] = (Func<int, DateTimeOffset>)(k => new DateTimeOffset(s_dateTimeOrigin.AddMinutes(30 * k), TimeSpan.FromHours(1))),
-        [typeof(LocalDate)]      = (Func<int, LocalDate>)(k => new LocalDate(2026, 1, 1).PlusDays(k)),
-        [typeof(LocalDateTime)]  = (Func<int, LocalDateTime>)(k => s_localOrigin.PlusMinutes(30 * k)),
-        [typeof(Instant)]        = (Func<int, Instant>)(k => s_instantOrigin.Plus(Duration.FromMinutes(30 * k))),
-        [typeof(YearMonth)]      = (Func<int, YearMonth>)(k => new YearMonth(2026, 1).PlusMonths(k))
-    };
 
     [TestMethod]
     public void Discovery_FindsEveryRangeType_AndEveryElementHasAnEmbedding()
@@ -72,7 +48,7 @@ public sealed class DomainParityOracleTests
 
         Assert.IsTrue(types.Count >= 11, $"Discovered {types.Count} range types, fewer than the 11 known to exist.");
 
-        var unembedded = types.Where(pair => !s_embeddings.ContainsKey(pair.Element)).Select(pair => pair.Range.Name).ToList();
+        var unembedded = types.Where(pair => !Embeddings.ContainsKey(pair.Element)).Select(pair => pair.Range.Name).ToList();
         Assert.AreEqual(0, unembedded.Count,
                         "A range type's element has no embedding, so the sweep cannot reach it — add one: " + string.Join(", ", unembedded));
     }
@@ -85,7 +61,7 @@ public sealed class DomainParityOracleTests
 
         foreach (var (range, element) in RangeProbes.AllRangeTypes())
         {
-            if (!s_embeddings.ContainsKey(element)) continue; // reported by the discovery test
+            if (!Embeddings.ContainsKey(element)) continue; // reported by the discovery test
             var result = Reflect.InvokeGeneric<(int Checks, List<string> Failures)>(typeof(DomainParityOracleTests), nameof(Sweep), range, element);
             Assert.IsTrue(result.Checks > 100_000, $"{range.Name}: expected well over 100,000 checks, made {result.Checks}.");
             failures.AddRange(result.Failures);
@@ -100,7 +76,7 @@ public sealed class DomainParityOracleTests
         where TRange : class, IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
-        var valueOf  = (Func<int, T>)s_embeddings[typeof(T)];
+        var valueOf  = (Func<int, T>)Embeddings[typeof(T)];
         var discrete = TRange.IsDiscrete;
 
         // The discrete grid: one index per value, bounds inside the universe. The continuous grid:
@@ -109,7 +85,7 @@ public sealed class DomainParityOracleTests
         int[] bounds = discrete ? [1, 2, 3, 4, 5, 6] : [2, 4, 6, 8, 10, 12];
 
         var cases = EnumerateSpecs(bounds)
-                   .Select(spec => new Case<TRange>($"{typeof(TRange).Name} {Describe(spec, k => TRange.FormatValue(valueOf(k), null, System.Globalization.CultureInfo.InvariantCulture))}", Build<TRange, T>(spec, valueOf), ModelOf(spec, gridMax)))
+                   .Select(spec => new Case<TRange>($"{typeof(TRange).Name} {Describe<TRange, T>(spec, valueOf)}", Build<TRange, T>(spec, valueOf), ModelOf(spec, gridMax)))
                    .ToList();
 
         var failures = new List<string>();
@@ -178,25 +154,6 @@ public sealed class DomainParityOracleTests
         HashSet<int> ModelOfSet(RangeSet<TRange, T> set) => [.. Enumerable.Range(0, gridMax + 1).Where(k => set.Contains(valueOf(k)))];
     }
 
-    private static IEnumerable<Spec> EnumerateSpecs(int[] bounds)
-    {
-        yield return new(Shape.Empty, 0, 0, false, false);
-        yield return new(Shape.Infinity, 0, 0, false, false);
-
-        foreach (var bound in bounds)
-        foreach (var inclusive in (bool[]) [true, false])
-        {
-            yield return new(Shape.UnboundedStart, 0, bound, false, inclusive);
-            yield return new(Shape.UnboundedEnd, bound, 0, inclusive, false);
-        }
-
-        foreach (var start in bounds)
-        foreach (var end in bounds.Where(end => end >= start))
-        foreach (var startInclusive in (bool[]) [true, false])
-        foreach (var endInclusive in (bool[]) [true, false])
-            yield return new(Shape.Finite, start, end, startInclusive, endInclusive);
-    }
-
     /// <summary>The values a specification holds, from the specification alone.</summary>
     private static HashSet<int> ModelOf(Spec spec, int gridMax)
     {
@@ -215,30 +172,6 @@ public sealed class DomainParityOracleTests
         static bool AtOrAfter(int k, int bound, bool inclusive)  => k > bound || (k == bound && inclusive);
         static bool AtOrBefore(int k, int bound, bool inclusive) => k < bound || (k == bound && inclusive);
     }
-
-    private static TRange Build<TRange, T>(Spec spec, Func<int, T> valueOf)
-        where TRange : IRangeFactory<TRange, T>, IRange<T>
-        where T : struct, IComparable<T>, IEquatable<T> =>
-        spec.Shape switch
-        {
-            Shape.Empty          => TRange.Empty,
-            Shape.Infinity       => TRange.Infinite,
-            Shape.Finite         => TRange.CreateFinite(valueOf(spec.Start), valueOf(spec.End), spec.StartInclusive, spec.EndInclusive),
-            Shape.UnboundedStart => TRange.CreateUnboundedStart(valueOf(spec.End), spec.EndInclusive),
-            Shape.UnboundedEnd   => TRange.CreateUnboundedEnd(valueOf(spec.Start), spec.StartInclusive),
-            _                    => throw new UnreachableException()
-        };
-
-    private static string Describe(Spec spec, Func<int, string> text) =>
-        spec.Shape switch
-        {
-            Shape.Empty          => "empty",
-            Shape.Infinity       => "(,)",
-            Shape.Finite         => $"{(spec.StartInclusive ? '[' : '(')}{text(spec.Start)},{text(spec.End)}{(spec.EndInclusive ? ']' : ')')}",
-            Shape.UnboundedStart => $"(,{text(spec.End)}{(spec.EndInclusive ? ']' : ')')}",
-            Shape.UnboundedEnd   => $"{(spec.StartInclusive ? '[' : '(')}{text(spec.Start)},)",
-            _                    => throw new UnreachableException()
-        };
 
     private static bool IsContiguous(HashSet<int> values) => values.Count == 0 || values.Max() - values.Min() + 1 == values.Count;
 

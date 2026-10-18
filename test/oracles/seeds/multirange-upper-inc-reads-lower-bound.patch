@@ -1,0 +1,17 @@
+Seed: RangeSet.UpperBoundInclusive reads the last element's lower inclusivity, a sibling accessor copied without its bound renamed
+Oracles: RangeSetLiftParityTests
+Fails: every one-element set whose range has differing lower and upper inclusivity: upper_inc disagrees with the range it holds, on every range type
+
+diff --git a/src/CodoMetis.ValueRanges/RangeSet.cs b/src/CodoMetis.ValueRanges/RangeSet.cs
+index ee6f28c..399cab8 100644
+--- a/src/CodoMetis.ValueRanges/RangeSet.cs
++++ b/src/CodoMetis.ValueRanges/RangeSet.cs
+@@ -342,7 +342,7 @@ public sealed class RangeSet<TRange, T>
+     /// Returns <see langword="true"/> if the set's last element has an inclusive upper
+     /// bound — equivalent to the PostgreSQL <c>upper_inc</c> function on multiranges.
+     /// </summary>
+-    public bool UpperBoundInclusive() => !_elements.IsEmpty && _elements[^1].UpperBoundInclusive();
++    public bool UpperBoundInclusive() => !_elements.IsEmpty && _elements[^1].LowerBoundInclusive();
+ 
+     // -------------------------------------------------------------------------
+     // Query operations

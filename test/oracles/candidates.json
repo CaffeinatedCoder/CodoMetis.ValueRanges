@@ -989,5 +989,194 @@
     "row": " over empty as ",
     "family": "an empty captured collection cannot be a VALUES query root",
     "issue": "#137"
+  },
+  {
+    "oracle": "SetWrapperParityTests",
+    "row": "DecimalSet JSON read [\"",
+    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
+    "issue": "#141",
+    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
+  },
+  {
+    "oracle": "SetWrapperParityTests",
+    "row": "Int16Set JSON read [\"",
+    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
+    "issue": "#141",
+    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
+  },
+  {
+    "oracle": "SetWrapperParityTests",
+    "row": "Int32Set JSON read [\"",
+    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
+    "issue": "#141",
+    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
+  },
+  {
+    "oracle": "SetWrapperParityTests",
+    "row": "Int64Set JSON read [\"",
+    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
+    "issue": "#141",
+    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
+  },
+  {
+    "oracle": "SetWrapperParityTests",
+    "row": "GuidSet JSON read [\" ",
+    "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
+    "issue": "#141",
+    "method": "PrimitiveSet_AndItsIdentityWrapperArity_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DateRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DateRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DateTimeOffsetRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DateTimeOffsetRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DateTimeRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DateTimeRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DecimalRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "DecimalRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "InstantRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "InstantRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "Int32Range (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "Int32Range (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "Int64Range (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "Int64Range (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "LocalDateRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "LocalDateRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "LocalDateTimeRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "LocalDateTimeRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "TimeRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "TimeRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "YearMonthRange (,) IsUnboundedStart:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
+  },
+  {
+    "oracle": "RangeSetLiftParityTests",
+    "row": "YearMonthRange (,) IsUnboundedEnd:",
+    "family": "IsUnboundedStart/IsUnboundedEnd test the variant; lower_inf/upper_inf are true for (,)",
+    "issue": "#109",
+    "method": "Range_AndItsOneElementRangeSet_AnswerAlike"
   }
 ]
