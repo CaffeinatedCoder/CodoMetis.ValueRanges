@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using NodaTime;
+using CodoMetis.ValueRanges.Oracles;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
@@ -115,13 +116,13 @@ public sealed class TemporalLiteralStrictnessContractTests
         foreach (var (shortForm, fullForm) in HoursMinutes[typeof(T)])
         {
             var literal  = $"[\"{shortForm}\",\"{shortForm}\"]";
-            var expected = TRange.Parse($"[\"{fullForm}\",\"{fullForm}\"]", CultureInfo.InvariantCulture);
+            var expected = StringOverloads.Parse<TRange>($"[\"{fullForm}\",\"{fullForm}\"]", CultureInfo.InvariantCulture);
             var label    = $"{typeof(TRange).Name} {literal}";
 
-            Check(failures, label, "Parse", expected, () => TRange.Parse(literal, CultureInfo.InvariantCulture));
+            Check(failures, label, "Parse", expected, () => StringOverloads.Parse<TRange>(literal, CultureInfo.InvariantCulture));
             Check(failures, label, "Parse(span)", expected, () => TRange.Parse(literal.AsSpan(), CultureInfo.InvariantCulture));
             Check(failures, label, "TryParse", expected,
-                () => TRange.TryParse(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
+                () => StringOverloads.TryParse<TRange>(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
             Check(failures, label, "JSON", expected, () => JsonSerializer.Deserialize<TRange>(JsonSerializer.Serialize(literal))!);
             Check(failures, label, "TypeConverter", expected,
                 () => (TRange)TypeDescriptor.GetConverter(typeof(TRange)).ConvertFromInvariantString(literal)!);
@@ -141,12 +142,12 @@ public sealed class TemporalLiteralStrictnessContractTests
         foreach (var (shortForm, fullForm) in HoursMinutes[typeof(TPrimitive)])
         {
             var literal  = $"{{\"{shortForm}\"}}";
-            var expected = TSet.Parse($"{{\"{fullForm}\"}}", CultureInfo.InvariantCulture);
+            var expected = StringOverloads.Parse<TSet>($"{{\"{fullForm}\"}}", CultureInfo.InvariantCulture);
             var label    = $"{(typeof(TSet).IsGenericType ? $"{typeof(TSet).Name.Split('`')[0]}<{typeof(T).Name}>" : typeof(TSet).Name)} {literal}";
 
-            Check(failures, label, "Parse", expected, () => TSet.Parse(literal, CultureInfo.InvariantCulture));
+            Check(failures, label, "Parse", expected, () => StringOverloads.Parse<TSet>(literal, CultureInfo.InvariantCulture));
             Check(failures, label, "TryParse", expected,
-                () => TSet.TryParse(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
+                () => StringOverloads.TryParse<TSet>(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
             Check(failures, label, "JSON", expected, () => JsonSerializer.Deserialize<TSet>($"[{JsonSerializer.Serialize(shortForm)}]")!);
             Check(failures, label, "TypeConverter", expected,
                 () => (TSet)TypeDescriptor.GetConverter(typeof(TSet)).ConvertFromInvariantString(literal)!);
@@ -221,9 +222,9 @@ public sealed class TemporalLiteralStrictnessContractTests
         var literal = $"[\"{element}\",\"{element}\"]";
         var label   = $"{typeof(TRange).Name} {literal}";
 
-        Assert.ThrowsExactly<FormatException>(() => TRange.Parse(literal, CultureInfo.InvariantCulture), $"{label}: Parse accepted it.");
+        Assert.ThrowsExactly<FormatException>(() => StringOverloads.Parse<TRange>(literal, CultureInfo.InvariantCulture), $"{label}: Parse accepted it.");
         Assert.ThrowsExactly<FormatException>(() => TRange.Parse(literal.AsSpan(), CultureInfo.InvariantCulture), $"{label}: Parse(span) accepted it.");
-        Assert.IsFalse(TRange.TryParse(literal, CultureInfo.InvariantCulture, out _), $"{label}: TryParse accepted it.");
+        Assert.IsFalse(StringOverloads.TryParse<TRange>(literal, CultureInfo.InvariantCulture, out _), $"{label}: TryParse accepted it.");
         Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<TRange>(JsonSerializer.Serialize(literal)), $"{label}: JSON accepted it.");
         Assert.ThrowsExactly<FormatException>(
             () => TypeDescriptor.GetConverter(typeof(TRange)).ConvertFromInvariantString(literal), $"{label}: the TypeConverter accepted it.");
@@ -249,8 +250,8 @@ public sealed class TemporalLiteralStrictnessContractTests
         var literal = $"{{\"{element}\"}}";
         var label   = $"{(typeof(TSet).IsGenericType ? $"{typeof(TSet).Name.Split('`')[0]}<{typeof(T).Name}>" : typeof(TSet).Name)} {literal}";
 
-        Assert.ThrowsExactly<FormatException>(() => TSet.Parse(literal, CultureInfo.InvariantCulture), $"{label}: Parse accepted it.");
-        Assert.IsFalse(TSet.TryParse(literal, CultureInfo.InvariantCulture, out _), $"{label}: TryParse accepted it.");
+        Assert.ThrowsExactly<FormatException>(() => StringOverloads.Parse<TSet>(literal, CultureInfo.InvariantCulture), $"{label}: Parse accepted it.");
+        Assert.IsFalse(StringOverloads.TryParse<TSet>(literal, CultureInfo.InvariantCulture, out _), $"{label}: TryParse accepted it.");
         Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<TSet>($"[{JsonSerializer.Serialize(element)}]"), $"{label}: JSON accepted it.");
         Assert.ThrowsExactly<FormatException>(
             () => TypeDescriptor.GetConverter(typeof(TSet)).ConvertFromInvariantString(literal), $"{label}: the TypeConverter accepted it.");

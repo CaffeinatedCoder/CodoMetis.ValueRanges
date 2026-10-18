@@ -340,8 +340,8 @@ The rules are the ones for any oracle, plus three of their own:
   added anything would turn a family defect into a harness defect.
 - **Make sure both sides really are distinct calls.** In generic code `TSet.Parse(string, …)` binds
   to the span overload (see [testing.md](testing.md#the-sibling-parity-sweeps)), so a string-versus-span
-  comparison has to go through `StringOverloads`. A seed that breaks one side shows whether the sweep
-  reaches it.
+  comparison has to go through `StringOverloads`. `StringOverloadConventionTests` enforces this for
+  every test project. A seed that breaks one side shows whether the sweep reaches it.
 
 A disagreement goes through `Candidates.Verdict` like any other, with each failure line starting
 with the row's type name. A disagreement already filed against another oracle gets its own rows here

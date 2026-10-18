@@ -119,7 +119,7 @@ public sealed class SetElementWhiteSpaceContractTests
         var failures = new List<string>();
         var element  = SetProbes.For<T>()[0];
         var text     = TSet.FormatValue(element, null, CultureInfo.InvariantCulture);
-        var plain    = TSet.Parse($"{{\"{Escape(text)}\"}}", CultureInfo.InvariantCulture);
+        var plain    = StringOverloads.Parse<TSet>($"{{\"{Escape(text)}\"}}", CultureInfo.InvariantCulture);
 
         foreach (var ws in AsciiWhiteSpace)
         {
@@ -186,9 +186,9 @@ public sealed class SetElementWhiteSpaceContractTests
 
         void Reads(string literal, TSet expected)
         {
-            Expect(literal, "Parse", expected, () => TSet.Parse(literal, CultureInfo.InvariantCulture));
+            Expect(literal, "Parse", expected, () => StringOverloads.Parse<TSet>(literal, CultureInfo.InvariantCulture));
             Expect(literal, "TryParse", expected,
-                () => TSet.TryParse(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
+                () => StringOverloads.TryParse<TSet>(literal, CultureInfo.InvariantCulture, out var tried) ? tried : throw new FormatException("TryParse returned false."));
             Expect(literal, "TypeConverter", expected,
                 () => (TSet)TypeDescriptor.GetConverter(typeof(TSet)).ConvertFromInvariantString(literal)!);
         }
@@ -214,9 +214,9 @@ public sealed class SetElementWhiteSpaceContractTests
                 ? "accepts whitespace uuid_in rejects"
                 : "accepts an element its input function rejects";
 
-            if (Accepted(() => TSet.Parse(literal, CultureInfo.InvariantCulture)) is { } parsed)
+            if (Accepted(() => StringOverloads.Parse<TSet>(literal, CultureInfo.InvariantCulture)) is { } parsed)
                 failures.Add($"  {label}: {kind}: Parse read {Show(literal)} as {Show(parsed)}.");
-            if (TSet.TryParse(literal, CultureInfo.InvariantCulture, out var tried))
+            if (StringOverloads.TryParse<TSet>(literal, CultureInfo.InvariantCulture, out var tried))
                 failures.Add($"  {label}: {kind}: TryParse read {Show(literal)} as {Show(tried.ToString()!)}.");
             if (Accepted(() => (TSet)TypeDescriptor.GetConverter(typeof(TSet)).ConvertFromInvariantString(literal)!) is { } converted)
                 failures.Add($"  {label}: {kind}: TypeConverter read {Show(literal)} as {Show(converted)}.");

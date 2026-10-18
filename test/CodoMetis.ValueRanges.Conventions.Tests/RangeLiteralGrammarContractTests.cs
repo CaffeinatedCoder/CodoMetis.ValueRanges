@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.Oracles;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
@@ -119,9 +120,9 @@ public sealed class RangeLiteralGrammarContractTests
         {
             var label = $"{typeof(TRange).Name} {literal}";
 
-            Expect<FormatException>(label, "Parse", () => TRange.Parse(literal, CultureInfo.InvariantCulture));
+            Expect<FormatException>(label, "Parse", () => StringOverloads.Parse<TRange>(literal, CultureInfo.InvariantCulture));
             Expect<FormatException>(label, "Parse(span)", () => TRange.Parse(literal.AsSpan(), CultureInfo.InvariantCulture));
-            if (TRange.TryParse(literal, CultureInfo.InvariantCulture, out var tried))
+            if (StringOverloads.TryParse<TRange>(literal, CultureInfo.InvariantCulture, out var tried))
                 failures.Add($"  {label}: TryParse read {tried}.");
             Expect<JsonException>(label, "JSON", () => JsonSerializer.Deserialize<TRange>(JsonSerializer.Serialize(literal))!);
             Expect<FormatException>(label, "TypeConverter",
@@ -151,7 +152,7 @@ public sealed class RangeLiteralGrammarContractTests
 
             try
             {
-                var actual = TRange.Parse(literal, CultureInfo.InvariantCulture);
+                var actual = StringOverloads.Parse<TRange>(literal, CultureInfo.InvariantCulture);
                 if (!Equals(actual, expected))
                     failures.Add($"  {label}: Parse read {actual}, expected {expected}.");
 

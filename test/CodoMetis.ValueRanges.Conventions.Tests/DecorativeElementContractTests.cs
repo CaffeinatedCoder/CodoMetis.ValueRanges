@@ -114,7 +114,7 @@ public sealed class DecorativeElementContractTests
             return; // refused, naming the contract: the documented behaviour
         }
 
-        var back = TSet.Parse(text, null);
+        var back = StringOverloads.Parse<TSet>(text, null);
         if (!back.Equals(set))
             failures.Add($"  {Name(typeof(TSet))}: literal round trip changed the set → wrote {text}, read back [{string.Join(",", back.Values)}], built from [{string.Join(",", set.Values)}]");
     }
