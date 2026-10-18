@@ -113,6 +113,20 @@ public class ComplexIndexesCrossTests
             StringAssert.Contains(script, clause, $"The create script renders no temporal constraint over {column}:{Environment.NewLine}{script}");
             Assert.AreEqual(clause, await ConstraintDefinition(connectionString, TemporalContext.Name(column)));
         }
+
+        Assert.IsTrue(await HasExtension(connectionString, "btree_gist"), "btree_gist was not created");
+    }
+
+    /// <summary>Before 18 the same schema does not create: <c>WITHOUT OVERLAPS</c> is a syntax error.</summary>
+    [TestMethod]
+    public async Task TemporalConstraint_IsASyntaxError_BeforePostgres18()
+    {
+        var connectionString = await FreshDatabase(Postgres16);
+
+        await using var context = new TemporalContext(connectionString);
+        var error = await Assert.ThrowsExactlyAsync<PostgresException>(() => context.Database.EnsureCreatedAsync());
+
+        Assert.AreEqual(PostgresErrorCodes.SyntaxError, error.SqlState);
     }
 
     [TestMethod]
@@ -120,6 +134,59 @@ public class ComplexIndexesCrossTests
     {
         var connectionString = await FreshDatabase(Postgres18);
         await RejectsOverlapsColumnByColumn(() => new TemporalContext(connectionString), TemporalContext.Name);
+    }
+
+    /// <summary>
+    /// The temporal foreign key over a <see cref="DateRange"/>: <c>FOREIGN KEY (… PERIOD …)</c> on
+    /// PostgreSQL 18, created by <c>EnsureCreated</c> with <c>btree_gist</c> injected. A dependent
+    /// period covered by the principal's rows for the same key is saved, even when it takes two adjacent
+    /// rows to cover it; one that runs past them, or names a key with no row, is rejected as
+    /// <c>23503</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task TemporalForeignKey_AcceptsACoveredPeriod_AndRejectsOneThatIsNot()
+    {
+        var connectionString = await FreshDatabase(Postgres18);
+
+        static DateRange Days(int from, int to) => DateRange.CreateFinite(new DateOnly(2026, 1, from), new DateOnly(2026, 1, to));
+
+        await using (var context = new TemporalForeignKeyContext(connectionString))
+        {
+            var script = context.Database.GenerateCreateScript();
+            StringAssert.Contains(script, "PERIOD \"Period\"", $"The create script renders no temporal foreign key:{Environment.NewLine}{script}");
+
+            await context.Database.EnsureCreatedAsync();
+            context.Availabilities.AddRange(new Availability { Id = 1, RoomId = 1, Period = Days(1, 10) },
+                                            new Availability { Id = 2, RoomId = 1, Period = Days(11, 20) });
+            await context.SaveChangesAsync();
+        }
+
+        Assert.AreEqual(
+            "FOREIGN KEY (\"RoomId\", PERIOD \"Period\") REFERENCES \"Availabilities\"(\"RoomId\", PERIOD \"Period\")",
+            await ConstraintDefinition(connectionString, TemporalForeignKeyContext.ForeignKeyName));
+        Assert.IsTrue(await HasExtension(connectionString, "btree_gist"), "btree_gist was not created");
+
+        await using (var covered = new TemporalForeignKeyContext(connectionString))
+        {
+            covered.Bookings.Add(new RoomBooking { Id = 1, RoomId = 1, Period = Days(5, 15) }); // covered by both rows together
+            await covered.SaveChangesAsync();
+        }
+
+        foreach (var (label, booking) in new[]
+                 {
+                     ("past the last availability", new RoomBooking { Id = 2, RoomId = 1, Period = Days(15, 25) }),
+                     ("a room with no availability", new RoomBooking { Id = 3, RoomId = 2, Period = Days(1, 2) })
+                 })
+        {
+            await using var rejected = new TemporalForeignKeyContext(connectionString);
+            rejected.Bookings.Add(booking);
+
+            var error    = await Assert.ThrowsExactlyAsync<DbUpdateException>(() => rejected.SaveChangesAsync(), $"A booking {label} was saved.");
+            var postgres = error.InnerException as PostgresException;
+            Assert.IsNotNull(postgres, $"Expected a PostgresException inside, got: {error.InnerException}");
+            Assert.AreEqual(PostgresErrorCodes.ForeignKeyViolation, postgres.SqlState, label);
+            Assert.AreEqual(TemporalForeignKeyContext.ForeignKeyName, postgres.ConstraintName, label);
+        }
     }
 
     [TestMethod]
@@ -264,6 +331,17 @@ public class ComplexIndexesCrossTests
         return await command.ExecuteScalarAsync() as string ?? $"(no constraint named {name})";
     }
 
+    private static async Task<bool> HasExtension(string connectionString, string name)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM pg_extension WHERE extname = $1", connection)
+        {
+            Parameters = { new NpgsqlParameter { Value = name } }
+        };
+        return (long)(await command.ExecuteScalarAsync())! == 1;
+    }
+
     private static async Task<(string Name, string Definition)> IndexOn(NpgsqlConnection connection, string column)
     {
         await using var command = new NpgsqlCommand(
@@ -360,6 +438,55 @@ public class ComplexIndexesCrossTests
             slot.HasIndex(s => s.Period).HasMethod("gist");
             slot.HasComplexIndex(s => s.Days, index => index.UseGist());
             slot.HasComplexIndex(s => s.Hours, index => index.UseGist());
+        }
+    }
+
+    private sealed class Availability
+    {
+        public int Id { get; set; }
+
+        public int RoomId { get; set; }
+
+        public DateRange Period { get; set; } = DateRange.Empty;
+    }
+
+    private sealed class RoomBooking
+    {
+        public int Id { get; set; }
+
+        public int RoomId { get; set; }
+
+        public DateRange Period { get; set; } = DateRange.Empty;
+    }
+
+    /// <summary>A principal with a temporal key, and a dependent whose period must lie inside the principal's.</summary>
+    private sealed class TemporalForeignKeyContext(string connectionString) : DbContext
+    {
+        public const string ForeignKeyName = "fk_bookings_room_period";
+
+        public DbSet<Availability> Availabilities => Set<Availability>();
+
+        public DbSet<RoomBooking> Bookings => Set<RoomBooking>();
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges())
+                             .UseNpgsqlComplexIndexes();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Availability>(availability =>
+            {
+                availability.Property(a => a.Id).ValueGeneratedNever();
+                // PostgreSQL requires the referenced columns to carry a WITHOUT OVERLAPS key.
+                availability.HasTemporalConstraint(a => a.RoomId, a => a.Period, "uq_availabilities_room_period");
+            });
+
+            modelBuilder.Entity<RoomBooking>(booking =>
+            {
+                booking.ToTable("Bookings");
+                booking.Property(b => b.Id).ValueGeneratedNever();
+                booking.HasTemporalForeignKey<RoomBooking, Availability>(b => b.RoomId, b => b.Period, a => a.RoomId, a => a.Period, ForeignKeyName);
+            });
         }
     }
 }

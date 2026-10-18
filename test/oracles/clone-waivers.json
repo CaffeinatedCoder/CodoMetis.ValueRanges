@@ -245,6 +245,125 @@
     "reason": "DateOnly steps by AddDays(-1); the integer siblings step by - 1"
   },
   {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeek($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeek(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeekStartingOn($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Month($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Month(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Quarter($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Quarter(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Year($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Year(int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Split(Func<$T, $TYPE>)",
+    "kind": "extra",
+    "reason": "the calendar split (#100) exists only on the ranges of days and months, where the calendar factories of #48 give a period to cut at; DateRange is the one core range over calendar days"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Split(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeOnly boundary is built from ticks, because TimeOnly.Add wraps at midnight: a boundary past the end of the day must be null, where the timestamp siblings' AddTicks throws at their own extremes"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Split(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Values(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where the integer siblings step by their own element type"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Shift(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeRange cannot cross midnight, so a moved bound goes through AddWithinDay, which throws past either end of the day where TimeOnly.Add wraps; the other temporal types throw at their own extremes through Checked"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Expand(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeRange cannot cross midnight, so a moved bound goes through AddWithinDay, which throws past either end of the day where TimeOnly.Add wraps; the other temporal types throw at their own extremes through Checked"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Shift(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Expand(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
     "family": "nodatime ranges",
     "unit": "LocalDateRange",
     "member": "CreateUnboundedEnd($T, bool)",
@@ -392,6 +511,90 @@
     "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
   },
   {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "IsoWeek($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "IsoWeek(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Month($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Month(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Split(Duration)",
+    "kind": "extra",
+    "reason": "an instant steps by an exact Duration, where the local types step by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Split(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Values(Period)",
+    "kind": "extra",
+    "reason": "a date steps by a calendar Period, where YearMonthRange, the other discrete NodaTime range, steps by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Values(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Shift(Duration)",
+    "kind": "extra",
+    "reason": "an instant moves by an exact Duration, where the local types move by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Expand(Duration)",
+    "kind": "extra",
+    "reason": "an instant moves by an exact Duration, where the local types move by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Shift(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Expand(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
     "family": "efcore wrapper bridges",
     "unit": "DateSet<>",
     "member": "formatPrimitive",
@@ -453,5 +656,89 @@
     "member": "arity only: RequireText($T)",
     "kind": "extra",
     "reason": "the arity checks the element's text form for a NUL character through one helper; the closed set checks the string itself inline (TextElement, #133)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Int16Set + Int32Set + Int64Set",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer families read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ones read strict ISO 8601 (IsoTemporal), the others their own grammar"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "the integer ranges read PostgreSQL's integer input grammar through one helper (IntegerLiteral); the temporal ranges read strict ISO 8601 (IsoTemporal)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Int16Set<TElement> + Int32Set<TElement> + Int64Set<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "integer-backed wrappers write a JSON number through the integer element converter, as their primitive siblings do; text-backed and temporal ones write a JSON string"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DecimalSet<TElement> + GuidSet<TElement>",
+    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
+    "kind": "lone body",
+    "reason": "each has a converter of its own for the token its primitive writes: a number keeping scale for decimal, the hyphenated uuid string for Guid; they share only the naming pattern"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "DateTimeOffsetSet<TElement> + DateTimeSet<TElement> + TimeSet<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "the temporal arities pin the round-trip O format because the default text form drops sub-seconds (and the DateTime Kind); the others' default already round-trips (AGENTS.md, value sets)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DecimalRange + Int64Range",
+    "member": "FiniteLength($T, $T)",
+    "kind": "extra",
+    "reason": "the two ranges whose span can exceed their own element type compute it without overflowing and return null when it would; Int32Range counts in long, the temporal ranges measure a TimeSpan"
+  },
+  {
+    "family": "efcore range definitions",
+    "unit": "InstantRange + LocalDateTimeRange",
+    "member": "storeValue",
+    "kind": "lone body",
+    "reason": "the NodaTime temporal ranges truncate to the store's microsecond with NodaStoreTemporal, the BCL ones with StoreTemporal: the same rule over different types"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "InstantSet + LocalDateSet + LocalDateTimeSet + LocalTimeSet",
+    "member": "literalText",
+    "kind": "extra",
+    "reason": "the NodaTime temporal sets write their SQL literal through NodaStoreTemporal.Literal, because Npgsql's NodaTime literal carries nine fraction digits the server rounds; the BCL sets use the shared SetProviderText"
+  },
+  {
+    "family": "efcore set definitions",
+    "unit": "DateTimeOffsetSet + DateTimeSet + LocalDateSet + LocalDateTimeSet",
+    "member": "normalizeValue",
+    "kind": "extra",
+    "reason": "the sets whose element the store reads differently from memory normalize it: timestamp to an Unspecified wall clock, timestamptz to UTC, the calendar-bearing NodaTime types to ISO; the others' elements are stored as they are"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "arity only: RequireIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime arities refuse an element whose wrapped value is not ISO (IsoWrapperElement), which a wrapper cannot convert; their primitive sets convert it instead (ToIso)"
+  },
+  {
+    "family": "primitive vs arity",
+    "unit": "LocalDateSet / LocalDateSet<TElement> + LocalDateTimeSet / LocalDateTimeSet<TElement>",
+    "member": "primitive only: ToIso($T)",
+    "kind": "extra",
+    "reason": "the calendar-bearing NodaTime primitive sets convert an element to the ISO calendar; their arities cannot convert a wrapped value and refuse it (RequireIso)"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Int32Range + Int64Range",
+    "member": "Values($T)",
+    "kind": "extra",
+    "reason": "Every discrete range has Values(step), but only on the integer ranges is the step the element type itself. DateRange steps in int days, LocalDateRange in a Period and YearMonthRange in int months, so their overloads don't normalize to Values($T)."
   }
 ]

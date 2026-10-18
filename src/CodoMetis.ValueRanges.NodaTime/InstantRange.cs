@@ -34,6 +34,18 @@ public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<Ins
     }
 
     /// <summary>
+    /// The copy constructor a <c>with</c> expression on a variant chains to.
+    /// </summary>
+    /// <remarks>
+    /// A record's copy constructor cannot be private, so this check, not the private constructor
+    /// above, is what keeps the union closed: a type declared outside the nested variants is
+    /// refused here, before it can reach a switch.
+    /// </remarks>
+    /// <param name="original">The variant being copied.</param>
+    /// <exception cref="InvalidOperationException">The runtime type is not one of the nested variants.</exception>
+    protected InstantRange(InstantRange original) => ClosedUnion.Require(this);
+
+    /// <summary>
     /// Represents an empty <see cref="InstantRange"/> that contains no values.
     /// </summary>
     [JsonConverter(typeof(RangeVariantJsonConverter<EmptyRange, InstantRange, Instant>))]
@@ -180,6 +192,26 @@ public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<Ins
         };
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="step"/> each, from its start:
+    /// <c>[09:00Z,12:00Z).Split(Duration.FromMinutes(30))</c> is the six half-hour slots from 09:00Z.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. On a continuous type each piece but the last is half-open, so a closed range ends in a closed piece rather than a single point.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="step">The length of each piece; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<InstantRange> Split(Duration step)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(step, Duration.Zero);
+        return RangeSplitting.Split<InstantRange, Instant>(this, RangeSplitting.Steps<Instant>(this, (start, n) => start.Plus(step * n)));
+    }
+
+    /// <summary>
     /// The elapsed time between the bounds, or <see langword="null"/> when the range is
     /// unbounded. The empty range measures <see cref="Duration.Zero"/>.
     /// </summary>
@@ -252,6 +284,34 @@ public abstract partial record InstantRange : IRange<Instant>, IRangeFactory<Ins
     /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
     /// </returns>
     public int CompareTo(InstantRange? other) => RangeOrder.Compare<Instant>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[09:00Z,10:00Z).Shift(Duration.FromHours(1))</c> is <c>[10:00Z,11:00Z)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="Instant"/> can hold.</exception>
+    public InstantRange Shift(Duration delta) => RangeArithmetic.Move<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[09:00Z,10:00Z).Expand(Duration.FromMinutes(15))</c> is <c>[08:45Z,10:15Z)</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="Instant"/> can hold.</exception>
+    public InstantRange Expand(Duration amount) => RangeArithmetic.Move<InstantRange, Instant>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
 
     /// <inheritdoc />
     public override sealed string ToString()

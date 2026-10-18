@@ -1,0 +1,22 @@
+Seed: TimeRange.Shift and Expand add with TimeOnly.Add, which wraps at midnight instead of throwing
+Oracles: RangeArithmeticOracleTests
+Fails: every TimeRange bound moved past either end of the day reappears at the other end, as an empty or wrapped range
+History: planted before Shift and Expand shipped in 10.0.0
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+index de8f988..913309e 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+@@ -61,11 +61,6 @@ internal static class RangeArithmetic
+     /// </summary>
+     internal static TimeOnly AddWithinDay(TimeOnly value, TimeSpan delta)
+     {
+-        long ticks = checked(value.Ticks + delta.Ticks);
+-        if (ticks < TimeOnly.MinValue.Ticks || ticks > TimeOnly.MaxValue.Ticks)
+-            throw new OverflowException(
+-                $"Moving {value.ToString("HH':'mm':'ss.FFFFFFF", CultureInfo.InvariantCulture)} by {delta.ToString("c", CultureInfo.InvariantCulture)} leaves the day; a TimeRange cannot cross midnight.");
+-
+-        return new TimeOnly(ticks);
++        return value.Add(delta);
+     }
+ }
