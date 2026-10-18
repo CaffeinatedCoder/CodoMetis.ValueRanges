@@ -15,6 +15,7 @@ covers all four packages, which share one version number and release together.
 - **`IComparable<TRange>` on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`**, in PostgreSQL's range order: empty first, then by lower bound, then by upper bound ([Sort ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#sort-ranges)).
 - **A range with a `RangeSet` operand** on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`, and `RangeSet.IsContainedBy`, as in the core package ([Compare a range with a set](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#compare-a-range-with-a-set)).
 - **`RangeAgg` and `RangeIntersectAgg` over a sequence of `RangeSet`** of a NodaTime range type, through the core package's generic overloads ([Aggregates](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#aggregate-a-sequence-of-ranges)).
+- **`Shift`** and **`Expand`** on the four NodaTime range types, by a `Period`, a `Duration` or a number of months. A period of months follows the calendar and clips to the end of a shorter month ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
 
 ## [9.1.0] — 2026-10-17
 

@@ -18,6 +18,7 @@ Each type is the same discriminated union of five sealed variants as in the core
 - **Queries:** `Contains`, `Overlaps`, `IsAdjacentTo` and the directional comparisons.
 - **Set operations:** `Intersect`, `Union`, `Except`, `Merge`, `Gap` and `Gaps`.
 - **Bounds and aggregates:** the bound accessors, and `RangeAgg`/`RangeIntersectAgg`.
+- **Arithmetic:** `Shift` and `Expand`, by a `Period`, a `Duration` or a number of months.
 - **Multiranges:** `RangeSet<TRange, T>`.
 - **Text and JSON:** PostgreSQL literal parsing and formatting, and `System.Text.Json` serialization.
 
