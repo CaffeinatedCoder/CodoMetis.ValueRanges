@@ -674,7 +674,8 @@ Good to know:
   the index builds and serves the range operators.
 - **Only finite values load.** A row that another tool wrote with `NaN` or an infinity in a bound
   throws when you load it (`ArgumentException`). A `NaN` or infinite parameter throws before the query
-  runs. See [Why doubles are finite only](why.md#why-doubles-are-finite-only).
+  runs. A query over such a row still runs, though, in PostgreSQL's order: see [Keep NaN and infinity
+  out of a float column](#keep-nan-and-infinity-out-of-a-float-column).
 - **`Float32Range` works the same way over `float4range`.** Create it with
   `HasPostgresRange("float4range", "real")`. There is no `subtype_diff` to leave out: `float4mi`
   returns `real`, and PostgreSQL accepts only a function that returns `double precision`.
@@ -682,6 +683,44 @@ Good to know:
   PostgreSQL does, so `1e23` is `9.999999999999999e+22` and `1e15` is `1e+15`. A `float` prints as
 `real` does: `1e6f` is `1e+06`, and `0.1f` is `0.1`, never the `0.10000000149011612` of the same value
 as a `double`.
+
+### Keep NaN and infinity out of a float column
+
+The finite-only rule covers every value your code creates, binds or loads. It can't cover a row that
+another tool writes into the same column. A query that runs in the database over such a row answers
+in PostgreSQL's order, where `NaN` sorts above every number, and only loading the entity throws:
+
+| Another tool stored | Your query | Result |
+|---|---|---|
+| `Score = '[0,NaN)'` | `Where(r => r.Score.Contains(1e308))` | the row matches |
+| `Ratio = 'NaN'` in a `double` column | `Where(r => r.Score.Contains(r.Ratio))` on `[0,)` | the row matches |
+| `Weights = '{1,NaN}'` | `Select(r => r.Weights.Count)` | 2 |
+
+To keep these values out of the database, give each float column a CHECK constraint:
+
+```csharp
+modelBuilder.Entity<Reading>().ToTable(table =>
+{
+    // A range: both bounds. lower and upper return NULL for an unbounded side and the empty range,
+    // and a CHECK that is NULL passes.
+    table.HasCheckConstraint("CK_Reading_Score_Finite",
+        """lower("Score") NOT IN ('NaN', 'Infinity', '-Infinity') AND upper("Score") NOT IN ('NaN', 'Infinity', '-Infinity')""");
+
+    // A multirange: its text. Its lower and upper are only the outer bounds, so {(,-Infinity],[1,2)}
+    // would pass the range check above. A finite float never prints these letters.
+    table.HasCheckConstraint("CK_Reading_Bands_Finite",
+        """"Bands"::text !~* '(nan|inf)'""");
+
+    // An array: no element in common with the three values.
+    table.HasCheckConstraint("CK_Reading_Weights_Finite",
+        """NOT ("Weights" && '{NaN,Infinity,-Infinity}')""");
+});
+```
+
+The same three expressions work for `float4range`, `float4multirange` and `real[]`. For a range,
+multirange or array column, they reject `NaN`, `Infinity` and `-Infinity` and accept every finite
+value, an unbounded side, the empty range and `NULL`. On a column that already holds such rows,
+adding the constraint fails until you fix them.
 
 ## Store a YearMonthRange
 
