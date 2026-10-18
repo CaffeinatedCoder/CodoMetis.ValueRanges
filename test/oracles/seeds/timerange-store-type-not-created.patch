@@ -1,0 +1,17 @@
+Seed: TimeRange maps to time_range / time_multirange, which HasPostgresRange("timerange", "time") never creates, so the migration declares its columns over types that do not exist
+Oracles: MigrationScaffoldTests, CustomRangeCatalogueTests
+Fails: the scaffolded migration and its SQL declare the TimeRange columns over another type than the CREATE TYPE; EnsureCreated fails with 42704 type "time_range" does not exist
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs
+index 966620b..98650a3 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Internal/RangeTypeRegistry.cs
+@@ -58,7 +58,7 @@ internal static class RangeTypeRegistry
+             // `CREATE TYPE timerange AS RANGE (subtype = time)` (e.g. via HasPostgresRange)
+             // and the Npgsql data source needs EnableUnmappedTypes() to put it on the wire.
+             new RangeTypeDefinition<TimeRange, TimeOnly>(
+-                "timerange", "timemultirange", "time without time zone", storeValue: StoreTemporal.Truncate)
++                "time_range", "time_multirange", "time without time zone", storeValue: StoreTemporal.Truncate)
+         ],
+         [typeof(RangeAggregateExtensions)]);
+ 

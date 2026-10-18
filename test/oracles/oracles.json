@@ -256,5 +256,20 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "MigrationScaffoldTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests",
+    "kind": "claim",
+    "against": "the migration the design-time services `dotnet ef migrations add` builds scaffold for a TimeRange model, and the SQL the provider generates from it"
+  },
+  {
+    "class": "CustomRangeCatalogueTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "claim",
+    "against": "PostgreSQL's catalogue (pg_type, pg_range, information_schema.columns) after EnsureCreated of the integration model in a database of its own",
+    "needs": [
+      "docker"
+    ]
   }
 ]

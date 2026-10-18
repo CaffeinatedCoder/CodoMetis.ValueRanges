@@ -700,6 +700,21 @@
     ]
   },
   {
+    "id": "E39-timerange-type-created-by-migrations",
+    "source": "docs/efcore.md#timerange-and-the-custom-timerange-type",
+    "quote": "// 1. The database needs the type — this generates // CREATE TYPE timerange AS RANGE (SUBTYPE = time) in your migrations // (PostgreSQL 14+ auto-creates timemultirange alongside it): modelBuilder.HasPostgresRange(\"timerange\", \"time\");",
+    "claim": "With HasPostgresRange(\"timerange\", \"time\") and UseValueRanges(), the migration `dotnet ef migrations add` scaffolds carries the timerange annotation and its SQL runs CREATE TYPE timerange AS RANGE (subtype = time) ahead of the CREATE TABLE that declares the TimeRange column as timerange and the RangeSet<TimeRange, TimeOnly> column as timemultirange; after EnsureCreated, pg_type holds the range type timerange over time without time zone, its multirange timemultirange, and the two columns are of those types.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "TimeRange.CreateFinite"
+    ],
+    "heldBy": [
+      "MigrationScaffoldTests",
+      "CustomRangeCatalogueTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
