@@ -131,5 +131,6 @@ public sealed class FuzzDbContext : DbContext
 
         modelBuilder.HasPostgresRange("timerange", "time");
         modelBuilder.HasPostgresRange("float8range", "double precision");
+        modelBuilder.HasPostgresRange("float4range", "real");
     }
 }

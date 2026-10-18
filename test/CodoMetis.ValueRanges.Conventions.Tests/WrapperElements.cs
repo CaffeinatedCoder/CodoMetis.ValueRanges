@@ -22,6 +22,7 @@ internal static class WrapperElements
         "Int64Set`1"          => typeof(LargeCode),
         "DecimalSet`1"        => typeof(Money),
         "Float64Set`1"        => typeof(Score),
+        "Float32Set`1"        => typeof(Weight),
         "DateSet`1"           => typeof(BusinessDate),
         "TimeSet`1"           => typeof(ShiftTime),
         "DateTimeSet`1"       => typeof(AuditStamp),
@@ -219,6 +220,31 @@ public readonly record struct Score : IFormattable, IParsable<Score>, IComparabl
     }
 
     public int CompareTo(Score other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+// Weight forwards the format specifier, as a generated float wrapper does; the family asks for G17.
+public readonly record struct Weight : IFormattable, IParsable<Weight>, IComparable<Weight>
+{
+    private readonly float _value;
+
+    private Weight(float value) => _value = value;
+
+    public static Weight Parse(string s, IFormatProvider? provider)
+        => new(float.Parse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out Weight result)
+    {
+        var parsed = float.TryParse(s, NumberStyles.Float, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = parsed ? new Weight(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(Weight other) => _value.CompareTo(other._value);
 
     public string ToString(string? format, IFormatProvider? formatProvider)
         => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);

@@ -37,6 +37,7 @@ public sealed class RangeArithmeticOracleTests
         [typeof(long)]           = k => (long)k,
         [typeof(decimal)]        = k => k * 0.5m,
         [typeof(double)]         = k => k * 0.5,
+        [typeof(float)]          = k => k * 0.5f,
         [typeof(DateOnly)]       = k => k,
         [typeof(TimeOnly)]       = k => TimeSpan.FromMinutes(30 * k),
         [typeof(DateTime)]       = k => TimeSpan.FromMinutes(30 * k),
@@ -56,7 +57,8 @@ public sealed class RangeArithmeticOracleTests
     /// </summary>
     private static readonly Dictionary<Type, Func<int, object>> EdgeSteps = new()
     {
-        [typeof(double)] = k => k * Math.ScaleB(1.0, 971)
+        [typeof(double)] = k => k * Math.ScaleB(1.0, 971),
+        [typeof(float)]  = k => k * MathF.ScaleB(1f, 104)
     };
 
     public sealed record ArithmeticRow(string Label, Func<List<string>, int> Sweep)

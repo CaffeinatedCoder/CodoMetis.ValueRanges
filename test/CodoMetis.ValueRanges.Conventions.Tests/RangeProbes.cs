@@ -18,6 +18,7 @@ internal static class RangeProbes
         [typeof(long)]           = (-5L, 10L),
         [typeof(decimal)]        = (-1.5m, 9.25m),
         [typeof(double)]         = (-1.5d, 9.25d),
+        [typeof(float)]          = (-1.5f, 9.25f),
         [typeof(DateOnly)]       = (new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)),
         [typeof(TimeOnly)]       = (new TimeOnly(9, 30), new TimeOnly(17, 0)),
         [typeof(DateTime)]       = (new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Unspecified),

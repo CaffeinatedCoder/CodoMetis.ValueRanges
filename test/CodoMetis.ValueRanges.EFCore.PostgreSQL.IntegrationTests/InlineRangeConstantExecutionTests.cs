@@ -29,6 +29,7 @@ public sealed class InlineRangeConstantExecutionTests
             Tickets       = Int64Range.CreateFinite(10, 20),
             Price         = DecimalRange.CreateFinite(1.5m, 2.5m),
             Score         = Float64Range.CreateFinite(1.5, 1e300),
+            Load          = Float32Range.CreateFinite(0.1f, 1e6f),
             Period        = DateRange.CreateFinite(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)),
             LocalTime     = DateTimeRange.CreateFinite(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 17, 0, 0)),
             InstantTime   = DateTimeOffsetRange.CreateFinite(new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 1, 1, 17, 0, 0, TimeSpan.Zero)),
@@ -47,6 +48,7 @@ public sealed class InlineRangeConstantExecutionTests
         yield return ("Int64Range", r => r.Tickets == Int64Range.CreateFinite(10, 20));
         yield return ("DecimalRange", r => r.Price == DecimalRange.CreateFinite(1.5m, 2.5m));
         yield return ("Float64Range", r => r.Score == Float64Range.CreateFinite(1.5, 1e300));
+        yield return ("Float32Range", r => r.Load == Float32Range.CreateFinite(0.1f, 1e6f));
         yield return ("DateRange", r => r.Period == DateRange.CreateFinite(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
         yield return ("DateTimeRange", r => r.LocalTime == DateTimeRange.CreateFinite(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 17, 0, 0)));
         yield return ("DateTimeOffsetRange", r => r.InstantTime == DateTimeOffsetRange.CreateFinite(

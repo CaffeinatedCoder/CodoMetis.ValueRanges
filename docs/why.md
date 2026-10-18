@@ -108,12 +108,13 @@ The first six element types meet that bar, and they are the six PostgreSQL ships
 range types. `int`, `long` and `DateOnly` are discrete. `decimal`, `DateTime` and
 `DateTimeOffset` are continuous, so adjacency for them depends on whether the bounds include their
 end point. `TimeOnly` (and, in the NodaTime package, `YearMonth`) meet the same bar and were added in
-v5. `double` meets it in 10.0, once `NaN` and the infinities are left out.
+v5. `double` and `float` meet it in 10.0, once `NaN` and the infinities are left out.
 
 ### Why doubles are finite only
 
 `Float64Range` and `Float64Set` hold every `double` except `NaN`, `+∞` and `-∞`. Creating, parsing
-or loading one with those values throws. Here is why, measured on PostgreSQL 16, 17 and 18:
+or loading one with those values throws. `Float32Range` and `Float32Set` do the same for `float`.
+Here is why, measured on PostgreSQL 16, 17 and 18:
 
 | Literal | PostgreSQL | .NET, comparing with `CompareTo` |
 |---|---|---|
@@ -137,6 +138,12 @@ pair, including `-0` and `0`, which are equal on both sides.
 compares through `Comparer<T>.Default`, which is .NET's order with `NaN` first, and makes no promise
 about PostgreSQL.
 
+### Why there is no `Half` range
+
+PostgreSQL has no two-byte float, so there is no column type for a `Half` range or set to mirror. A
+`real` column holds values that a `Half` can't, which would round or fail when loaded. It's the same
+reason there is an `Int16Set` (`smallint[]`) but no `Int16Range`: PostgreSQL has no `int2range`.
+
 ### Why not `Guid`?
 
 `Guid` is left out for a different reason. Version 7 GUIDs are ordered, so the algebra would be
@@ -157,8 +164,8 @@ above all other values by definition. So a `numrange` bound can be `NaN`. .NET's
 such value, so a `DecimalRange` can't hold one. The case that `numrange` has to define away never
 comes up.
 
-**A `Float64Range` bound or a `Float64Set` element can't be `NaN` or an infinity.** PostgreSQL's
-`double precision` holds both, so a `float8range` column can store `[5,NaN)` and a `double
+**A float range bound or set element can't be `NaN` or an infinity.** PostgreSQL's `double
+precision` and `real` hold both, so a `float8range` column can store `[5,NaN)` and a `double
 precision[]` column can store `{1.5,NaN}`, for example when another tool writes them. Loading such a
 row throws (`ArgumentException`) instead of returning a value that would sort differently in memory.
 A `NaN` or infinite query parameter throws in the same way, before the query runs.

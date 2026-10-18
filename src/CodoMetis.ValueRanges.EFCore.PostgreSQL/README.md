@@ -28,7 +28,9 @@ EF Core picks the column from the property type:
 | `RangeSet<DateRange, DateOnly>` | `datemultirange`                         |
 | `TimeRange`                     | `timerange` (custom type — see below)    |
 | `Float64Range`                  | `float8range` (custom type — see below)  |
+| `Float32Range`                  | `float4range` (custom type — see below)  |
 | `Float64Set`                    | `double precision[]`                     |
+| `Float32Set`                    | `real[]`                                 |
 | `StringSet`                     | `text[]`                                 |
 | `GuidSet`                       | `uuid[]`                                 |
 | … and so on for every type      |                                          |
@@ -44,9 +46,9 @@ Good to know:
   `HasPostgresRange` to create the type, and `EnableUnmappedTypes` on the data source. The EF Core
   guide shows both in
   [TimeRange and the custom timerange type](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#timerange-and-the-custom-timerange-type).
-- **`Float64Range` needs the same two opt-ins.** Create the type with
+- **`Float64Range` and `Float32Range` need the same two opt-ins.** Create the types with
   `HasPostgresRange("float8range", "double precision")`, without a `subtype_diff`, which overflows a
-  GiST index over very large values. Rows holding `NaN` or an infinity throw when loaded. See
+  GiST index over very large values, and `HasPostgresRange("float4range", "real")`. Rows holding `NaN` or an infinity throw when loaded. See
   [Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types).
 - **Sets are mapped as single values (scalars).** The package brings its own mappings and
   translators for them. EF Core's primitive-collection support is never involved.

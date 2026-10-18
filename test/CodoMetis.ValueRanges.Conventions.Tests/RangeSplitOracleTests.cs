@@ -36,6 +36,7 @@ public sealed class RangeSplitOracleTests
         [typeof(long)]           = k => (long)k,
         [typeof(decimal)]        = k => k * 0.5m,
         [typeof(double)]         = k => k * 0.5,
+        [typeof(float)]          = k => k * 0.5f,
         [typeof(DateOnly)]       = k => k,
         [typeof(TimeOnly)]       = k => TimeSpan.FromMinutes(30 * k),
         [typeof(DateTime)]       = k => TimeSpan.FromMinutes(30 * k),
@@ -53,6 +54,7 @@ public sealed class RangeSplitOracleTests
         [typeof(long)]           = long.MaxValue - 3,
         [typeof(decimal)]        = decimal.MaxValue - 3m,
         [typeof(double)]         = double.MaxValue - 4 * Math.ScaleB(1.0, 971),
+        [typeof(float)]          = float.MaxValue - 4 * MathF.ScaleB(1f, 104),
         [typeof(DateOnly)]       = DateOnly.MaxValue.AddDays(-3),
         [typeof(TimeOnly)]       = TimeOnly.MaxValue.AddMinutes(-90),
         [typeof(DateTime)]       = DateTime.MaxValue.AddMinutes(-90),
@@ -71,7 +73,8 @@ public sealed class RangeSplitOracleTests
     /// </summary>
     private static readonly Dictionary<Type, Func<int, object>> EdgeSteps = new()
     {
-        [typeof(double)] = k => k * Math.ScaleB(1.0, 970)
+        [typeof(double)] = k => k * Math.ScaleB(1.0, 970),
+        [typeof(float)]  = k => k * MathF.ScaleB(1f, 103)
     };
 
     public sealed record SplitRow(string Label, Func<List<string>, int> Sweep)

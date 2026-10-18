@@ -28,6 +28,7 @@ by convention:
 | `RangeSet<DateRange, DateOnly>`  | `datemultirange` |
 | `TimeRange`                      | `timerange` ([custom type](#custom-range-types)) |
 | `Float64Range`                   | `float8range` ([custom type](#custom-range-types)) |
+| `Float32Range`                   | `float4range` ([custom type](#custom-range-types)) |
 | … and so on for all types        |                  |
 
 Good to know:
@@ -605,17 +606,18 @@ Good to know:
 
 ## Custom range types
 
-Two range types map to a PostgreSQL range type the database doesn't ship. You create it once, from
+Three range types map to a PostgreSQL range type the database doesn't ship. You create it once, from
 your model, and the rest works as for the built-in ones:
 
 | .NET type | Column types | Create it with | Good to know |
 |---|---|---|---|
 | `TimeRange` | `timerange`, `timemultirange` | `HasPostgresRange("timerange", "time")` | No `24:00:00`, see [below](#timerange-and-the-custom-timerange-type) |
 | `Float64Range` | `float8range`, `float8multirange` | `HasPostgresRange("float8range", "double precision")` | Finite values only, and no `subtype_diff`, see [below](#float64range-and-the-custom-float8range-type) |
+| `Float32Range` | `float4range`, `float4multirange` | `HasPostgresRange("float4range", "real")` | Finite values only, see [below](#float64range-and-the-custom-float8range-type) |
 
-Both also need `EnableUnmappedTypes()` on the Npgsql data source, so Npgsql can send a type it
+All three also need `EnableUnmappedTypes()` on the Npgsql data source, so Npgsql can send a type it
 doesn't know by name. The value sets need nothing extra: `Float64Set` is a native `double
-precision[]` column.
+precision[]` column, and `Float32Set` a native `real[]` column.
 
 ## TimeRange and the custom timerange type
 
@@ -673,8 +675,13 @@ Good to know:
 - **Only finite values load.** A row that another tool wrote with `NaN` or an infinity in a bound
   throws when you load it (`ArgumentException`). A `NaN` or infinite parameter throws before the query
   runs. See [Why doubles are finite only](why.md#why-doubles-are-finite-only).
+- **`Float32Range` works the same way over `float4range`.** Create it with
+  `HasPostgresRange("float4range", "real")`. There is no `subtype_diff` to leave out: `float4mi`
+  returns `real`, and PostgreSQL accepts only a function that returns `double precision`.
 - **The text is PostgreSQL's.** `ToString()`, a SQL literal and JSON all print a `double` the way
-  PostgreSQL does, so `1e23` is `9.999999999999999e+22` and `1e15` is `1e+15`.
+  PostgreSQL does, so `1e23` is `9.999999999999999e+22` and `1e15` is `1e+15`. A `float` prints as
+`real` does: `1e6f` is `1e+06`, and `0.1f` is `0.1`, never the `0.10000000149011612` of the same value
+as a `double`.
 
 ## Store a YearMonthRange
 

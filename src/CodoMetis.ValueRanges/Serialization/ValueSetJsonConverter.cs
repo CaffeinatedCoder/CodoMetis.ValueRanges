@@ -192,6 +192,9 @@ public sealed class DecimalSetJsonConverter : ValueSetJsonConverter<DecimalSet, 
 /// <summary>JSON converter for <see cref="Float64Set"/>.</summary>
 public sealed class Float64SetJsonConverter : ValueSetJsonConverter<Float64Set, double>;
 
+/// <summary>JSON converter for <see cref="Float32Set"/>.</summary>
+public sealed class Float32SetJsonConverter : ValueSetJsonConverter<Float32Set, float>;
+
 /// <summary>JSON converter for <see cref="DateSet"/>.</summary>
 public sealed class DateSetJsonConverter : ValueSetJsonConverter<DateSet, DateOnly>;
 

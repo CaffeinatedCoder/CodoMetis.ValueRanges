@@ -55,6 +55,10 @@ public sealed class WrapperGrammarContractTests
             "1.5", "-1.5", "+1.5", " 1.5", "1.5 ", ".5", "5.", "1e3", "1.5E-1", "1e+300", "1e309", "1e-400",
             "2.9802322387695312e-08", "1,5", "1,000", "1 000", "0x10", "NaN", "Infinity", "-inf", "∞", ""
         ],
+        [typeof(float)] = [
+            "1.5", "-1.5", "+1.5", " 1.5", "1.5 ", ".5", "5.", "1e3", "1e+06", "0.1", "3.4028235e38", "3.4028236e38",
+            "1e-46", "1e-40", "1,5", "0x10", "NaN", "Infinity", "-inf", ""
+        ],
         [typeof(int)]   = Integers("2147483648"),
         [typeof(short)] = Integers("32768"),
         [typeof(long)]  = Integers("9223372036854775808"),
@@ -88,6 +92,7 @@ public sealed class WrapperGrammarContractTests
     {
         [typeof(decimal)] = ["1.5", "1.50", "-0.1", "1e3", "1.5e1", "12.50E-1"],
         [typeof(double)]  = ["1.5", "-0.1", "1e3", "1E+300", "2.9802322387695312e-08", "1e309", "-0"],
+        [typeof(float)]   = ["1.5", "-0.1", "0.1", "1e6", "3.4028235e38", "1e39", "-0"],
         [typeof(int)]     = ["42", "-7", "1e3", "42.0", "2147483648"],
         [typeof(short)]   = ["42", "-7", "1e3", "42.0", "32768"],
         [typeof(long)]    = ["42", "-7", "1e3", "42.0", "9223372036854775808"]
@@ -99,8 +104,8 @@ public sealed class WrapperGrammarContractTests
     /// </summary>
     private static readonly HashSet<Type> NoGrammar = [typeof(string)];
 
-    /// <summary>16 wrapper families as of 10.0.0, less the string one, plus a lenient element for each of the five numeric ones.</summary>
-    private const int KnownClosures = 20;
+    /// <summary>17 wrapper families as of 10.0.0, less the string one, plus a lenient element for each of the six numeric ones.</summary>
+    private const int KnownClosures = 22;
 
     private static string[] Integers(string overflow) =>
         ["42", "-7", "+42", " 42", "42 ", "1,000", "1e3", "42.0", "(1)", "1-", "¤1", "0x2A", "4 2", overflow, ""];
@@ -143,6 +148,7 @@ public sealed class WrapperGrammarContractTests
     {
         nameof(Decimal) => typeof(LenientAmount),
         nameof(Double)  => typeof(LenientScore),
+        nameof(Single)  => typeof(LenientWeight),
         nameof(Int32)   => typeof(LenientCount),
         nameof(Int16)   => typeof(LenientTinyCount),
         nameof(Int64)   => typeof(LenientLargeCount),
@@ -281,6 +287,30 @@ public readonly record struct LenientScore : IFormattable, IParsable<LenientScor
     }
 
     public int CompareTo(LenientScore other) => _value.CompareTo(other._value);
+
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);
+
+    public override string ToString() => _value.ToString(CultureInfo.InvariantCulture);
+}
+
+public readonly record struct LenientWeight : IFormattable, IParsable<LenientWeight>, IComparable<LenientWeight>
+{
+    private readonly float _value;
+
+    private LenientWeight(float value) => _value = value;
+
+    public static LenientWeight Parse(string s, IFormatProvider? provider)
+        => new(float.Parse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture));
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out LenientWeight result)
+    {
+        var parsed = float.TryParse(s, NumberStyles.Any, provider ?? CultureInfo.InvariantCulture, out var value);
+        result = parsed ? new LenientWeight(value) : default;
+        return parsed;
+    }
+
+    public int CompareTo(LenientWeight other) => _value.CompareTo(other._value);
 
     public string ToString(string? format, IFormatProvider? formatProvider)
         => _value.ToString(format, formatProvider ?? CultureInfo.InvariantCulture);

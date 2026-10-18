@@ -54,6 +54,7 @@ public sealed class SetElementWhiteSpaceContractTests
         [typeof(long)]           = InputFunction.Strips,
         [typeof(decimal)]        = InputFunction.Strips,
         [typeof(double)]         = InputFunction.Strips,
+        [typeof(float)]          = InputFunction.Strips,
         [typeof(DateOnly)]       = InputFunction.Strips,
         [typeof(DateTime)]       = InputFunction.Strips,
         [typeof(DateTimeOffset)] = InputFunction.Strips,

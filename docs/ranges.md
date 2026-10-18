@@ -38,7 +38,7 @@ Which bounds `CreateFinite` includes by default depends on the element type:
 | Range type                                                 | `CreateFinite()` default   |
 |------------------------------------------------------------|----------------------------|
 | `Int32Range`, `Int64Range`, `DateRange`                    | `[start, end]` — closed    |
-| `DecimalRange`, `Float64Range`, `DateTimeRange`, `DateTimeOffsetRange` | `[start, end)` — half-open |
+| `DecimalRange`, `Float64Range`, `Float32Range`, `DateTimeRange`, `DateTimeOffsetRange` | `[start, end)` — half-open |
 
 Discrete types, whose values have a next value (integers and dates), include both bounds.
 Continuous types include the start and exclude the end. That half-open form is the usual
@@ -272,6 +272,7 @@ The type of `Length` also depends on the element type:
 | The timestamp ranges | `TimeSpan?` |
 | `DecimalRange` | `decimal?` |
 | `Float64Range` | `double?`, which can be `+∞` |
+| `Float32Range` | `float?`, which can be `+∞` |
 | The NodaTime ranges | `Duration?` or `Period?` |
 
 In the NodaTime package, an instant range measures exact elapsed time (`Duration?`). A wall-clock
@@ -279,7 +280,8 @@ range measures a calendar quantity (`Period?`).
 
 A `Float64Range` measures the difference `End - Start` as a `double`. For
 `[double.MinValue, double.MaxValue]` that difference is larger than any `double`, so `Length` returns
-`double.PositiveInfinity`. The range itself is still finite: the infinity is only the measurement.
+`double.PositiveInfinity`. The range itself is still finite: the infinity is only the measurement. `Float32Range` works the same
+way with `float`.
 
 Good to know:
 
@@ -334,7 +336,7 @@ The pieces are adjacent and hold exactly the values of the range. So
 
 Good to know:
 
-- **Each range type takes its own step.** An `int` for `Int32Range`, a `double` for `Float64Range`, a number of days for
+- **Each range type takes its own step.** An `int` for `Int32Range`, a `double` for `Float64Range`, a `float` for `Float32Range`, a number of days for
   `DateRange`, a `TimeSpan` for the timestamp ranges and `TimeRange`, a `Period` for
   `LocalDateRange` and `LocalDateTimeRange`, a `Duration` for `InstantRange`, and a number of months
   for `YearMonthRange`.
@@ -350,7 +352,7 @@ Good to know:
 - **Errors come at the call.** An unbounded range throws `NotSupportedException`. A step of zero or
   less throws `ArgumentOutOfRangeException`. So does a step too small to move the start, such as
   `0.5m` near `decimal.MaxValue`.
-- **A `Float64Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`,
+- **A `Float64Range` or `Float32Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`,
   so the error doesn't build up from piece to piece. A step too small to move the start at its
   magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.
 - **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
@@ -474,7 +476,7 @@ Each range type takes the step its element type uses:
 | Range type | `Shift` and `Expand` take |
 |---|---|
 | `Int32Range`, `Int64Range`, `DecimalRange` | an `int`, a `long`, a `decimal` |
-| `Float64Range` | a finite `double` |
+| `Float64Range`, `Float32Range` | a finite `double`, a finite `float` |
 | `DateRange` | a number of days |
 | `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange` | a `TimeSpan` |
 | `LocalDateRange`, `LocalDateTimeRange` | a NodaTime `Period` |
@@ -490,7 +492,7 @@ Good to know:
 - **A bound moved past the last value throws.** `Shift` and `Expand` throw `OverflowException` when
   a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They
   never wrap around.
-- **A `Float64Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`,
+- **A `Float64Range` or `Float32Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`,
   so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue`
   throws `OverflowException`, as for the other types. A `NaN` or infinite step throws
   `ArgumentException`.

@@ -39,6 +39,7 @@ Each set type has a matching PostgreSQL array type:
 | `Int64Set` | `long` | `bigint[]` | `Int64Set<TElement>` |
 | `DecimalSet` | `decimal` | `numeric[]` | `DecimalSet<TElement>` |
 | `Float64Set` | `double`, finite only | `double precision[]` | `Float64Set<TElement>` |
+| `Float32Set` | `float`, finite only | `real[]` | `Float32Set<TElement>` |
 | `DateSet` | `DateOnly` | `date[]` | `DateSet<TElement>` |
 | `TimeSet` | `TimeOnly` | `time[]` | `TimeSet<TElement>` |
 | `DateTimeSet` | `DateTime` | `timestamp[]` | `DateTimeSet<TElement>` |
@@ -123,7 +124,7 @@ StringSet<AccessRight> rights = [AccessRight.Parse("users.read", null)];
 ```
 
 Every set family has a version like this: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`,
-`Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `Float64Set<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`,
+`Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `Float64Set<T>`, `Float32Set<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`,
 `DateTimeOffsetSet<T>`. The NodaTime package adds `LocalDateSet<T>`, `LocalDateTimeSet<T>`,
 `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>`.
 
@@ -180,6 +181,7 @@ Each family asks your `ToString` for a particular format:
 |---|---|
 | `StringSet<T>`, `GuidSet<T>`, the integer versions, `DecimalSet<T>` | the element's default (`null`) |
 | `Float64Set<T>` | `"G17"` |
+| `Float32Set<T>` | `"G9"` |
 | `DateSet<T>` | `"yyyy-MM-dd"` |
 | `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>` | `"O"` |
 | the five NodaTime versions | the family's ISO pattern |
@@ -222,6 +224,7 @@ reads the text with the grammar of its underlying type:
 
 - **`DecimalSet<T>`** uses PostgreSQL's `numeric` grammar.
 - **`Float64Set<T>`** uses PostgreSQL's `double precision` grammar, for finite numbers only.
+- **`Float32Set<T>`** uses PostgreSQL's `real` grammar, for finite numbers only.
 - **The integer versions** read a signed integer.
 - **The temporal and NodaTime versions** read strict ISO 8601.
 
@@ -283,11 +286,12 @@ membership is exactly what you ask of a collection of IDs.
 These element types are left out on purpose:
 
 - **`bool`** would be a set over just two values.
-- **`NaN` and the infinities in a `Float64Set`.** .NET sorts `NaN` first and PostgreSQL sorts it
+- **`NaN` and the infinities in a `Float64Set` or `Float32Set`.** .NET sorts `NaN` first and PostgreSQL sorts it
   last, so a set holding one would be in a different order on each side. `From`, `Add`, `Contains`
   and every parser throw for them instead
   ([Why doubles are finite only](why.md#why-doubles-are-finite-only)).
 - **`byte[]`** has nested elements of varying length, with no cheap canonical order.
+- **`Half`** has no PostgreSQL column to mirror: there is no two-byte float type.
 - **`TimeSpan`** can't represent a PostgreSQL `interval` without loss, because an `interval` is a
   months, days and microseconds triple.
 

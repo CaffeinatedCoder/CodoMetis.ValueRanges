@@ -101,6 +101,7 @@ internal static class SetProviderText
                // The text PostgreSQL prints, which reads back as the same number on every value; .NET's
                // shortest form does not for 2^-25 and 2^-958.
                double value         => Float64Set.FormatValue(value, null, CultureInfo.InvariantCulture),
+               float value          => Float32Set.FormatValue(value, null, CultureInfo.InvariantCulture),
                IFormattable value   => value.ToString(null, CultureInfo.InvariantCulture),
                null                 => throw new InvalidOperationException("Value sets cannot contain null elements."),
 
