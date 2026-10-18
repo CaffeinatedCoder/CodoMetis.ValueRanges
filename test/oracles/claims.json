@@ -797,7 +797,7 @@
     "id": "E45-compareto-runs-as-comparison-operator",
     "source": "docs/efcore.md#query-ranges-with-linq",
     "quote": "**`CompareTo` against 0** becomes `<`, `<=`, `>`, `>=` or `=`, for a range and a multirange, in the order `OrderBy` sorts by",
-    "claim": "A range or multirange CompareTo compared with 0 in a predicate translates to <, <=, >, >= or = between the operands, OrderBy on a range or multirange column translates to ORDER BY the column, and the rows returned match the same predicate and sort in memory.",
+    "claim": "A range or multirange CompareTo compared with 0 in a predicate translates to <, <=, >, >= or = between the operands, OrderBy on a range or multirange column translates to ORDER BY the column, and the rows returned match the same predicate and sort in memory, including for a null operand (where SQL's col > NULL alone returns no rows).",
     "oracle": "differential",
     "surfaces": [
       "*Range.CompareTo",
@@ -2990,6 +2990,35 @@
       "Float64DomainTests",
       "RangeSplitOracleTests",
       "RangeSplitTests"
+    ]
+  },
+  {
+    "id": "R42-compareto-null-operand-in-a-query",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "With a `null` range on the right, the query returns the rows memory returns: `> 0`, `>= 0` and `!= 0` hold for every row, and `< 0`, `<= 0` and `== 0` for none.",
+    "claim": "In an EF Core predicate, a range or multirange CompareTo against a null operand compared with 0 returns every row for > 0, >= 0 and != 0 and no row for < 0, <= 0 and == 0, with 0 on either side and under negation, as the same predicate in memory; a non-null operand still runs as the bare comparison operator.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests",
+      "QueryTranslationTests"
+    ]
+  },
+  {
+    "id": "R43-nongeneric-icomparable",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "Every range type implements `IComparable<TRange>` and `IComparable`, so `Order()`, `List.Sort()` and `SortedSet` work with no comparer, also on a `List<IRange<T>>` or an `ArrayList`.",
+    "claim": "For every discovered range union and its RangeSet, the non-generic IComparable.CompareTo gives the sign the generic CompareTo gives for every ordered pair of shapes, is positive for null, throws ArgumentException naming the type for an argument of another range type, the element type or a string, and List<IRange<T>>.Sort() and ArrayList.Sort() sort as Order() does.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "NonGenericComparableContractTests"
     ]
   },
   {

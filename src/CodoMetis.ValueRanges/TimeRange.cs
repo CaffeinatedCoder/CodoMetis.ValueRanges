@@ -288,6 +288,10 @@ public abstract partial record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeR
     /// </returns>
     public int CompareTo(TimeRange? other) => RangeOrder.Compare<TimeOnly>(this, other);
 
+    /// <inheritdoc cref="CompareTo(TimeRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="TimeRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<TimeRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[09:00,10:00).Shift(TimeSpan.FromHours(2))</c> is <c>[11:00,12:00)</c>.

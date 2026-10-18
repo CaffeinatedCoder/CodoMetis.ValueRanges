@@ -118,6 +118,7 @@ public sealed class MappingParityTests
         // 5 NodaTime sets + 5 NodaTime wrapper arities, as of 10.0.0.
         AssertAtLeast(RangeTypesIn(typeof(Int32Range)),     9,  "BCL range types");
         AssertAtLeast(RangeTypesIn(typeof(LocalDateRange)),  4, "NodaTime range types");
+        RangeCensus.AssertReachedEveryUnion(RangeTypesIn(typeof(Int32Range)).Concat(RangeTypesIn(typeof(LocalDateRange))), "Mapping discovery");
         AssertAtLeast(SetTypesIn(typeof(StringSet)),       12,  "BCL set types");
         AssertAtLeast(SetTypesIn(typeof(LocalDateSet)),     5,  "NodaTime set types");
         AssertAtLeast(SetFamiliesIn(typeof(StringSet)),    12,  "BCL wrapper arities");

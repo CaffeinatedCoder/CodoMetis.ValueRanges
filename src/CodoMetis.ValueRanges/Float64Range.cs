@@ -371,6 +371,10 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     /// </returns>
     public int CompareTo(Float64Range? other) => RangeOrder.Compare<double>(this, other);
 
+    /// <inheritdoc cref="CompareTo(Float64Range)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="Float64Range"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<Float64Range>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[1.5,2).Shift(0.5)</c> is <c>[2,2.5)</c>.
