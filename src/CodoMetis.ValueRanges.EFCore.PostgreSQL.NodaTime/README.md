@@ -6,6 +6,7 @@ You store the range and value set types of
 [CodoMetis.ValueRanges.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.NodaTime) in
 PostgreSQL range, multirange and array columns, and query them with LINQ. Under the hood it goes
 through `NpgsqlRange<T>` and native arrays, using `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`.
+It needs PostgreSQL 16 or later.
 
 ```sh
 dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime

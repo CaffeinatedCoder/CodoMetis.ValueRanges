@@ -116,7 +116,8 @@ jobs:
       # The full suite gates the release, which also means the conventions project runs: a
       # version with no changelog entry at the root or in a package changelog fails here, as
       # does a package that lost its README or its symbols.
-      # CI=true keeps the live-PostgreSQL layer mandatory.
+      # CI=true keeps the live-PostgreSQL layer mandatory. It runs on the default server, PostgreSQL 16,
+      # the 10.x floor; every pull request already ran both integration projects on 16 and 18.
       - name: Test
         env:
           CI: true

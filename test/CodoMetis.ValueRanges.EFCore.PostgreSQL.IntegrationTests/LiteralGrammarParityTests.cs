@@ -292,10 +292,11 @@ public sealed class LiteralGrammarParityTests
     /// <summary>
     /// Empty arrays nested to one depth are where PostgreSQL versions disagree: 17 and 18 read
     /// <c>{{}}</c> as <c>{}</c>, and 16 rejects it. The sets follow 17 and later (#128) and
-    /// <c>docs/value-sets.md</c> names the split, so this asks each version, the suite's own (17) and
-    /// two containers of this test's (16, 18), and fails when either side of the split moves, before the
-    /// sentence goes stale. A nested array holding an element is two-dimensional on every version, and
-    /// rejected here.
+    /// <c>docs/value-sets.md</c> names the split, so this asks each version, in containers of this test's
+    /// own (the suite's shared one runs whichever major <c>VALUERANGES_POSTGRES_IMAGE</c> names), and fails
+    /// when either side of the split moves, before the sentence goes stale. Each server's major is read
+    /// from <c>server_version_num</c>, not from the image. A nested array holding an element is
+    /// two-dimensional on every version, and rejected here.
     /// </summary>
     [TestMethod]
     public async Task NestedEmptyArrays_ReadAsPostgres17AndLaterReadThem_AndPostgres16Rejects()
@@ -307,15 +308,14 @@ public sealed class LiteralGrammarParityTests
         string[] mixed   = ["{{},{{}}}", "{{},{1}}", "{{},}"];
 
         var failures = new List<string>();
-        foreach (var (version, connectionString) in new[]
-                 {
-                     (16, await VersionServer("postgres:16-alpine")),
-                     (17, ContainerLifecycle.ConnectionString),
-                     (18, await VersionServer("postgres:18-alpine"))
-                 })
+        var majors = new List<int>();
+        foreach (var image in (string[])["postgres:16-alpine", "postgres:17-alpine", "postgres:18-alpine"])
         {
-            await using var connection = new NpgsqlConnection(connectionString);
+            await using var connection = new NpgsqlConnection(await VersionServer(image));
             await connection.OpenAsync();
+            await using (var command = new NpgsqlCommand("SELECT current_setting('server_version_num')::int / 10000", connection))
+                majors.Add((int)(await command.ExecuteScalarAsync())!);
+            var version = majors[^1];
 
             foreach (var literal in empties)
             {
@@ -343,6 +343,7 @@ public sealed class LiteralGrammarParityTests
             if (Int32Set.TryParse(literal, CultureInfo.InvariantCulture, out _))
                 failures.Add($"  Int32Set reads {literal}, which no version reads as a one-dimensional array");
 
+        CollectionAssert.AreEqual(new[] { 16, 17, 18 }, majors, "the three servers are not the three majors the split is stated for");
         Assert.IsEmpty(failures, "Nested empty arrays:\n" + string.Join("\n", failures));
     }
 

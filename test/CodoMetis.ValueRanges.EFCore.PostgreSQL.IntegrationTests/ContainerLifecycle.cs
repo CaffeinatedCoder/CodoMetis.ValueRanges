@@ -27,13 +27,18 @@ public sealed class ContainerLifecycle
 
     private static string? _unavailableReason;
 
+    // A server below the 10.x floor fails every test, in CI or not: the sweeps would compare nothing.
+    private static string? _belowFloor;
+
     [AssemblyInitialize]
     public static async Task StartContainer(TestContext _)
     {
         try
         {
-            _container = new PostgreSqlBuilder("postgres:17-alpine").Build();
+            _container = new PostgreSqlBuilder(PostgresServer.Image).Build();
             await _container.StartAsync();
+            _belowFloor = await PostgresServer.BelowFloor(_container.GetConnectionString());
+            if (_belowFloor is not null) return;
             ServerConnectionString = _container.GetConnectionString();
             ConnectionString       = ServerConnectionString;
 
@@ -69,6 +74,7 @@ public sealed class ContainerLifecycle
     /// </summary>
     internal static void RequireDatabase()
     {
+        if (_belowFloor is not null) Assert.Fail(_belowFloor);
         if (ConnectionString is not null) return;
 
         var message = $"PostgreSQL test container unavailable ({_unavailableReason ?? "unknown"}). "

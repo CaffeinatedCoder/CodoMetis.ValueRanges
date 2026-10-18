@@ -247,6 +247,8 @@ where the two sides disagreed before. Text that PostgreSQL rejects is now reject
 range shape gained its own `Parse` and `TryParse`. The compiler can't show you where, so check these
 in order, starting with the most likely to affect you:
 
+- **The EF Core packages need PostgreSQL 16 or later.** 9.x said 14 or later, but nothing older than
+  16 was ever tested ([details](#run-postgresql-16-or-later)).
 - **`IsUnboundedStart()` and `IsUnboundedEnd()` return `true` for the infinite range.** A query
   and the same call in memory already disagreed on it
   ([details](#check-isunboundedstart-and-isunboundedend-on-the-infinite-range)).
@@ -506,6 +508,24 @@ shape now gets a 400. If an endpoint should take any shape, type the parameter a
 `DateRange.Finite.Parse` now returns a `DateRange.Finite` and throws `FormatException` for another
 shape, where it was the union's `Parse` and returned any shape. Code that called `Parse` through a
 shape's name for a literal of another shape should call it on the union.
+
+### Run PostgreSQL 16 or later
+
+The EF Core packages of 10.x support PostgreSQL 16 and later, the same as 11.x. 9.x said 14 or later,
+but its tests only ever ran on 16 and later. From 10.0.0, CI runs both integration suites on 16 and
+18 for every change.
+
+On PostgreSQL 14 or 15 you can meet these:
+
+- **`RangeAgg` over a multirange column throws on 14.** It runs PostgreSQL's
+  `range_agg(anymultirange)`, which 14 doesn't have, so the query fails with `42883`.
+- **The library reads integer text the server rejects.** `0x1F`, `0o17`, `0b101` and `1_000` are read
+  as PostgreSQL 16 reads them. PostgreSQL 15 and older reject them.
+- **"Reads the literal as PostgreSQL reads it" was never checked there.** The tests that compare each
+  literal with the server use `pg_input_is_valid`, which PostgreSQL 16 added.
+
+PostgreSQL 14 receives fixes until November 2026. PostgreSQL 16 is supported until November 2028,
+which is when support for .NET 10 ends too.
 
 ## Migration from v8.x
 
