@@ -314,6 +314,64 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     public IEnumerable<YearMonth> Values() => DiscreteEnumeration.Values<YearMonthRange, YearMonth>(this);
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="months"/>, in months each, from its start:
+    /// <c>[2026-01,2026-12].Split(5)</c> is <c>[2026-01,2026-05]</c>, <c>[2026-06,2026-10]</c>, <c>[2026-11,2026-12]</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="months">The length of each piece, in months; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="months"/> is zero or negative.</exception>
+    public IEnumerable<YearMonthRange> Split(int months)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(months);
+        return RangeSplitting.Split<YearMonthRange, YearMonth>(this, RangeSplitting.Steps<YearMonth>(this, (start, n) => start.PlusMonths(checked((int)(n * months)))));
+    }
+
+    /// <summary>
+    /// Cuts the range at the boundaries of a calendar period: <c>range.Split(YearMonthRange.Quarter)</c> gives one
+    /// piece per calendar quarter, the first and the last clipped to the range.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="period"/> is called with the first month of each piece and returns the period that holds
+    /// it, and the piece runs to that period's end. Pass <see cref="Quarter(YearMonth)"/> or <see cref="Year(YearMonth)"/>, or a function of your own,
+    /// such as a fiscal year. The pieces are adjacent and hold exactly the values of the range. The
+    /// empty range yields nothing. This runs in memory only.
+    /// </remarks>
+    /// <param name="period">Returns the period that holds a given month.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="period"/> returned a range that is not bounded on both sides or does not hold
+    /// the month it was given.
+    /// </exception>
+    public IEnumerable<YearMonthRange> Split(Func<YearMonth, YearMonthRange> period)
+        => RangeSplitting.Split<YearMonthRange, YearMonth>(this, RangeSplitting.Periods<YearMonthRange, YearMonth>(period));
+
+    /// <summary>
+    /// Enumerates the range's values from its start, <paramref name="months"/>, in months apart:
+    /// <c>[2026-01,2026-12].Values(3)</c> is January, April, July and October.
+    /// </summary>
+    /// <remarks>
+    /// The stepping form of <see cref="Values()"/>, under the same rules: ascending, the empty range
+    /// yields nothing, and an unbounded range throws at the call. This runs in memory only.
+    /// </remarks>
+    /// <param name="months">The distance between two values, in months; it must be positive.</param>
+    /// <returns>The values, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="months"/> is zero or negative.</exception>
+    public IEnumerable<YearMonth> Values(int months)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(months);
+        return RangeSplitting.Values<YearMonthRange, YearMonth>(this, RangeSplitting.Steps<YearMonth>(this, (start, n) => start.PlusMonths(checked((int)(n * months)))));
+    }
+
+    /// <summary>
     /// The number of months the range covers, or <see langword="null"/> when it is unbounded.
     /// The empty range measures 0.
     /// </summary>

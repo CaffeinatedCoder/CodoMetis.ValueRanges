@@ -23,6 +23,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 
 - **`Parse` and `TryParse` on every shape** (`Int32Range.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
 - **`DateRange.Month`**, **`Quarter`**, **`Year`** and **`IsoWeek`**, by number or by any day inside the period. Weeks are ISO 8601 only, Monday to Sunday, whatever the current culture ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week)).
+- **`Split`** on every range type cuts it into pieces of one step, or at the boundaries of a calendar period such as `DateRange.Month`, and **`Values(step)`** on the discrete types skips ahead by a step. Both run in memory only ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#split-a-range-into-pieces)).
 
 ### Fixed
 

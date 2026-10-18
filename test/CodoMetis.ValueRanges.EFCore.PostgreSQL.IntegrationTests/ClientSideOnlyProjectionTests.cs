@@ -43,6 +43,8 @@ public class ClientSideOnlyProjectionTests
                 r.Seats.Length,
                 Values   = r.Seats.Values().ToList(),
                 Clamp    = r.Seats.Clamp(50),
+                Stepped  = r.Seats.Values(2).ToList(),
+                Pieces   = r.Seats.Split(2).ToList(),
                 MonthOf  = DateRange.Month(r.Period.LowerBound()!.Value),
                 WeekOf   = DateRange.IsoWeek(r.Period.LowerBound()!.Value),
                 RangeSet = r.Codes.ToRangeSet(),
@@ -54,6 +56,8 @@ public class ClientSideOnlyProjectionTests
         Assert.AreEqual(row.Seats.Length, server.Length, "Length");
         CollectionAssert.AreEqual(row.Seats.Values().ToList(), server.Values, "Values()");
         Assert.AreEqual(row.Seats.Clamp(50), server.Clamp, "Clamp");
+        CollectionAssert.AreEqual(row.Seats.Values(2).ToList(), server.Stepped, "Values(step)");
+        CollectionAssert.AreEqual(row.Seats.Split(2).ToList(), server.Pieces, "Split(step)");
         Assert.AreEqual(DateRange.Month(2026, 6), server.MonthOf, "DateRange.Month(column)");
         Assert.AreEqual(DateRange.IsoWeek(2026, 23), server.WeekOf, "DateRange.IsoWeek(column)");
 

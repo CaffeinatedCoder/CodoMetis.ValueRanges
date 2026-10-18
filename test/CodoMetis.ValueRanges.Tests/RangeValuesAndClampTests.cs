@@ -104,7 +104,7 @@ public class RangeValuesAndClampTests
     public void Values_IsDeclaredByDiscreteTypesOnly()
     {
         foreach (var discrete in new[] { typeof(Int32Range), typeof(Int64Range), typeof(DateRange) })
-            Assert.IsNotNull(discrete.GetMethod("Values"), $"{discrete.Name} should enumerate");
+            Assert.IsNotNull(discrete.GetMethods().FirstOrDefault(method => method.Name == "Values"), $"{discrete.Name} should enumerate");
 
         foreach (var continuous in new[]
                  {
@@ -112,7 +112,7 @@ public class RangeValuesAndClampTests
                      typeof(DateTimeOffsetRange), typeof(TimeRange)
                  })
             Assert.IsNull(
-                continuous.GetMethod("Values"),
+                continuous.GetMethods().FirstOrDefault(method => method.Name == "Values"),
                 $"{continuous.Name} is continuous and must not offer Values() — there is no step to walk");
     }
 

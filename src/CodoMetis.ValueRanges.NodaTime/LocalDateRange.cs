@@ -367,6 +367,64 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     public IEnumerable<LocalDate> Values() => DiscreteEnumeration.Values<LocalDateRange, LocalDate>(this);
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="step"/> each, from its start:
+    /// <c>[2026-01-15,2026-04-14].Split(Period.FromMonths(1))</c> is <c>[2026-01-15,2026-02-14]</c>, <c>[2026-02-15,2026-03-14]</c>, <c>[2026-03-15,2026-04-14]</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. Each boundary is counted from the range's start, so a split by months keeps the start's day where the calendar has it: from January 31, the pieces start on February 28, March 31 and April 30.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="step">The length of each piece; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<LocalDateRange> Split(Period step)
+    {
+        NodaPeriods.RequirePositive(step, nameof(step));
+        return RangeSplitting.Split<LocalDateRange, LocalDate>(this, RangeSplitting.Steps<LocalDate>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n))));
+    }
+
+    /// <summary>
+    /// Cuts the range at the boundaries of a calendar period: <c>range.Split(LocalDateRange.Month)</c> gives one
+    /// piece per calendar month, the first and the last clipped to the range.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="period"/> is called with the first day of each piece and returns the period that holds
+    /// it, and the piece runs to that period's end. Pass <see cref="Month(LocalDate)"/>, <see cref="Quarter(LocalDate)"/>, <see cref="Year(LocalDate)"/> or <see cref="IsoWeek(LocalDate)"/>, or a function of your own,
+    /// such as a fiscal year. The pieces are adjacent and hold exactly the values of the range. The
+    /// empty range yields nothing. This runs in memory only.
+    /// </remarks>
+    /// <param name="period">Returns the period that holds a given day.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="period"/> returned a range that is not bounded on both sides or does not hold
+    /// the day it was given.
+    /// </exception>
+    public IEnumerable<LocalDateRange> Split(Func<LocalDate, LocalDateRange> period)
+        => RangeSplitting.Split<LocalDateRange, LocalDate>(this, RangeSplitting.Periods<LocalDateRange, LocalDate>(period));
+
+    /// <summary>
+    /// Enumerates the range's values from its start, <paramref name="step"/> apart:
+    /// <c>[2026-06-01,2026-06-30].Values(Period.FromWeeks(1))</c> is every Monday of June 2026.
+    /// </summary>
+    /// <remarks>
+    /// The stepping form of <see cref="Values()"/>, under the same rules: ascending, the empty range
+    /// yields nothing, and an unbounded range throws at the call. Each boundary is counted from the range's start, so a split by months keeps the start's day where the calendar has it: from January 31, the pieces start on February 28, March 31 and April 30. This runs in memory only.
+    /// </remarks>
+    /// <param name="step">The distance between two values; it must be positive.</param>
+    /// <returns>The values, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
+    public IEnumerable<LocalDate> Values(Period step)
+    {
+        NodaPeriods.RequirePositive(step, nameof(step));
+        return RangeSplitting.Values<LocalDateRange, LocalDate>(this, RangeSplitting.Steps<LocalDate>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n))));
+    }
+
+    /// <summary>
     /// The number of days the range covers, or <see langword="null"/> when it is unbounded.
     /// The empty range measures 0.
     /// </summary>

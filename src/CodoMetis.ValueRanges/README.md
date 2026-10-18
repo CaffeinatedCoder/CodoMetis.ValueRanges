@@ -110,6 +110,7 @@ for the full reasoning.
   return `null` exactly where PostgreSQL returns `NULL`.
 - **Aggregates:** `RangeAgg`/`RangeIntersectAgg`.
 - **Calendar ranges:** `DateRange.Month`, `Quarter`, `Year` and `IsoWeek`. Weeks are ISO 8601, Monday to Sunday.
+- **Splitting:** `Split` cuts a range into steps or calendar periods; `Values(step)` skips ahead on a discrete range.
 
 Every one of them returns exactly what PostgreSQL returns, including how PostgreSQL canonicalizes
 discrete ranges.

@@ -112,11 +112,11 @@ public class NodaTimeLengthAndBridgeTests
     [TestMethod]
     public void Values_IsDeclaredByDiscreteTypesOnly()
     {
-        Assert.IsNotNull(typeof(LocalDateRange).GetMethod("Values"));
-        Assert.IsNotNull(typeof(YearMonthRange).GetMethod("Values"));
+        Assert.IsNotNull(typeof(LocalDateRange).GetMethods().FirstOrDefault(method => method.Name == "Values"));
+        Assert.IsNotNull(typeof(YearMonthRange).GetMethods().FirstOrDefault(method => method.Name == "Values"));
 
-        Assert.IsNull(typeof(InstantRange).GetMethod("Values"), "Instant is a continuous domain");
-        Assert.IsNull(typeof(LocalDateTimeRange).GetMethod("Values"), "LocalDateTime is continuous");
+        Assert.IsNull(typeof(InstantRange).GetMethods().FirstOrDefault(method => method.Name == "Values"), "Instant is a continuous domain");
+        Assert.IsNull(typeof(LocalDateTimeRange).GetMethods().FirstOrDefault(method => method.Name == "Values"), "LocalDateTime is continuous");
     }
 
     [TestMethod]

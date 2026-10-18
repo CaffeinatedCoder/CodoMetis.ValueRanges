@@ -308,6 +308,34 @@
     "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
   },
   {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Split(Func<$T, $TYPE>)",
+    "kind": "extra",
+    "reason": "the calendar split (#100) exists only on the ranges of days and months, where the calendar factories of #48 give a period to cut at; DateRange is the one core range over calendar days"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Split(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeOnly boundary is built from ticks, because TimeOnly.Add wraps at midnight: a boundary past the end of the day must be null, where the timestamp siblings' AddTicks throws at their own extremes"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Split(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Values(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where the integer siblings step by their own element type"
+  },
+  {
     "family": "nodatime ranges",
     "unit": "LocalDateRange",
     "member": "CreateUnboundedEnd($T, bool)",
@@ -481,6 +509,34 @@
     "member": "Month(int, int)",
     "kind": "extra",
     "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Split(Duration)",
+    "kind": "extra",
+    "reason": "an instant steps by an exact Duration, where the local types step by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Split(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Values(Period)",
+    "kind": "extra",
+    "reason": "a date steps by a calendar Period, where YearMonthRange, the other discrete NodaTime range, steps by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Values(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
   },
   {
     "family": "efcore wrapper bridges",

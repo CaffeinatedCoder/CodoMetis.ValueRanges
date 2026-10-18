@@ -310,6 +310,64 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     public IEnumerable<DateOnly> Values() => DiscreteEnumeration.Values<DateRange, DateOnly>(this);
 
     /// <summary>
+    /// Cuts the range into consecutive pieces of <paramref name="days"/>, in days each, from its start:
+    /// <c>[2026-06-01,2026-06-30].Split(7)</c> is four weeks from June 1 and <c>[2026-06-29,2026-06-30]</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are adjacent and hold exactly the values of the range, so
+    /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound.
+    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
+    /// <c>generate_series</c> returns rows, not a value.
+    /// </remarks>
+    /// <param name="days">The length of each piece, in days; it must be positive.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="days"/> is zero or negative.</exception>
+    public IEnumerable<DateRange> Split(int days)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(days);
+        return RangeSplitting.Split<DateRange, DateOnly>(this, RangeSplitting.Steps<DateOnly>(this, (start, n) => start.AddDays(checked((int)(n * days)))));
+    }
+
+    /// <summary>
+    /// Cuts the range at the boundaries of a calendar period: <c>range.Split(DateRange.Month)</c> gives one
+    /// piece per calendar month, the first and the last clipped to the range.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="period"/> is called with the first day of each piece and returns the period that holds
+    /// it, and the piece runs to that period's end. Pass <see cref="Month(DateOnly)"/>, <see cref="Quarter(DateOnly)"/>, <see cref="Year(DateOnly)"/> or <see cref="IsoWeek(DateOnly)"/>, or a function of your own,
+    /// such as a fiscal year. The pieces are adjacent and hold exactly the values of the range. The
+    /// empty range yields nothing. This runs in memory only.
+    /// </remarks>
+    /// <param name="period">Returns the period that holds a given day.</param>
+    /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="period"/> returned a range that is not bounded on both sides or does not hold
+    /// the day it was given.
+    /// </exception>
+    public IEnumerable<DateRange> Split(Func<DateOnly, DateRange> period)
+        => RangeSplitting.Split<DateRange, DateOnly>(this, RangeSplitting.Periods<DateRange, DateOnly>(period));
+
+    /// <summary>
+    /// Enumerates the range's values from its start, <paramref name="days"/>, in days apart:
+    /// <c>[2026-06-01,2026-06-30].Values(7)</c> is every Monday of June 2026.
+    /// </summary>
+    /// <remarks>
+    /// The stepping form of <see cref="Values()"/>, under the same rules: ascending, the empty range
+    /// yields nothing, and an unbounded range throws at the call. This runs in memory only.
+    /// </remarks>
+    /// <param name="days">The distance between two values, in days; it must be positive.</param>
+    /// <returns>The values, ascending.</returns>
+    /// <exception cref="NotSupportedException">The range is unbounded on either side.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="days"/> is zero or negative.</exception>
+    public IEnumerable<DateOnly> Values(int days)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(days);
+        return RangeSplitting.Values<DateRange, DateOnly>(this, RangeSplitting.Steps<DateOnly>(this, (start, n) => start.AddDays(checked((int)(n * days)))));
+    }
+
+    /// <summary>
     /// The number of days the range covers, or <see langword="null"/> when it is unbounded.
     /// The empty range measures 0.
     /// </summary>
