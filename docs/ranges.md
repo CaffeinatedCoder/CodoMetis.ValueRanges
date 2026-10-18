@@ -48,7 +48,8 @@ Good to know:
 
 - **An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form
   an empty or inverted interval. Examples are `start > end`, or equal bounds that are both
-  exclusive.
+  exclusive. Parsing is stricter: an inverted literal such as `[5,1)` fails, as it does in
+  PostgreSQL ([Parse a literal](serialization.md#parse-a-literal)).
 
 ## Pattern matching
 

@@ -1431,6 +1431,22 @@
     ]
   },
   {
+    "id": "J35-inverted-literal-refused",
+    "source": "docs/serialization.md#parse-a-literal",
+    "quote": "A literal whose lower bound is greater than its upper bound fails (`FormatException`), as it does\nin PostgreSQL. `TryParse` returns `false`, and JSON and the `TypeConverter` throw. Equal bounds that\naren't both inclusive are fine and read as `empty`, so `[5,5)` is `empty` and `[5,1)` fails.",
+    "claim": "Every range type and RangeSet refuse, through Parse, TryParse, the span overloads, JSON, the TypeConverter and the EF Core JSON document reader, a finite literal (or multirange element) whose lower bound text is greater than its upper bound text, as range_in does, while equal bounds not both inclusive read as empty and CreateFinite keeps returning Empty for inverted bounds.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Parse",
+      "*Range.TryParse"
+    ],
+    "heldBy": [
+      "RangeParseFormatTests",
+      "LiteralGrammarParityTests",
+      "LiteralCorpusProbeTests"
+    ]
+  },
+  {
     "id": "M01-rangeset-invariant-on-construction",
     "source": "docs/ranges.md#rangeset--multirange-support",
     "quote": "Every way you create a set keeps three rules. The elements are sorted by lower bound, no two of them overlap, and no two are adjacent. To keep those rules, creating a set: - **Drops empty ranges.** - **Merges ranges that overlap or are adjacent.** - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**",

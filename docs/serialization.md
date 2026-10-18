@@ -104,6 +104,12 @@ rounded to the nearest value. PostgreSQL keeps every digit, so a rounded value w
 number from the server's. Before 10.0, `[1.00000000000000000000000000001,2)` read as
 `[1.0000000000000000000000000000,2)` and contained 1, where the server's range doesn't.
 
+A literal whose lower bound is greater than its upper bound fails (`FormatException`), as it does
+in PostgreSQL. `TryParse` returns `false`, and JSON and the `TypeConverter` throw. Equal bounds that
+aren't both inclusive are fine and read as `empty`, so `[5,5)` is `empty` and `[5,1)` fails. Before
+10.0, `[5,1)` read as `empty`, and an inverted range inside a multirange literal disappeared from the
+set.
+
 Discrete types are normalized when you parse them. `"[1,10)"` and `"[1,9]"` hold the same values,
 and both parse to the same closed range `[1, 9]`:
 
