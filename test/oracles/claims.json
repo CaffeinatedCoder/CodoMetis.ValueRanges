@@ -961,6 +961,73 @@
     ]
   },
   {
+    "id": "E54-float8range-custom-type-setup",
+    "source": "docs/efcore.md#custom-range-types",
+    "quote": "Both also need `EnableUnmappedTypes()` on the Npgsql data source, so Npgsql can send a type it doesn't know by name. The value sets need nothing extra: `Float64Set` is a native `double precision[]` column.",
+    "claim": "With HasPostgresRange(\"float8range\", \"double precision\") and EnableUnmappedTypes(), Float64Range maps to float8range, RangeSet<Float64Range, double> to float8multirange and Float64Set and Float64Set<T> to double precision[]; every shape round-trips and the range operators agree with memory.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "Float64Range.CreateFinite",
+      "Float64Set.From"
+    ],
+    "heldBy": [
+      "Float64TranslationTests",
+      "CustomRangeCatalogueTests",
+      "ShapeMatrixParityTests",
+      "DifferentialFuzzParityTests"
+    ]
+  },
+  {
+    "id": "E55-float8range-no-subtype-diff",
+    "source": "docs/efcore.md#float64range-and-the-custom-float8range-type",
+    "quote": "**Leave out `subtype_diff`.** The usual `subtype_diff = float8mi` overflows when PostgreSQL builds a GiST index over very large values, and the insert or `CREATE INDEX` fails (`22003`). Without it, the index builds and serves the range operators.",
+    "claim": "The migration for HasPostgresRange(\"float8range\", \"double precision\") creates float8range with no subtype_diff (annotation 'double precision,,,,', pg_range.rngsubdiff '-'); a GiST index over [-MaxValue, MaxValue] ranges builds and answers @> with it, while a type declared with subtype_diff = float8mi fails with 22003.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "Float64Range.CreateFinite"
+    ],
+    "heldBy": [
+      "Float64TranslationTests",
+      "CustomRangeCatalogueTests",
+      "FloatDomainParityTests"
+    ]
+  },
+  {
+    "id": "E56-float-constant-exact-typed",
+    "source": "docs/efcore.md#float64range-and-the-custom-float8range-type",
+    "quote": "A constant you write in the query, such as `r.Score.Contains(0.5)`, is sent as `'0.5'::double precision`, the exact `double` you wrote.",
+    "claim": "A double constant operand of Contains on a Float64Range or Float64Set column is inlined as the float8out text cast to double precision, so 2^-25 is '2.9802322387695312e-08'::double precision and matches a stored 2^-25; .NET's shortest text for it is the double below.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "ValueSetExtensions.Contains",
+      "ValueRangesMethodCallTranslatorPlugin.Translators"
+    ],
+    "heldBy": [
+      "Float64TranslationTests",
+      "FloatDomainParityTests",
+      "DifferentialFuzzParityTests"
+    ]
+  },
+  {
+    "id": "E57-float-text-is-postgres",
+    "source": "docs/efcore.md#float64range-and-the-custom-float8range-type",
+    "quote": "**The text is PostgreSQL's.** `ToString()`, a SQL literal and JSON all print a `double` the way PostgreSQL does, so `1e23` is `9.999999999999999e+22` and `1e15` is `1e+15`.",
+    "claim": "Float64Range and Float64Set format a double exactly as float8out does at extra_float_digits 1, for 20,000 sampled doubles including 2^-25 and 2^-958 (which .NET's own shortest form does not read back), in ToString, the SQL literal and the JSON array.",
+    "oracle": "differential",
+    "surfaces": [
+      "Float64Range.FormatValue",
+      "Float64Set.FormatValue"
+    ],
+    "heldBy": [
+      "FloatDomainParityTests",
+      "Float64DomainTests",
+      "Float64TranslationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -2031,6 +2098,19 @@
     ]
   },
   {
+    "id": "M17-float64-length-may-be-infinite",
+    "source": "docs/ranges.md#measure-a-range",
+    "quote": "For `[double.MinValue, double.MaxValue]` that difference is larger than any `double`, so `Length` returns `double.PositiveInfinity`.",
+    "claim": "Float64Range.Length is End - Start for a finite range, 0 for the empty one, null when unbounded, and +Infinity for [MinValue, MaxValue].",
+    "oracle": "claim",
+    "surfaces": [
+      "Float64Range.Length"
+    ],
+    "heldBy": [
+      "Float64DomainTests"
+    ]
+  },
+  {
     "id": "R01-createfinite-degenerate-is-empty",
     "source": "docs/ranges.md#create-a-range",
     "quote": "**An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form an empty or inverted interval. Examples are `start > end`, or equal bounds that are both exclusive.",
@@ -2843,6 +2923,35 @@
     ]
   },
   {
+    "id": "R40-float64-shift-is-ieee-addition",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "**A `Float64Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`, so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue` throws `OverflowException`, as for the other types. A `NaN` or infinite step throws `ArgumentException`.",
+    "claim": "Float64Range.Shift and Expand move each bound by one IEEE addition; a bound that would become an infinity throws OverflowException, one unit in the last place past MaxValue included; a NaN or infinite delta or amount throws ArgumentException; the grid of shapes agrees with the moved specification.",
+    "oracle": "claim",
+    "surfaces": [
+      "Float64Range.Shift",
+      "Float64Range.Expand"
+    ],
+    "heldBy": [
+      "Float64DomainTests",
+      "RangeArithmeticOracleTests"
+    ]
+  },
+  {
+    "id": "R41-float64-split-rounds-once",
+    "source": "docs/ranges.md#split-a-range-into-pieces",
+    "quote": "**A `Float64Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`, so the error doesn't build up from piece to piece. A step too small to move the start at its magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.",
+    "claim": "Float64Range.Split's nth boundary is Start + n * step rounded once ([0,1) by 0.1 starts its eighth piece at 0.7000000000000001); a step that does not move the start throws ArgumentOutOfRangeException at the call; near MaxValue the last piece ends at MaxValue; the pieces are adjacent and their union is the range.",
+    "oracle": "claim",
+    "surfaces": [
+      "Float64Range.Split"
+    ],
+    "heldBy": [
+      "Float64DomainTests",
+      "RangeSplitOracleTests"
+    ]
+  },
+  {
     "id": "S01-canonical-set",
     "source": "docs/value-sets.md#value-sets",
     "quote": "Every set is immutable and deduplicated, sorted, and free of nulls.",
@@ -3236,6 +3345,98 @@
       "SetDimensionDecorationTests",
       "LiteralGrammarParityTests",
       "LiteralCorpusProbeTests"
+    ]
+  },
+  {
+    "id": "S22-float64set-wrapper-json-is-postgres-text",
+    "source": "docs/value-sets.md#how-your-element-types-sort-and-serialize",
+    "quote": "**`Float64Set<Score>`** writes `[0.1]`, the same text PostgreSQL prints for the `double` it wraps.",
+    "claim": "Float64Set<T> writes each element as a JSON number holding the float8out text of the double it wraps, identical to Float64Set's JSON, and reads it back as the same element, 2^-25 included.",
+    "oracle": "claim",
+    "surfaces": [
+      "Float64Set.FormatValue",
+      "IValueSetFactory.ElementJsonConverter"
+    ],
+    "heldBy": [
+      "Float64DomainTests",
+      "SetWrapperParityTests"
+    ]
+  },
+  {
+    "id": "W01-float-finite-only",
+    "source": "docs/why.md#why-doubles-are-finite-only",
+    "quote": "`Float64Range` and `Float64Set` hold every `double` except `NaN`, `+∞` and `-∞`. Creating, parsing or loading one with those values throws.",
+    "claim": "Every Float64Range factory and both unbounded constructors, Float64Set.From (both overloads) and Float64Set<T>.From throw ArgumentException for NaN, +Infinity and -Infinity; Parse, JSON and the TypeConverter throw and TryParse returns false for a literal holding them; a float8range, float8multirange or double precision[] value holding them throws ArgumentException when EF Core loads it.",
+    "oracle": "exception",
+    "surfaces": [
+      "Float64Range.CreateFinite",
+      "Float64Range.CreateUnboundedStart",
+      "Float64Range.CreateUnboundedEnd",
+      "Float64Range.Parse",
+      "Float64Set.From",
+      "Float64Set.Parse",
+      "RangeSet.Parse",
+      "RangeSetJsonConverter.Read"
+    ],
+    "heldBy": [
+      "Float64DomainTests",
+      "FloatDomainParityTests"
+    ]
+  },
+  {
+    "id": "W02-float-nan-ordering-measured",
+    "source": "docs/why.md#why-doubles-are-finite-only",
+    "quote": "**`NaN` is the one value the two sides order differently.** .NET sorts it below every number, and PostgreSQL sorts it above `Infinity`. No comparison involving `NaN` could give the same answer in memory and in the database, so the library throws instead of answering.",
+    "claim": "PostgreSQL holds [5,NaN) as a non-empty range and refuses [NaN,5); with the finite guard removed the model loads [5,NaN) as empty, and with it the load throws; Contains, Clamp and RangeSet.Contains throw for a NaN operand on every shape, the empty and infinite ones included.",
+    "oracle": "differential",
+    "surfaces": [
+      "Float64Range.CreateFinite",
+      "RangeExtensions.Contains",
+      "RangeExtensions.Clamp",
+      "RangeSet.Contains",
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "FloatDomainParityTests",
+      "Float64DomainTests"
+    ]
+  },
+  {
+    "id": "W03-float-agrees-without-nan",
+    "source": "docs/why.md#why-doubles-are-finite-only",
+    "quote": "Without those three values, `CompareTo`, the `<` and `>` operators and PostgreSQL agree on every pair, including `-0` and `0`, which are equal on both sides.",
+    "claim": "Over finite doubles, every ordered shape pair and the range algebra of Float64Range agree with float8range on PostgreSQL, the differential fuzz agrees on every translated operation, and -0 equals 0 in range and set equality, hashing and containment.",
+    "oracle": "differential",
+    "surfaces": [
+      "Float64Range.CreateFinite",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.Union",
+      "RangeExtensions.Except",
+      "Float64Set.From"
+    ],
+    "heldBy": [
+      "ShapeMatrixParityTests",
+      "DifferentialFuzzParityTests",
+      "Float64DomainTests"
+    ]
+  },
+  {
+    "id": "W04-float-stored-nonfinite-throws",
+    "source": "docs/why.md#where-is-the-model-stricter-than-the-database",
+    "quote": "Loading such a row throws (`ArgumentException`) instead of returning a value that would sort differently in memory. A `NaN` or infinite query parameter throws in the same way, before the query runs.",
+    "claim": "A float8range, float8multirange or double precision[] row holding NaN or an infinity throws ArgumentException ('finite numbers only') when EF Core loads it, and a query whose Contains operand is NaN or an infinity, on a Float64Range or Float64Set column, throws the same before it runs.",
+    "oracle": "exception",
+    "surfaces": [
+      "Float64Range.CreateFinite",
+      "Float64Set.From",
+      "ValueRangesTypeMappingSourcePlugin.FindMapping",
+      "ValueSetsTypeMappingSourcePlugin.FindMapping"
+    ],
+    "heldBy": [
+      "FloatDomainParityTests",
+      "Float64TranslationTests"
     ]
   }
 ]

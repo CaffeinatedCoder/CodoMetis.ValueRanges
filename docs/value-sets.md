@@ -38,6 +38,7 @@ Each set type has a matching PostgreSQL array type:
 | `Int32Set` | `int` | `integer[]` | `Int32Set<TElement>` |
 | `Int64Set` | `long` | `bigint[]` | `Int64Set<TElement>` |
 | `DecimalSet` | `decimal` | `numeric[]` | `DecimalSet<TElement>` |
+| `Float64Set` | `double`, finite only | `double precision[]` | `Float64Set<TElement>` |
 | `DateSet` | `DateOnly` | `date[]` | `DateSet<TElement>` |
 | `TimeSet` | `TimeOnly` | `time[]` | `TimeSet<TElement>` |
 | `DateTimeSet` | `DateTime` | `timestamp[]` | `DateTimeSet<TElement>` |
@@ -122,7 +123,7 @@ StringSet<AccessRight> rights = [AccessRight.Parse("users.read", null)];
 ```
 
 Every set family has a version like this: `StringSet<T>`, `GuidSet<T>`, `Int16Set<T>`,
-`Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`,
+`Int32Set<T>`, `Int64Set<T>`, `DecimalSet<T>`, `Float64Set<T>`, `DateSet<T>`, `TimeSet<T>`, `DateTimeSet<T>`,
 `DateTimeOffsetSet<T>`. The NodaTime package adds `LocalDateSet<T>`, `LocalDateTimeSet<T>`,
 `InstantSet<T>`, `LocalTimeSet<T>` and `YearMonthSet<T>`.
 
@@ -178,6 +179,7 @@ Each family asks your `ToString` for a particular format:
 | Version | The format the family asks for |
 |---|---|
 | `StringSet<T>`, `GuidSet<T>`, the integer versions, `DecimalSet<T>` | the element's default (`null`) |
+| `Float64Set<T>` | `"G17"` |
 | `DateSet<T>` | `"yyyy-MM-dd"` |
 | `TimeSet<T>`, `DateTimeSet<T>`, `DateTimeOffsetSet<T>` | `"O"` |
 | the five NodaTime versions | the family's ISO pattern |
@@ -219,6 +221,7 @@ Reading works the other way round, and the family decides it, not your element. 
 reads the text with the grammar of its underlying type:
 
 - **`DecimalSet<T>`** uses PostgreSQL's `numeric` grammar.
+- **`Float64Set<T>`** uses PostgreSQL's `double precision` grammar, for finite numbers only.
 - **The integer versions** read a signed integer.
 - **The temporal and NodaTime versions** read strict ISO 8601.
 
@@ -238,6 +241,7 @@ The same text goes into JSON:
 - **`StringSet<AccessRight>`** writes `["users.read"]`.
 - **`Int32Set<OrderId>`** writes `[1,2]`.
 - **`DecimalSet<Money>`** writes `[12.50]`, keeping the scale.
+- **`Float64Set<Score>`** writes `[0.1]`, the same text PostgreSQL prints for the `double` it wraps.
 - **`DateTimeSet<AuditStamp>`** writes ISO 8601 strings.
 
 Reading JSON calls `Parse`, so your validation also runs on incoming payloads. If you want a
@@ -279,8 +283,10 @@ membership is exactly what you ask of a collection of IDs.
 These element types are left out on purpose:
 
 - **`bool`** would be a set over just two values.
-- **`float` and `double`** have NaN, which breaks ordering and equality. That is the same silent
-  failure as for ranges.
+- **`NaN` and the infinities in a `Float64Set`.** .NET sorts `NaN` first and PostgreSQL sorts it
+  last, so a set holding one would be in a different order on each side. `From`, `Add`, `Contains`
+  and every parser throw for them instead
+  ([Why doubles are finite only](why.md#why-doubles-are-finite-only)).
 - **`byte[]`** has nested elements of varying length, with no cheap canonical order.
 - **`TimeSpan`** can't represent a PostgreSQL `interval` without loss, because an `interval` is a
   months, days and microseconds triple.

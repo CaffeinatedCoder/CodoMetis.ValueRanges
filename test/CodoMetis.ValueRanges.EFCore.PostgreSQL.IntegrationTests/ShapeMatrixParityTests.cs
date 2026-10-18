@@ -167,6 +167,31 @@ public sealed class ShapeMatrixParityTests
     }
 
     /// <summary>
+    /// The custom float8range: continuous like numrange, over finite doubles only (#153).
+    /// </summary>
+    [TestMethod]
+    public async Task Float64Range_EveryShapePair_AgreesWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await AssertMatrixAgrees<Float64Range, double>("float8range",
+        [
+            ("empty", Float64Range.Empty),
+            ("[1,5)", Float64Range.CreateFinite(1, 5)),
+            ("[5,9)", Float64Range.CreateFinite(5, 9)),
+            ("(1,5]", Float64Range.CreateFinite(1, 5, false, true)),
+            ("[5,9]", Float64Range.CreateFinite(5, 9, true, true)),
+            ("(5,9)", Float64Range.CreateFinite(5, 9, false, false)),
+            ("[3,7)", Float64Range.CreateFinite(3, 7)),
+            ("(,5)",  Float64Range.CreateUnboundedStart(5, false)),
+            ("(,5]",  Float64Range.CreateUnboundedStart(5, true)),
+            ("[5,)",  Float64Range.CreateUnboundedEnd(5)),
+            ("(5,)",  Float64Range.CreateUnboundedEnd(5, false)),
+            ("(,)",   Float64Range.Infinite)
+        ]);
+    }
+
+    /// <summary>
     /// A date domain, which is discrete like <see cref="int"/> but canonicalizes through a
     /// different step and renders through a different literal form.
     /// </summary>
@@ -516,6 +541,30 @@ public sealed class ShapeMatrixParityTests
             ("[5,)",  DecimalRange.CreateUnboundedEnd(5m)),
             ("(3,)",  DecimalRange.CreateUnboundedEnd(3m, false)),
             ("(,)",   DecimalRange.Infinite)
+        ]);
+    }
+
+    /// <summary>
+    /// The custom float8range: continuous like numrange, over finite doubles only (#153).
+    /// </summary>
+    [TestMethod]
+    public async Task Float64Range_Algebra_AgreesWithPostgres()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await AssertAlgebraAgrees<Float64Range, double>("float8range", "float8multirange",
+        [
+            ("empty", Float64Range.Empty),
+            ("[1,5)", Float64Range.CreateFinite(1, 5)),
+            ("[5,9)", Float64Range.CreateFinite(5, 9)),
+            ("(1,5]", Float64Range.CreateFinite(1, 5, false, true)),
+            ("(5,9)", Float64Range.CreateFinite(5, 9, false, false)),
+            ("[3,7)", Float64Range.CreateFinite(3, 7)),
+            ("(,5)",  Float64Range.CreateUnboundedStart(5, false)),
+            ("(,9]",  Float64Range.CreateUnboundedStart(9, true)),
+            ("[5,)",  Float64Range.CreateUnboundedEnd(5)),
+            ("(3,)",  Float64Range.CreateUnboundedEnd(3, false)),
+            ("(,)",   Float64Range.Infinite)
         ]);
     }
 

@@ -108,20 +108,34 @@ The first six element types meet that bar, and they are the six PostgreSQL ships
 range types. `int`, `long` and `DateOnly` are discrete. `decimal`, `DateTime` and
 `DateTimeOffset` are continuous, so adjacency for them depends on whether the bounds include their
 end point. `TimeOnly` (and, in the NodaTime package, `YearMonth`) meet the same bar and were added in
-v5.
+v5. `double` meets it in 10.0, once `NaN` and the infinities are left out.
 
-### Why not `double` or `float`?
+### Why doubles are finite only
 
-`double` and `float` fail the first requirement, and they fail *quietly*:
+`Float64Range` and `Float64Set` hold every `double` except `NaN`, `+∞` and `-∞`. Creating, parsing
+or loading one with those values throws. Here is why, measured on PostgreSQL 16, 17 and 18:
 
-- **`double.CompareTo` puts `NaN` first.** It reports `NaN` as less than every value and equal to
-  itself, which is a total order.
-- **The IEEE operators disagree.** `NaN < 5.0`, `NaN > 5.0` and `NaN == NaN` are all `false`.
+| Literal | PostgreSQL | .NET, comparing with `CompareTo` |
+|---|---|---|
+| `[5,NaN)` | a range that contains `1e308` and `Infinity` | inverted, so empty |
+| `[NaN,5)` | an error: lower bound above upper | a valid range |
+| `[0,)` and the value `NaN` | contains it | doesn't contain it |
+| `[1,Infinity)` and `[1,)` | two different ranges | two different ranges |
 
-So a range library that is generic over `IComparable<T>` accepts `double` without complaint. A
-containment check against a `NaN` bound then returns a wrong result, and nothing looks off. There is
-no exception to catch, and no bound to reject when you create the range. Restricting `T` to a chosen
-list is what keeps the algebra sound. It is not a gap left to fill later.
+**`NaN` is the one value the two sides order differently.** .NET sorts it below every number, and
+PostgreSQL sorts it above `Infinity`. No comparison involving `NaN` could give the same answer in
+memory and in the database, so the library throws instead of answering.
+
+**The infinities only repeat what an unbounded side already says.** `[1,Infinity)` is a different
+value from `[1,)` on the server, but it holds the same numbers. Use `CreateUnboundedEnd`,
+`CreateUnboundedStart` or `Infinite` for an open side.
+
+Without those three values, `CompareTo`, the `<` and `>` operators and PostgreSQL agree on every
+pair, including `-0` and `0`, which are equal on both sides.
+
+[Intervals.NET](https://www.nuget.org/packages/Intervals.NET) accepts `double` ranges too. It
+compares through `Comparer<T>.Default`, which is .NET's order with `NaN` first, and makes no promise
+about PostgreSQL.
 
 ### Why not `Guid`?
 
@@ -131,7 +145,7 @@ domain.
 
 ### Why not `ZonedDateTime` or `OffsetDateTime`?
 
-The NodaTime package leaves these out for the same reason as `double`. NodaTime deliberately gives
+The NodaTime package leaves these out for a reason close to `NaN`'s. NodaTime deliberately gives
 them no default ordering, because ordering by instant and ordering by local time disagree. The
 `IComparable<T>` constraint therefore rejects them at compile time. The [NodaTime package's
 README](../src/CodoMetis.ValueRanges.NodaTime/README.md#why-these-element-types) has the full reasoning, and the conversions to and from NodaTime's `Interval` and `DateInterval`.
@@ -142,6 +156,12 @@ README](../src/CodoMetis.ValueRanges.NodaTime/README.md#why-these-element-types)
 above all other values by definition. So a `numrange` bound can be `NaN`. .NET's `decimal` has no
 such value, so a `DecimalRange` can't hold one. The case that `numrange` has to define away never
 comes up.
+
+**A `Float64Range` bound or a `Float64Set` element can't be `NaN` or an infinity.** PostgreSQL's
+`double precision` holds both, so a `float8range` column can store `[5,NaN)` and a `double
+precision[]` column can store `{1.5,NaN}`, for example when another tool writes them. Loading such a
+row throws (`ArgumentException`) instead of returning a value that would sort differently in memory.
+A `NaN` or infinite query parameter throws in the same way, before the query runs.
 
 **The NodaTime types avoid the two timestamp caveats.** `DateTimeRange` and `DateTimeOffsetRange`
 carry two [timestamp caveats](efcore.md) at the database boundary. The NodaTime types don't, for a

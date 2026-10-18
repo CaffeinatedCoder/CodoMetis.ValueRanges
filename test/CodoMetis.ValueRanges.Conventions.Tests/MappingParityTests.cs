@@ -114,13 +114,13 @@ public sealed class MappingParityTests
     [TestMethod]
     public void Discovery_FindsEveryRangeAndSetType()
     {
-        // 7 BCL ranges + 4 NodaTime ranges; 10 closed BCL sets + 10 BCL wrapper arities +
-        // 5 NodaTime sets + 5 NodaTime wrapper arities, as of 7.0.0.
-        AssertAtLeast(RangeTypesIn(typeof(Int32Range)),     7,  "BCL range types");
+        // 8 BCL ranges + 4 NodaTime ranges; 11 closed BCL sets + 11 BCL wrapper arities +
+        // 5 NodaTime sets + 5 NodaTime wrapper arities, as of 10.0.0.
+        AssertAtLeast(RangeTypesIn(typeof(Int32Range)),     8,  "BCL range types");
         AssertAtLeast(RangeTypesIn(typeof(LocalDateRange)),  4, "NodaTime range types");
-        AssertAtLeast(SetTypesIn(typeof(StringSet)),       10,  "BCL set types");
+        AssertAtLeast(SetTypesIn(typeof(StringSet)),       11,  "BCL set types");
         AssertAtLeast(SetTypesIn(typeof(LocalDateSet)),     5,  "NodaTime set types");
-        AssertAtLeast(SetFamiliesIn(typeof(StringSet)),    10,  "BCL wrapper arities");
+        AssertAtLeast(SetFamiliesIn(typeof(StringSet)),    11,  "BCL wrapper arities");
         AssertAtLeast(SetFamiliesIn(typeof(LocalDateSet)),  5,  "NodaTime wrapper arities");
 
         static void AssertAtLeast(IEnumerable<Type> discovered, int floor, string what)

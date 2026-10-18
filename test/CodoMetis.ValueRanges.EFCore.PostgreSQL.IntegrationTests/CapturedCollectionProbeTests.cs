@@ -390,5 +390,6 @@ public sealed class CollectionProbeDbContext : DbContext
         }
 
         modelBuilder.HasPostgresRange("timerange", "time");
+        modelBuilder.HasPostgresRange("float8range", "double precision");
     }
 }

@@ -375,6 +375,129 @@ public abstract partial record DecimalRange
     }
 }
 
+public abstract partial record Float64Range
+{
+    public sealed partial record EmptyRange
+    {
+        /// <summary>
+        /// Parses a PostgreSQL range literal that names a <see cref="EmptyRange"/>, using the same invariant
+        /// grammar as <see cref="Float64Range.Parse(string, IFormatProvider?)"/>.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <exception cref="FormatException">The literal does not parse, or names another shape.</exception>
+        public static new EmptyRange Parse(string s, IFormatProvider? provider)
+            => RangeFormat.ParseVariant<Float64Range, double, EmptyRange>(s);
+
+        /// <summary>
+        /// Tries to parse a PostgreSQL range literal that names a <see cref="EmptyRange"/>. Minimal APIs bind
+        /// a parameter of this type through it.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <param name="result">The range, or <see langword="null"/> when the method returns <see langword="false"/>.</param>
+        /// <returns><see langword="false"/> when the literal does not parse or names another shape.</returns>
+        public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, [NotNullWhen(true)] out EmptyRange? result)
+            => RangeFormat.TryParseVariant<Float64Range, double, EmptyRange>(s, out result);
+    }
+
+    public sealed partial record Finite
+    {
+        /// <summary>
+        /// Parses a PostgreSQL range literal that names a <see cref="Finite"/>, using the same invariant
+        /// grammar as <see cref="Float64Range.Parse(string, IFormatProvider?)"/>.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <exception cref="FormatException">The literal does not parse, or names another shape.</exception>
+        public static new Finite Parse(string s, IFormatProvider? provider)
+            => RangeFormat.ParseVariant<Float64Range, double, Finite>(s);
+
+        /// <summary>
+        /// Tries to parse a PostgreSQL range literal that names a <see cref="Finite"/>. Minimal APIs bind
+        /// a parameter of this type through it.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <param name="result">The range, or <see langword="null"/> when the method returns <see langword="false"/>.</param>
+        /// <returns><see langword="false"/> when the literal does not parse or names another shape.</returns>
+        public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, [NotNullWhen(true)] out Finite? result)
+            => RangeFormat.TryParseVariant<Float64Range, double, Finite>(s, out result);
+    }
+
+    public sealed partial record UnboundedStart
+    {
+        /// <summary>
+        /// Parses a PostgreSQL range literal that names a <see cref="UnboundedStart"/>, using the same invariant
+        /// grammar as <see cref="Float64Range.Parse(string, IFormatProvider?)"/>.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <exception cref="FormatException">The literal does not parse, or names another shape.</exception>
+        public static new UnboundedStart Parse(string s, IFormatProvider? provider)
+            => RangeFormat.ParseVariant<Float64Range, double, UnboundedStart>(s);
+
+        /// <summary>
+        /// Tries to parse a PostgreSQL range literal that names a <see cref="UnboundedStart"/>. Minimal APIs bind
+        /// a parameter of this type through it.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <param name="result">The range, or <see langword="null"/> when the method returns <see langword="false"/>.</param>
+        /// <returns><see langword="false"/> when the literal does not parse or names another shape.</returns>
+        public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, [NotNullWhen(true)] out UnboundedStart? result)
+            => RangeFormat.TryParseVariant<Float64Range, double, UnboundedStart>(s, out result);
+    }
+
+    public sealed partial record UnboundedEnd
+    {
+        /// <summary>
+        /// Parses a PostgreSQL range literal that names a <see cref="UnboundedEnd"/>, using the same invariant
+        /// grammar as <see cref="Float64Range.Parse(string, IFormatProvider?)"/>.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <exception cref="FormatException">The literal does not parse, or names another shape.</exception>
+        public static new UnboundedEnd Parse(string s, IFormatProvider? provider)
+            => RangeFormat.ParseVariant<Float64Range, double, UnboundedEnd>(s);
+
+        /// <summary>
+        /// Tries to parse a PostgreSQL range literal that names a <see cref="UnboundedEnd"/>. Minimal APIs bind
+        /// a parameter of this type through it.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <param name="result">The range, or <see langword="null"/> when the method returns <see langword="false"/>.</param>
+        /// <returns><see langword="false"/> when the literal does not parse or names another shape.</returns>
+        public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, [NotNullWhen(true)] out UnboundedEnd? result)
+            => RangeFormat.TryParseVariant<Float64Range, double, UnboundedEnd>(s, out result);
+    }
+
+    public sealed partial record Infinity
+    {
+        /// <summary>
+        /// Parses a PostgreSQL range literal that names a <see cref="Infinity"/>, using the same invariant
+        /// grammar as <see cref="Float64Range.Parse(string, IFormatProvider?)"/>.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <exception cref="FormatException">The literal does not parse, or names another shape.</exception>
+        public static new Infinity Parse(string s, IFormatProvider? provider)
+            => RangeFormat.ParseVariant<Float64Range, double, Infinity>(s);
+
+        /// <summary>
+        /// Tries to parse a PostgreSQL range literal that names a <see cref="Infinity"/>. Minimal APIs bind
+        /// a parameter of this type through it.
+        /// </summary>
+        /// <param name="s">The literal.</param>
+        /// <param name="provider">Ignored: the literal is invariant.</param>
+        /// <param name="result">The range, or <see langword="null"/> when the method returns <see langword="false"/>.</param>
+        /// <returns><see langword="false"/> when the literal does not parse or names another shape.</returns>
+        public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, [NotNullWhen(true)] out Infinity? result)
+            => RangeFormat.TryParseVariant<Float64Range, double, Infinity>(s, out result);
+    }
+}
+
 public abstract partial record DateRange
 {
     public sealed partial record EmptyRange

@@ -234,6 +234,16 @@ Case("aot-stringset", () =>
     var json = JsonSerializer.Serialize(tags, ctx.StringSet);
     return json + (JsonSerializer.Deserialize(json, ctx.StringSet) == tags ? " roundtrip" : " MISMATCH");
 });
+// A double set writes PostgreSQL's float8out text through WriteRawValue: 2^-25 reads back exactly,
+// where System.Text.Json's own writer prints a text one unit lower.
+Case("aot-float64set", () =>
+{
+    var weights = Float64Set.From(1e23, 2.9802322387695312e-08);
+    var json    = JsonSerializer.Serialize(weights, ctx.Float64Set);
+    return json + (JsonSerializer.Deserialize(json, ctx.Float64Set) == weights ? " roundtrip" : " MISMATCH");
+});
+// A double-backed wrapper set this program only ever deserializes: its own closed converters.
+Case("aot-float64set-wrapper-read", () => JsonSerializer.Deserialize("[1e23,2.9802322387695312e-08]", ctx.Float64SetRatio)!.ToString());
 // Through object: the serializer resolves the runtime type (the variant) from the context.
 Case("aot-object", () => JsonSerializer.Serialize<object>(h1, ctx.Object));
 // A closed temporal set reads its elements with the literal grammar: an offset is required.
@@ -292,12 +302,29 @@ public readonly record struct Key(string Value) : IFormattable, IParsable<Key>
 [JsonSerializable(typeof(Int32Set<Code>))]
 [JsonSerializable(typeof(Code))]
 [JsonSerializable(typeof(StringSet))]
+[JsonSerializable(typeof(Float64Set))]
+[JsonSerializable(typeof(double))]
+[JsonSerializable(typeof(Float64Set<Ratio>))]
+[JsonSerializable(typeof(Ratio))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(object))]
 [JsonSerializable(typeof(DateTimeOffsetSet))]
 [JsonSerializable(typeof(DateTimeOffset))]
 [JsonSerializable(typeof(Declared))]
 internal partial class SmokeJson : JsonSerializerContext;
+
+public readonly record struct Ratio(double Value) : IFormattable, IParsable<Ratio>, IComparable<Ratio>
+{
+    public static Ratio Parse(string s, IFormatProvider? provider) => new(double.Parse(s, System.Globalization.CultureInfo.InvariantCulture));
+    public static bool TryParse(string? s, IFormatProvider? provider, out Ratio result)
+    {
+        var ok = double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v);
+        result = new(v);
+        return ok;
+    }
+    public int CompareTo(Ratio other) => Value.CompareTo(other.Value);
+    public string ToString(string? format, IFormatProvider? formatProvider) => Value.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+}
 
 public readonly record struct Code(int Value) : IFormattable, IParsable<Code>, IComparable<Code>
 {
@@ -344,6 +371,8 @@ assert_contains 'aot-noda-rangeset-read={[2026-01-01,2026-01-31]}' "$work/aot.na
 assert_contains 'aot-wrapper=["users.read"] roundtrip'         "$work/aot.native.out" "AOT: a validated-wrapper set round-trips"
 assert_contains 'aot-wrapper-read={1,2}'                       "$work/aot.native.out" "AOT: a validated-wrapper set the program never constructs deserializes"
 assert_contains 'aot-stringset=["alpha","beta"] roundtrip'     "$work/aot.native.out" "AOT: a primitive set round-trips through the documented minimal context"
+assert_contains 'aot-float64set=[2.9802322387695312e-08,9.999999999999999e+22] roundtrip' "$work/aot.native.out" "AOT: a Float64Set writes PostgreSQL's text and round-trips 2^-25"
+assert_contains 'aot-float64set-wrapper-read={2.9802322387695312e-08,9.999999999999999e+22}' "$work/aot.native.out" "AOT: a Float64Set<T> the program never constructs deserializes"
 assert_contains 'aot-object="[2026-01-01,2026-06-30]"'         "$work/aot.native.out" "AOT: a range serializes through object"
 assert_contains 'aot-dtoset=["2026-01-01T09:30:00+01:00"]'     "$work/aot.native.out" "AOT: a DateTimeOffsetSet round-trips"
 assert_contains 'aot-dtoset-offsetless=FAILED JsonException'   "$work/aot.native.out" "AOT: a DateTimeOffsetSet element without an offset is refused"

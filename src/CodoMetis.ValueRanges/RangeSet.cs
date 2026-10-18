@@ -365,6 +365,7 @@ public sealed class RangeSet<TRange, T>
         // binary-search on — RangeLowerBound throws for IInfinityRange rather than inventing one.
         // Every other query here guards this first; until 8.0.0 this one did not, so
         // RangeSet.Infinite.Contains(value) threw where the single-range overload answered true.
+        value = ((IRange<T>)TRange.Empty).NormalizeElement(value);
         if (IsInfiniteSet) return true;
 
         int idx = RangeSetHelpers.LastIndexWithLowerBoundAtOrBelow<TRange, T>(_elements, value);

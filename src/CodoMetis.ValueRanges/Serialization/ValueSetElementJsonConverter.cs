@@ -99,6 +99,49 @@ internal static class ValueSetElementJson
         }
     }
 
+    /// <summary>
+    /// The text of a <see cref="double"/> or <see cref="float"/> token for the family's parser: the raw
+    /// token text of a number (not <c>GetDouble().ToString()</c>, whose shortest form is wrong for two
+    /// doubles), or — only under <see cref="JsonNumberHandling.AllowReadingFromString"/> — a string holding
+    /// a number without surrounding whitespace, as System.Text.Json reads one. <c>"NaN"</c> and
+    /// <c>"Infinity"</c> reach the family's parser and are refused there, whatever
+    /// <see cref="JsonNumberHandling.AllowNamedFloatingPointLiterals"/> says: the families hold finite
+    /// numbers only.
+    /// </summary>
+    internal static string ReadFloatText<T>(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.Number:
+                return Encoding.UTF8.GetString(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan);
+
+            case JsonTokenType.String when ReadsNumbersFromStrings(options):
+                var text = reader.GetString()!;
+                if (text.Length == 0 || LiteralWhiteSpace.Is(text[0]) || LiteralWhiteSpace.Is(text[^1]))
+                    throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(text)}' as {typeof(T).Name}: a quoted number is sign, digits, point and exponent.");
+                return text;
+
+            case JsonTokenType.String:
+                throw new JsonException(
+                    $"Expected a JSON number for a {typeof(T).Name} value, got a string; a quoted number is read only under JsonNumberHandling.AllowReadingFromString.");
+
+            default:
+                throw new JsonException($"Expected a JSON number for a {typeof(T).Name} value, got {reader.TokenType}.");
+        }
+    }
+
+    /// <summary>
+    /// Writes a float family's element text — the text PostgreSQL prints — as a JSON number, or as a
+    /// string under <see cref="JsonNumberHandling.WriteAsString"/>, as System.Text.Json writes a number.
+    /// </summary>
+    internal static void WriteFloatText(Utf8JsonWriter writer, string text, JsonSerializerOptions options)
+    {
+        if (WritesNumbersAsStrings(options))
+            writer.WriteStringValue(text);
+        else
+            writer.WriteRawValue(text);
+    }
+
     /// <summary>What System.Text.Json reads inside the quotes of a decimal: <see cref="NumberStyles.Float"/> without the whitespace.</summary>
     private const NumberStyles QuotedDecimal = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
 
@@ -313,4 +356,31 @@ internal sealed class ValueSetDecimalElementJsonConverter<TSet, T> : JsonConvert
         else
             writer.WriteNumberValue(number);
     }
+}
+
+/// <summary>
+/// Writes a set element as a JSON number holding the text PostgreSQL prints for the
+/// <see cref="double"/> or <see cref="float"/> it wraps — the shape used by <c>Float64Set&lt;TElement&gt;</c>
+/// and <c>Float32Set&lt;TElement&gt;</c>, and the text their primitive siblings write.
+/// </summary>
+/// <remarks>
+/// Both legs go through the family's text form, as in the integer and decimal converters, and
+/// <see cref="JsonNumberHandling.WriteAsString"/> and <see cref="JsonNumberHandling.AllowReadingFromString"/>
+/// are honoured the same way. The family's <c>FormatValue</c> already writes the PostgreSQL text, so it is
+/// written as it is: going through <see cref="double"/> again would bring back .NET's shortest form.
+/// </remarks>
+/// <typeparam name="TSet">The value set family that owns the element's text form.</typeparam>
+/// <typeparam name="T">The element type.</typeparam>
+internal sealed class ValueSetFloatElementJsonConverter<TSet, T> : JsonConverter<T>
+    where TSet : IValueSetFactory<TSet, T>, IValueSet<T>
+    where T : IEquatable<T>
+{
+    /// <summary>The shared instance — the converter is stateless.</summary>
+    internal static readonly ValueSetFloatElementJsonConverter<TSet, T> Instance = new();
+
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => ValueSetElementJson.Parse<TSet, T>(ValueSetElementJson.ReadFloatText<T>(ref reader, options));
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+        => ValueSetElementJson.WriteFloatText(writer, ValueSetElementJson.Format<TSet, T>(value), options);
 }

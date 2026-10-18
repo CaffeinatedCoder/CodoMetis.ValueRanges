@@ -1,0 +1,17 @@
+Seed: Float64Range and Float64Set write .NET's shortest form instead of the text float8out prints, so 1e15 is 1E+15, 1e23 is 1E+23 where PostgreSQL prints 9.999999999999999e+22, and 2^-25 is written as a text that reads back one unit lower
+Oracles: FloatDomainParityTests
+Fails: the text sweep, on most exponent-form doubles, about one in three hundred others in its digits, and 2^-25 and 2^-958 in their value; the inlined 2^-25 constant matches no stored bound
+History: #153, measured against PostgreSQL 16, 17 and 18
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs b/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
+index 2c1533f..f46cd6f 100644
+--- a/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
++++ b/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
+@@ -125,6 +125,7 @@ internal static class FloatLiteral
+     /// <summary>The text <c>float8out</c> prints for a finite <paramref name="value"/>.</summary>
+     internal static string Format(double value)
+     {
++        if (double.IsFinite(value)) return value.ToString("R", CultureInfo.InvariantCulture);
+         if (value == 0) return double.IsNegative(value) ? "-0" : "0";
+ 
+         var bits     = BitConverter.DoubleToInt64Bits(RequireFinite(value, "Float64"));

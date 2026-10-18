@@ -15,8 +15,11 @@ CodoMetis.ValueRanges is a .NET 10 class library providing type-safe range types
 | `DateTimeRange` | `tsrange` | `DateTime` | — |
 | `DateTimeOffsetRange` | `tstzrange` | `DateTimeOffset` | — |
 | `TimeRange` | `timerange` (custom) | `TimeOnly` | — |
+| `Float64Range` | `float8range` (custom) | `double` (finite) | — |
 
 Discrete types (int, long, DateOnly) implement `NextValueAfter`/`PreviousValueBefore` to return the adjacent value. Continuous types leave them returning `null`. Discrete ranges canonicalize to closed `[lower, upper]` at construction (`Internals/DiscreteCanonical.cs`); continuous ranges default to half-open `[lower, upper)`.
+
+`Float64Range` (10.0) is the second custom domain: `float8range` over finite doubles, created without a `subtype_diff` (`float8mi` overflows a GiST index over extreme values). `NaN` and the infinities are refused on every construction path and every scalar operand (`IRange<T>.NormalizeElement`), because .NET sorts `NaN` first and PostgreSQL last; its text is exactly `float8out`'s (`Internals/FloatLiteral.cs`), not .NET's shortest form (#153).
 
 `TimeRange` (v5) is the first domain beyond the six built-ins: `timerange` does not exist in PostgreSQL until the database runs `CREATE TYPE timerange AS RANGE (subtype = time)` (via `HasPostgresRange`), and the Npgsql data source needs `EnableUnmappedTypes()`. A single range cannot cross midnight — overnight windows are two-element `RangeSet`s. PostgreSQL `time`'s special value `24:00:00` is not representable in `TimeOnly`.
 
