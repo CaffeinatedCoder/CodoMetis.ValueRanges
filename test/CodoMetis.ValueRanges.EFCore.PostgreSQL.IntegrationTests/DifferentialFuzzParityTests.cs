@@ -1,3 +1,4 @@
+using CodoMetis.ValueRanges.Conventions.Tests;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -77,7 +78,7 @@ public sealed class DifferentialFuzzParityTests
     public async Task Ranges_AgreeWithPostgres()
     {
         ContainerLifecycle.RequireDatabase();
-        Assert.IsGreaterThanOrEqualTo(11, FuzzTypes.Ranges.Count, "range type discovery found too few types");
+        RangeCensus.AssertReachedEveryUnion(FuzzTypes.Ranges.Select(t => t.Range), nameof(Ranges_AgreeWithPostgres));
 
         var method = typeof(DifferentialFuzzParityTests).GetMethod(nameof(SweepRange), BindingFlags.NonPublic | BindingFlags.Static)!;
         var lines  = await RunAll(FuzzTypes.Ranges.Select(t => (Func<Task<List<string>>>)(

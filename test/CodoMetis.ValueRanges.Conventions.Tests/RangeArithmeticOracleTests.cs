@@ -55,6 +55,22 @@ public sealed class RangeArithmeticOracleTests
     /// <see cref="double.MaxValue"/> rounds back to it, as IEEE addition does, so the overflow past the last
     /// value is asked for with one unit in the last place there (2^971) instead.
     /// </summary>
+    /// <summary>
+    /// The element types whose extremes stand for PostgreSQL's <c>-infinity</c> and <c>infinity</c>, each
+    /// with a value two grid steps below its maximum. On these a bound at an extreme stays where it is
+    /// under <c>Shift</c> and <c>Expand</c> (#224), and a finite bound moved past one still throws.
+    /// </summary>
+    private static readonly Dictionary<Type, object> InfinityBacked = new()
+    {
+        [typeof(DateOnly)]       = DateOnly.MaxValue.AddDays(-2),
+        [typeof(DateTime)]       = DateTime.MaxValue.AddMinutes(-60),
+        [typeof(DateTimeOffset)] = DateTimeOffset.MaxValue.AddMinutes(-60),
+        [typeof(LocalDate)]      = LocalDate.MaxIsoValue.PlusDays(-2),
+        [typeof(LocalDateTime)]  = LocalDateTime.MaxIsoValue.PlusMinutes(-60),
+        [typeof(Instant)]        = Instant.MaxValue.Minus(Duration.FromMinutes(60)),
+        [typeof(YearMonth)]      = new YearMonth(9999, 10)
+    };
+
     private static readonly Dictionary<Type, Func<int, object>> EdgeSteps = new()
     {
         [typeof(double)] = k => k * Math.ScaleB(1.0, 971),
@@ -179,13 +195,43 @@ public sealed class RangeArithmeticOracleTests
             ("[min,max]",     TRange.CreateFinite(min, max, true, true), true, true),
         ];
 
-        var edge = EdgeSteps.GetValueOrDefault(typeof(T), step);
+        var edge     = EdgeSteps.GetValueOrDefault(typeof(T), step);
+        var infinite = InfinityBacked.TryGetValue(typeof(T), out var belowMax);
+
         foreach (var (name, range, atMin, atMax) in edges)
         {
-            Throws("Shift(1)",   () => Call(shift, range, 1, edge),   atMax);
-            Throws("Shift(-1)",  () => Call(shift, range, -1, edge),  atMin);
-            Throws("Expand(1)",  () => Call(expand, range, 1, edge),  atMin || atMax);
-            Throws("Expand(-1)", () => Call(expand, range, -1, edge), false);
+            if (infinite)
+            {
+                // The extreme is an infinity: it stays, whichever way the range moves, and the
+                // finite bound moves alone. Nothing throws, and moving back is the identity.
+                foreach (var (operation, k) in new[] { ("Shift", 1), ("Shift", -1), ("Expand", 1), ("Expand", -1) })
+                {
+                    checks++;
+                    var method = operation == "Shift" ? shift : expand;
+                    var moved  = Outcome(() => Call(method, range, k, edge));
+                    var kept   = Outcome(() =>
+                    {
+                        var result = Call(method, range, k, edge);
+                        return (!atMin || Equals(result.LowerBound(), min)) && (!atMax || Equals(result.UpperBound(), max))
+                                   ? "kept"
+                                   : $"moved to {result}";
+                    });
+                    if (kept != "kept")
+                        failures.Add($"{label} {name} {operation}({k}) at the domain edge → {moved}, expected the infinite bound to stay");
+                }
+
+                checks++;
+                var back = Outcome(() => Call(shift, Call(shift, range, 1, edge), -1, edge));
+                if (back != range.ToString())
+                    failures.Add($"{label} {name} Shift(1).Shift(-1) at the domain edge → {back}, expected {range}");
+            }
+            else
+            {
+                Throws("Shift(1)",   () => Call(shift, range, 1, edge),   atMax);
+                Throws("Shift(-1)",  () => Call(shift, range, -1, edge),  atMin);
+                Throws("Expand(1)",  () => Call(expand, range, 1, edge),  atMin || atMax);
+                Throws("Expand(-1)", () => Call(expand, range, -1, edge), false);
+            }
 
             // Nothing moves an empty or infinite range, so nothing there can overflow.
             Throws("Empty.Shift", () => Call(shift, TRange.Empty, 1), false);
@@ -198,6 +244,20 @@ public sealed class RangeArithmeticOracleTests
                 var threw   = outcome == $"throws {nameof(OverflowException)}";
                 if (threw != expected)
                     failures.Add($"{label} {name} {operation} at the domain edge → {outcome}, expected "
+                               + (expected ? nameof(OverflowException) : "a range"));
+            }
+        }
+
+        // A finite bound two steps below the maximum moves up to it, and past it throws, infinity or not.
+        if (infinite)
+        {
+            var near = TRange.CreateFinite((T)belowMax!, (T)belowMax!, true, true);
+            foreach (var (k, expected) in new[] { (1, false), (3, true) })
+            {
+                checks++;
+                var outcome = Outcome(() => Call(shift, near, k, edge));
+                if ((outcome == $"throws {nameof(OverflowException)}") != expected)
+                    failures.Add($"{label} {near} Shift({k}) below the domain edge → {outcome}, expected "
                                + (expected ? nameof(OverflowException) : "a range"));
             }
         }

@@ -353,7 +353,8 @@ Good to know:
   less throws `ArgumentOutOfRangeException`. So does a step too small to move the start, such as
   `0.5m` near `decimal.MaxValue`.
 - **A `Float64Range` or `Float32Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`,
-  so the error doesn't build up from piece to piece. A step too small to move the start at its
+  so the error doesn't build up from piece to piece. Near the top of the domain, where `n × step`
+  alone is too large for the type, a boundary is the one before it plus the step. A step too small to move the start at its
   magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.
 - **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
   a value ([What runs where](efcore.md#what-runs-where)).
@@ -399,8 +400,9 @@ Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10
 
 ### Sort ranges
 
-Every range type implements `IComparable<TRange>`, so `Order()`, `List.Sort()` and `SortedSet` work
-with no comparer. The order is PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
+Every range type implements `IComparable<TRange>` and `IComparable`, so `Order()`, `List.Sort()` and
+`SortedSet` work with no comparer, also on a `List<IRange<T>>` or an `ArrayList`. The order is
+PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
 
 ```csharp
 var ranges = new[]
@@ -420,12 +422,15 @@ missing bound is the smallest lower bound and the largest upper bound. At the sa
 inclusive lower bound sorts first and an inclusive upper bound sorts last.
 
 `CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct
-range. `null` sorts before every range.
+range. `null` sorts before every range. The non-generic `CompareTo(object)` throws `ArgumentException` for an
+argument that is not the same range type.
 
 Good to know:
 
 - **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
-  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`.
+  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`. With a
+  `null` range on the right, the query returns the rows memory returns: `> 0`, `>= 0` and `!= 0` hold
+  for every row, and `< 0`, `<= 0` and `== 0` for none.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
   nullable column, the two orders differ only in where the nulls go.
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
@@ -492,6 +497,13 @@ Good to know:
 - **A bound moved past the last value throws.** `Shift` and `Expand` throw `OverflowException` when
   a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They
   never wrap around.
+- **A bound that stands for infinity stays where it is.** On the date and time ranges,
+  `DateOnly.MaxValue`, `DateTime.MaxValue` and the other extremes stand for PostgreSQL's
+  `infinity` and `-infinity`. `Shift` and `Expand` leave such a bound alone, as `infinity - 1`
+  is still `infinity` in PostgreSQL. A closed date range counts the day before the maximum too,
+  because a column holding `[2026-01-01,infinity)` loads as `[2026-01-01,9999-12-30]`. So that
+  range shifted back a day is `[2025-12-31,9999-12-30]`, and it still ends at infinity. The
+  integer and float ranges have no infinity, so their extremes still throw.
 - **A `Float64Range` or `Float32Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`,
   so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue`
   throws `OverflowException`, as for the other types. A `NaN` or infinite step throws
@@ -501,9 +513,11 @@ Good to know:
 - **A `DateTimeOffsetRange` keeps its offsets.** A day is exactly 24 hours, whatever a time zone
   does that night.
 - **A period of months follows the calendar.** `LocalDateRange` and `LocalDateTimeRange` move by
-  NodaTime's calendar arithmetic, which clips to the end of a shorter month. So
-  `[2026-01-01,2026-01-31]` moved by one month is `[2026-02-01,2026-02-28]`, and moving it back
-  gives `[2026-01-01,2026-01-28]`. A period of days or weeks moves back exactly.
+  NodaTime's calendar arithmetic, which clips to the end of a shorter month. A `LocalDateRange`
+  moves the day after its last day, as PostgreSQL stores a `daterange`, so a whole month moves to a
+  whole month: `LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1))` is
+  `LocalDateRange.Month(2026, 3)`, and moving it back gives February again. A start on the 31st
+  still clips: January 31 plus one month is February 28.
 - **They run in memory only.** PostgreSQL has no range arithmetic. See
   [What runs where](efcore.md#what-runs-where).
 
@@ -880,7 +894,7 @@ a.Equals(b);  // true — both normalize to { [1, 10] }
 a == b;       // true — same value semantics as the ranges themselves
 ```
 
-Sets implement `IComparable<RangeSet<TRange, T>>` in PostgreSQL's multirange order. Two sets compare
+Sets implement `IComparable<RangeSet<TRange, T>>` and `IComparable` in PostgreSQL's multirange order. Two sets compare
 element by element in the [range order](#sort-ranges), and a set that runs out of elements first
 sorts first. So the empty set sorts before every other set, and `{[1,3]}` before `{[1,3],[5,7]}`.
 As for ranges, `CompareTo` returns 0 exactly when the two sets are equal.

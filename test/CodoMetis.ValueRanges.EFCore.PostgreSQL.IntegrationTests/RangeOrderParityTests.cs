@@ -39,7 +39,7 @@ public sealed class RangeOrderParityTests
     public async Task EveryRangeAndMultirange_OrdersAsPostgres()
     {
         ContainerLifecycle.RequireDatabase();
-        Assert.IsGreaterThanOrEqualTo(11, FuzzTypes.Ranges.Count, "range type discovery found too few types");
+        RangeCensus.AssertReachedEveryUnion(FuzzTypes.Ranges.Select(t => t.Range), nameof(EveryRangeAndMultirange_OrdersAsPostgres));
 
         var method = typeof(RangeOrderParityTests).GetMethod(nameof(Sweep), BindingFlags.NonPublic | BindingFlags.Static)!;
         var lines  = new List<string>();
@@ -102,6 +102,28 @@ public sealed class RangeOrderParityTests
         await Agree("==", r => r.Seats.CompareTo(probe) == 0);
         await Agree("multirange <", r => r.SeatBlocks.CompareTo(probeSet) < 0);
         await Agree("multirange >=", r => r.SeatBlocks.CompareTo(probeSet) >= 0);
+
+        // A null operand: null sorts before every range, so > 0, >= 0 and != 0 hold for every row and
+        // the other three for none. SQL's "col > NULL" is NULL, which returned no rows for any (#220).
+        Int32Range? none = null;
+        RangeSet<Int32Range, int>? noSet = null;
+
+        await Agree("null <",  r => r.Seats.CompareTo(none) < 0);
+        await Agree("null <=", r => r.Seats.CompareTo(none) <= 0);
+        await Agree("null >",  r => r.Seats.CompareTo(none) > 0);
+        await Agree("null >=", r => r.Seats.CompareTo(none) >= 0);
+        await Agree("null ==", r => r.Seats.CompareTo(none) == 0);
+        await Agree("null !=", r => r.Seats.CompareTo(none) != 0);
+        await Agree("null, 0 on the left: 0 < CompareTo", r => 0 < r.Seats.CompareTo(none));
+        await Agree("null, 0 on the left: 0 >= CompareTo", r => 0 >= r.Seats.CompareTo(none));
+        await Agree("null, negated: !(CompareTo < 0)", r => !(r.Seats.CompareTo(none) < 0));
+        await Agree("null multirange >", r => r.SeatBlocks.CompareTo(noSet) > 0);
+        await Agree("null multirange <=", r => r.SeatBlocks.CompareTo(noSet) <= 0);
+        Assert.HasCount(seats.Length, await mine.Where(r => r.Seats.CompareTo(none) > 0).ToListAsync(),
+                        "every row sorts after a null range");
+
+        // …and a non-null operand still answers as before, through the same rewrite.
+        await Agree("non-null >= after the rewrite", r => r.Seats.CompareTo(probe) >= 0 && r.SeatBlocks.CompareTo(probeSet) != 0);
 
         CollectionAssert.AreEqual(
             rows.OrderBy(r => r.Seats).Select(r => r.Id).ToList(),

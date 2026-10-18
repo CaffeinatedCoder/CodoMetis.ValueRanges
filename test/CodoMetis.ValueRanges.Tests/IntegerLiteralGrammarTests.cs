@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CodoMetis.ValueRanges.Tests;
 
@@ -98,6 +100,44 @@ public class IntegerLiteralGrammarTests
         Assert.AreEqual(
             RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 2)]),
             RangeSet<Int32Range, int>.Parse("{[0b1,0x2]}", CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// PostgreSQL text cannot hold U+0000, so no integer is spelled with one. The BCL integer parsers
+    /// ignore trailing NULs, and until 10.0.0 <c>31\0</c> read as 31, in a bound, a set element and JSON
+    /// alike (#233); the decimal, float, temporal and Guid families refused it already.
+    /// </summary>
+    [TestMethod]
+    [DataRow("31\0")]
+    [DataRow("31\0\0")]
+    [DataRow("-5\0")]
+    [DataRow("\031")]
+    [DataRow("3\01")]
+    [DataRow("0x1F\0")]
+    [DataRow("1_0\0")]
+    public void ParseValue_RejectsANul(string text)
+    {
+        foreach (var (name, parse) in new (string, Action)[]
+                 {
+                     ("Int16Set", () => Int16Set.ParseValue(text, null)),
+                     ("Int32Set", () => Int32Set.ParseValue(text, null)),
+                     ("Int64Set", () => Int64Set.ParseValue(text, null)),
+                     ("Int32Range", () => Int32Range.ParseValue(text, null)),
+                     ("Int64Range", () => Int64Range.ParseValue(text, null))
+                 })
+            Assert.ThrowsExactly<FormatException>(parse, name);
+    }
+
+    [TestMethod]
+    public void Literals_RejectANul()
+    {
+        Assert.IsFalse(Int32Range.TryParse("[1\0,5)", CultureInfo.InvariantCulture, out _));
+        Assert.IsFalse(RangeSet<Int64Range, long>.TryParse("{[1\0,5)}", CultureInfo.InvariantCulture, out _));
+        Assert.IsFalse(Int16Set.TryParse("{\"31\0\"}", CultureInfo.InvariantCulture, out _));
+        Assert.IsFalse(Int32Set.TryParse("{31\0}", CultureInfo.InvariantCulture, out _));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int32Range>("\"[1\\u0000,5)\""));
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Int64Set>(
+            "[\"7\\u0000\"]", new JsonSerializerOptions { NumberHandling = JsonNumberHandling.AllowReadingFromString }));
     }
 
     /// <summary>A magnitude too large for the type overflows, as the decimal form always has.</summary>

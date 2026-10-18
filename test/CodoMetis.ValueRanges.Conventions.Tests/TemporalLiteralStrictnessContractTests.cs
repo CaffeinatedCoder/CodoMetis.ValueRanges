@@ -34,13 +34,17 @@ public sealed class TemporalLiteralStrictnessContractTests
     private static readonly Dictionary<Type, string[]> NonIso = new()
     {
         [typeof(DateOnly)]       = ["01.02.2027"],
-        [typeof(DateTime)]       = ["01.02.2027 09:30:00", "2027-02-01"],
-        [typeof(DateTimeOffset)] = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01"],
+        // +0530 and +5:30 are offsets PostgreSQL reads and the strict grammar refuses; .NET's zzz read
+        // them for DateTimeOffset alone until #234.
+        [typeof(DateTime)]       = ["01.02.2027 09:30:00", "2027-02-01", "2027-02-01T09:30:00+0530", "2027-02-01T09:30:00+5:30"],
+        [typeof(DateTimeOffset)] = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01",
+                                    "2027-02-01T09:30:00+0530", "2027-02-01 09:30:00-0530", "2027-02-01T09:30:00+5:30"],
         [typeof(TimeOnly)]       = ["9:30 AM", "9:30"],
         [typeof(LocalDate)]      = ["01.02.2027"],
-        [typeof(LocalDateTime)]  = ["01.02.2027 09:30:00", "2027-02-01", "2027-02-01T9:30"],
+        [typeof(LocalDateTime)]  = ["01.02.2027 09:30:00", "2027-02-01", "2027-02-01T9:30", "2027-02-01T09:30:00+0530",
+                                    "2027-02-01T09:30:00+5:30"],
         [typeof(Instant)]        = ["01.02.2027 09:30:00 +01:00", "2027-02-01T09:30:00", "2027-02-01",
-                                    "2027-02-01T09:30"],
+                                    "2027-02-01T09:30", "2027-02-01T09:30:00+0530", "2027-02-01T09:30:00+5:30"],
         [typeof(LocalTime)]      = ["9:30 AM", "9:30"],
         [typeof(YearMonth)]      = ["02.2027"]
     };
