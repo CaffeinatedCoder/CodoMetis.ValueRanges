@@ -136,13 +136,20 @@ internal static class IsoTemporal
         if (TryParseInfinity(s, out var positive)) return positive ? DateTimeOffset.MaxValue : DateTimeOffset.MinValue;
 
         var trimmed = TruncateFraction(s);
+
+        // The offset is Z, ±HH, ±HH:mm or ±HH:mm:ss, as for a DateTime; .NET's zzz would also read
+        // +0530 and +5:30, which the grammar and the sibling types refuse (#234).
+        if (!trimmed.EndsWith('Z') && OffsetLength(trimmed) == 0) throw InvalidDateTimeOffset();
+
         return DateTimeOffset.TryParseExact(trimmed, DateTimeOffsetFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
             || TryParseWideOffset(trimmed, out value)
             ? value
-            : throw new FormatException(
-                "Expected an ISO 8601 date and time with an offset, yyyy-MM-dd then T or a space then "
-              + "HH:mm[:ss[.fffffff]] then Z, ±HH, ±HH:mm or ±HH:mm:ss, or infinity / -infinity.");
+            : throw InvalidDateTimeOffset();
     }
+
+    private static FormatException InvalidDateTimeOffset()
+        => new("Expected an ISO 8601 date and time with an offset, yyyy-MM-dd then T or a space then "
+             + "HH:mm[:ss[.fffffff]] then Z, ±HH, ±HH:mm or ±HH:mm:ss, or infinity / -infinity.");
 
     // The date-time part of a value whose offset DateTimeOffset cannot hold, read as a wall clock.
     private static readonly string[] WallClockFormats =
