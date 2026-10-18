@@ -53,6 +53,7 @@ public sealed class SetWrapperParityTests
         [typeof(int)]            = [int.MinValue, int.MaxValue],
         [typeof(long)]           = [long.MinValue, long.MaxValue],
         [typeof(decimal)]        = [decimal.MinValue, decimal.MaxValue, 0.0000000000000000000000000001m, 1.10m],
+        [typeof(float)]          = [float.MinValue, float.MaxValue, float.Epsilon, -0f, 0.1f, 1e6f, 16777217f],
         [typeof(double)]         = [double.MinValue, double.MaxValue, double.Epsilon, -0d, 2.9802322387695312e-08, 4.1045368012983762e-289, 1e23],
         [typeof(DateOnly)]       = [DateOnly.MinValue, DateOnly.MaxValue],
         [typeof(TimeOnly)]       = [TimeOnly.MinValue, TimeOnly.MaxValue],

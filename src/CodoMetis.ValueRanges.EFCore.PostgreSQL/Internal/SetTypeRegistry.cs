@@ -73,6 +73,9 @@ internal static class SetTypeRegistry
             [typeof(Float64Set<>)] = Bridged<double>(
                 "double precision", "G17", static text => Float64Set.ParseValue(text, Invariant),
                 static value => value.ToString("G17", Invariant), requireRoundTrip: true),
+            [typeof(Float32Set<>)] = Bridged<float>(
+                "real", "G9", static text => Float32Set.ParseValue(text, Invariant),
+                static value => value.ToString("G9", Invariant), requireRoundTrip: true),
 
             // ParseExact, not Parse: an element that ignores the format specifier and hands back
             // its own default form is a contract violation, and the strict parse turns it into
@@ -195,6 +198,7 @@ internal static class SetTypeRegistry
             new SetTypeDefinition<Int64Set, long>("bigint"),
             new SetTypeDefinition<DecimalSet, decimal>("numeric"),
             new SetTypeDefinition<Float64Set, double>("double precision", FiniteFloat.Require),
+            new SetTypeDefinition<Float32Set, float>("real", FiniteFloat.Require),
             // The temporal sets write a JSON document as their store values (storeText): truncated
             // to the store's microsecond as Npgsql truncates them, the extremes as infinity.
             new SetTypeDefinition<DateSet, DateOnly>("date", storeText: true),

@@ -43,6 +43,11 @@ internal static class RangeTypeRegistry
             new RangeTypeDefinition<Float64Range, double>(
                 "float8range", "float8multirange", "double precision", normalizeValue: FiniteFloat.Require),
 
+            // `float4range` likewise: `CREATE TYPE float4range AS RANGE (subtype = float4)`. There is no
+            // subtype_diff to leave out — float4mi returns real, and a diff function must return float8.
+            new RangeTypeDefinition<Float32Range, float>(
+                "float4range", "float4multirange", "real", normalizeValue: FiniteFloat.Require),
+
             // The temporal definitions end in StoreTemporal: bounds truncated to the store's
             // microsecond and the extremes written as infinity, exactly as Npgsql sends them, so a
             // JSON document and a SQL literal carry the value a parameter would.

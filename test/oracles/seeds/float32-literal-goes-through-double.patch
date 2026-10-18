@@ -1,0 +1,17 @@
+Seed: Float32Range and Float32Set format a float through double, so 0.1f is written 0.10000000149011612 and 1e6f is 1000000 where PostgreSQL prints 0.1 and 1e+06; every text still reads back as the same real, so only the text shows it
+Oracles: FloatDomainParityTests
+Fails: the float4out text sweep, on most of its floats
+History: #153, measured against PostgreSQL 16, 17 and 18
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs b/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
+index 2c1533f..7e2aaeb 100644
+--- a/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
++++ b/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
+@@ -143,6 +143,7 @@ internal static class FloatLiteral
+     /// <summary>The text <c>float4out</c> prints for a finite <paramref name="value"/>.</summary>
+     internal static string Format(float value)
+     {
++        if (float.IsFinite(value)) return Format((double)value);
+         if (value == 0) return float.IsNegative(value) ? "-0" : "0";
+ 
+         var bits     = BitConverter.SingleToInt32Bits(RequireFinite(value, "Float32"));

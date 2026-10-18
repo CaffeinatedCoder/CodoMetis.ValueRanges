@@ -793,19 +793,22 @@
   {
     "id": "E45-float8range-custom-type-setup",
     "source": "docs/efcore.md#custom-range-types",
-    "quote": "Both also need `EnableUnmappedTypes()` on the Npgsql data source, so Npgsql can send a type it doesn't know by name. The value sets need nothing extra: `Float64Set` is a native `double precision[]` column.",
-    "claim": "With HasPostgresRange(\"float8range\", \"double precision\") and EnableUnmappedTypes(), Float64Range maps to float8range, RangeSet<Float64Range, double> to float8multirange and Float64Set and Float64Set<T> to double precision[]; every shape round-trips and the range operators agree with memory.",
+    "quote": "All three also need `EnableUnmappedTypes()` on the Npgsql data source, so Npgsql can send a type it doesn't know by name. The value sets need nothing extra: `Float64Set` is a native `double precision[]` column, and `Float32Set` a native `real[]` column.",
+    "claim": "With HasPostgresRange(\"float8range\", \"double precision\") and EnableUnmappedTypes(), Float64Range maps to float8range, RangeSet<Float64Range, double> to float8multirange and Float64Set and Float64Set<T> to double precision[]; every shape round-trips and the range operators agree with memory. Likewise HasPostgresRange(\"float4range\", \"real\") maps Float32Range to float4range, RangeSet<Float32Range, float> to float4multirange and Float32Set and Float32Set<T> to real[].",
     "oracle": "claim",
     "surfaces": [
       "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
       "Float64Range.CreateFinite",
-      "Float64Set.From"
+      "Float64Set.From",
+      "Float32Range.CreateFinite",
+      "Float32Set.From"
     ],
     "heldBy": [
-      "Float64TranslationTests",
       "CustomRangeCatalogueTests",
-      "ShapeMatrixParityTests",
-      "DifferentialFuzzParityTests"
+      "DifferentialFuzzParityTests",
+      "Float32TranslationTests",
+      "Float64TranslationTests",
+      "ShapeMatrixParityTests"
     ]
   },
   {
@@ -855,6 +858,38 @@
       "FloatDomainParityTests",
       "Float64DomainTests",
       "Float64TranslationTests"
+    ]
+  },
+  {
+    "id": "E49-float4-text-is-postgres",
+    "source": "docs/efcore.md#float64range-and-the-custom-float8range-type",
+    "quote": "A `float` prints as `real` does: `1e6f` is `1e+06`, and `0.1f` is `0.1`, never the `0.10000000149011612` of the same value as a `double`.",
+    "claim": "Float32Range and Float32Set format a float exactly as float4out does at extra_float_digits 1, for 20,000 sampled floats, in ToString, the SQL literal ('0.1'::real, ARRAY['0.1','1e+06']::real[]) and JSON; with the float formatted through double the text sweep fails.",
+    "oracle": "differential",
+    "surfaces": [
+      "Float32Range.FormatValue",
+      "Float32Set.FormatValue"
+    ],
+    "heldBy": [
+      "FloatDomainParityTests",
+      "Float32DomainTests",
+      "Float32TranslationTests"
+    ]
+  },
+  {
+    "id": "E50-float4range-no-diff-possible",
+    "source": "docs/efcore.md#float64range-and-the-custom-float8range-type",
+    "quote": "Create it with `HasPostgresRange(\"float4range\", \"real\")`. There is no `subtype_diff` to leave out: `float4mi` returns `real`, and PostgreSQL accepts only a function that returns `double precision`.",
+    "claim": "The migration for HasPostgresRange(\"float4range\", \"real\") carries the annotation 'real,,,,' and creates float4range over real with no subtype_diff (pg_range.rngsubdiff '-'), with float4multirange beside it; every shape pair and the algebra agree with memory.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "Float32Range.CreateFinite"
+    ],
+    "heldBy": [
+      "Float32TranslationTests",
+      "CustomRangeCatalogueTests",
+      "ShapeMatrixParityTests"
     ]
   },
   {
@@ -2644,6 +2679,7 @@
       "RangeSetJsonConverter.Read"
     ],
     "heldBy": [
+      "Float32DomainTests",
       "Float64DomainTests",
       "FloatDomainParityTests"
     ]
@@ -2664,8 +2700,9 @@
       "ValueSetExtensions.Remove"
     ],
     "heldBy": [
-      "FloatDomainParityTests",
-      "Float64DomainTests"
+      "Float32DomainTests",
+      "Float64DomainTests",
+      "FloatDomainParityTests"
     ]
   },
   {
@@ -2702,6 +2739,25 @@
     "heldBy": [
       "FloatDomainParityTests",
       "Float64TranslationTests"
+    ]
+  },
+  {
+    "id": "W05-float32-finite-only",
+    "source": "docs/why.md#why-doubles-are-finite-only",
+    "quote": "`Float32Range` and `Float32Set` do the same for `float`.",
+    "claim": "Every Float32Range factory and both unbounded constructors, Float32Set.From and Float32Set<T>.From throw ArgumentException for NaN and the infinities; Parse and JSON refuse them and out-of-range real text (1e39, 1e-46); a stored float4range, float4multirange or real[] value holding them throws when EF Core loads it, and with the guard removed [5,NaN) loads as empty.",
+    "oracle": "exception",
+    "surfaces": [
+      "Float32Range.CreateFinite",
+      "Float32Range.CreateUnboundedStart",
+      "Float32Range.CreateUnboundedEnd",
+      "Float32Range.Parse",
+      "Float32Set.From",
+      "Float32Set.Parse"
+    ],
+    "heldBy": [
+      "Float32DomainTests",
+      "FloatDomainParityTests"
     ]
   }
 ]

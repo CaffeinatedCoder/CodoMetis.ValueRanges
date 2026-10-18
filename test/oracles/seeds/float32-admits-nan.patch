@@ -1,0 +1,18 @@
+Seed: Float32Range and Float32Set admit NaN and the infinities, so [5,NaN) stored by PostgreSQL loads as the empty range and {1.5,NaN} loads as a set PostgreSQL orders the other way
+Oracles: FloatDomainParityTests
+Fails: the stored float4range [5,NaN) and float4multirange {[5,NaN)} rows load as empty instead of being refused
+History: #153, the finite guard of the float families
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs b/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
+index 2c1533f..da3faae 100644
+--- a/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
++++ b/src/CodoMetis.ValueRanges/Internals/FloatLiteral.cs
+@@ -49,7 +49,7 @@ internal static class FloatLiteral
+ 
+     /// <inheritdoc cref="RequireFinite(double, string, string?)"/>
+     internal static float RequireFinite(float value, string typeName, string? paramName = null)
+-        => float.IsFinite(value) ? value : throw NotFinite(value.ToString(CultureInfo.InvariantCulture), typeName, paramName);
++        => value;
+ 
+     private static ArgumentException NotFinite(string value, string typeName, string? paramName)
+         => new($"{typeName} holds finite numbers only; got {value}. PostgreSQL sorts NaN above every number, where "

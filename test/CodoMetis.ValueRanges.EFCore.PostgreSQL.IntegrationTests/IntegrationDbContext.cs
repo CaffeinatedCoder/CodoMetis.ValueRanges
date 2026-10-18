@@ -56,6 +56,13 @@ public partial class Reservation
 
     public double Ratio { get; set; }
 
+    // float4range, likewise custom (#153).
+    public Float32Range Load { get; set; } = Float32Range.Empty;
+
+    public RangeSet<Float32Range, float> LoadBands { get; set; } = RangeSet<Float32Range, float>.Empty;
+
+    public float Share { get; set; }
+
     // Month granularity, stored as a month-aligned daterange — no custom type needed.
     public YearMonthRange BillingPeriod { get; set; } = YearMonthRange.Empty;
 
@@ -115,6 +122,8 @@ public partial class Reservation
     public DecimalSet Rates { get; set; } = DecimalSet.Empty;
 
     public Float64Set Weights { get; set; } = Float64Set.Empty;
+
+    public Float32Set Shares { get; set; } = Float32Set.Empty;
 
     public DateSet BlackoutDates { get; set; } = DateSet.Empty;
 
@@ -256,6 +265,7 @@ public sealed class IntegrationDbContext(string? connectionString = null) : DbCo
         // CREATE TYPE float8range AS RANGE (SUBTYPE = double precision), with no subtype_diff: float8mi
         // overflows building a GiST index over extreme values (#153).
         modelBuilder.HasPostgresRange("float8range", "double precision");
+        modelBuilder.HasPostgresRange("float4range", "real");
     }
 }
 

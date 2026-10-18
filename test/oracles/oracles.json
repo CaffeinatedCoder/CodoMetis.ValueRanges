@@ -291,7 +291,7 @@
     "class": "FloatDomainParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
-    "against": "PostgreSQL's float8out text for 20,000 doubles, and range_in, array_in and EF Core's read leg for the same float8range, double precision[] and float8multirange literals, with the non-finite values the model refuses",
+    "against": "PostgreSQL's float8out and float4out text for 20,000 doubles and 20,000 floats, and range_in, array_in and EF Core's read leg for the same float8range, float4range, double precision[], real[] and multirange literals, with the non-finite values the model refuses",
     "needs": [
       "docker"
     ]

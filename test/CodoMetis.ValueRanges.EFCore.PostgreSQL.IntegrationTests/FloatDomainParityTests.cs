@@ -7,8 +7,9 @@ using NpgsqlTypes;
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
 /// <summary>
-/// The float families against the server they mirror (#153): <see cref="Float64Range"/> over the custom
-/// <c>float8range</c> and <see cref="Float64Set"/> over <c>double precision[]</c>. Three questions, each
+/// The float families against the server they mirror (#153): <see cref="Float64Range"/> and
+/// <see cref="Float32Range"/> over the custom <c>float8range</c> and <c>float4range</c>, and
+/// <see cref="Float64Set"/> and <see cref="Float32Set"/> over <c>double precision[]</c> and <c>real[]</c>. Three questions, each
 /// asked of PostgreSQL rather than of a table copied from it.
 /// </summary>
 /// <remarks>
@@ -90,6 +91,63 @@ public sealed class FloatDomainParityTests
             $"{failures.Count} of {values.Count} doubles are written differently from float8out:\n" + string.Join("\n", failures.Take(25)));
     }
 
+    private static readonly float[] SingleEdges =
+    [
+        0, -0f, 1, -1, 0.1f, 0.3f, 123456.7f, 999999.9f, 1e6f, 1e7f, 16777216f, 16777217f, -90185504f, 0.0001f, 0.00001f,
+        float.Epsilon, -float.Epsilon, float.MaxValue, float.MinValue, 1.17549435e-38f, 3.14159265f, MathF.BitIncrement(1f)
+    ];
+
+    /// <summary>
+    /// The same sweep for <c>real</c>: <c>float4out</c> switches to exponent form at <c>1e+06</c>, and its
+    /// digits differ from .NET's for about one float in two hundred. A float formatted through
+    /// <see cref="double"/> — <c>0.10000000149011612</c> for <c>0.1f</c> — reads back as the same float,
+    /// so only the text shows it.
+    /// </summary>
+    [TestMethod]
+    public async Task Text_IsWhatFloat4OutPrints()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var random = new Random(1532);
+        var values = new List<float>(SingleEdges);
+        while (values.Count < TextSamples)
+        {
+            var value = random.Next(4) switch
+            {
+                0 => BitConverter.Int32BitsToSingle(random.Next() ^ (random.Next(2) << 31)),
+                1 => (float)Math.Round(random.NextDouble() * Math.Pow(10, random.Next(-8, 12)), random.Next(0, 6)),
+                2 => MathF.ScaleB(1f, random.Next(-149, 128)) * (random.Next(2) == 0 ? 1 : -1),
+                _ => MathF.BitDecrement(MathF.ScaleB(1f, random.Next(-126, 128)))
+            };
+            if (float.IsFinite(value)) values.Add(value);
+        }
+
+        await using var connection = new NpgsqlConnection(ContainerLifecycle.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT v::text, float4range(v, v, '[]')::text FROM unnest(@values) AS v", connection);
+        command.Parameters.Add(new NpgsqlParameter<float[]>("values", values.ToArray()));
+
+        var failures = new List<string>();
+        var index    = 0;
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var value    = values[index++];
+            var expected = reader.GetString(0);
+            var element  = Float32Set.FormatValue(value, null, CultureInfo.InvariantCulture);
+            var range    = Float32Range.CreateFinite(value, value, true, true).ToString();
+
+            if (element != expected || range != reader.GetString(1))
+                failures.Add($"  {value.ToString("G9", CultureInfo.InvariantCulture)} (bits {BitConverter.SingleToInt32Bits(value):X8}): "
+                           + $"PostgreSQL '{expected}' / '{reader.GetString(1)}', family '{element}' / '{range}'");
+        }
+
+        Assert.AreEqual(values.Count, index, "PostgreSQL returned a different number of rows.");
+        Assert.IsEmpty(failures,
+            $"{failures.Count} of {values.Count} floats are written differently from float4out:\n" + string.Join("\n", failures.Take(25)));
+    }
+
     /// <summary>Range literals: grammar, the guard, the extremes, continuity and <c>-0</c>.</summary>
     private static readonly string[] RangeLiterals =
     [
@@ -108,6 +166,20 @@ public sealed class FloatDomainParityTests
     ];
 
     private static readonly string[] MultirangeLiterals = ["{[1,2),[3,4)}", "{[5,NaN)}", "{[1,2),[3,Infinity)}", "{}"];
+
+    /// <summary>The <c>real</c> literals: its own range and the out-of-range texts strtof reports.</summary>
+    private static readonly string[] SingleRangeLiterals =
+    [
+        "[0.1,0.3)", "[ 1.5 , 2.5 )", "(1,1.0000001)", "[-0,0]", "[1e-45,3.4028235e38]", "[1e6,1e7)", "[16777217,16777218]",
+        "[5,NaN)", "[NaN,5)", "[1,Infinity)", "(,-inf]", "[0x10,20)", "[1e39,2)", "[1,3.4028236e38)", "[1e-46,1)", "[1,)", "empty"
+    ];
+
+    private static readonly string[] SingleArrayLiterals =
+    [
+        "{0.1,0.3}", "{-0,0}", "{16777217,16777216}", "{1e-40}", "{1.5,NaN}", "{Infinity}", "{1e39}", "{1e-46}", "{}"
+    ];
+
+    private static readonly string[] SingleMultirangeLiterals = ["{[0.1,0.2),[0.3,0.4)}", "{[5,NaN)}", "{}"];
 
     [TestMethod]
     public async Task Literals_AndTheStore_AgreeWithPostgres_OrRefuseANonFiniteValue()
@@ -143,6 +215,21 @@ public sealed class FloatDomainParityTests
             refused += await Compare(literal, "float8multirange", "Bands",
                                      text => RangeSet<Float64Range, double>.TryParse(text, CultureInfo.InvariantCulture, out var b) ? b.ToString() : null,
                                      row => row.Bands?.ToString());
+
+        foreach (var literal in SingleRangeLiterals)
+            refused += await Compare(literal, "float4range", "SingleRange",
+                                     text => Float32Range.TryParse(text, CultureInfo.InvariantCulture, out var r) ? r.ToString() : null,
+                                     row => row.SingleRange?.ToString());
+
+        foreach (var literal in SingleArrayLiterals)
+            refused += await Compare(literal, "real[]", "SingleSet",
+                                     text => Float32Set.TryParse(text, CultureInfo.InvariantCulture, out var s) ? s.ToString() : null,
+                                     row => row.SingleSet?.ToString());
+
+        foreach (var literal in SingleMultirangeLiterals)
+            refused += await Compare(literal, "float4multirange", "SingleBands",
+                                     text => RangeSet<Float32Range, float>.TryParse(text, CultureInfo.InvariantCulture, out var b) ? b.ToString() : null,
+                                     row => row.SingleBands?.ToString());
 
         Assert.IsEmpty(failures, "The float families disagree with PostgreSQL:\n" + string.Join("\n", failures));
         Assert.IsGreaterThanOrEqualTo(10, refused, "Fewer non-finite values were refused than the corpus holds — is the guard reached?");
@@ -258,6 +345,15 @@ public sealed class FloatDomainParityTests
             error = await Assert.ThrowsAsync<Exception>(() => context.Reservations.Where(r => r.Weights.Contains(value)).ToListAsync());
             Assert.IsTrue(Chain(error).Any(ex => ex is ArgumentException && ex.Message.Contains("finite numbers only")),
                           $"Weights.Contains({value}) failed, but not with the finite guard: {error}");
+
+            var single = (float)value;
+            error = await Assert.ThrowsAsync<Exception>(() => context.Reservations.Where(r => r.Load.Contains(single)).ToListAsync());
+            Assert.IsTrue(Chain(error).Any(ex => ex is ArgumentException && ex.Message.Contains("finite numbers only")),
+                          $"Load.Contains({single}) failed, but not with the finite guard: {error}");
+
+            error = await Assert.ThrowsAsync<Exception>(() => context.Reservations.Where(r => r.Shares.Contains(single)).ToListAsync());
+            Assert.IsTrue(Chain(error).Any(ex => ex is ArgumentException && ex.Message.Contains("finite numbers only")),
+                          $"Shares.Contains({single}) failed, but not with the finite guard: {error}");
         }
     }
 
@@ -349,6 +445,12 @@ public sealed class FloatRow
     public Float64Set? Set { get; set; }
 
     public RangeSet<Float64Range, double>? Bands { get; set; }
+
+    public Float32Range? SingleRange { get; set; }
+
+    public Float32Set? SingleSet { get; set; }
+
+    public RangeSet<Float32Range, float>? SingleBands { get; set; }
 }
 
 /// <summary>A database of its own for <see cref="FloatDomainParityTests"/>, created by <c>EnsureCreated</c>.</summary>
@@ -365,5 +467,6 @@ public sealed class FloatDomainContext(string connectionString) : DbContext
     {
         modelBuilder.Entity<FloatRow>().ToTable("float_rows").Property(row => row.Id).ValueGeneratedNever();
         modelBuilder.HasPostgresRange("float8range", "double precision");
+        modelBuilder.HasPostgresRange("float4range", "real");
     }
 }

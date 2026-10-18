@@ -115,6 +115,12 @@ internal static class FuzzDomains
                 double.MinValue, double.MaxValue, 0d, [double.MinValue, double.MaxValue, double.Epsilon, -double.Epsilon],
                 [(v, k) => v + k, (v, k) => v + k * 0.5, (v, k) => Ulps(v, k), (v, k) => v * Math.Pow(10, k)]),
 
+            // Finite floats, stepped the same ways; a float that went through double would show in the
+            // literal before it showed in a value.
+            var t when t == typeof(float) => new FuzzDomain<float>(
+                float.MinValue, float.MaxValue, 0f, [float.MinValue, float.MaxValue, float.Epsilon, -float.Epsilon],
+                [(v, k) => v + k, (v, k) => v + k * 0.5f, (v, k) => UlpsF(v, k), (v, k) => v * MathF.Pow(10, k)]),
+
             // DateOnly.MinValue and MaxValue reach PostgreSQL as -infinity and infinity; the edges
             // one day inside them are ordinary dates on both sides.
             var t when t == typeof(DateOnly) => new FuzzDomain<DateOnly>(
@@ -185,6 +191,13 @@ internal static class FuzzDomains
         for (var i = 0L; i < Math.Abs(count); i++)
             value = count < 0 ? Math.BitDecrement(value) : Math.BitIncrement(value);
         return double.IsFinite(value) ? value : throw new OverflowException();
+    }
+
+    private static float UlpsF(float value, long count)
+    {
+        for (var i = 0L; i < Math.Abs(count); i++)
+            value = count < 0 ? MathF.BitDecrement(value) : MathF.BitIncrement(value);
+        return float.IsFinite(value) ? value : throw new OverflowException();
     }
 
     private static TimeOnly AddTime(TimeOnly value, long ticks)
@@ -286,6 +299,7 @@ internal static class FuzzDomains
         LocalTime t      => LocalTimePattern.ExtendedIso.Format(t),
         YearMonth m      => YearMonthPattern.Iso.Format(m),
         double d         => d.ToString("G17", CultureInfo.InvariantCulture),
+        float f          => f.ToString("G9", CultureInfo.InvariantCulture),
         IFormattable f   => f.ToString(null, CultureInfo.InvariantCulture),
         _                => value.ToString()!
     };

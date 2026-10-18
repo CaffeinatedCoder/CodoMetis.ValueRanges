@@ -443,79 +443,9 @@
   {
     "family": "core value sets",
     "unit": "Float64Set",
-    "member": "From(IEnumerable<$T>)",
-    "kind": "lone body",
-    "reason": "refuses NaN and the infinities (RequireFinite): PostgreSQL sorts NaN above every number and .NET below, so no order over one could agree (#153); the other families' elements are valid by type"
-  },
-  {
-    "family": "core value sets",
-    "unit": "Float64Set",
-    "member": "From(ReadOnlySpan<$T>)",
-    "kind": "lone body",
-    "reason": "refuses NaN and the infinities (RequireFinite): PostgreSQL sorts NaN above every number and .NET below, so no order over one could agree (#153); the other families' elements are valid by type"
-  },
-  {
-    "family": "core value sets",
-    "unit": "Float64Set",
-    "member": "FormatValue($T, string?, IFormatProvider?)",
-    "kind": "lone body",
-    "reason": "the text PostgreSQL's float8out prints (FloatLiteral): .NET's shortest form differs in its digits for about one double in three hundred and does not read back at all for 2^-25 and 2^-958 (#153)"
-  },
-  {
-    "family": "core value sets",
-    "unit": "Float64Set",
     "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
     "kind": "lone body",
     "reason": "PostgreSQL's float8in grammar for a finite number (FloatLiteral): refuses NaN, the infinities, hexadecimal, and a number double.Parse would round to infinity or zero where the server reports it out of range (#153)"
-  },
-  {
-    "family": "core value sets",
-    "unit": "Float64Set",
-    "member": "RequireFinite($T)",
-    "kind": "extra",
-    "reason": "the finite guard From and NormalizeElement share (#153); the other families' elements are valid by type"
-  },
-  {
-    "family": "core wrapper arities",
-    "unit": "Float64Set<TElement>",
-    "member": "From(IEnumerable<$T>)",
-    "kind": "lone body",
-    "reason": "refuses an element wrapping NaN or an infinity, as Float64Set refuses the double (#153)"
-  },
-  {
-    "family": "core wrapper arities",
-    "unit": "Float64Set<TElement>",
-    "member": "From(ReadOnlySpan<$T>)",
-    "kind": "lone body",
-    "reason": "refuses an element wrapping NaN or an infinity, as Float64Set refuses the double (#153)"
-  },
-  {
-    "family": "core wrapper arities",
-    "unit": "Float64Set<TElement>",
-    "member": "FormatValue($T, string?, IFormatProvider?)",
-    "kind": "lone body",
-    "reason": "asks the element for G17, then writes the text float8out prints for the double it wraps, so the literal is Float64Set's: the element's own G17 text is exact but not PostgreSQL's (#153)"
-  },
-  {
-    "family": "core wrapper arities",
-    "unit": "Float64Set<TElement>",
-    "member": "IValueSetFactory<$TYPE<$T>, $T>.ElementJsonConverter",
-    "kind": "lone body",
-    "reason": "a JSON number holding the text float8out prints, as Float64Set writes it; the decimal converter would read through decimal, which has neither the range nor the binary fractions of a double"
-  },
-  {
-    "family": "core wrapper arities",
-    "unit": "Float64Set<TElement>",
-    "member": "ParseElement(string)",
-    "kind": "lone body",
-    "reason": "hands the element the parsed double's G17 text: the default form reads back as a different double for 2^-25 and 2^-958 (#153)"
-  },
-  {
-    "family": "core wrapper arities",
-    "unit": "Float64Set<TElement>",
-    "member": "RequireFinite($T)",
-    "kind": "extra",
-    "reason": "the finite guard From and NormalizeElement share, read through the element's G17 text (#153); the other arities' primitives are valid by type"
   },
   {
     "family": "core wrapper arities",
@@ -523,27 +453,6 @@
     "member": "RoundTripFormat",
     "kind": "lone body",
     "reason": "G17 reads back as the same double for every value; .NET's default shortest form does not for 2^-25 and 2^-958, so a wrapper asked for it would store them one unit lower (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "CreateFinite($T, $T, bool, bool)",
-    "kind": "lone body",
-    "reason": "refuses NaN and the infinities before comparing: under CompareTo [5,NaN) is inverted and empty, while PostgreSQL holds it as a range containing 1e308 (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "FormatValue($T, string?, IFormatProvider?)",
-    "kind": "lone body",
-    "reason": "the text PostgreSQL's float8out prints (FloatLiteral): .NET's shortest form differs in its digits for about one double in three hundred and does not read back at all for 2^-25 and 2^-958 (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "IRange<$T>.NormalizeElement($T)",
-    "kind": "extra",
-    "reason": "a NaN or infinite operand of Contains and Clamp is refused, not answered: [0,) contains NaN in PostgreSQL and not under CompareTo (#153); every other range's element type is valid by type"
   },
   {
     "family": "core ranges",
@@ -560,87 +469,59 @@
     "reason": "PostgreSQL's float8in grammar for a finite number (FloatLiteral): refuses NaN, the infinities, hexadecimal, and a number double.Parse would round to infinity or zero where the server reports it out of range (#153)"
   },
   {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "RequireFinite($T, string)",
-    "kind": "extra",
-    "reason": "the finite guard every factory, both unbounded constructors and NormalizeElement share (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedEnd..ctor($T, bool)",
-    "kind": "extra",
-    "reason": "checks the bound is finite; a positional record has no constructor body to check it in, and its init accessor would let `with { Start = double.NaN }` past any check (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedEnd.<type>",
-    "kind": "lone body",
-    "reason": "not a positional record, so the finite check in its constructor cannot be bypassed through `with` (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedEnd.Deconstruct($T, bool)",
-    "kind": "extra",
-    "reason": "the Deconstruct a positional record synthesizes, written out because this one is not positional (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedEnd.Start",
-    "kind": "extra",
-    "reason": "the property a positional record synthesizes, get-only because this one is not positional: no init accessor to bypass the finite check (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedEnd.StartInclusive",
-    "kind": "lone body",
-    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedStart..ctor($T, bool)",
-    "kind": "extra",
-    "reason": "checks the bound is finite; a positional record has no constructor body to check it in, and its init accessor would let `with { End = double.NaN }` past any check (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedStart.<type>",
-    "kind": "lone body",
-    "reason": "not a positional record, so the finite check in its constructor cannot be bypassed through `with` (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedStart.Deconstruct($T, bool)",
-    "kind": "extra",
-    "reason": "the Deconstruct a positional record synthesizes, written out because this one is not positional (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedStart.End",
-    "kind": "extra",
-    "reason": "the property a positional record synthesizes, get-only because this one is not positional: no init accessor to bypass the finite check (#153)"
-  },
-  {
-    "family": "core ranges",
-    "unit": "Float64Range",
-    "member": "UnboundedStart.EndInclusive",
-    "kind": "lone body",
-    "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
-  },
-  {
     "family": "efcore wrapper bridges",
     "unit": "Float64Set<>",
     "member": "formatPrimitive",
     "kind": "lone body",
     "reason": "G17 reads back as the same double for every value; the default form does not for 2^-25 and 2^-958 (#153)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "StringSet",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "lone body",
+    "reason": "text has one rule the column enforces and the others do not: a NUL character cannot be stored, so Contains, Add and Remove refuse the probe From refuses (TextElement, #133); the float families refuse NaN and the infinities instead (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "StringSet<TElement>",
+    "member": "IValueSet<$T>.NormalizeElement($T)",
+    "kind": "lone body",
+    "reason": "the element's text form is what the text column holds, so the NUL rule applies to it on every construction path (TextElement, #133); the float arities refuse an element wrapping NaN or an infinity instead (#153)"
+  },
+  {
+    "family": "core value sets",
+    "unit": "Float32Set",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "PostgreSQL's float4in grammar for a finite number (FloatLiteral.ParseSingle), read straight to float as strtof does: a detour through double would round twice; Float64Set reads float8in's"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range",
+    "member": "ParseValue(ReadOnlySpan<char>, IFormatProvider?)",
+    "kind": "lone body",
+    "reason": "PostgreSQL's float4in grammar for a finite number (FloatLiteral.ParseSingle), read straight to float as strtof does: a detour through double would round twice; Float64Range reads float8in's"
+  },
+  {
+    "family": "core ranges",
+    "unit": "Float32Range",
+    "member": "Length",
+    "kind": "lone body",
+    "reason": "a float span, the IEEE difference End - Start, which may be +Infinity for [MinValue, MaxValue]: an answer, not a bound (#153)"
+  },
+  {
+    "family": "core wrapper arities",
+    "unit": "Float32Set<TElement>",
+    "member": "RoundTripFormat",
+    "kind": "lone body",
+    "reason": "G9 reads back as the same float for every value; Float64Set<TElement> pins G17 for double (#153)"
+  },
+  {
+    "family": "efcore wrapper bridges",
+    "unit": "Float32Set<>",
+    "member": "formatPrimitive",
+    "kind": "lone body",
+    "reason": "G9 reads back as the same float for every value, as G17 does for the double bridge (#153)"
   }
 ]

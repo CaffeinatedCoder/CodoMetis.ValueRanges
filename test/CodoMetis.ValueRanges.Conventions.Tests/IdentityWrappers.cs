@@ -123,6 +123,7 @@ internal static class IdentityParse
         [typeof(long)]           = (Func<string, long>)(s => long.Parse(s, CultureInfo.InvariantCulture)),
         [typeof(decimal)]        = (Func<string, decimal>)(s => decimal.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)),
         [typeof(double)]         = (Func<string, double>)(s => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)),
+        [typeof(float)]          = (Func<string, float>)(s => float.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)),
         [typeof(Guid)]           = (Func<string, Guid>)(s => Guid.Parse(s, CultureInfo.InvariantCulture)),
         [typeof(DateOnly)]       = (Func<string, DateOnly>)(s => DateOnly.Parse(s, CultureInfo.InvariantCulture)),
         [typeof(TimeOnly)]       = (Func<string, TimeOnly>)(s => TimeOnly.Parse(s, CultureInfo.InvariantCulture)),

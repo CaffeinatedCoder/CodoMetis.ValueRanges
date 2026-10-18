@@ -8,6 +8,7 @@ covers all four packages, which share one version number and release together.
 ### Added
 
 - **`Float64Range` maps to the custom `float8range`** (`float8multirange` for `RangeSet<Float64Range, double>`), created with `HasPostgresRange("float8range", "double precision")` and no `subtype_diff`, plus `EnableUnmappedTypes()`. `Float64Set` and `Float64Set<T>` map to `double precision[]`. A stored `NaN` or infinity throws on load, and a `NaN` parameter throws before the query runs ([Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types)).
+- **`Float32Range` maps to the custom `float4range`** (`float4multirange`), created with `HasPostgresRange("float4range", "real")` and `EnableUnmappedTypes()`. `Float32Set` and `Float32Set<T>` map to `real[]` ([Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types)).
 
 ### Fixed
 

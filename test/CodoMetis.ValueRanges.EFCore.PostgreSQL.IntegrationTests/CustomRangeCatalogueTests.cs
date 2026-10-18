@@ -117,4 +117,55 @@ public class CustomRangeCatalogueTests
 
         CollectionAssert.AreEqual(new[] { "Score float8range", "ScoreBands float8multirange", "Weights _float8" }, found);
     }
+
+    /// <summary>
+    /// <c>docs/efcore.md</c>'s custom types table, read back from the catalogue: <c>HasPostgresRange("float4range",
+    /// "real")</c> creates a range type over <c>real</c> with no <c>subtype_diff</c> (#153),
+    /// <c>float4multirange</c> beside it, and the <c>Float32Range</c> columns are of those two types.
+    /// </summary>
+    [TestMethod]
+    public async Task EnsureCreated_CreatesFloat4rangeWithoutASubtypeDiff_AndTheColumnsUseIt()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = new NpgsqlConnectionStringBuilder(ContainerLifecycle.ServerConnectionString)
+        {
+            Database = $"float4range_catalogue_{Guid.NewGuid():N}"
+        }.ConnectionString;
+
+        await using (var context = new IntegrationDbContext(connectionString))
+            Assert.IsTrue(await context.Database.EnsureCreatedAsync(), "EnsureCreated found the fresh database already created.");
+
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        await using (var range = new NpgsqlCommand(
+                         """
+                         SELECT format_type(r.rngsubtype, NULL), m.typname, r.rngsubdiff::text
+                         FROM pg_type t
+                         JOIN pg_range r ON r.rngtypid = t.oid
+                         JOIN pg_type m ON m.oid = r.rngmultitypid
+                         WHERE t.typname = 'float4range' AND t.typtype = 'r'
+                         """, connection))
+        await using (var reader = await range.ExecuteReaderAsync())
+        {
+            Assert.IsTrue(await reader.ReadAsync(), "pg_type has no range type named float4range.");
+            Assert.AreEqual("real", reader.GetString(0));
+            Assert.AreEqual("float4multirange", reader.GetString(1));
+            Assert.AreEqual("-", reader.GetString(2), "float4range was created with a subtype_diff.");
+        }
+
+        await using var columns = new NpgsqlCommand(
+            """
+            SELECT column_name, udt_name FROM information_schema.columns
+            WHERE table_name = 'Reservations' AND column_name IN ('Load', 'LoadBands', 'Shares')
+            ORDER BY column_name
+            """, connection);
+        await using var columnReader = await columns.ExecuteReaderAsync();
+
+        var found = new List<string>();
+        while (await columnReader.ReadAsync()) found.Add($"{columnReader.GetString(0)} {columnReader.GetString(1)}");
+
+        CollectionAssert.AreEqual(new[] { "Load float4range", "LoadBands float4multirange", "Shares _float4" }, found);
+    }
 }
