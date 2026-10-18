@@ -251,6 +251,9 @@ where the two sides disagreed before. The compiler can't show you where, so chec
 - **`RangeSet.Overlaps` on a continuous element type returns `true` for more inputs.** A query and
   the same call in memory already disagreed on them
   ([details](#check-rangesetoverlaps-on-a-continuous-element-type)).
+- **EF Core: `Any` and `Count` over a captured list of ranges return the in-memory answer.** The
+  query already disagreed with memory for lists with overlapping, adjacent or empty ranges, and
+  `EF.Parameter(wanted)` there now throws ([details](#check-any-and-count-over-a-captured-list-of-ranges)).
 
 ### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
 
@@ -299,6 +302,33 @@ set.Intersect(DecimalRange.CreateFinite(3, 5));             // {[3,4)} in both, 
 
 Discrete types (`Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange`) are
 unaffected: their closed canonical form has no exclusive end to stop on.
+
+### Check `Any` and `Count` over a captured list of ranges
+
+Check queries that call `Any`, `Count` or another LINQ operator over a captured list, array or
+other collection of ranges, without a `Contains` on the same list in the same query.
+
+Before 10.0.0 such a list went to PostgreSQL as one parameter, which Npgsql typed as a multirange.
+A multirange merges overlapping and adjacent ranges and drops empty ones, so the query counted the
+merged ranges. Now each range goes as its own parameter and the query reads them from `VALUES`,
+the same way a `Contains` already did:
+
+```csharp
+var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8) };
+// row: Seats = [1,5]
+db.Reservations.Select(r => wanted.Count(w => w.Overlaps(r.Seats)));   // v9: 1   v10: 2, as in memory
+db.Reservations.Select(r => wanted.Count(w => w == r.Seats));          // v9: 0   v10: 1
+
+var withEmpty = new List<Int32Range> { Int32Range.Empty, Int32Range.CreateFinite(1, 5) };
+db.Reservations.Select(r => withEmpty.Any(w => w.IsEmpty()));          // v9: false   v10: true
+```
+
+Two more things change with it:
+
+- **`EF.Parameter(wanted).Any(…)` throws** (`InvalidOperationException`), as
+  `EF.Parameter(wanted).Contains(…)` did since 9.1.0. The message says to remove `EF.Parameter`.
+- **`EF.Constant(wanted)` keeps working.** It was the workaround the EF Core guide gave; you can
+  remove the wrapper or leave it.
 
 ## Migration from v8.x
 

@@ -69,12 +69,13 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     /// infers as a multirange array, which is what it is.
     /// </para>
     /// <para>
-    /// A range collection is switched only when a <c>Contains</c> in the query reads it, because
-    /// <c>Contains</c> is what failed. On its own, <c>Any</c> or <c>Count</c> over it ran: as
-    /// <c>unnest</c> of the parameter Npgsql had typed as a multirange, which merged overlapping and
-    /// adjacent ranges and dropped empty ones. Switching those would change an answer, so it waits for
-    /// the next major (issue #76). A value set collection is switched wherever it is used, because
-    /// every use of one failed.
+    /// Both collections are switched wherever they are used. Until 10.0.0 a range collection was
+    /// switched only when a <c>Contains</c> in the query read it, because <c>Contains</c> is what had
+    /// failed: on its own, <c>Any</c> or <c>Count</c> over it ran, as <c>unnest</c> of the parameter
+    /// Npgsql had typed as a multirange — which merged overlapping and adjacent ranges and dropped
+    /// empty ones, so <c>Count(w =&gt; w.Overlaps(c))</c> over <c>[1,5]</c> and <c>[3,8]</c> was 1
+    /// where memory says 2, without an error (issue #76). Read from <c>VALUES</c> the list is the
+    /// list. An empty collection then reads no rows (<see cref="EmptyCollectionRewriter"/>).
     /// </para>
     /// <para>
     /// Only a collection that would have gone out as one array parameter is changed. A context
@@ -82,33 +83,30 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     /// <see cref="ParameterTranslationMode.MultipleParameters"/>, and a collection wrapped in
     /// <see cref="EF.Constant{T}"/>, already translate, so they keep their mode. A collection wrapped
     /// in <see cref="EF.Parameter{T}"/> asks for the one array parameter that cannot be bound, so it is
-    /// refused here, with what to write instead — a range collection only as the source of
-    /// <c>Contains</c>, for the same reason.
+    /// refused here, with what to write instead.
     /// </para>
     /// <para>
     /// A value set <c>Union</c> computed on the server stays refused under <c>IN</c>: that is decided on
     /// the SQL tree, by <see cref="ValueSetSqlGuard"/>.
     /// </para>
     /// </remarks>
-    private sealed class CollectionParameterExpander(ParameterTranslationMode defaultMode, HashSet<string> rangeContainsSources)
-        : ExpressionVisitor
+    private sealed class CollectionParameterExpander(ParameterTranslationMode defaultMode) : ExpressionVisitor
     {
         public static Expression Expand(Expression query, ParameterTranslationMode defaultMode)
-            => new CollectionParameterExpander(defaultMode, ContainsSourceCollector.Of(query)).Visit(query);
+            => new CollectionParameterExpander(defaultMode).Visit(query);
 
         protected override Expression VisitExtension(Expression node)
             => node is QueryParameterExpression parameter
                && (parameter.TranslationMode ?? defaultMode) == ParameterTranslationMode.Parameter
-               && Element(parameter.Type) is var (_, isSet)
-               && (isSet || rangeContainsSources.Contains(parameter.Name))
+               && Element(parameter.Type) is not null
                    ? new QueryParameterExpression(parameter.Name, parameter.Type, ParameterTranslationMode.MultipleParameters)
                    : base.VisitExtension(node);
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            // Every use of a value set collection failed; a range collection failed only under Contains.
-            if (EFParameterOf(node) is (var set, true)) throw EFParameterRefused(set, isSet: true);
-            if (EFParameterOf(ContainsSource(node)) is (var range, false)) throw EFParameterRefused(range, isSet: false);
+            // Every use of either collection as one parameter is wrong: a value set collection cannot be
+            // bound, and a range collection binds as a multirange, which is not the list.
+            if (EFParameterOf(node) is var (type, isSet)) throw EFParameterRefused(type, isSet);
 
             return base.VisitMethodCall(node);
         }
@@ -118,9 +116,10 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
                  + (isSet
                         ? $"Each {type.Name} is a PostgreSQL array, and PostgreSQL has no array of arrays, so there is "
                         + "no type to bind the collection as. "
-                        : "Npgsql would send it as an array it reads as a multirange rather than an array of ranges. ")
+                        : "Npgsql would send it as an array it reads as a multirange rather than an array of ranges, "
+                        + "which merges overlapping and adjacent ranges and drops empty ones. ")
                  + $"Remove 'EF.Parameter': without it the collection is sent one parameter per {(isSet ? "set" : "range")}, "
-                 + "and Contains translates to IN (@p1, @p2, …).");
+                 + "Contains translates to IN (@p1, @p2, …), and Any or Count read it from VALUES.");
 
         /// <summary>The value set or range type of an <c>EF.Parameter(collection)</c> call.</summary>
         private static (Type Type, bool IsSet)? EFParameterOf(Expression? node)
@@ -128,49 +127,6 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
                && method.DeclaringType == typeof(EF)
                    ? Element(call.Type)
                    : null;
-
-        /// <summary>
-        /// The collection a <c>Contains</c> call searches: <c>Enumerable.Contains(source, item)</c> or an
-        /// instance <c>source.Contains(item)</c> (<c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, …).
-        /// </summary>
-        private static Expression? ContainsSource(Expression node)
-            => node switch
-               {
-                   MethodCallExpression { Method.Name: nameof(Enumerable.Contains), Object: null, Arguments: [var source, _] } call
-                       when call.Method.DeclaringType == typeof(Enumerable) => source,
-                   MethodCallExpression { Method.Name: nameof(Enumerable.Contains), Object: { } source, Arguments: [_] } => source,
-                   _ => null
-               };
-
-        /// <summary>
-        /// Collects the range collection parameters read by a <c>Contains</c>. A captured range collection
-        /// is switched only when one is: <c>Contains</c> over it failed on the server, so nothing that
-        /// worked changes. <c>Any</c> or <c>Count</c> alone read it through <c>unnest</c> of the parameter
-        /// Npgsql typed as a multirange — which ran, and merged overlapping ranges and dropped empty ones —
-        /// so switching those would change an answer; that is issue #76, for the next major.
-        /// </summary>
-        private sealed class ContainsSourceCollector : ExpressionVisitor
-        {
-            private readonly HashSet<string> _names = [];
-
-            public static HashSet<string> Of(Expression node)
-            {
-                var collector = new ContainsSourceCollector();
-                collector.Visit(node);
-                return collector._names;
-            }
-
-            protected override Expression VisitMethodCall(MethodCallExpression node)
-            {
-                if (ContainsSource(node) is QueryParameterExpression { } parameter && Element(parameter.Type) is (_, false))
-                    _names.Add(parameter.Name);
-
-                return base.VisitMethodCall(node);
-            }
-
-            protected override Expression VisitExtension(Expression node)
-                => node is QueryParameterExpression ? node : base.VisitExtension(node);
-        }
 
         /// <summary>
         /// The registered value set or range type a collection type holds, or <see langword="null"/>.

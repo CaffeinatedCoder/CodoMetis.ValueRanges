@@ -936,13 +936,6 @@
     "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
   },
   {
-    "oracle": "CapturedCollectionProbeTests",
-    "row": ", alone: ",
-    "family": "a range collection no Contains reads goes out as one parameter Npgsql types as a multirange: unnest merges and drops empties, Any(==) fails with 42809, timerange cannot be written",
-    "issue": "#76",
-    "method": "Ranges_AnswerAsInMemory"
-  },
-  {
     "oracle": "SetWrapperParityTests",
     "row": "DecimalSet JSON read [\"",
     "family": "wrapper element JSON reader uses the literal grammar, wider than the primitive set's",
