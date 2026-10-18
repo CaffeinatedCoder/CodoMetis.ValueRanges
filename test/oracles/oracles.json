@@ -135,6 +135,15 @@
     ]
   },
   {
+    "class": "ExecutedQueryTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "the in-memory answer, for each translated range and multirange predicate, accessor and operation over seeded rows of every shape",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "DifferentialFuzzParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
@@ -283,6 +292,15 @@
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "claim",
     "against": "PostgreSQL 16 and 18 enforcing EFCore.ComplexIndexes.PostgreSQL's temporal and exclusion constraints and GiST indexes over a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange column, created by EnsureCreated with its differ registered",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "RangeOrderParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "PostgreSQL's <, = and > for every ordered pair of range and multirange shapes of every discovered range type, and ORDER BY over the whole list",
     "needs": [
       "docker"
     ]

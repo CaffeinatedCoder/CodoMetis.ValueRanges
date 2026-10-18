@@ -12,14 +12,21 @@ namespace CodoMetis.ValueRanges.Core;
 /// JSON and <see cref="System.ComponentModel.TypeConverter"/> support are written against.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The range interfaces are the shared vocabulary of the shipped range types, not an extension
 /// point: implementing them outside this library is not supported. The engines, the EF Core provider
 /// (whose registries are internal) and the parity tests against PostgreSQL cover only the shipped
 /// types, and these interfaces may gain members in a minor version.
+/// </para>
+/// <para>
+/// Every range type is also <see cref="IComparable{TRange}"/> in PostgreSQL's range order, the
+/// order <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by
+/// lower bound, then by upper bound. See <c>docs/ranges.md#sort-ranges</c>.
+/// </para>
 /// </remarks>
 /// <typeparam name="TRange">The concrete range type being constructed.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
-public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable
+public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable, IComparable<TRange>
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {

@@ -297,6 +297,40 @@ Int32Range.CreateFinite(1, 5).DoesNotExtendRightOf(Int32Range.CreateFinite(1, 10
 Int32Range.CreateFinite(3, 10).DoesNotExtendLeftOf(Int32Range.CreateFinite(1, 10));  // true
 ```
 
+### Sort ranges
+
+Every range type implements `IComparable<TRange>`, so `Order()`, `List.Sort()` and `SortedSet` work
+with no comparer. The order is PostgreSQL's, the one `ORDER BY` and `<` use on a range column:
+
+```csharp
+var ranges = new[]
+{
+    DecimalRange.CreateFinite(1m, 5m, false, false),  // (1,5)
+    DecimalRange.CreateFinite(1m, 5m, true, true),    // [1,5]
+    DecimalRange.CreateUnboundedStart(3m),            // (,3)
+    DecimalRange.CreateFinite(1m, 5m),                // [1,5)
+    DecimalRange.Empty
+};
+
+ranges.Order();  // empty, (,3), [1,5), [1,5], (1,5)
+```
+
+The empty range sorts first. Every other range sorts by its lower bound, then by its upper bound. A
+missing bound is the smallest lower bound and the largest upper bound. At the same value, an
+inclusive lower bound sorts first and an inclusive upper bound sorts last.
+
+`CompareTo` returns 0 exactly when the two ranges are equal, so a `SortedSet` keeps every distinct
+range. `null` sorts before every range.
+
+Good to know:
+
+- **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
+  runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`.
+- **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
+  nullable column, the two orders differ only in where the nulls go.
+- **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
+  the lower bound, so it ties `[1,5]` with `[1,9]` ([Sort ranges the way a set does](#sort-ranges-the-way-a-set-does)).
+
 ### Read the bounds
 
 These methods are PostgreSQL's `lower`, `upper`, `lower_inc` and `upper_inc`, and they work on any
@@ -623,6 +657,11 @@ a.Equals(b);  // true — both normalize to { [1, 10] }
 a == b;       // true — same value semantics as the ranges themselves
 ```
 
+Sets implement `IComparable<RangeSet<TRange, T>>` in PostgreSQL's multirange order. Two sets compare
+element by element in the [range order](#sort-ranges), and a set that runs out of elements first
+sorts first. So the empty set sorts before every other set, and `{[1,3]}` before `{[1,3],[5,7]}`.
+As for ranges, `CompareTo` returns 0 exactly when the two sets are equal.
+
 ### Sort ranges the way a set does
 
 `RangeSet<TRange, T>.LowerBoundComparer` sorts ranges by lower bound, in the same order the set uses
@@ -675,6 +714,9 @@ static T Load<T>(ReadOnlySpan<char> literal) where T : ISpanParsable<T>
     => T.Parse(literal, CultureInfo.InvariantCulture);
 ```
 
-To sort ranges in generic code, use `RangeLowerBoundComparer<TRange, T>`, an `IComparer<TRange>`
-singleton. It gives you the same lower-bound order the set uses inside. See
+`IRangeFactory<TRange, T>` also extends `IComparable<TRange>`, so generic code can sort any range
+type in the [range order](#sort-ranges).
+
+For the lower-bound order the set uses inside, use `RangeLowerBoundComparer<TRange, T>`, an
+`IComparer<TRange>` singleton. See
 [Sort ranges the way a set does](#sort-ranges-the-way-a-set-does).

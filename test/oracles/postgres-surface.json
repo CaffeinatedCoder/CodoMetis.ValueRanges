@@ -228,10 +228,10 @@
     "signature": "anymultirange < anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " < ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange << anymultirange",
@@ -255,10 +255,10 @@
     "signature": "anymultirange <= anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " <= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange <> anymultirange",
@@ -300,19 +300,19 @@
     "signature": "anymultirange > anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " > ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange >= anymultirange",
     "kind": "operator",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.CompareTo",
+    "translation": " >= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anymultirange >> anymultirange",
@@ -462,10 +462,10 @@
     "signature": "anyrange < anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " < ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange << anymultirange",
@@ -489,10 +489,10 @@
     "signature": "anyrange <= anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " <= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange <> anyrange",
@@ -534,19 +534,19 @@
     "signature": "anyrange > anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " > ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange >= anyrange",
     "kind": "operator",
     "since": 9.2,
-    "member": null,
-    "translation": null,
+    "member": "*Range.CompareTo",
+    "translation": " >= ",
     "waiver": null,
-    "issue": 39
+    "issue": null
   },
   {
     "signature": "anyrange >> anymultirange",
