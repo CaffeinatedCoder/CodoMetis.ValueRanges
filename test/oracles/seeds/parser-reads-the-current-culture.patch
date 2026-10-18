@@ -1,31 +1,18 @@
-Seed: the range and set element parsers read the current culture instead of the invariant one, so a literal read under de-DE refuses the decimal bound -1.5 (or, with a group separator, reads another number) while every explicit provider is still ignored
+Seed: the decimal bound and element parser reads the current culture instead of the invariant one, so a literal read under de-DE refuses the decimal bound -1.5 (its '.' is a group separator there) while every explicit provider is still ignored
 Oracles: CultureEntryPointProbeTests, HostCultureProbeTests
-Fails: Parse, TryParse, TypeConverter, configuration and JSON reads under de-DE, sv-SE, fa-IR and th-TH for the integer and decimal ranges, multiranges and sets; the host answers 400 to a valid literal under those request cultures
-History: LiteralProviderContractTests varies only the provider, with the current culture left as the machine sets it, so it catches this only on a machine whose own culture is not invariant
+Fails: Parse, TryParse, TypeConverter, configuration and JSON reads of DecimalRange, RangeSet<DecimalRange>, DecimalSet and DecimalSet<T> under the probe cultures whose decimal separator is not a point; the host answers 400 to a valid literal under those request cultures
+History: LiteralProviderContractTests varies only the provider, with the current culture left as the machine sets it, so it catches this only on a machine whose own culture is not invariant. Until 10.0.0 this seed passed CultureInfo.CurrentCulture to ParseValue from RangeFormat and SetFormat; once every element ParseValue ignored its provider (#115 for decimal, #127 for the integers) that planted nothing, and `oracles.cs seeds` reported it MISSED (#55)
 
-diff --git a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
-index f463698..7d505df 100644
---- a/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
-+++ b/src/CodoMetis.ValueRanges/Internals/RangeFormat.cs
-@@ -145,7 +145,7 @@ internal static class RangeFormat
+diff --git a/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs b/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs
+index 791dbee..0282185 100644
+--- a/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs
++++ b/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs
+@@ -24,7 +24,7 @@ internal static class DecimalLiteral
+ {
+     internal static decimal Parse(ReadOnlySpan<char> s)
      {
-         try
-         {
--            return TRange.ParseValue(part, CultureInfo.InvariantCulture);
-+            return TRange.ParseValue(part, CultureInfo.CurrentCulture);
-         }
-         catch (FormatException ex)
-         {
-diff --git a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
-index 2bcea7f..d884988 100644
---- a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
-+++ b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
-@@ -187,7 +187,7 @@ internal static class SetFormat
-         try
-         {
-             // Always invariant, whatever provider the caller handed Parse: the literal is a wire format.
--            return TSet.ParseValue(text, CultureInfo.InvariantCulture);
-+            return TSet.ParseValue(text, CultureInfo.CurrentCulture);
-         }
-         catch (FormatException ex)
-         {
+-        var value = decimal.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture);
++        var value = decimal.Parse(s, NumberStyles.Float, CultureInfo.CurrentCulture);
+ 
+         return Represents(value, s)
+                    ? value

@@ -11,5 +11,7 @@
 
     <ItemGroup>
         <Compile Include="$(MSBuildThisFileDirectory)../test/oracles/CloneSweep.cs" Link="CloneSweep.cs" />
+        <!-- The seed verdict, for the same reason: SeedVerdictTests holds the rule `seeds` applies (#55). -->
+        <Compile Include="$(MSBuildThisFileDirectory)../test/oracles/SeedVerdict.cs" Link="SeedVerdict.cs" />
     </ItemGroup>
 </Project>
