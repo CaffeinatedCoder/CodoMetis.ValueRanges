@@ -366,6 +366,52 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out YearMonthRange result)
         => RangeFormat.TryParse<YearMonthRange, YearMonth>(s, provider, out result);
 
+    /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(YearMonthRange? other) => RangeOrder.Compare<YearMonth>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="months"/>, in months: both bounds move together and keep their
+    /// inclusiveness, so <c>[2026-01,2026-03].Shift(12)</c> is <c>[2027-01,2027-03]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="months"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="months">How far to move the range, in months.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="YearMonth"/> can hold.</exception>
+    public YearMonthRange Shift(int months) => RangeArithmetic.Move<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(months)), value => RangeArithmetic.Checked(() => value.PlusMonths(months)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="months"/>, in months on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[2026-02,2026-03].Expand(1)</c> is <c>[2026-01,2026-04]</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="months"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="months">How far to move each bound outward, in months.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="YearMonth"/> can hold.</exception>
+    public YearMonthRange Expand(int months) => RangeArithmetic.Move<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(checked(-months))), value => RangeArithmetic.Checked(() => value.PlusMonths(months)));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);

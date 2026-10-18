@@ -43,6 +43,17 @@ blocked.Contains(new DateOnly(2025, 6, 20));    // False — falls in the gap
 blocked.Complement();                       // everything else, as a RangeSet
 ```
 
+To find the free days between the stays, ask for the gaps. `Gap` gives you the range between two
+stays, and `Gaps` gives you every free stretch inside a set or inside a window:
+
+```csharp
+june.Gap(july);                             // [2025-06-09,2025-06-30]
+blocked.Gaps();                             // {[2025-06-09,2025-06-30]}
+
+var summer = DateRange.CreateFinite(new DateOnly(2025, 6, 1), new DateOnly(2025, 8, 31));
+blocked.Gaps(summer);                       // {[2025-06-09,2025-06-30],[2025-07-06,2025-08-31]}
+```
+
 ### Leave the end date open
 
 "No end date" is a shape, not a null. A range comes in five kinds, called shapes: `Finite`,
@@ -195,9 +206,9 @@ Plan for this early, because your application code can't do it. Checking for an 
 inserting is a race between a read and a write. Under concurrency, two requests can both find the
 slot free. Only a database constraint is atomic.
 
-In PostgreSQL, that constraint is an exclusion constraint.
+In PostgreSQL, that constraint is an exclusion constraint, or on PostgreSQL 18 a temporal key.
 [Indexing a range column, and preventing overlaps](efcore.md#indexing-a-range-column-and-preventing-overlaps)
-shows how to declare one on a column this package maps.
+shows how to declare either on a column this package maps.
 
 ## What runs in memory only
 

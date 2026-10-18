@@ -30,6 +30,12 @@
     "against": ".NET's ISOWeek and the NodaTime package's WeekYearRules.Iso and YearMonth arithmetic, for every day of 1999-2031 and both domain ends, under five current cultures"
   },
   {
+    "class": "RangeArithmeticOracleTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "metamorphic",
+    "against": "the shape matrix moved by whole grid steps, the round trip, the hull and overlap laws between Shift and Expand, and OverflowException at the domain extremes, for every discovered range type"
+  },
+  {
     "class": "JsonDefaultContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "differential",
@@ -136,6 +142,15 @@
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
     "against": "PostgreSQL, over every ordered pair of range shapes, eight predicates and four operations",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "ExecutedQueryTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "the in-memory answer, for each translated range and multirange predicate, accessor and operation over seeded rows of every shape",
     "needs": [
       "docker"
     ]
@@ -289,6 +304,15 @@
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "claim",
     "against": "PostgreSQL 16 and 18 enforcing EFCore.ComplexIndexes.PostgreSQL's temporal and exclusion constraints and GiST indexes over a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange column, created by EnsureCreated with its differ registered",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "RangeOrderParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "PostgreSQL's <, = and > for every ordered pair of range and multirange shapes of every discovered range type, and ORDER BY over the whole list",
     "needs": [
       "docker"
     ]

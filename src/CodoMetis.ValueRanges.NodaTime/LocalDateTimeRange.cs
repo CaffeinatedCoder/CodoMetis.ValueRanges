@@ -299,6 +299,55 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out LocalDateTimeRange result)
         => RangeFormat.TryParse<LocalDateTimeRange, LocalDateTime>(s, provider, out result);
 
+    /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(LocalDateTimeRange? other) => RangeOrder.Compare<LocalDateTime>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[09:00,10:00).Shift(Period.FromWeeks(1))</c> is the same hour a week later.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// A period with months or years follows NodaTime's calendar arithmetic, which clips to the end of a
+    /// shorter month, so moving back does not always restore the range. Days, weeks and time units move
+    /// every value by the same amount.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDateTime"/> can hold.</exception>
+    public LocalDateTimeRange Shift(Period delta) => RangeArithmetic.Move<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[09:00,10:00).Expand(Period.FromMinutes(15))</c> is <c>[08:45,10:15)</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDateTime"/> can hold.</exception>
+    public LocalDateTimeRange Expand(Period amount) => RangeArithmetic.Move<LocalDateTimeRange, LocalDateTime>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);

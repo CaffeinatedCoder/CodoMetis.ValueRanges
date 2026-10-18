@@ -308,6 +308,34 @@
     "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
   },
   {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Shift(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeRange cannot cross midnight, so a moved bound goes through AddWithinDay, which throws past either end of the day where TimeOnly.Add wraps; the other temporal types throw at their own extremes through Checked"
+  },
+  {
+    "family": "core ranges",
+    "unit": "TimeRange",
+    "member": "Expand(TimeSpan)",
+    "kind": "lone body",
+    "reason": "a TimeRange cannot cross midnight, so a moved bound goes through AddWithinDay, which throws past either end of the day where TimeOnly.Add wraps; the other temporal types throw at their own extremes through Checked"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Shift(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Expand(int)",
+    "kind": "extra",
+    "reason": "the step of a date is a number of days, an int, where every other core range steps by its own element type or a TimeSpan"
+  },
+  {
     "family": "nodatime ranges",
     "unit": "LocalDateRange",
     "member": "CreateUnboundedEnd($T, bool)",
@@ -481,6 +509,34 @@
     "member": "Month(int, int)",
     "kind": "extra",
     "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Shift(Duration)",
+    "kind": "extra",
+    "reason": "an instant moves by an exact Duration, where the local types move by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "InstantRange",
+    "member": "Expand(Duration)",
+    "kind": "extra",
+    "reason": "an instant moves by an exact Duration, where the local types move by a calendar Period and YearMonthRange by a number of months"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Shift(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "Expand(int)",
+    "kind": "extra",
+    "reason": "the step of a year-month is a number of months, an int; a Period could carry days, which a YearMonth cannot hold"
   },
   {
     "family": "efcore wrapper bridges",

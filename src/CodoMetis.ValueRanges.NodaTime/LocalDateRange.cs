@@ -419,6 +419,57 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out LocalDateRange result)
         => RangeFormat.TryParse<LocalDateRange, LocalDate>(s, provider, out result);
 
+    /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(LocalDateRange? other) => RangeOrder.Compare<LocalDate>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[2026-06-01,2026-06-08].Shift(Period.FromWeeks(1))</c> is <c>[2026-06-08,2026-06-15]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// A period with months or years follows NodaTime's calendar arithmetic, which clips to the end of a
+    /// shorter month: <c>2026-01-31</c> plus one month is <c>2026-02-28</c>, and moving back gives
+    /// <c>2026-01-28</c>. Days and weeks move every date by the same amount, so moving back restores
+    /// the range. A period with a time part throws <see cref="ArgumentException"/>, as
+    /// <see cref="LocalDate.Plus(Period)"/> does.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDate"/> can hold.</exception>
+    public LocalDateRange Shift(Period delta) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Plus(delta)), value => RangeArithmetic.Checked(() => value.Plus(delta)));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[2026-06-10,2026-06-12].Expand(Period.FromDays(1))</c> is <c>[2026-06-09,2026-06-13]</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="LocalDate"/> can hold.</exception>
+    public LocalDateRange Expand(Period amount) => RangeArithmetic.Move<LocalDateRange, LocalDate>(this, value => RangeArithmetic.Checked(() => value.Minus(amount)), value => RangeArithmetic.Checked(() => value.Plus(amount)));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);

@@ -238,6 +238,52 @@ public abstract partial record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeR
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out TimeRange result)
         => RangeFormat.TryParse<TimeRange, TimeOnly>(s, provider, out result);
 
+    /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(TimeRange? other) => RangeOrder.Compare<TimeOnly>(this, other);
+
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[09:00,10:00).Shift(TimeSpan.FromHours(2))</c> is <c>[11:00,12:00)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="TimeOnly"/> can hold.</exception>
+    public TimeRange Shift(TimeSpan delta) => RangeArithmetic.Move<TimeRange, TimeOnly>(this, value => RangeArithmetic.AddWithinDay(value, delta), value => RangeArithmetic.AddWithinDay(value, delta));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[09:00,10:00).Expand(TimeSpan.FromMinutes(15))</c> is <c>[08:45,10:15)</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="TimeOnly"/> can hold.</exception>
+    public TimeRange Expand(TimeSpan amount) => RangeArithmetic.Move<TimeRange, TimeOnly>(this, value => RangeArithmetic.AddWithinDay(value, amount.Negate()), value => RangeArithmetic.AddWithinDay(value, amount));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
