@@ -27,6 +27,7 @@ Nothing was removed or renamed. Some calls answer differently, text that parsed 
 - **`RangeAgg` and `RangeIntersectAgg` over a sequence of `RangeSet`**, as PostgreSQL's `range_agg` and `range_intersect_agg` over multiranges. They are generic, so they serve every range type, the NodaTime ones included ([Aggregates](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#aggregate-a-sequence-of-ranges)).
 - **`Gap`** on a range returns the range between two ranges, and **`Gaps()`** and **`Gaps(window)`** on a `RangeSet` return the gaps between its elements and the uncovered parts of a window ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#find-the-gap-between-two-ranges)).
 - **`Shift`** and **`Expand`** on every range type move a range by a step, or grow it on both sides, keeping each bound's inclusiveness. A bound moved past the element type's last value throws `OverflowException`. They run in memory only ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
+- **`DateRange.Month`**, **`Quarter`**, **`Year`** and **`IsoWeek`**, by number or by any day inside the period. Weeks are ISO 8601 only, Monday to Sunday, whatever the current culture ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week)).
 
 ### Fixed
 

@@ -824,6 +824,22 @@
     ]
   },
   {
+    "id": "E46-calendar-range-inlined-as-constant",
+    "source": "docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week",
+    "quote": "`b.Period.Overlaps(DateRange.Month(2026, 10))` runs as SQL with the month as one constant.",
+    "claim": "A calendar factory called with values the query does not read is evaluated in memory and inlined as one daterange constant, and the query runs and returns the in-memory answer; one that reads a column fails translation in a Where and runs in memory in a Select.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateRange.Month",
+      "DateRange.IsoWeek"
+    ],
+    "heldBy": [
+      "InlineRangeConstantTests",
+      "ClientSideOnlyTranslationTests",
+      "ClientSideOnlyProjectionTests"
+    ]
+  },
+  {
     "id": "E46-range-with-multirange-operand-translates",
     "source": "docs/efcore.md#query-ranges-with-linq",
     "quote": "Since 10.0.0 they also work on a range with a multirange on the other side, as the operator with the range on the left",
@@ -2669,6 +2685,30 @@
     ]
   },
   {
+    "id": "R32-calendar-factories",
+    "source": "docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week",
+    "quote": "Each factory takes either the numbers of the period or any day inside it.",
+    "claim": "DateRange and LocalDateRange Month, Quarter, Year and IsoWeek, and YearMonthRange Quarter and Year, return the closed range from the period's first day (or month) to its last; the overload taking a day returns the period holding it; months and quarters partition their year, and the two packages return the same days for every date.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateRange.Month",
+      "DateRange.Quarter",
+      "DateRange.Year",
+      "DateRange.IsoWeek",
+      "LocalDateRange.Month",
+      "LocalDateRange.Quarter",
+      "LocalDateRange.Year",
+      "LocalDateRange.IsoWeek",
+      "YearMonthRange.Quarter",
+      "YearMonthRange.Year"
+    ],
+    "heldBy": [
+      "CalendarRangeParityTests",
+      "CalendarRangeTests",
+      "NodaTimeCalendarRangeTests"
+    ]
+  },
+  {
     "id": "R32-union-closed-at-construction",
     "source": "docs/ranges.md#why-the-discard-arm-must-throw",
     "quote": "The five shapes are the only ranges that can exist. A record derived from a range type compiles, because C# gives every record a protected copy constructor, but the first `new` of it throws (`InvalidOperationException`). Only the five variants nested in the type can be constructed.",
@@ -2683,6 +2723,42 @@
     ],
     "heldBy": [
       "ClosedUnionContractTests"
+    ]
+  },
+  {
+    "id": "R33-iso-weeks-only",
+    "source": "docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week",
+    "quote": "A week starts on Monday, and week 1 is the week that holds the year's first Thursday. The current culture's first day of the week plays no part, the same way it plays no part in a literal.",
+    "claim": "IsoWeek returns Monday to Sunday, numbered by ISO 8601 week-year as .NET's ISOWeek and NodaTime's WeekYearRules.Iso number it, under every current culture whatever its first day of the week.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateRange.IsoWeek",
+      "LocalDateRange.IsoWeek"
+    ],
+    "heldBy": [
+      "CalendarRangeParityTests",
+      "CalendarRangeTests",
+      "NodaTimeCalendarRangeTests"
+    ]
+  },
+  {
+    "id": "R34-calendar-out-of-range-throws",
+    "source": "docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week",
+    "quote": "A month outside 1 to 12, a quarter outside 1 to 4, or a week past the last of its week-year throws `ArgumentOutOfRangeException`. So does a week that runs past the last date the type can hold, such as week 52 of 9999.",
+    "claim": "Month(y, 13), Quarter(y, 0) and Quarter(y, 5), IsoWeek(y, 0) and IsoWeek(y, n+1) for a week-year of n weeks, and a week running past the type's last or before its first date throw ArgumentOutOfRangeException in both packages, never return another period.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.Month",
+      "DateRange.Quarter",
+      "DateRange.IsoWeek",
+      "LocalDateRange.IsoWeek",
+      "LocalDateRange.Quarter",
+      "YearMonthRange.Quarter"
+    ],
+    "heldBy": [
+      "CalendarRangeParityTests",
+      "CalendarRangeTests",
+      "NodaTimeCalendarRangeTests"
     ]
   },
   {

@@ -6,6 +6,7 @@ using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Internals;
 using CodoMetis.ValueRanges.Serialization;
 using NodaTime;
+using NodaTime.Calendars;
 
 namespace CodoMetis.ValueRanges;
 
@@ -247,6 +248,116 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// <inheritdoc />
     public static LocalDate? PreviousValueBefore(LocalDate value)
         => ToIso(value) == LocalDate.MinIsoValue ? null : value.PlusDays(-1);
+
+    // -------------------------------------------------------------------------
+    // Calendar ranges
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the calendar month <paramref name="month"/> of <paramref name="year"/> in the ISO
+    /// calendar, from its first day to its last: <c>LocalDateRange.Month(2026, 2)</c> is
+    /// <c>[2026-02-01,2026-02-28]</c>.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <param name="month">The month, 1 to 12.</param>
+    /// <returns>The month as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year or the month is out of range.</exception>
+    public static LocalDateRange Month(int year, int month)
+        => new Finite(new LocalDate(year, month, 1), new LocalDate(year, month, CalendarSystem.Iso.GetDaysInMonth(year, month)));
+
+    /// <summary>
+    /// Returns the ISO calendar month that contains <paramref name="date"/>. A date in another
+    /// calendar is converted to ISO first, as every bound of this type is.
+    /// </summary>
+    /// <param name="date">Any day of the month.</param>
+    /// <returns>The month as a closed range of days.</returns>
+    public static LocalDateRange Month(LocalDate date)
+    {
+        date = ToIso(date);
+        return Month(date.Year, date.Month);
+    }
+
+    /// <summary>
+    /// Returns quarter <paramref name="quarter"/> of <paramref name="year"/>: three ISO calendar
+    /// months starting in January, April, July or October.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <param name="quarter">The quarter, 1 to 4.</param>
+    /// <returns>The quarter as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year or the quarter is out of range.</exception>
+    public static LocalDateRange Quarter(int year, int quarter)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(quarter, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(quarter, 4);
+
+        return new Finite(new LocalDate(year, quarter * 3 - 2, 1), new LocalDate(year, quarter * 3, CalendarSystem.Iso.GetDaysInMonth(year, quarter * 3)));
+    }
+
+    /// <summary>
+    /// Returns the quarter that contains <paramref name="date"/>, in the ISO calendar.
+    /// </summary>
+    /// <param name="date">Any day of the quarter.</param>
+    /// <returns>The quarter as a closed range of days.</returns>
+    public static LocalDateRange Quarter(LocalDate date)
+    {
+        date = ToIso(date);
+        return Quarter(date.Year, (date.Month + 2) / 3);
+    }
+
+    /// <summary>
+    /// Returns the ISO calendar year <paramref name="year"/>, from January 1 to December 31.
+    /// </summary>
+    /// <param name="year">The ISO year, -9998 to 9999.</param>
+    /// <returns>The year as a closed range of days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The year is out of range.</exception>
+    public static LocalDateRange Year(int year) => new Finite(new LocalDate(year, 1, 1), new LocalDate(year, 12, 31));
+
+    /// <summary>
+    /// Returns the ISO calendar year that contains <paramref name="date"/>.
+    /// </summary>
+    /// <param name="date">Any day of the year.</param>
+    /// <returns>The year as a closed range of days.</returns>
+    public static LocalDateRange Year(LocalDate date) => Year(ToIso(date).Year);
+
+    /// <summary>
+    /// Returns ISO 8601 week <paramref name="week"/> of the ISO week-year <paramref name="weekYear"/>:
+    /// Monday to Sunday.
+    /// </summary>
+    /// <remarks>
+    /// Weeks are always ISO 8601 (<see cref="WeekYearRules.Iso"/>), never the current culture's: a
+    /// week starts on Monday, and week 1 is the week that holds the year's first Thursday. The same
+    /// rule as <c>DateRange.IsoWeek</c>.
+    /// </remarks>
+    /// <param name="weekYear">The ISO week-year.</param>
+    /// <param name="week">The week, 1 to 52, or 53 in a long week-year.</param>
+    /// <returns>The week as a closed range of seven days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The week-year or the week is out of range, or the week runs past either end of the ISO
+    /// calendar.
+    /// </exception>
+    public static LocalDateRange IsoWeek(int weekYear, int week)
+    {
+        // The first week of -9998 starts before LocalDate.MinIsoValue, and the last of 9999 ends
+        // after LocalDate.MaxIsoValue; NodaTime throws for the Monday or the Sunday, whichever is out.
+        var monday = WeekYearRules.Iso.GetLocalDate(weekYear, week, IsoDayOfWeek.Monday);
+        return new Finite(monday, WeekYearRules.Iso.GetLocalDate(weekYear, week, IsoDayOfWeek.Sunday));
+    }
+
+    /// <summary>
+    /// Returns the ISO 8601 week that contains <paramref name="date"/>: the Monday on or before it to
+    /// the Sunday after that Monday.
+    /// </summary>
+    /// <remarks>
+    /// Weeks are always ISO 8601, never the current culture's; see <see cref="IsoWeek(int, int)"/>.
+    /// </remarks>
+    /// <param name="date">Any day of the week.</param>
+    /// <returns>The week as a closed range of seven days.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The week runs past either end of the ISO calendar.</exception>
+    public static LocalDateRange IsoWeek(LocalDate date)
+    {
+        date = ToIso(date);
+        return IsoWeek(WeekYearRules.Iso.GetWeekYear(date), WeekYearRules.Iso.GetWeekOfWeekYear(date));
+    }
 
     /// <summary>
     /// Enumerates the dates the range contains, ascending and inclusive of both bounds.

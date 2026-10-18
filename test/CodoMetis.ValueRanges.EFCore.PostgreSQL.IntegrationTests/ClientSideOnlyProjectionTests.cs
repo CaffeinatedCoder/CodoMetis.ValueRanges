@@ -23,6 +23,7 @@ public class ClientSideOnlyProjectionTests
         {
             Id         = Id,
             Seats      = Int32Range.CreateFinite(3, 7),
+            Period     = DateRange.CreateFinite(new DateOnly(2026, 6, 3), new DateOnly(2026, 6, 5)),
             Codes      = Int32Set.From([5, 1, 2, 3]),
             SeatBlocks = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 2), Int32Range.CreateFinite(4, 4)]),
             Tags       = StringSet.From(["b", "a"]),
@@ -44,6 +45,8 @@ public class ClientSideOnlyProjectionTests
                 Clamp    = r.Seats.Clamp(50),
                 Shifted  = r.Seats.Shift(10),
                 Expanded = r.Seats.Expand(-1),
+                MonthOf  = DateRange.Month(r.Period.LowerBound()!.Value),
+                WeekOf   = DateRange.IsoWeek(r.Period.LowerBound()!.Value),
                 RangeSet = r.Codes.ToRangeSet(),
                 Set      = r.SeatBlocks.ToInt32Set(),
                 First    = r.Tags[0],
@@ -55,6 +58,15 @@ public class ClientSideOnlyProjectionTests
         Assert.AreEqual(row.Seats.Clamp(50), server.Clamp, "Clamp");
         Assert.AreEqual(row.Seats.Shift(10), server.Shifted, "Shift");
         Assert.AreEqual(row.Seats.Expand(-1), server.Expanded, "Expand");
+        Assert.AreEqual(DateRange.Month(2026, 6), server.MonthOf, "DateRange.Month(column)");
+        Assert.AreEqual(DateRange.IsoWeek(2026, 23), server.WeekOf, "DateRange.IsoWeek(column)");
+
+        // Built from values the query does not read, a calendar range is one constant and runs as SQL.
+        var inJune = await context.Reservations
+            .Where(r => r.Id == Id && r.Period.IsContainedBy(DateRange.Month(2026, 6)))
+            .Select(r => r.Id)
+            .ToListAsync();
+        CollectionAssert.AreEqual(new[] { Id }, inJune, "Period.IsContainedBy(DateRange.Month(2026, 6))");
         Assert.AreEqual(row.Codes.ToRangeSet(), server.RangeSet, "ToRangeSet()");
         Assert.AreEqual(row.SeatBlocks.ToInt32Set(), server.Set, "ToInt32Set()");
         Assert.AreEqual(row.Tags[0], server.First, "set[0]");

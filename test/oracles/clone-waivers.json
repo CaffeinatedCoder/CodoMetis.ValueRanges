@@ -246,6 +246,69 @@
   },
   {
     "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeek($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeek(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "IsoWeekStartingOn($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Month($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Month(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Quarter($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Quarter(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Year($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
+    "unit": "DateRange",
+    "member": "Year(int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48) exist only on the ranges of days: DateRange is the one core range whose element is a calendar date, and its siblings' elements have no month, quarter or ISO week"
+  },
+  {
+    "family": "core ranges",
     "unit": "TimeRange",
     "member": "Shift(TimeSpan)",
     "kind": "lone body",
@@ -418,6 +481,34 @@
     "member": "UnboundedStart.EndInclusive",
     "kind": "lone body",
     "reason": "continuous: the inclusivity is stored as given; the discrete siblings pin it to true because their factory has already canonicalized the bound"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "IsoWeek($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "IsoWeek(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Month($T)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "LocalDateRange",
+    "member": "Month(int, int)",
+    "kind": "extra",
+    "reason": "the calendar factories (#48): LocalDateRange is the NodaTime range of days, so it alone has Month and IsoWeek; YearMonthRange shares Quarter and Year, and the instant and date-time ranges have no calendar period of their own"
   },
   {
     "family": "nodatime ranges",
