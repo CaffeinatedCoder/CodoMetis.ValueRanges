@@ -247,6 +247,9 @@ where the two sides disagreed before. Text that PostgreSQL rejects is now reject
 compiler can't show you where, so check these in order, starting with the most likely to affect
 you:
 
+- **`IsUnboundedStart()` and `IsUnboundedEnd()` return `true` for the infinite range.** A query
+  and the same call in memory already disagreed on it
+  ([details](#check-isunboundedstart-and-isunboundedend-on-the-infinite-range)).
 - **`RangeSet.Overlaps` on a continuous element type returns `true` for more inputs.** A query and
   the same call in memory already disagreed on them
   ([details](#check-rangesetoverlaps-on-a-continuous-element-type)).
@@ -263,6 +266,32 @@ you:
   ([details](#check-that-your-elements-text-form-round-trips)).
 - **Decimal text with more precision than `decimal` holds now throws**, where it was rounded
   ([details](#decimal-text-is-read-exactly-or-refused)).
+
+### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
+
+Check code that calls `IsUnboundedStart()` or `IsUnboundedEnd()` on a single range to pick out the
+`(-∞, end]` or `[start, +∞)` shape, and could meet the infinite range `(,)`.
+
+Before 10.0.0 the two methods tested the kind of range, so both returned `false` for `(,)`.
+PostgreSQL's `lower_inf` and `upper_inf`, which they run as in SQL, return `true` for it, and so
+does a `RangeSet` holding it. A query through EF Core therefore matched every row holding `(,)`
+where the same call in memory did not. Now memory and SQL agree:
+
+```csharp
+Int32Range.Infinite.IsUnboundedStart();   // v9: false   v10: true
+Int32Range.Infinite.IsUnboundedEnd();     // v9: false   v10: true
+Int32Range.CreateUnboundedStart(5).IsUnboundedEnd();   // false in both
+```
+
+If you meant the kind of range, pattern-match on it. The shape interfaces are exact, and the
+compiler checks them:
+
+```csharp
+if (range is IUnboundedStartRange<int> s) { … s.End … }   // (-∞, end] only, never (,)
+```
+
+`IsInfinity()` and `IsFinite()` are unchanged. `(,)` is the only range for which `IsInfinity()`
+returns `true`, and `IsFinite()` returns `false` for it, as before.
 
 ### Check `RangeSet.Overlaps` on a continuous element type
 
