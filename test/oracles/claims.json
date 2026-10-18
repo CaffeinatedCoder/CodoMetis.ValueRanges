@@ -263,7 +263,8 @@
       "DateRange.CreateFinite"
     ],
     "heldBy": [
-      "ExclusionConstraintTests"
+      "ExclusionConstraintTests",
+      "ComplexIndexesCrossTests"
     ]
   },
   {
@@ -712,6 +713,64 @@
     "heldBy": [
       "MigrationScaffoldTests",
       "CustomRangeCatalogueTests"
+    ]
+  },
+  {
+    "id": "E40-complexindexes-accepts-mapped-range-columns",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint",
+    "quote": "It accepts a range column mapped by this package exactly as it accepts an `NpgsqlRange<T>`. That works because the constraint is declared over the *column*, and these types map as ordinary scalars:",
+    "claim": "EFCore.ComplexIndexes.PostgreSQL 5.4 accepts a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange (custom timerange) property as the overlap column of HasExclusionConstraint (builder and shorthand overloads) and as the period of HasTemporalConstraint: with UseNpgsqlComplexIndexes() the create script and EnsureCreated render EXCLUDE USING gist (\"RoomId\" WITH =, \"<column>\" WITH &&) on PostgreSQL 16 and 18 and UNIQUE (\"RoomId\", \"<column>\" WITHOUT OVERLAPS) on PostgreSQL 18, which pg_get_constraintdef reads back.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E41-overlap-rejected-as-23p01",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint",
+    "quote": "Now a second booking for the same room whose `Period` overlaps an existing one fails. PostgreSQL raises `23P01` (`exclusion_violation`), and you get a `DbUpdateException` wrapping a `PostgresException` that names the constraint.",
+    "claim": "A row whose DateRange, RangeSet<DateRange, DateOnly> or TimeRange overlaps an existing row's for the same key fails SaveChanges with a DbUpdateException wrapping a PostgresException of SqlState 23P01 whose ConstraintName is the constraint over that column, for an exclusion constraint (raw SQL on PostgreSQL 17, ComplexIndexes on 16 and 18) and a ComplexIndexes temporal constraint on 18; rows for another key and adjacent rows are saved, and the rejected row is not.",
+    "oracle": "exception",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests",
+      "ExclusionConstraintTests"
+    ]
+  },
+  {
+    "id": "E42-ensurecreated-skips-exclusion-constraints",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint",
+    "quote": "`EnsureCreated()` builds the > schema through the runtime differ, which doesn't know about them. The table is created, the > constraint silently isn't, and overlapping rows are accepted.",
+    "claim": "Without a runtime registration of ComplexIndexes' differ (UseNpgsqlComplexIndexes()), EnsureCreated over a model with HasExclusionConstraint creates the table with no exclusion constraint (pg_constraint holds no contype 'x' for it) and two overlapping rows for the same key are both saved.",
+    "oracle": "silent-default",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E43-gist-index-serves-range-operators",
+    "source": "docs/efcore.md#indexing-a-range-column-and-preventing-overlaps",
+    "quote": "The index serves `&&`, `@>`, `<@` and the positional operators.",
+    "claim": "A GiST index over a daterange (HasIndex().HasMethod(\"gist\")), a datemultirange or a timerange column (ComplexIndexes' HasComplexIndex with UseGist()) is chosen by the planner, with sequential scans off, for &&, @>, <@, <<, >>, &<, &> and -|- against an operand of the column's type, and Overlaps over the mapped column translates to && and returns the overlapping rows.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "RangeExtensions.Overlaps"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
     ]
   },
   {

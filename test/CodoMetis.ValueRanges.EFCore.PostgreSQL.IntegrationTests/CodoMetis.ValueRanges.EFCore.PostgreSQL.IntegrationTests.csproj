@@ -11,6 +11,12 @@
     <ItemGroup>
         <PackageReference Include="MSTest" Version="4.5.1" />
         <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
+        <!--
+            Test-only, and only here: ComplexIndexesCrossTests proves that this package's columns work
+            under EFCore.ComplexIndexes.PostgreSQL's temporal and exclusion constraints and GiST indexes.
+            Neither shipping package references the other.
+        -->
+        <PackageReference Include="EFCore.ComplexIndexes.PostgreSQL" Version="5.4.0" />
     </ItemGroup>
 
     <ItemGroup>
