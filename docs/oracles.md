@@ -371,3 +371,62 @@ issue gets that shrunk row.
 A promise no document makes. A behaviour whose correct answer has no independent reference (API
 design, error wording). Native AOT compilation, which only `test/consumer-smoke-test.sh` observes.
 Performance. Those stay with review and with the integration suite's hand-picked tests.
+
+## The clone-divergence sweep
+
+Everything above holds the library to what the documents promise. It cannot notice the defect class
+the history shows most often: a fix that lands at one hand-copied site and not at its siblings. Each
+NodaTime set file carries five or six fix commits; the wrapper arities have repeatedly lagged their
+primitive set; the 9.1.0 whitespace fix landed as two commits, one for range bounds and one for set
+elements, because the second site was found only after the first was fixed. A claim is held per type,
+so an oracle that passes for `TimeSet` says nothing about `DateSet` lacking a line.
+
+`test/oracles/CloneSweep.cs` reads the source instead. It is linked into the conventions project as
+`CloneDivergenceTests` and compiled into the tool through `tools/Directory.Build.props`, so
+`dotnet run tools/oracles.cs clones` and CI run one engine.
+
+**Families** are discovered, never listed: the value set types under each `Sets/` folder (primitives and
+wrapper arities apart, core and NodaTime apart), the range unions in each library's root, the EF-side
+`new RangeTypeDefinition<…>(…)` / `new SetTypeDefinition<…>(…)` registrations and the `Bridged<…>(…)`
+wrapper-family entries, and every primitive set paired with its own arity (the members only one of the
+two has, compared across the pairs). Adding a type adds a sibling; `CloneDivergenceTests` also pins the
+fewest siblings each family is known to have, so a glob that stops matching fails instead of passing
+vacuously.
+
+**Normalization** replaces what siblings legitimately differ in. The type's own name becomes `$TYPE`, its
+element type `$T`, and in a wrapper arity the backing primitive `$P`. The type's stem (`Date` of `DateSet`,
+and its camel-case suffixes, so `DateTime` and `Time` of `LocalDateTimeSet`) inside another identifier
+becomes `$STEM` — but only for an identifier shape the family actually shares (`ParseDate`/`ParseTime`,
+`LocalDatePattern`/`InstantPattern`); a shape with a single realization, or one some sibling spells with a
+stem that is not its own (`ToString` in `StringSet`, `TimeSpan` in `TimeRange`), is left alone. Where the
+element has a keyword alias a sibling also uses for its own sake (`int`, `string`), each member is read
+every way and the reading that agrees with the most siblings is the one compared, so `int Count` is not a
+divergence of `Int32Set`. Comments, documentation and preprocessor lines are stripped and the formatting
+is Roslyn's canonical one. String literals stay: a format constant that differs is worth a waiver.
+
+**Three rules**, per family of *N* siblings and per member (a method or property signature, a field, an
+operator, a nested variant's header, a registration's constructor parameter):
+
+- *missing* — present in at least max(3, *N* − 2) siblings, absent here;
+- *extra* — present here and nowhere else;
+- *lone body* — a body no sibling shares, when two or more siblings share a body that is near it: at
+  least half similar by token sequence over the body alone, or behind an identical signature. A member
+  that is bespoke in signature and body (`Length`, typed per range) is near nothing and stays silent.
+
+**`clone-waivers.json`** holds every divergence that is right as it is, by family, sibling, member and
+rule, with the reason — the ordinal comparer of `StringSet`, `yyyy-MM-dd` for a date, `RequireIso`
+where a year-month cannot convert. `CloneDivergenceTests` fails on a divergence without a waiver, on a
+waiver without a reason, and on a waiver nothing matches any more, so the list cannot outlive what it
+explains. The tool prints every divergence with its status and, for a new one, the JSON line to paste.
+
+**Triage a divergence** the way a candidate is triaged: first ask whether the sibling is right to
+differ (a discrete range canonicalizes where a continuous one stores; a calendar-bearing type normalizes
+where an instant cannot) and waive it saying so; otherwise it is a sibling lagging a fix, and it gets an
+issue and a `candidates.json` entry like any other finding. The seed
+`sibling-drops-input-function-trim.patch` removes one temporal set's `LiteralWhiteSpace.TrimAsInputFunction`
+call — the shape of the 9.1.0 fix — and is caught as a lone body beside the three siblings that kept it.
+
+What it does not see: a divergence shared by every sibling (nothing to diverge from), behaviour in the
+shared engines under `Internals/` (one copy, held by the oracles above), and whether a waived difference
+is still the right one — the reason is the reviewer's, and `EveryWaiver_StillMatchesADivergence` only
+says the difference is still there.

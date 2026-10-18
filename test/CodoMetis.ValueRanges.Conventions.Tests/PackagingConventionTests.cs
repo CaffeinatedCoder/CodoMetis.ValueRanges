@@ -214,6 +214,12 @@ public sealed class PackagingConventionTests
     /// it (once <c>Version</c> is bumped for the next one), and never older. That lags by at most
     /// one release and forces the move at every version bump.
     /// </summary>
+    /// <remarks>
+    /// A preview is never a baseline. Previews promise no API stability among themselves (the 11.0.0
+    /// variants rewrite breaks <c>11.0.0-preview.1</c> on purpose), so "the release before it" means
+    /// the latest stable release: <c>11.0.0-preview.2</c> and <c>11.0.0</c> are both validated
+    /// against 10.0.0.
+    /// </remarks>
     [TestMethod]
     public void PackageValidationBaseline_IsTheShippedVersionOrTheReleaseBeforeIt()
     {
@@ -224,19 +230,19 @@ public sealed class PackagingConventionTests
             "Directory.Build.props does not enable package validation, so a removed public member "
           + "packs cleanly and the 'no breaking changes' claim rests on reading the diff.");
 
-        var shipped  = Version.Parse(RepoLayout.ShippedVersion);
-        var previous = ChangelogVersions().Where(version => version < shipped).DefaultIfEmpty().Max();
+        var shipped  = ReleaseVersion.Parse(RepoLayout.ShippedVersion);
+        var previous = ChangelogVersions().Where(version => version < shipped && !version.IsPrerelease).DefaultIfEmpty().Max();
         var baseline = properties.GetValueOrDefault("PackageValidationBaselineVersion");
 
         Assert.IsNotNull(baseline, "Directory.Build.props sets no PackageValidationBaselineVersion.");
 
-        var allowed = new[] { shipped, previous }.Where(version => version is not null).Distinct().ToList();
+        var allowed = new[] { shipped, previous }.Where(version => version is { IsPrerelease: false }).Distinct().ToList();
 
         Assert.IsTrue(
-            allowed.Contains(Version.Parse(baseline)),
+            allowed.Contains(ReleaseVersion.Parse(baseline)),
             $"PackageValidationBaselineVersion is {baseline}, but Directory.Build.props ships {shipped} "
-          + $"and the release before it is {previous?.ToString() ?? "none"}. The baseline must be one of "
-          + "those two — move it to the release just superseded when bumping Version, or API added "
+          + $"and the stable release before it is {previous?.ToString() ?? "none"}. The baseline must be one of "
+          + "those two (never a preview) — move it to the release just superseded when bumping Version, or API added "
           + "since the old baseline goes unvalidated.");
     }
 
@@ -279,9 +285,9 @@ public sealed class PackagingConventionTests
         }
     }
 
-    private static IEnumerable<Version> ChangelogVersions() =>
-        Regex.Matches(File.ReadAllText(RepoLayout.RootChangelog.FullName), @"^##\s*\[(?<version>\d+\.\d+\.\d+)\]", RegexOptions.Multiline)
-             .Select(match => Version.Parse(match.Groups["version"].Value));
+    private static IEnumerable<ReleaseVersion> ChangelogVersions() =>
+        Regex.Matches(File.ReadAllText(RepoLayout.RootChangelog.FullName), $@"^##\s*\[(?<version>{ReleaseVersion.Pattern})\]", RegexOptions.Multiline)
+             .Select(match => ReleaseVersion.Parse(match.Groups["version"].Value));
 
     private static Dictionary<string, string> SharedBuildProperties()
     {

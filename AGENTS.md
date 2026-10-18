@@ -27,7 +27,7 @@ so moving a project cannot silently retarget a test.
 - `test/CodoMetis.ValueRanges.EFCore.PostgreSQL.InfinityDisabled.IntegrationTests/` — The same live layer for configuration that is per process: its runtimeconfig sets `Npgsql.DisableDateTimeInfinityConversions`, which Npgsql and the plugin each read once, so it cannot be flipped inside the other project's run. Holds the temporal store rule at the extremes with the conversion off. Own container; CI's integration job runs every `test/*IntegrationTests/`
 - `test/CodoMetis.ValueRanges.AspNetCore.Tests/` — Host-level behaviour with no ValueRanges registration: configuration binding (`TypeConverter`), MVC and minimal-API binding and JSON bodies via `TestServer`, and the documented OpenAPI schema transformer (`ValueRangesSchemaTransformer.cs`), which `docs/serialization.md` must carry verbatim — edit the test copy, then the doc. `HostCultureProbeTests` binds every discovered type (core and NodaTime) through both hosts under four request cultures; it links `RangeProbes`, `SetProbes`, `WrapperElements` and `Reflect` from the conventions project rather than copying them
 - `test/CodoMetis.ValueRanges.Conventions.Tests/` — Repo-level conventions: changelog consistency and form, packaging metadata, release wiring, the SECURITY.md supported-versions table, value set contract compliance, EF mapping parity, the default JSON contract. Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
-- `test/oracles/` — The bug-finding system (`docs/oracles.md`): `claims.json` quotes every promise the consumer-facing docs make and names the test that holds it (empty `heldBy` is the worklist); `oracles.json` registers the sweep classes; `seeds/*.patch` plant one defect each in `src/` that the named oracles were shown to catch; `surface-waivers.json` names the public members no claim covers, with the reason; `candidates.json` holds disagreements found but not fixed, keyed to issues; `postgres-surface.json` holds every PostgreSQL range, multirange and array operator and function (one entry per row of `postgres-surface.catalog.txt`, the raw `pg_operator`/`pg_proc` listing) with the member that mirrors it, the translation a test asserts, or a waiver or issue. `Oracle*Tests` in the conventions project hold all of it consistent in CI without building; `dotnet run tools/oracles.cs seeds` re-proves locally that every seed is caught, `… status` prints the worklist, `… pg-surface` regenerates the listing from a container
+- `test/oracles/` — The bug-finding system (`docs/oracles.md`): `claims.json` quotes every promise the consumer-facing docs make and names the test that holds it (empty `heldBy` is the worklist); `oracles.json` registers the sweep classes; `seeds/*.patch` plant one defect each in `src/` that the named oracles were shown to catch; `surface-waivers.json` names the public members no claim covers, with the reason; `candidates.json` holds disagreements found but not fixed, keyed to issues; `postgres-surface.json` holds every PostgreSQL range, multirange and array operator and function (one entry per row of `postgres-surface.catalog.txt`, the raw `pg_operator`/`pg_proc` listing) with the member that mirrors it, the translation a test asserts, or a waiver or issue; `CloneSweep.cs` is the clone-divergence sweep over the hand-copied type families (sets, arities, ranges, EF registrations), and `clone-waivers.json` explains every divergence it finds between siblings that is right as it is. `Oracle*Tests` and `CloneDivergenceTests` in the conventions project hold all of it consistent in CI without building; `dotnet run tools/oracles.cs seeds` re-proves locally that every seed is caught, `… status` prints the worklist, `… pg-surface` regenerates the listing from a container, `… clones` prints the sibling divergences with their waiver status
 - `tools/oracles.cs` — The local prover and status report for `test/oracles/`; file-based app, never run in CI
 - `test/consumer-smoke-test.sh` — The only check of *delivery* rather than code: packs the four packages, restores them into throwaway projects created outside the repository (inside it, `Directory.Build.props` would apply), compiles and runs real code against them, and asserts on printed output and translated SQL — never on the exit code alone. Four consumers: core only; a Native AOT publish of core + NodaTime, run as a native binary (extra linker paths via `SMOKE_AOT_LINKER_ARGS`, e.g. for Homebrew's dotnet); the NodaTime EF satellite, which pulls in all four through the nuspec chain; and the EF package beside `EFCore.ComplexIndexes.PostgreSQL` from nuget.org, asserting its exclusion and temporal constraints over this package's columns in the create script. `NUGET_PACKAGES` is redirected to a private folder because NuGet resolves id+version from the global cache before any source, so a locally built package is otherwise shadowed by whatever build of that version was restored before; the generated `nuget.config` uses package source mapping so this repo's ids come from the local feed only and everything else from nuget.org. Runs on every PR in both modes (own feed; the pre-built `dist` the release workflow passes). Everything is discovered (projects by globbing `src/`, types by reflection), so adding a package or a type needs no edit here
 - `docs/` — Agent docs (read relevant doc before starting work)
@@ -75,8 +75,10 @@ the work, and close it from the PR (`Closes #n`).
   `enhancement`, `documentation`, `tests`, `chore`); every `package/*` the change affects
   (`core`, `nodatime`, `efcore`, `efcore-nodatime`); the `area/*` concern (`ranges`, `range-set`,
   `value-sets`, `json`, `literals`, `aot`, `release`); and `severity/*` on a bug. Add `silent` to
-  a bug that answers wrongly without throwing; by the release rule its fix goes in the next
-  major, never deferred to a minor. Add `breaking` to anything that changes an existing answer or
+  a bug that answers wrongly without throwing. Its fix went in the next major up to 10.0.0;
+  after 10.0.0 it ships as a minor on every supported line (never a patch), whose changelog entry
+  opens with `### Changed answers`, a row linking the issue and its `docs/migration.md` section
+  (`pr-hygiene.sh` fails a `silent` PR into a minor without that row). Add `breaking` to anything that changes an existing answer or
   signature, `found-by/oracle` to what the generated-oracle machinery finds, and `stacked` to a
   PR whose base is another open PR
 - **PRs** carry their issue's labels and milestone, open with `Closes #n`, and describe the
@@ -85,11 +87,16 @@ the work, and close it from the PR (`Closes #n`).
   is attached as native sub-issues and carries the same milestone. A theme that spans releases is
   an `epic` without a milestone; a finding it produces belongs to the release epic it ships in
 - **Roadmap:** the pinned `roadmap` issue (#34) holds every epic as a sub-issue
-- **Branches:** one version is supported at a time. `main` is the next release; `release/9.x`
-  holds 9.x patches until the `v10.0.0` tag, then takes no changes. Until then, a change
-  for both merges into `main` first and is cherry-picked (`-x`) into a PR against `release/9.x`.
-  An issue fixed only on `release/9.x` is closed by hand, because `Closes #n` acts only on `main`.
-  See CONTRIBUTING.md#branches-and-releases
+- **Branches:** up to two lines are supported at once, 10.x (LTS, .NET 10) and 11.x (.NET 11).
+  Until the `v10.0.0` tag: `main` is 10.0.0; `release/9.x` holds 9.x patches and then takes no
+  changes; `net11` holds the .NET 11 retarget, ships `11.0.0-preview.N`, and merges `main`
+  forward after every change, so nothing lands on `net11` that `main` should have. At the tag,
+  `release/10.x` is cut from it and `net11` becomes `main`. After it, a change for both merges
+  into `main` first and is cherry-picked (`-x`) into a PR against `release/10.x`; additions ship
+  as 10.x minors until `v11.0.0`, after which 10.x takes fixes only. An issue fixed only on a
+  release branch is closed by hand, because `Closes #n` acts only on `main`. SECURITY.md has one
+  row per line; the other line's latest release is `CompanionLineRelease` in
+  `Directory.Build.props`. See CONTRIBUTING.md#branches-and-releases
 
 ## Docs
 - `docs/architecture.md` — Discriminated union pattern, interface hierarchy, RangeSet internals

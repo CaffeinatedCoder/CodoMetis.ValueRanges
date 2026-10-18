@@ -102,6 +102,47 @@ public sealed class ReleaseWiringConventionTests
           + "without a GitHub release for its SBOMs.");
     }
 
+    /// <summary>
+    /// The GitHub release keeps an older line and every preview off Latest.
+    /// </summary>
+    /// <remarks>
+    /// GitHub marks each new release Latest unless told otherwise, and Latest is what the repository
+    /// page and <c>gh release view</c> show. With two supported lines (#151), a 10.x patch tagged
+    /// after 11.0.0 is the ordinary case; left to the default it would make the LTS line the front
+    /// page's answer. A preview marked only <c>--prerelease</c> relies on the API refusing to make a
+    /// prerelease Latest, so it says <c>--latest=false</c> as well. Only script lines are read here:
+    /// the comment above the step explains both rules, and a test matching it would pass with the
+    /// code deleted.
+    /// </remarks>
+    [TestMethod]
+    public void TheGitHubRelease_KeepsAnOlderLineAndPreviewsOffLatest()
+    {
+        var step = Regex.Match(ReleaseWorkflowText, @"(?ms)^      - name: Create the release if it does not exist\n.*?(?=^      - name: )").Value;
+
+        Assert.AreNotEqual(0, step.Length, "Could not find the 'Create the release if it does not exist' step in the release workflow.");
+
+        var script = step.Split('\n')
+                         .Select(line => line.Trim())
+                         .Where(line => line.Length > 0 && !line.StartsWith('#'))
+                         .ToList();
+
+        Assert.IsTrue(
+            script.Any(line => line.Contains("\"$VERSION\" == *-*", StringComparison.Ordinal)),
+            "The release step no longer tells a prerelease version (x.y.z-suffix) apart, so a preview tag "
+          + "would be published as a full release.");
+        Assert.IsTrue(
+            script.Any(line => line.Contains("flags+=(--prerelease --latest=false)", StringComparison.Ordinal)),
+            "The release step does not publish a preview as a prerelease that is not Latest.");
+        Assert.IsTrue(
+            script.Any(line => line.Contains("sort -V", StringComparison.Ordinal))
+         && script.Any(line => line.Contains("flags+=(--latest=false)", StringComparison.Ordinal)),
+            "The release step no longer compares the version with the current Latest and passes "
+          + "--latest=false for an older one, so a 10.x tag pushed after 11.0.0 would take Latest.");
+        Assert.IsTrue(
+            script.Any(line => line.StartsWith("gh release create", StringComparison.Ordinal) && line.Contains("\"${flags[@]}\"", StringComparison.Ordinal)),
+            "The release step's `gh release create` does not pass the flags it computes.");
+    }
+
     [TestMethod]
     public void TheReleaseWorkflow_ChecksTheTagAgainstTheVersionProperty()
     {

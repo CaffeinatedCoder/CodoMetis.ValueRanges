@@ -68,8 +68,10 @@ written down.
 ## Issues
 
 Use the **Bug** or **Enhancement** form. The bug form asks whether the failure is silent or loud,
-because that decides which release the fix goes in: a wrong answer without an exception is fixed
-in the next major even if it's old, and a loud failure can wait for a minor.
+because that decides how the fix ships. A wrong answer without an exception found before
+10.0.0 ships is fixed in 10.0.0, even if it's old. After that it ships as a minor on every
+supported line, under "Changed answers" ([below](#a-fix-that-changes-an-answer)). A loud failure
+can wait for a minor either way.
 
 Releases and longer themes are tracked as `epic` issues, with the work as sub-issues. The pinned
 [Roadmap](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/34) lists them all,
@@ -90,32 +92,81 @@ labels when triaging, and a pull request gets the same labels as the issue it cl
 
 ## Branches and releases
 
-One version is supported at a time: the latest release (see [SECURITY.md](SECURITY.md#supported-versions)).
+Up to two lines are supported at once, one per .NET major: 10.x, the LTS line on .NET 10, and
+11.x on .NET 11 ([SECURITY.md](SECURITY.md#supported-versions) lists what each line gets). `main`
+is the next release: 10.0.0 until its tag, the 11 line after it. Each line has one branch, one `Version` in its
+`Directory.Build.props`, and the same CI and protection, and a release is a `v*` tag on the branch
+it ships from. The tag must match that `Version`, or the release workflow stops before publishing.
 
-`main` is the next release. `release/9.x` holds 9.x patches while `main` takes 10.0.0's breaking
-changes. It was cut from `main` before the first 10.0.0 change landed, and it ends at the
-`v10.0.0` tag: from then on it takes no changes, and a fix reaches 9.x users only by upgrading.
-Until then both branches get the same CI and the same protection, and a release is a `v*` tag on
-the branch it ships from: `v9.1.1` on `release/9.x`, `v10.0.0` on `main`. The tag must match
-`Version` in that branch's `Directory.Build.props`, or the release workflow stops before
-publishing. The next major's line is cut the same way, before its first breaking change.
+### Until the `v10.0.0` tag
 
-- **A change for both lines** goes into `main` first. Once it has merged, cherry-pick it onto a
-  branch from `release/9.x` (`git cherry-pick -x`, so the commit names the original) and open a PR
-  into `release/9.x` that links the `main` PR. Only loud fixes and additions go to 9.x. A silent
-  fix, or one that changes an answer, waits for the next major, as on `main`.
-- **A change for 9.x only**, such as its version bump or a fix to code `main` no longer has, goes
-  straight into `release/9.x`.
-- **Issues:** `Closes #n` closes an issue only when the PR merges into `main`. An issue fixed only
-  on `release/9.x` is closed by hand, with a comment linking the PR.
-- **Changelog:** a 9.x change goes under its 9.x version on both branches, never under the next
-  major too. `main`'s changelog keeps every 9.x section, so it stays the full history.
-- **SECURITY.md's supported-versions table** names the latest release on NuGet, never the version
-  being prepared. `SecurityPolicyConventionTests` compares it with `PackageValidationBaselineVersion`,
-  so move the table when you move the baseline, which happens when you open the next version right
-  after a tag. The tagged commit still names the release before it.
-- **GitHub's Latest release** is the highest version. The release workflow checks this rather than
-  trusting the API's default, so a tag pushed out of order can't take Latest from a newer release.
+- **`main`** is 10.0.0, the last release made under the old rule: it takes the silent fixes as a
+  major.
+- **`release/9.x`** holds 9.x patches and ends at the `v10.0.0` tag. A change for both goes into
+  `main` first; once it has merged, cherry-pick it onto a branch from `release/9.x`
+  (`git cherry-pick -x`, so the commit names the original) and open a PR into `release/9.x` that
+  links the `main` PR. Only loud fixes and additions go to 9.x. A silent fix waits for 10.0.0.
+- **`net11`** holds the .NET 11 retarget on top of `main` and ships `11.0.0-preview.N`, tagged
+  `v11.0.0-preview.N` on `net11`. Nothing lands on `net11` that `main` should have: every change
+  goes into `main`, and `net11` merges `main` forward after each one, so the 11 line never lacks a
+  10.0.0 fix.
+
+### At the `v10.0.0` tag
+
+Cut `release/10.x` from the tag, merge `net11` into `main`, and delete `net11`. `release/9.x` takes
+no changes from then on, and a fix reaches 9.x users only by upgrading.
+
+### After the `v10.0.0` tag
+
+- **`main`** is the 11 line: previews until .NET 11 is released, then `v11.0.0` and its minors.
+- **`release/10.x`** is the LTS line. A change for both goes into `main` first and is cherry-picked
+  with `-x` into a PR against `release/10.x` that links the `main` PR. A change for 10.x only, such
+  as its version bump or a fix to code `main` no longer has, goes straight into `release/10.x`.
+- **Additions** ship as 10.x minors until `v11.0.0`, and always reach `main` first, so the LTS
+  line never carries something the current line lacks. After `v11.0.0`, 10.x takes fixes only:
+  loud ones in a patch or a minor, silent ones in a minor.
+
+### A fix that changes an answer
+
+A silent fix is one where a call returned a wrong value without throwing, and the fix changes
+what it returns. With two lines, a major means a new .NET release and nothing else (11.0.0 is the
+first), so a silent fix has no major to wait for on the LTS line. After 10.0.0 it ships as a minor
+on every supported line, never a patch, and that minor says so:
+
+- **Its changelog entry opens with `### Changed answers`**, one row per changed answer, each
+  linking its issue and its section of [docs/migration.md](docs/migration.md).
+- **docs/migration.md** gets a `## Changed answers in x.y.0` section for that minor, saying how to
+  find the calls whose answer changed.
+
+10.0.0 is the last release under the old rule, and `main` keeps it until its tag: a silent fix is
+listed under Breaking in the major, and no 9.x minor carries one. `ChangelogConventionTests` holds the form: `Changed answers`
+appears only in a minor, each row links an issue and an existing migration heading, and after
+10.0.0 a change that says it used to produce a value ("where it returned …") must sit there. That
+test reads the wording, not the label. The label half is `.github/scripts/pr-hygiene.sh`: a PR
+labelled `silent` into a minor fails until its closing issue has a row there, and into a patch it
+fails outright.
+
+### Releases on two lines
+
+- **Issues:** `Closes #n` closes an issue only when the PR merges into the default branch, `main`.
+  An issue fixed only on a release branch is closed by hand, with a comment linking the PR.
+- **Changelog:** a change goes under the version it ships in on each branch, never under the next
+  major too. `main`'s changelog keeps every release's section, of both lines, so it stays the full
+  history; a cherry-pick brings its 10.x entry with it. A preview has its own
+  `## [11.0.0-preview.N]` section, which the release workflow publishes as its notes.
+- **SECURITY.md's supported-versions table** names the latest release of each line on NuGet,
+  never the version being prepared, and has no row for a preview. `SecurityPolicyConventionTests`
+  compares this branch's row with `PackageValidationBaselineVersion`, so move the row when you
+  move the baseline, which happens when you open the next version right after a tag; the tagged
+  commit still names the release before it. The other line's row is compared with
+  `CompanionLineRelease` in `Directory.Build.props`, which is empty until 11.0.0 ships. From then
+  on, a minor on one line moves its row and `CompanionLineRelease` on the other branch in a PR of
+  its own. The table gets its second row in the PR that opens the first version after `v11.0.0`.
+- **The ApiCompat baseline** is the latest stable release before the version being prepared,
+  never a preview: the 11 line validates against 10.0.0 until 11.0.0 ships.
+- **GitHub's Latest release** is the highest stable version. The release workflow decides it
+  rather than trusting the API's default, so a 10.x tag pushed after 11.0.0 exists, or any
+  preview, can't take Latest from it.
 
 ## Changelog
 
@@ -127,7 +178,8 @@ same form, with the entries that affect that package.
   never under `Unreleased`.
 - **One optional line first**, for a version where something can break you: what kind of change it
   is, and a link to its section of [docs/migration.md](docs/migration.md).
-- **Then the sections, in this order:** `### Breaking`, `### Added`, `### Changed`, `### Fixed`.
+- **Then the sections, in this order:** `### Changed answers` (a minor only, see
+  [above](#a-fix-that-changes-an-answer)), `### Breaking`, `### Added`, `### Changed`, `### Fixed`.
   Leave out the ones you don't need. A version with nothing for a package says so in one line:
   "No change in this package."
 - **Breaking** holds everything that can break existing code or data, in a major or not: a call
@@ -148,7 +200,7 @@ same form, with the entries that affect that package.
   emoji.
 
 `ChangelogConventionTests` holds the form: known sections in order, one line per change, at most
-60 words a change and 40 for the introduction, and absolute links.
+60 words a change and 40 for the introduction, absolute links, and the `Changed answers` rules.
 
 ## Oracle tests
 
@@ -172,6 +224,12 @@ the invariant literal under five cultures for every discovered type (`LiteralCul
   issue that tracks it. It fails labelled until the issue is filed, is reported as skipped while the
   issue is open, and fails as `candidate fixed` once the fix lands, so the entry is removed in the same
   PR.
+- **Clones.** The hand-copied type families — the value sets and their wrapper arities, the range
+  unions, the EF registrations — are compared sibling by sibling from the source text
+  (`CloneSweep.cs`, `CloneDivergenceTests`). A member one sibling lacks or alone has, or a body that
+  drifted from the one the others share, is either waived with a reason in `clone-waivers.json` or
+  fails CI. `dotnet run tools/oracles.cs clones` prints the list with the JSON line to paste for a new
+  one; a fix that lands at one site and not its siblings is what this catches.
 
 ## Commit trailers
 

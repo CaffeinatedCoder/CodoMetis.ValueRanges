@@ -228,6 +228,12 @@
     "against": "the documented wire form, for every discovered range, multirange and set type × six declarations × six JsonSerializerOptions (test/oracles/axes.md)"
   },
   {
+    "class": "CloneDivergenceTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "differential",
+    "against": "each hand-copied sibling's normalized source, member by member, against its family's consensus (test/oracles/CloneSweep.cs)"
+  },
+  {
     "class": "CultureEntryPointProbeTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "metamorphic",
