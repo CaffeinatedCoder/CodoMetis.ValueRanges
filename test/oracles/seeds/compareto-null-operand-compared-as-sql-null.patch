@@ -1,0 +1,18 @@
+Seed: CompareTo against a null range is left to EF Core's rewrite, so a query compares col > NULL
+Oracles: RangeOrderParityTests
+Fails: every CompareTo comparison with a null operand that memory answers true (> 0, >= 0, != 0), which returns no rows
+History: found by the pre-tag analysis (#179), fixed before 10.0.0 shipped (#220)
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
+index 3c3b2f9..d36cb56 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
+@@ -37,7 +37,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+     public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
+         => CollectionParameterExpander.Expand(
+             RangeVariantConstantRetyper.Instance.Visit(
+-                NullOperandCompareToRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))),
++                RangeSetOperatorRewriter.Instance.Visit(queryExpression)),
+             DefaultCollectionMode(eventData.Context));
+ 
+     private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)

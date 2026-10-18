@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using CodoMetis.ValueRanges.Core;
@@ -75,6 +76,20 @@ public sealed class RangeSplitOracleTests
     {
         [typeof(double)] = k => k * Math.ScaleB(1.0, 970),
         [typeof(float)]  = k => k * MathF.ScaleB(1f, 103)
+    };
+
+    /// <summary>
+    /// A start half the domain below zero and a step a third of the domain wide, for the types whose step
+    /// is their own element: from there <c>n × step</c> passes the maximum one step before
+    /// <c>start + n × step</c> does, which ended the split early (#219).
+    /// </summary>
+    private static readonly Dictionary<Type, (object Start, object Step)> WideSteps = new()
+    {
+        [typeof(int)]     = (int.MinValue / 2, int.MaxValue / 3),
+        [typeof(long)]    = (long.MinValue / 2, long.MaxValue / 3),
+        [typeof(decimal)] = (decimal.MinValue / 2, decimal.MaxValue / 3),
+        [typeof(double)]  = (double.MinValue / 2, double.MaxValue / 3),
+        [typeof(float)]   = (float.MinValue / 2, float.MaxValue / 3)
     };
 
     public sealed record SplitRow(string Label, Func<List<string>, int> Sweep)
@@ -160,6 +175,44 @@ public sealed class RangeSplitOracleTests
             });
             if (outcome != "ok")
                 failures.Add($"{label} {nearMax} Split({k}) at the domain edge → {outcome}, expected pieces ending at the maximum");
+        }
+
+        // Half the domain below zero, a third of it per step: every piece but the last is one step long,
+        // and the last is at most one step, even where n × step alone no longer fits the type.
+        if (WideSteps.TryGetValue(typeof(T), out var wide))
+        {
+            var wideStep  = Convert.ToDouble(wide.Step, CultureInfo.InvariantCulture);
+            var wideRange = TRange.CreateFinite((T)wide.Start, max, true, true);
+            var wideName  = string.Create(CultureInfo.InvariantCulture, $"[{wide.Start},{max}] by {wide.Step}");
+
+            List<T> starts;
+            try
+            {
+                starts = [.. Run(split, wideRange, 1, _ => wide.Step).Select(piece => piece.LowerBound()!.Value)];
+            }
+            catch (Exception exception)
+            {
+                failures.Add($"{label} {wideName} Split across the domain → throws {exception.GetType().Name}");
+                starts = [];
+            }
+
+            if (values is not null)
+                CheckWide("Values", [.. ((IEnumerable)Invoke(values, wideRange, 1, _ => wide.Step)).Cast<T>()]);
+            CheckWide("Split", starts);
+
+            void CheckWide(string operation, List<T> points)
+            {
+                checks++;
+                var text = string.Join(",", points.Select(point => Convert.ToString(point, CultureInfo.InvariantCulture)));
+                var gaps = points.Zip(points.Skip(1), (a, b) => Width(a, b)).ToList();
+                if (points.Count == 0 || gaps.Any(gap => !Near(gap, wideStep)) || Width(points[^1], max) > wideStep * (1 + 1e-9))
+                    failures.Add($"{label} {wideName} {operation} across the domain → starts {text}, expected one step apart up to the last step before {max}");
+            }
+
+            static double Width(T from, T to)
+                => Convert.ToDouble(to, CultureInfo.InvariantCulture) - Convert.ToDouble(from, CultureInfo.InvariantCulture);
+
+            static bool Near(double actual, double expected) => Math.Abs(actual - expected) <= Math.Abs(expected) * 1e-6;
         }
 
         // The rejections, at the call rather than at the first MoveNext.
