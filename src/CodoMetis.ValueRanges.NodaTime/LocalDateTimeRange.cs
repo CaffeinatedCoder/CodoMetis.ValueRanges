@@ -300,6 +300,24 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
         => RangeFormat.TryParse<LocalDateTimeRange, LocalDateTime>(s, provider, out result);
 
     /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(LocalDateTimeRange? other) => RangeOrder.Compare<LocalDateTime>(this, other);
+
+    /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[09:00,10:00).Shift(Period.FromWeeks(1))</c> is the same hour a week later.
     /// </summary>

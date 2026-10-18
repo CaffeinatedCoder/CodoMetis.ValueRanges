@@ -257,6 +257,24 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
         => RangeFormat.TryParse<DateRange, DateOnly>(s, provider, out result);
 
     /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(DateRange? other) => RangeOrder.Compare<DateOnly>(this, other);
+
+    /// <summary>
     /// Returns the range moved by <paramref name="days"/>, in days: both bounds move together and keep their
     /// inclusiveness, so <c>[2026-06-01,2026-06-08].Shift(7)</c> is <c>[2026-06-08,2026-06-15]</c>.
     /// </summary>

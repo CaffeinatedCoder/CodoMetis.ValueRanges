@@ -105,7 +105,7 @@ for the full reasoning.
 
 - **Containment, overlap and adjacency:** `Contains`, `Overlaps`, `IsContainedBy`, `IsAdjacentTo`.
 - **Directional comparisons:** `IsStrictlyLeftOf`/`RightOf`, `DoesNotExtendLeftOf`/`RightOf`.
-- **Set operations:** `Intersect`, `Union`, `Except`, `Complement`, `Merge`.
+- **Set operations:** `Intersect`, `Union`, `Except`, `Complement`, `Merge`, `Gap`, `Gaps`.
 - **Arithmetic:** `Shift` moves a range, `Expand` grows it on both sides.
 - **Bound accessors:** `LowerBound`/`UpperBound`/`LowerBoundInclusive`/`UpperBoundInclusive`. They
   return `null` exactly where PostgreSQL returns `NULL`.

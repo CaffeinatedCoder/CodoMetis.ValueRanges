@@ -1,0 +1,17 @@
+Seed: RangeIntersectAgg over ranges skips an empty range reached after the first input, as range_agg drops one
+Oracles: RangeAggregateParityTests
+Fails: every group holding the empty range and another range, folded with the empty range last (the sweep missed this while it folded in one order)
+
+diff --git a/src/CodoMetis.ValueRanges/RangeAggregateExtensions.cs b/src/CodoMetis.ValueRanges/RangeAggregateExtensions.cs
+index f2ceef2..e0af2a2 100644
+--- a/src/CodoMetis.ValueRanges/RangeAggregateExtensions.cs
++++ b/src/CodoMetis.ValueRanges/RangeAggregateExtensions.cs
+@@ -146,7 +146,7 @@ public static class RangeAggregateExtensions
+         TRange? accumulator = null;
+         foreach (var range in source)
+         {
+-            accumulator = accumulator is null ? range : accumulator.Intersect(range);
++            accumulator = accumulator is null ? range : range.IsEmpty() ? accumulator : accumulator.Intersect(range);
+         }
+ 
+         return accumulator;

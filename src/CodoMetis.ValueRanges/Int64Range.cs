@@ -228,8 +228,10 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     }
 
     /// <inheritdoc />
+    /// <remarks>PostgreSQL 16\'s integer grammar — decimal, or <c>0x</c>, <c>0o</c> or <c>0b</c> digits, with single
+    /// underscores between digits (<see cref="IntegerLiteral"/>); the provider is ignored.</remarks>
     public static long ParseValue(ReadOnlySpan<char> s, IFormatProvider? provider)
-        => long.Parse(s, NumberStyles.Integer, provider ?? CultureInfo.InvariantCulture);
+        => IntegerLiteral.Parse<long>(s);
 
     /// <summary>
     /// Parses a PostgreSQL range literal (e.g. <c>[1,10]</c>, <c>empty</c>, <c>(,)</c>)
@@ -255,6 +257,24 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     /// </summary>
     public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Int64Range result)
         => RangeFormat.TryParse<Int64Range, long>(s, provider, out result);
+
+    /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(Int64Range? other) => RangeOrder.Compare<long>(this, other);
 
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their

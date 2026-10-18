@@ -318,6 +318,24 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
         => RangeFormat.TryParse<YearMonthRange, YearMonth>(s, provider, out result);
 
     /// <summary>
+    /// Compares this range with <paramref name="other"/> in PostgreSQL's range order, the order
+    /// <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by lower
+    /// bound, then by upper bound.
+    /// </summary>
+    /// <remarks>
+    /// An unbounded side is the smallest lower bound and the largest upper bound. At the same value
+    /// an inclusive lower bound sorts first and an inclusive upper bound sorts last, so
+    /// <c>[1,5)</c> sorts before <c>[1,5]</c>, which sorts before <c>(1,5)</c>. The result is 0 exactly
+    /// when the two ranges are equal, and <see langword="null"/> sorts before every range.
+    /// </remarks>
+    /// <param name="other">The range to compare with.</param>
+    /// <returns>
+    /// A negative number when this range sorts first, 0 when the two are equal, and a positive
+    /// number when <paramref name="other"/> sorts first or is <see langword="null"/>.
+    /// </returns>
+    public int CompareTo(YearMonthRange? other) => RangeOrder.Compare<YearMonth>(this, other);
+
+    /// <summary>
     /// Returns the range moved by <paramref name="months"/>, in months: both bounds move together and keep their
     /// inclusiveness, so <c>[2026-01,2026-03].Shift(12)</c> is <c>[2027-01,2027-03]</c>.
     /// </summary>
