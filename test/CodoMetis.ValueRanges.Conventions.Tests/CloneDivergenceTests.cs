@@ -13,8 +13,9 @@ namespace CodoMetis.ValueRanges.Conventions.Tests;
 /// commits, wrapper arities lag their primitive set, the 9.1.0 whitespace fix landed as two commits.
 /// The claim-driven oracles hold a documented promise per type and cannot notice that one sibling
 /// lacks a line the others have. This can, from the source text alone, without running the library:
-/// a member present in all but one or two siblings, a member only one sibling has, and a body that
-/// no sibling shares while a near-identical one is shared by several.
+/// a member present in all but one or two siblings, a member only a minority has (one sibling, or a
+/// group smaller than a third of the family, reported once under the group's joined names), and a body
+/// only such a minority shares while a near-identical one is shared by more (#200).
 /// </para>
 /// <para>
 /// A divergence is not a defect by itself — the format constant of <c>DateSet</c> differs from
