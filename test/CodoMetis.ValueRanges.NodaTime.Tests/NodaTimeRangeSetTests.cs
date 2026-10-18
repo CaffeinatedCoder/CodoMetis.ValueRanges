@@ -116,4 +116,17 @@ public class NodaTimeRangeSetTests
 
         Assert.IsNull(Array.Empty<LocalDateTimeRange>().RangeIntersectAgg());
     }
+
+    [TestMethod]
+    public void TheSetAggregates_ServeNodaTimeSets()
+    {
+        DateSet[] sets =
+        [
+            DateSet.From([LocalDateRange.CreateFinite(D(2025, 1, 1), D(2025, 1, 20))]),
+            DateSet.From([LocalDateRange.CreateFinite(D(2025, 1, 10), D(2025, 2, 10))])
+        ];
+
+        Assert.AreEqual("{[2025-01-01,2025-02-10]}", sets.RangeAgg().ToString());
+        Assert.AreEqual("{[2025-01-10,2025-01-20]}", sets.RangeIntersectAgg()!.ToString());
+    }
 }

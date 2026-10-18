@@ -5,6 +5,10 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
+### Added
+
+- **EF Core: `RangeAgg` and `RangeIntersectAgg` over a multirange column** run as `range_agg` and `range_intersect_agg` over the multirange inside a `GroupBy` projection ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
+
 ### Fixed
 
 - EF Core: `Any` or `Count` with a predicate over an empty captured list of value sets, or of ranges beside a `Contains`, returns `false` or `0`, as in memory. It threw `InvalidOperationException` ("Empty collections are not supported as inline query roots") ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).

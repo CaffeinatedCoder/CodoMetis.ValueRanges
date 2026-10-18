@@ -309,4 +309,15 @@ public sealed class NodaQueryTranslationTests
         var sql = Sql(db => db.Reservations.Where(r => r.BillingPeriods.Contains(Month)));
         StringAssert.Contains(sql, "r.\"BillingPeriods\" @> DATE '2024-06-01'");
     }
+
+    [TestMethod]
+    public void NodaMultirangeAggregates_TranslateOverTheMultirange()
+    {
+        var sql = Sql(db => db.Reservations
+            .GroupBy(r => r.CustomerId)
+            .Select(g => new { Union = g.Select(r => r.BlockedDays).RangeAgg(), Common = g.Select(r => r.Windows).RangeIntersectAgg() }));
+
+        StringAssert.Contains(sql, "range_agg(r.\"BlockedDays\")");
+        StringAssert.Contains(sql, "range_intersect_agg(r.\"Windows\")");
+    }
 }

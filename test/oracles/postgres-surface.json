@@ -1425,10 +1425,10 @@
     "signature": "range_agg(anymultirange)",
     "kind": "aggregate",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeAggregateExtensions.RangeAgg",
+    "translation": "range_agg(",
     "waiver": null,
-    "issue": 93
+    "issue": null
   },
   {
     "signature": "range_agg(anyrange)",
@@ -1443,10 +1443,10 @@
     "signature": "range_intersect_agg(anymultirange)",
     "kind": "aggregate",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeAggregateExtensions.RangeIntersectAgg",
+    "translation": "range_intersect_agg(",
     "waiver": null,
-    "issue": 93
+    "issue": null
   },
   {
     "signature": "range_intersect_agg(anyrange)",

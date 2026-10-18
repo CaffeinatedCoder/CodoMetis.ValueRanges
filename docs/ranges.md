@@ -435,7 +435,24 @@ new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
 - **`RangeIntersectAgg()`** returns the intersection of all the ranges, or `null` when the
   sequence is empty.
 
-In an EF Core query, both run as the SQL aggregates inside a `GroupBy` projection. See
+Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:
+
+```csharp
+IntSet[] blocked =
+[
+    IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(20, 25)]),
+    IntSet.From([Int32Range.CreateFinite(3, 22)])
+];
+
+blocked.RangeAgg();           // { [1, 25] } — every value of every set
+blocked.RangeIntersectAgg();  // { [3, 5], [20, 22] } — the values every set holds
+```
+
+Over sets, `RangeIntersectAgg()` returns a `RangeSet`, again `null` for an empty sequence. An empty
+set among the inputs makes it the empty set. These two are generic, so they work for every range
+type, the NodaTime ones included.
+
+In an EF Core query, all four run as the SQL aggregates inside a `GroupBy` projection. See
 [Entity Framework Core](efcore.md).
 
 ## RangeSet — multirange support
