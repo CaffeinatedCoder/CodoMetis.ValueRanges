@@ -42,6 +42,8 @@ public class ClientSideOnlyProjectionTests
                 r.Seats.Length,
                 Values   = r.Seats.Values().ToList(),
                 Clamp    = r.Seats.Clamp(50),
+                Shifted  = r.Seats.Shift(10),
+                Expanded = r.Seats.Expand(-1),
                 RangeSet = r.Codes.ToRangeSet(),
                 Set      = r.SeatBlocks.ToInt32Set(),
                 First    = r.Tags[0],
@@ -51,6 +53,8 @@ public class ClientSideOnlyProjectionTests
         Assert.AreEqual(row.Seats.Length, server.Length, "Length");
         CollectionAssert.AreEqual(row.Seats.Values().ToList(), server.Values, "Values()");
         Assert.AreEqual(row.Seats.Clamp(50), server.Clamp, "Clamp");
+        Assert.AreEqual(row.Seats.Shift(10), server.Shifted, "Shift");
+        Assert.AreEqual(row.Seats.Expand(-1), server.Expanded, "Expand");
         Assert.AreEqual(row.Codes.ToRangeSet(), server.RangeSet, "ToRangeSet()");
         Assert.AreEqual(row.SeatBlocks.ToInt32Set(), server.Set, "ToInt32Set()");
         Assert.AreEqual(row.Tags[0], server.First, "set[0]");

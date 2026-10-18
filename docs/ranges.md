@@ -356,6 +356,53 @@ set.UpperBound();  // 9
 On a `RangeSet`, `LowerBound()` is the first element's lower bound, and `UpperBound()` the last
 element's upper bound.
 
+## Move or widen a range
+
+`Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the
+inclusiveness of each bound:
+
+```csharp
+var week = DateRange.CreateFinite(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 7));
+week.Shift(7);    // [2026-06-08,2026-06-14] — the same week, one week later
+week.Shift(-7);   // [2026-05-25,2026-05-31]
+
+var meeting = DateTimeRange.CreateFinite(nineAm, tenAm);           // [09:00, 10:00)
+meeting.Expand(TimeSpan.FromMinutes(15));                         // [08:45, 10:15) — a buffer on each side
+
+Int32Range.CreateFinite(1, 10).Expand(-2);                        // [3, 8] — a negative amount shrinks
+```
+
+Each range type takes the step its element type uses:
+
+| Range type | `Shift` and `Expand` take |
+|---|---|
+| `Int32Range`, `Int64Range`, `DecimalRange` | an `int`, a `long`, a `decimal` |
+| `DateRange` | a number of days |
+| `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange` | a `TimeSpan` |
+| `LocalDateRange`, `LocalDateTimeRange` | a NodaTime `Period` |
+| `InstantRange` | a NodaTime `Duration` |
+| `YearMonthRange` | a number of months |
+
+Good to know:
+
+- **An empty or infinite range comes back as it is.** It has no bound to move. An unbounded side
+  stays unbounded.
+- **Shrinking past the width gives you `Empty`.** `Expand` with a negative amount moves the bounds
+  inward, and bounds that cross make the empty range, as `CreateFinite` does.
+- **A bound moved past the last value throws.** `Shift` and `Expand` throw `OverflowException` when
+  a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They
+  never wrap around.
+- **A `TimeRange` can't cross midnight.** Moving a bound past the end of the day throws
+  `OverflowException`, where `TimeOnly.Add` would wrap to the next morning.
+- **A `DateTimeOffsetRange` keeps its offsets.** A day is exactly 24 hours, whatever a time zone
+  does that night.
+- **A period of months follows the calendar.** `LocalDateRange` and `LocalDateTimeRange` move by
+  NodaTime's calendar arithmetic, which clips to the end of a shorter month. So
+  `[2026-01-01,2026-01-31]` moved by one month is `[2026-02-01,2026-02-28]`, and moving it back
+  gives `[2026-01-01,2026-01-28]`. A period of days or weeks moves back exactly.
+- **They run in memory only.** PostgreSQL has no range arithmetic. See
+  [What runs where](efcore.md#what-runs-where).
+
 ## Combine two ranges
 
 The set operations are extension methods on the range types. They are written against
@@ -452,6 +499,33 @@ RangeSet<Int32Range, int>.From([a, b]).Merge(); // [1, 12]
 
 `Merge` ignores an empty range, and an unbounded edge stays unbounded in the result. On a
 `RangeSet`, `Merge()` covers the whole set.
+
+### Find the gap between two ranges
+
+```csharp
+var a = Int32Range.CreateFinite(1, 3);
+var b = Int32Range.CreateFinite(10, 12);
+
+a.Gap(b);  // [4, 9]
+b.Gap(a);  // [4, 9] — the order doesn't matter
+
+a.Gap(Int32Range.CreateFinite(4, 6));  // Empty — adjacent, nothing lies between them
+```
+
+`Gap` returns the range that lies between two ranges. It holds every value that `Merge` covers and
+neither range holds. So the two ranges and their gap together make up exactly `a.Merge(b)`.
+
+Good to know:
+
+- **No gap gives you `Empty`.** `Gap` returns `Empty` when the ranges overlap or are adjacent, and
+  when either of them is empty.
+- **Each bound of the gap flips at the edge it meets.** On a continuous type, `[1,3)` and `(3,5]`
+  leave the single value 3, so their gap is `[3,3]`.
+- **An unbounded range still has a gap on its bounded side.** `(-∞, 3]` and `[10, +∞)` leave
+  `[4, 9]`.
+- **`Gap` runs in the database.** In an EF Core query it becomes `range_merge` over the multirange
+  difference, because PostgreSQL has no gap function. See
+  [What runs where](efcore.md#what-runs-where).
 
 ### Aggregate a sequence of ranges
 
@@ -633,6 +707,33 @@ Good to know:
 - **An empty set is contained by every range**, the empty range included. With an empty set on
   either side, `IsStrictlyLeftOf`, `IsStrictlyRightOf`, `DoesNotExtendLeftOf`,
   `DoesNotExtendRightOf`, `Overlaps` and `IsAdjacentTo` return `false`.
+
+### Find the free slots in a set
+
+```csharp
+var booked = IntSet.From([
+    Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(20, 30), Int32Range.CreateFinite(35, 40)
+]);
+
+booked.Gaps();                                // { [11, 19], [31, 34] }
+booked.Complement();                          // { (-∞, 0], [11, 19], [31, 34], [41, +∞) }
+
+booked.Gaps(Int32Range.CreateFinite(5, 50));  // { [11, 19], [31, 34], [41, 50] }
+```
+
+`Gaps()` returns every value between the set's first and last element that the set doesn't cover.
+Unlike `Complement()`, it leaves out what lies before the first element and after the last.
+
+`Gaps(window)` returns the parts of `window` that the set doesn't cover, such as the free days of a
+month. It gives the same values as `Complement().Intersect(window)`.
+
+Good to know:
+
+- **A set with fewer than two elements has no gaps.** `Gaps()` returns the `Empty` set for it.
+- **An unbounded window keeps its open side.** `booked.Gaps(Int32Range.CreateUnboundedEnd(5))`
+  ends with `[41, +∞)`.
+- **Both run in the database.** `Gaps()` becomes `datemultirange(range_merge(x)) - x`, and
+  `Gaps(window)` becomes `datemultirange(window) - x`.
 
 ### Build a set with a collection expression
 

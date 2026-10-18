@@ -1490,8 +1490,8 @@
     "since": 18,
     "member": null,
     "translation": null,
-    "waiver": null,
-    "issue": 97
+    "waiver": "a constraint, not a value operation; docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18 shows it through EFCore.ComplexIndexes.PostgreSQL's HasTemporalForeignKey, and Npgsql 11's HasPeriod is the native form on the 11.x line (#150)",
+    "issue": null
   },
   {
     "signature": "PRIMARY KEY (…, range column WITHOUT OVERLAPS)",
@@ -1499,8 +1499,8 @@
     "since": 18,
     "member": null,
     "translation": null,
-    "waiver": null,
-    "issue": 97
+    "waiver": "a constraint, not a value operation; docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18 shows the same rule as UNIQUE (… WITHOUT OVERLAPS) through EFCore.ComplexIndexes.PostgreSQL's HasTemporalConstraint, and Npgsql 11's HasWithoutOverlaps is the native form on the 11.x line (#150)",
+    "issue": null
   },
   {
     "signature": "generate_series(lower, upper)",

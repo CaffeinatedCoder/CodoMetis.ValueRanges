@@ -48,6 +48,7 @@ internal sealed class ValueRangesMethodCallTranslator(
 
     private static readonly MethodInfo IsAdjacentToMethod = GetRangeOperandMethod(nameof(RangeExtensions.IsAdjacentTo));
     private static readonly MethodInfo MergeMethod        = GetExtensionMethod(nameof(RangeExtensions.Merge));
+    private static readonly MethodInfo GapMethod          = GetExtensionMethod(nameof(RangeExtensions.Gap));
     private static readonly MethodInfo IntersectMethod    = GetExtensionMethod(nameof(RangeExtensions.Intersect));
     private static readonly MethodInfo UnionMethod        = GetExtensionMethod(nameof(RangeExtensions.Union));
     private static readonly MethodInfo ExceptMethod       = GetExtensionMethod(nameof(RangeExtensions.Except));
@@ -189,6 +190,37 @@ internal sealed class ValueRangesMethodCallTranslator(
         if (generic == IntersectMethod)
             return sqlExpressionFactory.MakePostgresBinary(
                 PgExpressionType.RangeIntersect, Range(0), Range(1), definition.RangeTypeMapping);
+
+        // PostgreSQL has no gap function, and range - range raises when the result would be two
+        // ranges, so the hull and both operands are lifted to multiranges, subtracted, and the
+        // single range left (or the empty one) is read back with range_merge.
+        if (generic == GapMethod)
+        {
+            var hull = sqlExpressionFactory.Function(
+                "range_merge",
+                [Range(0), Range(1)],
+                nullable: true,
+                argumentsPropagateNullability: [true, true],
+                definition.RangeClrType,
+                definition.RangeTypeMapping);
+
+            var gaps = sqlExpressionFactory.MakePostgresBinary(
+                PgExpressionType.RangeExcept,
+                sqlExpressionFactory.MakePostgresBinary(
+                    PgExpressionType.RangeExcept,
+                    AsMultirange(hull, definition), AsMultirange(Range(0), definition),
+                    definition.RangeSetTypeMapping),
+                AsMultirange(Range(1), definition),
+                definition.RangeSetTypeMapping);
+
+            return sqlExpressionFactory.Function(
+                "range_merge",
+                [gaps],
+                nullable: true,
+                argumentsPropagateNullability: [true],
+                definition.RangeClrType,
+                definition.RangeTypeMapping);
+        }
 
         // Union/Except return a RangeSet, so both operands are lifted to multiranges:
         // range + range errors on disjoint operands, multirange + multirange is total.
@@ -368,6 +400,24 @@ internal sealed class ValueRangesMethodCallTranslator(
                     PgExpressionType.RangeExcept,
                     sqlExpressionFactory.Constant(definition.InfiniteRangeSet, definition.RangeSetTypeMapping),
                     Set(instance));
+
+            // The inner complement: the hull of the set minus the set.
+            case nameof(RangeSet<,>.Gaps) when instance is not null && arguments.Count == 0:
+                return SetBinary(
+                    PgExpressionType.RangeExcept,
+                    AsMultirange(
+                        sqlExpressionFactory.Function(
+                            "range_merge",
+                            [Set(instance)],
+                            nullable: true,
+                            argumentsPropagateNullability: [true],
+                            definition.RangeClrType,
+                            definition.RangeTypeMapping),
+                        definition),
+                    Set(instance));
+
+            case nameof(RangeSet<,>.Gaps) when instance is not null && arguments.Count == 1:
+                return SetBinary(PgExpressionType.RangeExcept, AsSet(arguments[0]), Set(instance));
 
             case nameof(RangeSet<,>.LowerBound) when instance is not null && arguments.Count == 0:
                 return BoundFunction("lower", Set(instance), definition);

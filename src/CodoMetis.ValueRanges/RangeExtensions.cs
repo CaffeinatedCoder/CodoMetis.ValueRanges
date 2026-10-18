@@ -691,6 +691,44 @@ public static class RangeExtensions
         }
 
         /// <summary>
+        /// Returns the range lying strictly between this range and <paramref name="other"/>: the
+        /// values that <see cref="Merge"/> covers and neither operand holds.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The gap is a single range, whichever operand comes first: <c>[1,3].Gap([10,12])</c> and
+        /// <c>[10,12].Gap([1,3])</c> are both <c>[4,9]</c>. Each of its bounds takes the opposite
+        /// inclusiveness of the operand bound it meets, so the operands, the gap and nothing else
+        /// make up the merged range: <c>[1,3)</c> and <c>(3,5]</c> leave the single value 3.
+        /// </para>
+        /// <para>
+        /// The result is <see cref="IRangeFactory{TRange,T}.Empty"/> when the operands overlap or
+        /// are adjacent, and when either is empty. An unbounded operand still has a gap on its
+        /// bounded side: <c>(-∞,3]</c> and <c>[10,+∞)</c> leave <c>[4,9]</c>.
+        /// </para>
+        /// <para>
+        /// In an EF Core query this is
+        /// <c>range_merge(multirange(range_merge(a, b)) - multirange(a) - multirange(b))</c>.
+        /// </para>
+        /// </remarks>
+        /// <param name="other">The range on the other side of the gap.</param>
+        /// <returns>The range between the two operands, or <see cref="IRangeFactory{TRange,T}.Empty"/>.</returns>
+        public TRange Gap(IRange<T> other)
+        {
+            if (range.IsEmpty() || other.IsEmpty() || range.Overlaps(other)) return TRange.Empty;
+
+            // Decided on the pair, never on the receiver's shape: two disjoint non-empty ranges
+            // have exactly one on the left, whose upper bound is therefore finite, as is the lower
+            // bound of the other. Adjacent operands need no arm of their own — the bounds they
+            // meet at describe a range with nothing in it, which CreateFinite returns as Empty.
+            var (left, right) = RangeSetHelpers.IsStrictlyLeftOf(range, other) ? (range, other) : (other, (IRange<T>) range);
+            var (end, endInclusive, _)     = RangeSetHelpers.RangeUpperBound(left);
+            var (start, startInclusive, _) = RangeSetHelpers.RangeLowerBound(right);
+
+            return TRange.CreateFinite(end, start, !endInclusive, !startInclusive);
+        }
+
+        /// <summary>
         /// Returns the largest range contained by both this range and <paramref name="other"/>.
         /// </summary>
         /// <remarks>

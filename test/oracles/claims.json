@@ -579,12 +579,14 @@
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
     "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in a projection EF runs them in memory instead:",
-    "claim": "Length, Values(), Clamp, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
+    "claim": "Length, Values(), Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Length",
       "*Range.Values",
       "RangeExtensions.Clamp",
+      "*Range.Shift",
+      "*Range.Expand",
       "ValueSetRangeExtensions.ToRangeSet",
       "ValueSetRangeExtensions.ToInt32Set",
       "StringSet.Item"
@@ -806,6 +808,22 @@
     ]
   },
   {
+    "id": "E45-gap-and-gaps-translate",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**`Gap`** becomes `range_merge` of the hull minus both ranges, computed on multiranges.",
+    "claim": "Range Gap translates to range_merge((multirange(range_merge(a, b)) - multirange(a)) - multirange(b)), RangeSet.Gaps() to multirange(range_merge(x)) - x and Gaps(window) to multirange(window) - x, and each returns the in-memory answer for every shape pair, in a projection and in a predicate.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Gap",
+      "RangeSet.Gaps"
+    ],
+    "heldBy": [
+      "QueryTranslationTests",
+      "ExecutedQueryTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
     "id": "E46-range-with-multirange-operand-translates",
     "source": "docs/efcore.md#query-ranges-with-linq",
     "quote": "Since 10.0.0 they also work on a range with a multirange on the other side, as the operator with the range on the left",
@@ -841,6 +859,88 @@
       "QueryTranslationTests",
       "NodaQueryTranslationTests",
       "RangeAggregateParityTests"
+    ]
+  },
+  {
+    "id": "E48-temporal-key-over-mapped-columns",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "`EFCore.ComplexIndexes.PostgreSQL` declares one with `HasTemporalConstraint`, over any range or multirange column this package maps:",
+    "claim": "HasTemporalConstraint over a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange column, with UseNpgsqlComplexIndexes(), renders UNIQUE (\"RoomId\", \"<column>\" WITHOUT OVERLAPS) in the create script and creates it with EnsureCreated on PostgreSQL 18, which pg_get_constraintdef reads back verbatim.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E49-temporal-key-rejects-overlap",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "A second booking for the same room whose `Period` overlaps an existing one fails with a `DbUpdateException` wrapping a `PostgresException`. Its `SqlState` is `23P01` and its `ConstraintName` is the constraint's name. Bookings for another room, and adjacent bookings, are saved.",
+    "claim": "Under a temporal key on PostgreSQL 18, a row overlapping an existing row for the same key in a DateRange, RangeSet<DateRange, DateOnly> or TimeRange column fails SaveChanges with DbUpdateException wrapping PostgresException 23P01 naming the constraint; adjacent rows (adjacent multiranges included) and rows for another key are saved.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite",
+      "RangeSet.From"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E50-temporal-foreign-key-coverage",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "A booking passes when the room's availabilities cover its period together, even across two adjacent rows. A booking that runs past them, or names a room with no availability, fails with `SqlState` `23503` (`foreign_key_violation`).",
+    "claim": "HasTemporalForeignKey over DateRange columns renders and creates FOREIGN KEY (\"RoomId\", PERIOD \"Period\") REFERENCES \"Availabilities\"(\"RoomId\", PERIOD \"Period\") on PostgreSQL 18; a dependent period covered by two adjacent principal rows is saved, and one past them or for a key with no principal row fails with DbUpdateException wrapping PostgresException 23503 naming the constraint.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.CreateFinite"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E51-temporal-key-needs-postgres-18",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "Older servers reject `WITHOUT OVERLAPS` as a syntax error.",
+    "claim": "EnsureCreated over a model with HasTemporalConstraint on PostgreSQL 16 throws PostgresException 42601.",
+    "oracle": "exception",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E52-temporal-key-creates-btree-gist",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18",
+    "quote": "ComplexIndexes adds `CREATE EXTENSION IF NOT EXISTS btree_gist` to the schema.",
+    "claim": "After EnsureCreated with a temporal key or temporal foreign key in a fresh PostgreSQL 18 database, pg_extension holds btree_gist.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
+    ]
+  },
+  {
+    "id": "E53-ensurecreated-with-complexindexes-registration",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint",
+    "quote": "Use migrations, add the constraint with > explicit SQL, or call `UseNpgsqlComplexIndexes()` on the options. That registers the package's > differ for `EnsureCreated()` too, so the constraints are created.",
+    "claim": "With UseNpgsqlComplexIndexes() on the options, EnsureCreated creates the exclusion constraints (PostgreSQL 16 and 18) and temporal constraints (18) the model declares, and an overlap is rejected; without it none is created.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "ComplexIndexesCrossTests"
     ]
   },
   {
@@ -1790,6 +1890,24 @@
     ]
   },
   {
+    "id": "M12-gaps-inner-complement",
+    "source": "docs/ranges.md#find-the-free-slots-in-a-set",
+    "quote": "Unlike `Complement()`, it leaves out what lies before the first element and after the last.",
+    "claim": "set.Gaps() holds exactly the values of set.Merge() the set does not hold, canonically, for every multirange; a set with fewer than two elements has no gaps.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.Gaps",
+      "RangeSet.Merge",
+      "RangeSet.Complement"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelMultirangeOracleTests",
+      "RangeSetLiftParityTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
     "id": "M12-multirange-order",
     "source": "docs/ranges.md#read-and-compare-sets",
     "quote": "Two sets compare element by element in the [range order](#sort-ranges), and a set that runs out of elements first sorts first.",
@@ -1801,6 +1919,24 @@
     "heldBy": [
       "RangeOrderParityTests",
       "RangeCompareToTests"
+    ]
+  },
+  {
+    "id": "M13-gaps-in-window",
+    "source": "docs/ranges.md#find-the-free-slots-in-a-set",
+    "quote": "It gives the same values as `Complement().Intersect(window)`.",
+    "claim": "set.Gaps(window) holds exactly the values of window the set does not hold, canonically, for every multirange and window; an unbounded window keeps its open side where the set leaves it uncovered.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeSet.Gaps",
+      "RangeSet.Complement",
+      "RangeSet.Intersect"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelMultirangeOracleTests",
+      "RangeSetLiftParityTests",
+      "ShapeMatrixParityTests"
     ]
   },
   {
@@ -2361,6 +2497,24 @@
     ]
   },
   {
+    "id": "R26-gap-between-two-ranges",
+    "source": "docs/ranges.md#find-the-gap-between-two-ranges",
+    "quote": "So the two ranges and their gap together make up exactly `a.Merge(b)`.",
+    "claim": "For every pair of ranges, a.Gap(b) is one range, equal to b.Gap(a), sharing no value with either operand, and a ∪ a.Gap(b) ∪ b holds exactly the values of a.Merge(b); in PostgreSQL the same as range_merge(multirange(range_merge(a,b)) - multirange(a) - multirange(b)).",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "RangeExtensions.Gap",
+      "RangeExtensions.Merge"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelOracleTests",
+      "DomainParityOracleTests",
+      "RangeSetLiftParityTests",
+      "ShapeMatrixParityTests"
+    ]
+  },
+  {
     "id": "R26-range-order-is-postgres-order",
     "source": "docs/ranges.md#sort-ranges",
     "quote": "The empty range sorts first. Every other range sorts by its lower bound, then by its upper bound.",
@@ -2373,6 +2527,23 @@
       "RangeOrderParityTests",
       "RangeCompareToTests",
       "NodaTimeRangeOrderTests"
+    ]
+  },
+  {
+    "id": "R27-gap-empty-when-touching",
+    "source": "docs/ranges.md#find-the-gap-between-two-ranges",
+    "quote": "`Gap` returns `Empty` when the ranges overlap or are adjacent, and when either of them is empty.",
+    "claim": "a.Gap(b) is Empty exactly when a and b overlap, are adjacent, or either is empty; otherwise it is non-empty, with each bound the opposite inclusiveness of the operand bound it meets.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Gap",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeGapTests",
+      "SmallModelOracleTests",
+      "DomainParityOracleTests"
     ]
   },
   {
@@ -2407,6 +2578,22 @@
     ]
   },
   {
+    "id": "R28-shift-and-expand-keep-shape",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "`Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the inclusiveness of each bound:",
+    "claim": "For every range type, shape and inclusivity, r.Shift(d) is r with both finite bounds moved by d and r.Expand(a) is r with the lower bound moved by -a and the upper by +a, each keeping its inclusiveness; Empty and Infinite come back unchanged and an unbounded side stays unbounded; r.Shift(d).Shift(-d) == r for an exact step, Expand(a) contains r for a >= 0, Expand(a) is the hull of Shift(-a) and Shift(a), and Expand(-a) their intersection.",
+    "oracle": "metamorphic",
+    "surfaces": [
+      "*Range.Shift",
+      "*Range.Expand"
+    ],
+    "heldBy": [
+      "RangeArithmeticOracleTests",
+      "RangeShiftExpandTests",
+      "NodaTimeShiftExpandTests"
+    ]
+  },
+  {
     "id": "R29-aggregates-over-sets",
     "source": "docs/ranges.md#aggregate-a-sequence-of-ranges",
     "quote": "Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:",
@@ -2420,6 +2607,21 @@
       "RangeAggregateParityTests",
       "RangeAggregateTests",
       "NodaTimeRangeSetTests"
+    ]
+  },
+  {
+    "id": "R29-expand-shrinks-to-empty",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "`Expand` with a negative amount moves the bounds inward, and bounds that cross make the empty range, as `CreateFinite` does.",
+    "claim": "r.Expand(-a) for a > 0 moves both bounds inward and returns Empty once they cross or meet without both being inclusive.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.Expand",
+      "*Range.CreateFinite"
+    ],
+    "heldBy": [
+      "RangeArithmeticOracleTests",
+      "RangeShiftExpandTests"
     ]
   },
   {
@@ -2437,7 +2639,37 @@
     ]
   },
   {
-    "id": "R31-union-closed-at-construction",
+    "id": "R30-shift-overflow-throws",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "`Shift` and `Expand` throw `OverflowException` when a bound would leave the element type, such as past `int.MaxValue` or `DateOnly.MaxValue`. They never wrap around.",
+    "claim": "For every range type, Shift or Expand moving a finite bound past the element type's least or greatest value throws OverflowException, a TimeRange bound moved past either end of the day included, and moving away from the extreme, or an unbounded side, does not throw.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Shift",
+      "*Range.Expand"
+    ],
+    "heldBy": [
+      "RangeArithmeticOracleTests",
+      "RangeShiftExpandTests",
+      "NodaTimeShiftExpandTests"
+    ]
+  },
+  {
+    "id": "R31-shift-by-months-follows-calendar",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "`LocalDateRange` and `LocalDateTimeRange` move by NodaTime's calendar arithmetic, which clips to the end of a shorter month.",
+    "claim": "LocalDateRange.Shift(Period.FromMonths(1)) of [2026-01-01,2026-01-31] is [2026-02-01,2026-02-28], and shifting it back gives [2026-01-01,2026-01-28]; a period with a time part throws ArgumentException.",
+    "oracle": "claim",
+    "surfaces": [
+      "LocalDateRange.Shift",
+      "LocalDateTimeRange.Shift"
+    ],
+    "heldBy": [
+      "NodaTimeShiftExpandTests"
+    ]
+  },
+  {
+    "id": "R32-union-closed-at-construction",
     "source": "docs/ranges.md#why-the-discard-arm-must-throw",
     "quote": "The five shapes are the only ranges that can exist. A record derived from a range type compiles, because C# gives every record a protected copy constructor, but the first `new` of it throws (`InvalidOperationException`). Only the five variants nested in the type can be constructed.",
     "claim": "For every range union, constructing a type derived from it outside the union — chaining to the copy constructor as a derived record does — throws InvalidOperationException naming the union, while a `with` on each of the five variants still yields an equal value of the same variant.",

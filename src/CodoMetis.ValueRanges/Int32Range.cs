@@ -281,6 +281,34 @@ public abstract partial record Int32Range : IRange<int>, IRangeFactory<Int32Rang
     /// </returns>
     public int CompareTo(Int32Range? other) => RangeOrder.Compare<int>(this, other);
 
+    /// <summary>
+    /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
+    /// inclusiveness, so <c>[1,5].Shift(10)</c> is <c>[11,15]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
+    /// unbounded. A negative <paramref name="delta"/> moves the range down.
+    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="delta">How far to move the range.</param>
+    /// <returns>The moved range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="int"/> can hold.</exception>
+    public Int32Range Shift(int delta) => RangeArithmetic.Move<Int32Range, int>(this, value => checked(value + delta), value => checked(value + delta));
+
+    /// <summary>
+    /// Returns the range grown by <paramref name="amount"/> on both sides: the lower bound moves down
+    /// and the upper bound up, each keeping its inclusiveness, so <c>[5,10].Expand(2)</c> is <c>[3,12]</c>.
+    /// </summary>
+    /// <remarks>
+    /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
+    /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
+    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// </remarks>
+    /// <param name="amount">How far to move each bound outward.</param>
+    /// <returns>The grown, or shrunk, range.</returns>
+    /// <exception cref="OverflowException">A moved bound is outside the values <see cref="int"/> can hold.</exception>
+    public Int32Range Expand(int amount) => RangeArithmetic.Move<Int32Range, int>(this, value => checked(value - amount), value => checked(value + amount));
+
     /// <inheritdoc />
     public override sealed string ToString()
         => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
