@@ -19,14 +19,14 @@ namespace CodoMetis.ValueRanges.Core;
 /// types, and these interfaces may gain members in a minor version.
 /// </para>
 /// <para>
-/// Every range type is also <see cref="IComparable{TRange}"/> in PostgreSQL's range order, the
+/// Every range type is also <see cref="IComparable{TRange}"/> and <see cref="IComparable"/> in PostgreSQL's range order, the
 /// order <c>ORDER BY</c> and <c>&lt;</c> use on a range column: the empty range first, then by
 /// lower bound, then by upper bound. See <c>docs/ranges.md#sort-ranges</c>.
 /// </para>
 /// </remarks>
 /// <typeparam name="TRange">The concrete range type being constructed.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
-public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable, IComparable<TRange>
+public interface IRangeFactory<TRange, T> : ISpanParsable<TRange>, IFormattable, IComparable<TRange>, IComparable
     where TRange : IRangeFactory<TRange, T>
     where T : struct, IComparable<T>, IEquatable<T>
 {

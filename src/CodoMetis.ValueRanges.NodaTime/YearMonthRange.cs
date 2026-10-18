@@ -454,6 +454,10 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// </returns>
     public int CompareTo(YearMonthRange? other) => RangeOrder.Compare<YearMonth>(this, other);
 
+    /// <inheritdoc cref="CompareTo(YearMonthRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="YearMonthRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<YearMonthRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="months"/>, in months: both bounds move together and keep their
     /// inclusiveness, so <c>[2026-01,2026-03].Shift(12)</c> is <c>[2027-01,2027-03]</c>.

@@ -290,6 +290,10 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
     /// </returns>
     public int CompareTo(DecimalRange? other) => RangeOrder.Compare<decimal>(this, other);
 
+    /// <inheritdoc cref="CompareTo(DecimalRange)"/>
+    /// <exception cref="ArgumentException"><paramref name="other"/> is not a <see cref="DecimalRange"/>.</exception>
+    int IComparable.CompareTo(object? other) => RangeOrder.CompareObject<DecimalRange>(this, other, static (a, b) => a.CompareTo(b));
+
     /// <summary>
     /// Returns the range moved by <paramref name="delta"/>: both bounds move together and keep their
     /// inclusiveness, so <c>[1.5,2).Shift(0.5m)</c> is <c>[2.0,2.5)</c>.
