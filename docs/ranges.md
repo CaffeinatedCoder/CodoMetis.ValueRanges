@@ -353,7 +353,8 @@ Good to know:
   less throws `ArgumentOutOfRangeException`. So does a step too small to move the start, such as
   `0.5m` near `decimal.MaxValue`.
 - **A `Float64Range` or `Float32Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`,
-  so the error doesn't build up from piece to piece. A step too small to move the start at its
+  so the error doesn't build up from piece to piece. Near the top of the domain, where `n × step`
+  alone is too large for the type, a boundary is the one before it plus the step. A step too small to move the start at its
   magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.
 - **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
   a value ([What runs where](efcore.md#what-runs-where)).

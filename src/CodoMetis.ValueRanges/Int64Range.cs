@@ -231,7 +231,7 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     public IEnumerable<Int64Range> Split(long step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
-        return RangeSplitting.Split<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+        return RangeSplitting.Split<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step)), previous => checked(previous + step)));
     }
 
     /// <summary>
@@ -249,7 +249,7 @@ public abstract partial record Int64Range : IRange<long>, IRangeFactory<Int64Ran
     public IEnumerable<long> Values(long step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
-        return RangeSplitting.Values<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step))));
+        return RangeSplitting.Values<Int64Range, long>(this, RangeSplitting.Steps<long>(this, (start, n) => checked(start + checked(n * step)), previous => checked(previous + step)));
     }
 
     /// <summary>

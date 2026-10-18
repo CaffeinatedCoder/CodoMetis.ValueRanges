@@ -2946,7 +2946,7 @@
     "id": "R39-values-step",
     "source": "docs/ranges.md#list-the-values-of-a-discrete-range",
     "quote": "`Int32Range.CreateFinite(1, 10).Values(3)` gives 1, 4, 7, 10.",
-    "claim": "On every discrete range type, Values(step) yields every k-th value of Values() for a grid step k, and a Period or month step counts from the start.",
+    "claim": "On every discrete range type, Values(step) yields every k-th value of Values() for a grid step k, and a Period or month step counts from the start. This holds from a start half the domain below zero with a step a third of its width, where n × step overflows before start + n × step does (#219).",
     "oracle": "metamorphic",
     "surfaces": [
       "*Range.Values"
@@ -2978,8 +2978,8 @@
   {
     "id": "R41-float64-split-rounds-once",
     "source": "docs/ranges.md#split-a-range-into-pieces",
-    "quote": "**A `Float64Range` or `Float32Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`, so the error doesn't build up from piece to piece. A step too small to move the start at its magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.",
-    "claim": "Float64Range.Split's nth boundary is Start + n * step rounded once ([0,1) by 0.1 starts its eighth piece at 0.7000000000000001); a step that does not move the start throws ArgumentOutOfRangeException at the call; near MaxValue the last piece ends at MaxValue; the pieces are adjacent and their union is the range. Float32Range.Split behaves the same over float.",
+    "quote": "**A `Float64Range` or `Float32Range` step is rounded at each boundary, once.** The boundaries are `Start + n × step`, so the error doesn't build up from piece to piece. Near the top of the domain, where `n × step` alone is too large for the type, a boundary is the one before it plus the step. A step too small to move the start at its magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.",
+    "claim": "Float64Range.Split's nth boundary is Start + n * step rounded once ([0,1) by 0.1 starts its eighth piece at 0.7000000000000001); a step that does not move the start throws ArgumentOutOfRangeException at the call; near MaxValue the last piece ends at MaxValue; the pieces are adjacent and their union is the range. Float32Range.Split behaves the same over float. Where n × step alone overflows and the boundary still fits, the boundary is the previous one plus the step, so the walk reaches the range's end (#219).",
     "oracle": "claim",
     "surfaces": [
       "Float64Range.Split",
@@ -2988,7 +2988,8 @@
     "heldBy": [
       "Float32DomainTests",
       "Float64DomainTests",
-      "RangeSplitOracleTests"
+      "RangeSplitOracleTests",
+      "RangeSplitTests"
     ]
   },
   {

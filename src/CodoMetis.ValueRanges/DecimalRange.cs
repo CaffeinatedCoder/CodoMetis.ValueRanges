@@ -202,7 +202,7 @@ public abstract partial record DecimalRange : IRange<decimal>, IRangeFactory<Dec
     public IEnumerable<DecimalRange> Split(decimal step)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
-        return RangeSplitting.Split<DecimalRange, decimal>(this, RangeSplitting.Steps<decimal>(this, (start, n) => checked(start + n * step)));
+        return RangeSplitting.Split<DecimalRange, decimal>(this, RangeSplitting.Steps<decimal>(this, (start, n) => checked(start + n * step), previous => checked(previous + step)));
     }
 
     /// <summary>
