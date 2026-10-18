@@ -189,7 +189,20 @@ internal sealed class ValueSetGuidElementJsonConverter<TSet, T> : JsonConverter<
     }
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
-        => writer.WriteStringValue(TSet.FormatValue(value, null, CultureInfo.InvariantCulture));
+    {
+        var text = TSet.FormatValue(value, null, CultureInfo.InvariantCulture);
+
+        // The hyphenated form is what System.Text.Json writes for a Guid and the only form it — and
+        // Read above — takes back. An element formatting as N, B or P would otherwise write a payload
+        // neither sibling can read, so it is refused here naming the contract, as the integer
+        // converter refuses non-numeric text.
+        if (!Guid.TryParseExact(text, "D", out _))
+            throw new JsonException(
+                $"{typeof(T).Name} formats as '{LiteralExcerpt.Of(text)}', which is not the hyphenated uuid form. An element of "
+              + $"{typeof(TSet).Name} must format as exactly the text form of the primitive it wraps.");
+
+        writer.WriteStringValue(text);
+    }
 }
 
 /// <summary>

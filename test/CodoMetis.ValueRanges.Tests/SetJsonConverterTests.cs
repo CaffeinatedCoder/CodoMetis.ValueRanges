@@ -429,6 +429,34 @@ public class SetJsonConverterTests
             Outcome(() => JsonSerializer.Deserialize<GuidSet<TestId>>($"[{token}]", Options)!.ToString()),
             token);
 
+    /// <summary>
+    /// A Guid wrapper formatting as <c>N</c> passes the literal (<c>uuid_in</c> reads it) but would
+    /// write JSON that neither <c>GuidSet</c> nor the wrapper reads back, so the write refuses it
+    /// naming the contract, as the integer converter refuses non-numeric text.
+    /// </summary>
+    [TestMethod]
+    public void WrapperSet_GuidBacked_ElementNotFormattingAsTheHyphenatedForm_IsRefusedOnWrite()
+    {
+        var set   = GuidSet<TestUndashedId>.From(new TestUndashedId(Guid.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff")));
+        var error = Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Serialize(set, Options));
+
+        StringAssert.Contains(error.Message, nameof(TestUndashedId));
+        StringAssert.Contains(error.Message, "text form");
+    }
+
+    private readonly record struct TestUndashedId(Guid Value) : IFormattable, IParsable<TestUndashedId>, IComparable<TestUndashedId>
+    {
+        public static TestUndashedId Parse(string s, IFormatProvider? provider) => new(Guid.Parse(s));
+        public static bool TryParse(string? s, IFormatProvider? provider, out TestUndashedId result)
+        {
+            var ok = Guid.TryParse(s, out var value);
+            result = new(value);
+            return ok;
+        }
+        public string ToString(string? format, IFormatProvider? formatProvider) => Value.ToString("N");
+        public int CompareTo(TestUndashedId other) => Value.CompareTo(other.Value);
+    }
+
     private static string Outcome(Func<string> read)
     {
         try
