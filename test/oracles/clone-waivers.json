@@ -603,13 +603,6 @@
   },
   {
     "family": "nodatime ranges",
-    "unit": "LocalDateRange",
-    "member": "EndIsInfinity($T)",
-    "kind": "extra",
-    "reason": "a closed date range's end stands for infinity) the day before the maximum, where its exclusive end is the extreme (#117, #224); LocalDateTimeRange and InstantRange are continuous, and YearMonthRange's month before the last stores as a finite date"
-  },
-  {
-    "family": "nodatime ranges",
     "unit": "InstantRange",
     "member": "IsInfinity($T)",
     "kind": "lone body",
@@ -619,8 +612,15 @@
     "family": "nodatime ranges",
     "unit": "YearMonthRange",
     "member": "IsInfinity($T)",
-    "kind": "lone body",
-    "reason": "YearMonth has no MinIsoValue or MaxIsoValue; the type's own MinIso and MaxIso are the months of LocalDate's ISO extremes, which the store writes as -infinity and infinity"
+    "kind": "missing",
+    "reason": "a month stands for an infinity on one side only: the first month's first day is -infinity and the last month's last day is infinity, but the last month as a lower bound and the first as an upper bound are dates (#257), so YearMonthRange has StartIsInfinity and EndIsInfinity instead of one IsInfinity"
+  },
+  {
+    "family": "nodatime ranges",
+    "unit": "YearMonthRange",
+    "member": "StartIsInfinity($T)",
+    "kind": "extra",
+    "reason": "a month stands for an infinity on one side only: the first month's first day is -infinity and the last month's last day is infinity, but the last month as a lower bound and the first as an upper bound are dates (#257); the day and instant siblings' extremes are infinities on either side"
   },
   {
     "family": "efcore wrapper bridges",

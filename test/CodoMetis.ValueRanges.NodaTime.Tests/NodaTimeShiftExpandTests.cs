@@ -118,6 +118,41 @@ public class NodaTimeShiftExpandTests
     }
 
     /// <summary>
+    /// The day before <see cref="LocalDate.MaxIsoValue"/> stands for <c>infinity)</c> as a closed end, the
+    /// form a column holding <c>[x,infinity)</c> loads as, and stays; a finite end moved onto it throws
+    /// (#257, #260). A closed end at the minimum is a date, and moves.
+    /// </summary>
+    [TestMethod]
+    public void LocalDateRange_InfiniteEnds_StayAndFiniteOnesDoNotLandThere()
+    {
+        var openEnded = LocalDateRange.CreateFinite(new LocalDate(2026, 1, 1), LocalDate.MaxIsoValue.PlusDays(-1));
+        Assert.AreEqual(LocalDateRange.CreateFinite(new LocalDate(2025, 12, 31), LocalDate.MaxIsoValue.PlusDays(-1)),
+                        openEnded.Shift(Period.FromDays(-1)));
+
+        var nearEnd = LocalDateRange.CreateFinite(LocalDate.MaxIsoValue.PlusDays(-4), LocalDate.MaxIsoValue.PlusDays(-3));
+        Assert.AreEqual(nearEnd, nearEnd.Shift(Period.FromDays(1)).Shift(Period.FromDays(-1)));
+        Assert.ThrowsExactly<OverflowException>(() => nearEnd.Shift(Period.FromDays(2)));
+
+        Assert.AreEqual(LocalDateRange.CreateFinite(LocalDate.MinIsoValue, LocalDate.MinIsoValue.PlusDays(5)),
+                        LocalDateRange.CreateFinite(LocalDate.MinIsoValue, LocalDate.MinIsoValue).Shift(Period.FromDays(5)));
+
+        var wallClock = LocalDateTimeRange.CreateFinite(new LocalDateTime(2026, 1, 1, 0, 0), LocalDateTime.MaxIsoValue.PlusMinutes(-2));
+        Assert.AreEqual(wallClock, wallClock.Shift(Period.FromMinutes(1)).Shift(Period.FromMinutes(-1)));
+        Assert.ThrowsExactly<OverflowException>(() => wallClock.Shift(Period.FromMinutes(2)));
+
+        var instants = InstantRange.CreateFinite(Instant.FromUtc(2026, 1, 1, 0, 0), Instant.MaxValue.Minus(Duration.FromMinutes(2)));
+        Assert.AreEqual(instants, instants.Shift(Duration.FromMinutes(1)).Shift(Duration.FromMinutes(-1)));
+        Assert.ThrowsExactly<OverflowException>(() => instants.Shift(Duration.FromMinutes(2)));
+
+        var months = YearMonthRange.CreateFinite(new YearMonth(9999, 9), new YearMonth(9999, 10));
+        Assert.AreEqual(months, months.Shift(1).Shift(-1));
+        Assert.ThrowsExactly<OverflowException>(() => months.Shift(2), "9999-12 stands for infinity");
+        Assert.AreEqual(YearMonthRange.CreateFinite(new YearMonth(-9998, 1), new YearMonth(-9998, 6)),
+                        YearMonthRange.CreateFinite(new YearMonth(-9998, 1), new YearMonth(-9998, 1)).Shift(5),
+                        "the first month as an end is a date, and moves; as a start it stands for -infinity, and stays");
+    }
+
+    /// <summary>
     /// A month or year shift of a short range ending on the 28th to 31st can be <c>Empty</c>: the start
     /// and the day after the end clip separately and can meet. That is PostgreSQL's answer for the
     /// <c>daterange</c> and <c>LocalDateTimeRange</c>'s for the same days, and the maintainer kept it (#259).

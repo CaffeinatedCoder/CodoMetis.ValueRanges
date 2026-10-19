@@ -1,0 +1,18 @@
+Seed: LocalDateRange counts only the maximum as an infinite end, not the day before it, which is how a column holding [x,infinity) loads
+Oracles: RangeArithmeticOracleTests
+Fails: the LocalDateRange row whose end stands for infinity): Shift(-1) moves the end off 9999-12-30
+History: the rule shipped untested with #224, found by the final pre-release analysis (#257)
+
+diff --git a/src/CodoMetis.ValueRanges.NodaTime/LocalDateRange.cs b/src/CodoMetis.ValueRanges.NodaTime/LocalDateRange.cs
+index bb78c31..b4d034b 100644
+--- a/src/CodoMetis.ValueRanges.NodaTime/LocalDateRange.cs
++++ b/src/CodoMetis.ValueRanges.NodaTime/LocalDateRange.cs
+@@ -566,7 +566,7 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
+     /// <c>[x,9999-12-30]</c> (#117). Not at the minimum: a closed end there is <c>[-infinity,0001-01-02)</c>
+     /// in PostgreSQL's half-open form, whose upper bound is a date (#257).
+     /// </summary>
+-    private static bool EndIsInfinity(LocalDate end) => end >= LocalDate.MaxIsoValue.PlusDays(-1);
++    private static bool EndIsInfinity(LocalDate end) => end >= LocalDate.MaxIsoValue;
+ 
+     /// <summary>
+     /// Moves a closed upper bound as the exclusive end PostgreSQL stores for it — the day after —

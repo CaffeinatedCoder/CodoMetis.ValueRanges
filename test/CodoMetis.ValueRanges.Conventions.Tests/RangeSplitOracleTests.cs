@@ -307,6 +307,34 @@ public sealed class RangeSplitOracleTests
                     .Cast<T>().Where((_, index) => index % k == 0)];
     }
 
+    /// <summary>
+    /// A <c>LocalDateTimeRange</c> split by a period of nanoseconds: the period's nanosecond count times
+    /// <c>n</c> leaves <c>long</c> while the boundary is still millennia inside the domain, which ended
+    /// the split after ten pieces of the expected 284 (#255). Every piece but the last is one step long,
+    /// counted by adding the step to the previous start, and the last is at most one step.
+    /// </summary>
+    [TestMethod]
+    public void Split_LocalDateTimeByANanosecondPeriod_ReachesTheEnd()
+    {
+        var step  = Period.FromNanoseconds(1_000_000_000_000_000_000);   // about 31.7 years
+        var range = LocalDateTimeRange.CreateFinite(new LocalDateTime(1, 1, 1, 0, 0), new LocalDateTime(9001, 1, 1, 0, 0));
+
+        var starts = range.Split(step).Cast<LocalDateTimeRange.Finite>().Select(piece => piece.Start).ToList();
+        var failures = new List<string>();
+
+        for (var i = 1; i < starts.Count; i++)
+        {
+            if (starts[i] != starts[i - 1].Plus(step))
+                failures.Add($"piece {i} starts at {starts[i]}, one step after {starts[i - 1]} is {starts[i - 1].Plus(step)}");
+        }
+
+        if (starts.Count == 0 || starts[^1].Plus(step) < new LocalDateTime(9001, 1, 1, 0, 0))
+            failures.Add($"{starts.Count} pieces, the last starting at {(starts.Count > 0 ? starts[^1] : default)}: it is wider than one step");
+
+        Candidates.Verdict(nameof(RangeSplitOracleTests), failures, "LocalDateTimeRange split by nanoseconds",
+                           method: nameof(Split_LocalDateTimeByANanosecondPeriod_ReachesTheEnd));
+    }
+
     /// <summary>The calendar split of the date ranges: one piece per period, clipped to the range.</summary>
     [TestMethod]
     public void SplitByCalendarPeriod_OnePiecePerPeriod_ClippedToTheRange()

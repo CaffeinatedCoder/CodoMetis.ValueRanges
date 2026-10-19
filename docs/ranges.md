@@ -430,7 +430,15 @@ Good to know:
 - **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
   runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`. With a
   `null` range on the right, the query returns the rows memory returns: `> 0`, `>= 0` and `!= 0` hold
-  for every row, and `< 0`, `<= 0` and `== 0` for none.
+  for every row, and `< 0`, `<= 0` and `== 0` for none. The same holds when you compare `CompareTo`
+  with `-1` or `1`, which EF Core also turns into operators. `CompareTo` answers only `-1`, `0` or `1`,
+  so `== 1` means "sorts after" in memory as in SQL. A projected `CompareTo`, such as
+  `Select(b => b.Period.CompareTo(other))`, returns the same number in the query as in memory, also for
+  a `null` operand.
+- **A NULL column compares as `Comparer<T>.Default` orders a null.** It is equal to a `null` range,
+  and before every other range. So with a `null` operand, a NULL column matches `== 0`, `>= 0` and
+  `<= 0`, and with a non-null operand it compares lower, so it matches `< 0`, `<= 0` and `!= 0`. In
+  memory, calling `CompareTo` on a null throws.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
   nullable column, the two orders differ only in where the nulls go.
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
@@ -502,8 +510,14 @@ Good to know:
   `infinity` and `-infinity`. `Shift` and `Expand` leave such a bound alone, as `infinity - 1`
   is still `infinity` in PostgreSQL. A closed date range counts the day before the maximum too,
   because a column holding `[2026-01-01,infinity)` loads as `[2026-01-01,9999-12-30]`. So that
-  range shifted back a day is `[2025-12-31,9999-12-30]`, and it still ends at infinity. The
-  integer and float ranges have no infinity, so their extremes still throw.
+  range shifted back a day is `[2025-12-31,9999-12-30]`, and it still ends at infinity. A closed
+  date range's end at the minimum is a date, though, and moves. The integer and float ranges have
+  no infinity, so their extremes still throw.
+- **A finite bound can't move onto infinity.** `Shift` and `Expand` throw `OverflowException` when
+  they would move a finite bound onto a value that stands for infinity, as they do for a move past
+  it. Saved, the bound would come back as infinity, and shifting back wouldn't restore the range.
+  So `DateRange.CreateFinite(new DateOnly(9999, 12, 1), new DateOnly(9999, 12, 29)).Shift(1)`
+  throws, because its end would land on 9999-12-30.
 - **A `Float64Range` or `Float32Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`,
   so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue`
   throws `OverflowException`, as for the other types. A `NaN` or infinite step throws
