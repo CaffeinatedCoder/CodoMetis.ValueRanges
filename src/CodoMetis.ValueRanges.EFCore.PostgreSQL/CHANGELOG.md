@@ -16,6 +16,15 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 - EF Core: an `ExecuteUpdate` that sets a nullable value set inside a JSON column to a value that may be null is refused for the JSON array alone; Npgsql 11 writes the null outcome as JSON null, so the message no longer names a whole-document NULL ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).
 - EF Core: an empty captured list of ranges or sets reads no rows through EF Core 11's own `SELECT … WHERE FALSE`; the SQL differs from 10.x, the answers do not ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
 
+## [10.1.0] — 2026-10-19
+
+### Fixed
+
+- EF Core: `Any` or `Count` over an empty captured list of ranges or value sets returns `false` or `0` on EF Core 10.0.2 and later, where it failed with `42883: operator does not exist: text && int4range`. The stopgap `AppContext.SetSwitch("Microsoft.EntityFrameworkCore.Issue37216", true)` also brings back EF Core's own failure on empty lists of other types ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+- EF Core: `RangeSet.Contains` translates on the EF Core 10 patch that carries [dotnet/efcore#37081](https://github.com/dotnet/efcore/issues/37081), where every overload threw `ArgumentException` inside EF Core before translation. That patch, planned as 10.0.15, was not published when 10.1.0 shipped. Its stopgap `AppContext.SetSwitch("Microsoft.EntityFrameworkCore.Issue37081", true)` also gives up EF Core's own fix for `IReadOnlySet` parameters, which inline their values again ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
+- EF Core: `ExecuteUpdate` of a value set inside a JSON column is refused naming the property (`'Doc.Tags'`) on Npgsql EF 10.0.3 with `SetPostgresVersion(16, 0)` or higher, where it was refused naming the column (`'Doc'`), and the refusal no longer says that a value that may be `null` writes `NULL` as the whole document ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).
+- EF Core: `a == b ? null : a` over a value set `Union` computed on the server, which EF Core writes as `NULLIF(a, b)`, is refused as value set equality, where it was refused naming no operation ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#combine-sets-with-union)).
+
 ## [10.0.0] — 2026-10-19
 
 Nothing was removed or renamed. Some calls answer differently, and text PostgreSQL refuses is refused here too: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).

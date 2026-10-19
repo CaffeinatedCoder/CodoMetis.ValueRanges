@@ -53,16 +53,16 @@ maintained.
 
 | Version | Supported |
 |---|---|
-| 10.0.x | ✅ |
-| < 10.0 | ❌ |
+| 10.1.x | ✅ |
+| < 10.1 | ❌ |
 
 Previews (`11.0.0-preview.N`) are not supported versions and have no row: a fix reaches a preview
 in the next preview.
 
 ### How the table changes
 
-- **Until 11.0.0 ships**, one line is supported: 10.0.x. 9.x stopped receiving fixes when 10.0.0
-  shipped. The 11.0.0 previews on `main` have no row.
+- **Until 11.0.0 ships**, one line is supported: the latest 10.x minor. 9.x stopped receiving fixes
+  when 10.0.0 shipped. The 11.0.0 previews on `main` have no row.
 - **When 11.0.0 ships**, the table gets its second row: 11.0.x, and below it the latest 10.x minor.
   From then on each line's row moves when that line ships a minor.
 

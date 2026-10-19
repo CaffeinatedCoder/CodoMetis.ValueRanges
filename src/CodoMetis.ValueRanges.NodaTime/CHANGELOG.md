@@ -15,6 +15,12 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. The
 
 - Value sets: every set type implements `IFormattable` itself, so `ToString()` and formatting no longer run the interface's default, whose shared-generic stub traps under Native AOT with ILCompiler 11 RC2 ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
 
+## [10.1.0] — 2026-10-19
+
+### Fixed
+
+- NodaTime: `ToString` on `LocalDateSet`, `LocalTimeSet`, `LocalDateTimeSet`, `InstantSet` and `YearMonthSet`, and on their wrapper sets, runs in a `net11.0` Native AOT consumer, where the process ended with `SIGTRAP` on the first call ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+
 ## [10.0.0] — 2026-10-19
 
 Nothing was removed or renamed. Some calls answer differently, and text PostgreSQL refuses is refused here too: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).

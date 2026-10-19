@@ -11,6 +11,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 
 - Targets `net11.0` and references `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime` 11 (a release candidate while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
 
+## [10.1.0] — 2026-10-19
+
+No change in this package. The NodaTime ranges and sets get the EF Core package's fixes for an empty captured list (EF Core 10.0.2 and later) and for `RangeSet.Contains` on the planned EF Core 10.0.15 (dotnet/efcore#37081).
+
 ## [10.0.0] — 2026-10-19
 
 ### Breaking
