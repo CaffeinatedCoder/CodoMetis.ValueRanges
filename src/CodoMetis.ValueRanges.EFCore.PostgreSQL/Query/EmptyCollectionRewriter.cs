@@ -19,10 +19,10 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// (issue #137).
 /// </para>
 /// <para>
-/// Until 10.0.0 EF Core's SQL generator refused a <c>VALUES</c> with no rows ("Empty collections are
-/// not supported as inline query roots"), and this gave the <c>SELECT</c> holding it one row of typed
-/// <c>NULL</c>s under <c>WHERE FALSE</c>. EF Core 11 (and an EF Core 10 patch, dotnet/efcore#37216)
-/// replaces the empty <c>VALUES</c> itself, in its nullability processing, with
+/// EF Core 10.0.0 and 10.0.1 refused a <c>VALUES</c> with no rows in the SQL generator ("Empty
+/// collections are not supported as inline query roots"), and against those this gave the
+/// <c>SELECT</c> holding it one row of typed <c>NULL</c>s under <c>WHERE FALSE</c>. EF Core 11 (and
+/// EF Core 10.0.2, dotnet/efcore#37216) replaces the empty <c>VALUES</c> itself, in its nullability processing, with
 /// <c>(SELECT NULL AS "Value" WHERE FALSE) AS w</c> — but the <c>NULL</c> is bare: Npgsql writes a
 /// null constant without its type, PostgreSQL types a bare <c>NULL</c> as <c>text</c>, and
 /// <c>w."Value" &amp;&amp; b."Seats"</c> then fails on the server with <c>42883</c>, "operator does

@@ -20,7 +20,8 @@ multirange and array columns, so one expression means the same thing in a unit t
 dotnet add package CodoMetis.ValueRanges
 ```
 
-You need .NET 11 or later (the 10.x line stays on .NET 10). To run your LINQ queries as SQL, add the EF Core package,
+Version 11 needs .NET 11, and version 10 needs .NET 10. Until 11.0.0 is released, `dotnet add package`
+installs 10.x, and the 11 previews need `--prerelease`. To run your LINQ queries as SQL, add the EF Core package,
 [`CodoMetis.ValueRanges.EFCore.PostgreSQL`](docs/efcore.md). It needs PostgreSQL 16 or later. For NodaTime types, add the
 [NodaTime packages](#nodatime).
 
