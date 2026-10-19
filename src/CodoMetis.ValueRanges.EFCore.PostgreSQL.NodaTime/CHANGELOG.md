@@ -5,7 +5,7 @@ covers all four packages, which share one version number and release together.
 
 ## [10.1.0]
 
-No change in this package.
+No change in this package. The NodaTime ranges and sets get the EF Core package's fix for an empty captured list on EF Core 10.0.2 and later.
 
 ## [10.0.0] — 2026-10-19
 
