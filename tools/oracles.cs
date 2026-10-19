@@ -21,7 +21,8 @@
 // and each oracle class the patch's `Oracles:` line names run in its project. A seed is caught by an
 // oracle when at least one of its tests fails with a row that is not a known candidate (SeedVerdict); one line
 // per (seed, oracle), and exit code 1 unless every pair is CAUGHT. Oracles that need Docker are run
-// too — start Docker first, or pass a filter that leaves them out.
+// too — start Docker first, or pass a filter that leaves them out. An oracle test/oracles/compiled-out.json
+// records as compiled out on this line is SKIPPED with the issue that compiles it back, not run.
 //
 // `pg-surface`: starts a PostgreSQL container (default image postgres:18-alpine), lists every pg_operator
 // and pg_proc row over anyrange, anymultirange, anyarray and anycompatiblearray plus the constructors of
@@ -89,6 +90,8 @@ int Clones(string filter)
 int Seeds(string filter)
 {
     var oracles = Json<List<Oracle>>("oracles.json").ToDictionary(o => o.Class, StringComparer.Ordinal);
+    var compiledOut = Json<List<CompiledOut>>("compiled-out.json").ToDictionary(c => c.Class, StringComparer.Ordinal);
+    var skipped = 0;
     var seeds = Directory.GetFiles(Path.Combine(oraclesDir, "seeds"), "*.patch")
                          .Where(s => Path.GetFileName(s).Contains(filter, StringComparison.OrdinalIgnoreCase))
                          .Order(StringComparer.Ordinal)
@@ -111,6 +114,13 @@ int Seeds(string filter)
             Require(Run(scratch, "git", "apply", "--whitespace=nowarn", seed), "apply");
 
             var byProject = named.Select(n => oracles.TryGetValue(n, out var o) ? o : throw new SeedError($"'{n}' is not in oracles.json"))
+                                 .Where(o =>
+                                 {
+                                     if (!compiledOut.TryGetValue(o.Class, out var gap)) return true;
+                                     skipped++;
+                                     Console.WriteLine($"SKIPPED {name} → {o.Class}: compiled out of {gap.Project} on this line until #{gap.Issue}");
+                                     return false;
+                                 })
                                  .GroupBy(o => o.Project);
             foreach (var group in byProject)
             {
@@ -139,7 +149,9 @@ int Seeds(string filter)
         }
     }
 
-    Console.WriteLine(allCaught ? "every seed is caught" : "A SEED IS NOT CAUGHT — the oracle it names cannot fail for that defect");
+    Console.WriteLine(!allCaught ? "A SEED IS NOT CAUGHT — the oracle it names cannot fail for that defect"
+                    : skipped > 0 ? $"every seed is caught, except {skipped} pair(s) skipped: their oracle is compiled out on this line"
+                    : "every seed is caught");
     return allCaught ? 0 : 1;
 }
 
@@ -170,15 +182,24 @@ int Status()
                          .ToList();
     var candidates = Json<List<Candidate>>("candidates.json");
 
-    var held = claims.Where(c => c.HeldBy is { Count: > 0 }).ToList();
-    Console.WriteLine($"claims: {claims.Count}, held by a test: {held.Count}, unheld (the worklist): {claims.Count - held.Count}");
-    foreach (var c in claims.Where(c => c.HeldBy is not { Count: > 0 }))
-        Console.WriteLine($"  UNHELD  {c.Id,-32} {c.Source}");
+    // A class compiled out on this line holds nothing here; OracleCatalogueTests keeps the record true.
+    var compiledOut = Json<List<CompiledOut>>("compiled-out.json").ToDictionary(c => c.Class, StringComparer.Ordinal);
+    bool Held(Claim c) => c.HeldBy?.Any(h => !compiledOut.ContainsKey(h)) == true;
+
+    var held = claims.Where(Held).ToList();
+    Console.WriteLine($"claims: {claims.Count}, held by a compiled test: {held.Count}, unheld (the worklist): {claims.Count - held.Count}");
+    foreach (var c in claims.Where(c => !Held(c)))
+    {
+        var gaps = (c.HeldBy ?? []).Where(compiledOut.ContainsKey).Select(h => $"{h} compiled out until #{compiledOut[h].Issue}").ToList();
+        Console.WriteLine($"  UNHELD  {c.Id,-32} {c.Source}{(gaps.Count > 0 ? $"  ({string.Join("; ", gaps)})" : "")}");
+    }
 
     var seeded = seeds.SelectMany(s => s.Oracles).ToHashSet(StringComparer.Ordinal);
     Console.WriteLine($"oracles: {oracles.Count}, seeds: {seeds.Count}, oracles without a seed: {oracles.Count(o => !seeded.Contains(o.Class))}");
     foreach (var o in oracles.Where(o => !seeded.Contains(o.Class)))
         Console.WriteLine($"  UNSEEDED {o.Class}");
+    foreach (var o in oracles.Where(o => compiledOut.ContainsKey(o.Class)))
+        Console.WriteLine($"  COMPILED OUT {o.Class} until #{compiledOut[o.Class].Issue}: its seeds are skipped on this line");
 
     Console.WriteLine($"candidates: {candidates.Count} ({candidates.Count(c => c.Issue.Length == 0)} without an issue)");
     foreach (var c in candidates)
@@ -352,6 +373,7 @@ static void Require((int Exit, string Output) result, string step)
 sealed record Oracle(string Class, string Project, string Kind, string Against, List<string>? Needs);
 sealed record PgSurfaceEntry(string Signature, string Kind, double Since, string? Member, string? Translation, string? Waiver, int? Issue);
 sealed record Claim(string Id, string Source, string Quote, [property: System.Text.Json.Serialization.JsonPropertyName("claim")] string Statement, string Oracle, List<string>? Surfaces, List<string>? HeldBy);
+sealed record CompiledOut(string Class, string Project, int Issue, string Reason);
 sealed record Candidate(string Oracle, string Row, string Family, string Issue);
 sealed class SeedError(string message) : Exception(message);
 

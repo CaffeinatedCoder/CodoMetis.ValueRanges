@@ -1,0 +1,8 @@
+[
+  {
+    "class": "ComplexIndexesCrossTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "issue": 333,
+    "reason": "EFCore.ComplexIndexes.PostgreSQL 5.x pins EF Core and Npgsql to 10, so the 11 line compiles the class only on net10.0. Its claims are unheld here until #333 holds them against CodoMetis.EFCore.SchemaKit.PostgreSQL; release/10.x still runs it."
+  }
+]
