@@ -13,6 +13,12 @@ has the rules.
 
 ## [10.1.0]
 
+One call answers differently, on the .NET 11 runtime only: [Changed answers in 10.1.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1010).
+
+### Changed answers
+
+- Literals: a time, `DateTime` or `DateTimeOffset` element with an hour of 24 throws `FormatException` on the .NET 11 runtime too, where it returned midnight: `{24:00:00}` read as `{00:00:00}` and `T24:00:00` as the next day. On .NET 10 it always threw ([#300](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/300), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1010)).
+
 ### Fixed
 
 - EF Core: `Any` or `Count` over an empty captured list of ranges or value sets returns `false` or `0` on EF Core 10.0.2 and later, where it failed with `42883: operator does not exist: text && int4range`. The stopgap `AppContext.SetSwitch("Microsoft.EntityFrameworkCore.Issue37216", true)` also brings back EF Core's own failure on empty lists of other types ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
