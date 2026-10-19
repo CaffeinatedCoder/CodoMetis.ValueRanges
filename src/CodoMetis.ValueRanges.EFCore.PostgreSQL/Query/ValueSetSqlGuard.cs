@@ -40,7 +40,8 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 ///   <item>a column of the outermost <c>SELECT</c>, which is materialized, and materialization
 ///   canonicalizes through the set's <c>From</c>.</item>
 /// </list>
-/// Everything else is refused: equality, <c>cardinality</c>, <c>GROUP BY</c>, <c>DISTINCT</c>,
+/// Everything else is refused: equality (<c>NULLIF</c> included, which EF Core writes for
+/// <c>a == b ? null : a</c>), <c>cardinality</c>, <c>GROUP BY</c>, <c>DISTINCT</c>,
 /// <c>ORDER BY</c>, a deduplicating set operation, <c>IN</c>, and an <c>UPDATE</c> setter — which
 /// would store the concatenation, after which server-side equality and <c>Count</c> on that row are
 /// wrong for good. PostgreSQL has no array-distinct to canonicalize into, and sorting in SQL would
@@ -50,12 +51,12 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// <para>
 /// <b>A value set inside a JSON column must not be written by <c>to_jsonb</c>.</b> Npgsql
 /// translates an <c>ExecuteUpdate</c> setter targeting a scalar inside a JSON document to
-/// <c>jsonb_set(doc, path, to_jsonb(value))</c>. For a value set, <c>value</c> is the PostgreSQL
-/// array, so the document receives a JSON array where it holds the set's literal string: the
-/// update reports success and the row no longer loads. A <c>null</c> value set is refused too, with
-/// its own message: it arrives as <c>to_jsonb(NULL)</c>, which PostgreSQL cannot type, and a NULL
-/// that it could type would make <c>jsonb_set</c> return NULL for the whole document. Detecting it
-/// here, by what will be written rather than by how the setter lambda named the property, covers
+/// <c>jsonb_set(doc, path, to_jsonb(value))</c> — <c>jsonb_set_lax</c> from Npgsql EF 10.0.3 on
+/// PostgreSQL 16 and later when the value may be null. For a value set, <c>value</c> is the PostgreSQL
+/// array, so the document receives a JSON array where it holds the set's literal string: the update
+/// reports success and the row no longer loads. A <c>null</c> value set is refused too, with its own
+/// message: it arrives as <c>to_jsonb(NULL)</c>, which PostgreSQL cannot type (<c>42804</c>). Detecting
+/// it here, by what will be written rather than by how the setter lambda named the property, covers
 /// every route to the property — a join, <c>EF.Property</c>, a nested complex type.
 /// </para>
 /// <para>
@@ -98,6 +99,7 @@ internal static class ValueSetSqlGuard
         SqlFunctionExpression { Name: UnguardedUnion } when IsSet(expression)                      => true,
         SqlFunctionExpression { Name: "array_remove", Arguments: [var input, _] } when IsSet(expression) => MayBeConcatenation(input),
         SqlFunctionExpression { Name: "COALESCE", Arguments: { } arguments }                       => arguments.Any(MayBeConcatenation),
+        SqlFunctionExpression { Name: "NULLIF", Arguments: [var kept, _] }                         => MayBeConcatenation(kept),
         CaseExpression conditional => conditional.WhenClauses.Any(c => MayBeConcatenation(c.Result)) || MayBeConcatenation(conditional.ElseResult),
         SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when IsSet(convert)    => MayBeConcatenation(convert.Operand),
         _                                                                                          => false
@@ -257,6 +259,13 @@ internal static class ValueSetSqlGuard
                 case SqlFunctionExpression { Name: "COALESCE", Arguments: { } arguments }:
                     return arguments.Aggregate(false, (any, argument) => Derived(argument) | any);
 
+                // EF Core writes `a == b ? null : a` as NULLIF(a, b), which compares the two: array
+                // equality over a concatenation, refused as the CASE it stands for was.
+                case SqlFunctionExpression { Name: "NULLIF", Arguments: [var kept, var compared] }:
+                    Consume(kept, Use.Equality);
+                    Consume(compared, Use.Equality);
+                    return false;
+
                 case CaseExpression conditional:
                     Consume(conditional.Operand);
                     var anyResult = false;
@@ -336,7 +345,9 @@ internal static class ValueSetSqlGuard
                 case null:
                     break;
 
-                case SqlFunctionExpression { Name: "jsonb_set" or "json_set", Arguments: [var document, SqlConstantExpression { Value: var segments }, var written, ..] }:
+                // Npgsql EF 10.0.3 writes jsonb_set_lax on PostgreSQL 16 and later when the value may be
+                // null (npgsql/efcore.pg#3855).
+                case SqlFunctionExpression { Name: "jsonb_set" or "jsonb_set_lax" or "json_set", Arguments: [var document, SqlConstantExpression { Value: var segments }, var written, ..] }:
                     JsonSetter(column, document, path);
                     JsonSetter(column, written, segments is IEnumerable<PathSegment> named ? string.Join('.', named) : path);
                     break;
@@ -344,11 +355,9 @@ internal static class ValueSetSqlGuard
                 // A null value set — a constant or a null parameter, which the provider's processing has
                 // inlined as NULL by now — gets its own message: it is refused, but not for the JSON array.
                 case SqlFunctionExpression { Name: "to_jsonb" or "to_json", Arguments: [var serialized] } when IsSet(Unwrap(serialized)):
-                    throw Unwrap(serialized) switch
-                    {
-                        SqlConstantExpression { Value: null } => Refusal.NullJsonSetter(column.Name, path),
-                        var written                            => Refusal.JsonSetter(column.Name, path, MayBeNull(written))
-                    };
+                    throw Unwrap(serialized) is SqlConstantExpression { Value: null }
+                        ? Refusal.NullJsonSetter(column.Name, path)
+                        : Refusal.JsonSetter(column.Name, path);
 
                 default:
                     foreach (var child in ChildCollector.Of(value))
@@ -359,20 +368,6 @@ internal static class ValueSetSqlGuard
 
         private static SqlExpression Unwrap(SqlExpression expression)
             => expression is SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert ? Unwrap(convert.Operand) : expression;
-
-        /// <summary>
-        /// Whether a written value set may be NULL on some row: a conditional with a NULL branch, or a
-        /// nullable column. Only the message depends on it — the setter is refused either way.
-        /// </summary>
-        private static bool MayBeNull(SqlExpression expression) => Unwrap(expression) switch
-        {
-            SqlConstantExpression { Value: null } => true,
-            CaseExpression conditional            => conditional.ElseResult is null
-                                                  || MayBeNull(conditional.ElseResult)
-                                                  || conditional.WhenClauses.Any(c => MayBeNull(c.Result)),
-            ColumnExpression column               => column.IsNullable,
-            _                                     => false
-        };
     }
 
     /// <summary>Gives every checked <see cref="UnguardedUnion"/> the name PostgreSQL knows.</summary>
@@ -446,23 +441,21 @@ internal static class ValueSetSqlGuard
           + "duplicates in operand order, and from then on server-side equality and Count on that row are wrong. "
           + "Compute the union in memory and set the value, or load the entities and save them with SaveChanges.");
 
-        public static InvalidOperationException JsonSetter(string column, string? path, bool mayBeNull) => new(
+        // Until 10.1.0 a value that may be NULL on some row got a second reason: jsonb_set returns NULL for
+        // a NULL value, so the UPDATE wrote NULL as the whole document. That holds on Npgsql EF 10.0.0–10.0.2
+        // only. 10.0.3 writes such a value through jsonb_set_lax (PostgreSQL 16 and later) or coalesces it to
+        // JSON null (npgsql/efcore.pg#3855), which sets the property to JSON null as SaveChanges does. The
+        // JSON array is refused on every patch, so the message names only that.
+        public static InvalidOperationException JsonSetter(string column, string? path) => new(
             $"'ExecuteUpdate' cannot set the value set '{column}{(path is null ? "" : "." + path)}' inside a JSON column. "
           + "EF Core writes it with PostgreSQL's to_jsonb, which stores a JSON array where the document holds the "
           + "set's literal string, so the row would no longer load and queries on the property would fail. "
-          + (mayBeNull
-                ? "Where the value is NULL it is worse: jsonb_set returns NULL for a NULL value, so the UPDATE writes NULL "
-                + "as the whole document, which fails on a required JSON column (23502) and erases the document on an "
-                + "optional one. "
-                : "")
           + $"Load the entity and save it with SaveChanges, or set the whole JSON property (SetProperty(e => e.{column}, …)) "
           + "or a whole complex property that contains the set.");
 
         public static InvalidOperationException NullJsonSetter(string column, string? path) => new(
             $"'ExecuteUpdate' cannot set the value set '{column}{(path is null ? "" : "." + path)}' inside a JSON column "
-          + "to null. EF Core writes it as jsonb_set(document, path, to_jsonb(NULL)): PostgreSQL cannot type the "
-          + "untyped NULL (42804), and where it can, jsonb_set returns NULL for a NULL value, so the UPDATE writes NULL "
-          + "as the whole document instead of setting the property to JSON null. "
+          + "to null. EF Core writes it as to_jsonb(NULL), and PostgreSQL cannot type the untyped NULL (42804). "
           + "Load the entity, set the property to null and save it with SaveChanges, which writes JSON null, or set "
           + $"the whole JSON property (SetProperty(e => e.{column}, …)) or a whole complex property that contains the "
           + "set to a value holding null.");

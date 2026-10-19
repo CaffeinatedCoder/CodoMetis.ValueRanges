@@ -605,7 +605,7 @@ the row it was saved from. `TemporalStoreParityTests` checks the rule against a 
 | `ExecuteUpdate` of the whole JSON property, a JSON-to-JSON copy, a range or multirange | ✓ — a range is then stored in PostgreSQL's own text form, which reads back |
 | `ExecuteUpdate` of a value set | **refused** — EF Core would write it with `to_jsonb`, a JSON array the document cannot hold, and the row would no longer load. Recognized in the translated `UPDATE`, so it holds however the setter reaches the property (a join, `EF.Property`, a nested complex type) |
 | `ExecuteUpdate` of a whole complex property that contains a value set | ✓ — EF serializes the complex value through the plugin's writer |
-| `ExecuteUpdate` setting a property to `null` | fails for every type — a range or multirange in Npgsql (`42804`); a value set is refused before it reaches Npgsql, because a `NULL` written there would turn the whole document into `NULL`. Set it to `null` with `SaveChanges`, or replace the whole JSON property |
+| `ExecuteUpdate` setting a property to `null` | fails for every type — a range or multirange in Npgsql (`42804`, the untyped `NULL` in `to_jsonb(NULL)`); a value set is refused before it reaches Npgsql, for the same reason. Set it to `null` with `SaveChanges`, or replace the whole JSON property |
 | `ExecuteUpdate` on an owned JSON type | refused by EF Core |
 
 Good to know:

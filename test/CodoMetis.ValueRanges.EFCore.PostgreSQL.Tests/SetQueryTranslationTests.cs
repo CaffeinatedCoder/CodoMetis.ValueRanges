@@ -252,6 +252,23 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
+    public void NullIf_OverAServerSideUnion_IsRefusedAsEquality()
+    {
+        // EF Core 10 writes `a == b ? null : a` as NULLIF(a, b) — shown on a plain column first, so the
+        // test is about that shape. Over a union it is array equality over a concatenation, refused as
+        // equality; without an arm of its own it was refused as "This use of it", naming no operation.
+        var target = StringSet.From("a", "b", "c");
+        using var context = new TestDbContext();
+
+        StringAssert.Contains(context.Bookings.Select(b => b.Id == 5 ? (int?)null : b.Id).ToQueryString(), "NULLIF(");
+
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(
+            () => context.Bookings.Select(b => b.Tags.Union(Wanted) == target ? null : b.Tags.Union(Wanted)).ToQueryString());
+
+        StringAssert.Contains(refusal.Message, "Value set equality");
+    }
+
+    [TestMethod]
     public void Equality_WithoutAUnion_StillTranslates()
     {
         // The refusal is scoped to a server-computed union: comparing a column against a
