@@ -60,9 +60,31 @@ internal static class IsoTemporal
     }
 
     internal static TimeOnly ParseTime(ReadOnlySpan<char> s)
-        => TimeOnly.TryParseExact(TruncateFraction(s), TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
+        => !StartsWithHour24(s, 0)
+        && TimeOnly.TryParseExact(TruncateFraction(s), TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
             ? value
             : throw new FormatException("Expected an ISO 8601 time of day, HH:mm or HH:mm:ss with up to seven fraction digits.");
+
+    /// <summary>
+    /// Whether the time of day starting at <paramref name="timeStart"/> has the hour 24.
+    /// </summary>
+    /// <remarks>
+    /// ISO 8601's end-of-day form. .NET 11 reads it: <c>24:00:00</c> as <c>00:00:00</c> for a
+    /// <see cref="TimeOnly"/>, and <c>2026-01-01T24:00:00</c> as the next day's midnight for a
+    /// <see cref="DateTime"/> or <see cref="DateTimeOffset"/>, where .NET 10 refused both. This
+    /// <c>net10.0</c> assembly runs on the .NET 11 runtime inside a <c>net11.0</c> application, so
+    /// until 10.1.0 the same literal meant one thing there and threw everywhere else (#300; #286 on
+    /// the 11 line). The grammar refuses it on every runtime: a <c>time</c> of <c>24:00:00</c> is a
+    /// PostgreSQL value <see cref="TimeOnly"/> cannot hold, so reading it as midnight would store a
+    /// different value, and a timestamp is never printed that way by PostgreSQL or this library.
+    /// Checked before the BCL parse, since afterwards the next day's midnight is indistinguishable
+    /// from the literal that names it.
+    /// </remarks>
+    private static bool StartsWithHour24(ReadOnlySpan<char> s, int timeStart)
+        => s.Length >= timeStart + 3 && s[timeStart] == '2' && s[timeStart + 1] == '4' && s[timeStart + 2] == ':';
+
+    /// <summary>The position of the time of day in a date-and-time literal, after <c>yyyy-MM-dd</c> and its separator.</summary>
+    private const int TimeStartInDateTime = 11;
 
     /// <remarks>
     /// The offset is not applied. A <c>DateTime</c> range is a <c>tsrange</c>, which stores a wall
@@ -90,7 +112,8 @@ internal static class IsoTemporal
             text = text[..^length];
         }
 
-        return DateTime.TryParseExact(text, WallClockFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
+        return !StartsWithHour24(text, TimeStartInDateTime)
+            && DateTime.TryParseExact(text, WallClockFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
             ? DateTime.SpecifyKind(value, kind)
             : throw new FormatException(
                 "Expected an ISO 8601 date and time, yyyy-MM-dd then T or a space then HH:mm[:ss[.fffffff]], "
@@ -139,7 +162,7 @@ internal static class IsoTemporal
 
         // The offset is Z, ±HH, ±HH:mm or ±HH:mm:ss, as for a DateTime; .NET's zzz would also read
         // +0530 and +5:30, which the grammar and the sibling types refuse (#234).
-        if (!trimmed.EndsWith('Z') && OffsetLength(trimmed) == 0) throw InvalidDateTimeOffset();
+        if (StartsWithHour24(trimmed, TimeStartInDateTime) || !trimmed.EndsWith('Z') && OffsetLength(trimmed) == 0) throw InvalidDateTimeOffset();
 
         return DateTimeOffset.TryParseExact(trimmed, DateTimeOffsetFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
             || TryParseWideOffset(trimmed, out value)

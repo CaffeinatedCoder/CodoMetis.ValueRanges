@@ -743,3 +743,45 @@ On PostgreSQL 14 or 15 you can meet these:
 
 PostgreSQL 14 receives fixes until November 2026. PostgreSQL 16 is supported until November 2028,
 which is when support for .NET 10 ends too.
+
+## Changed answers in 10.1.0
+
+One call returns a different value, and only when your application runs on the .NET 11 runtime.
+The 10.x packages target `net10.0`. A `net11.0` application that references them runs them on
+.NET 11, where `TimeOnly`, `DateTime` and `DateTimeOffset` read an hour of 24 that .NET 10 rejects.
+10.0.0 handed the text straight to them, so the same literal was a value on .NET 11 and threw on
+.NET 10. If your application runs on the .NET 10 runtime, nothing changes.
+
+### Check temporal text with an hour of 24
+
+Check the time, `DateTime` and `DateTimeOffset` text your application reads but doesn't write: a
+literal in a query string or a configuration value, a JSON body, a value bound through the
+`TypeConverter`, and a JSON column that another program fills. ISO 8601 allows `24:00:00` as the end
+of a day, and PostgreSQL's `time` accepts it, so a client or another tool may send it.
+
+Before 10.1.0, on the .NET 11 runtime, that text read as midnight: `24:00:00` as `00:00:00`, and
+`2026-01-01T24:00:00` as the next day's midnight. Now it throws on both runtimes, as it always did
+on .NET 10:
+
+| Text | 10.0.0 on .NET 10 | 10.0.0 on .NET 11 | 10.1.0 |
+|---|---|---|---|
+| `TimeSet.Parse("{24:00:00}")` | `FormatException` | `{00:00:00.0000000}` | `FormatException` |
+| `DateTimeRange.Parse("[2026-01-01 00:00:00,2026-01-01T24:00:00)")` | `FormatException` | `[2026-01-01T00:00:00.0000000,2026-01-02T00:00:00.0000000)` | `FormatException` |
+| `DateTimeOffsetRange.Parse("[2026-01-01 00:00:00Z,2026-01-01T24:00:00Z)")` | `FormatException` | `[2026-01-01T00:00:00.0000000+00:00,2026-01-02T00:00:00.0000000+00:00)` | `FormatException` |
+| `TimeRange.Parse("[23:00:00,24:00:00)")` | `FormatException` | `FormatException`, because `00:00:00` is below the lower bound | `FormatException` |
+
+This holds for every entry point: `Parse`, `TryParse` (which returns `false`), JSON
+(`JsonException`), the `TypeConverter` and configuration binding, a minimal-API or MVC parameter
+(a 400 response), and an EF Core JSON column.
+
+The compiler can't show you the calls whose value changed, because your code is the same on both
+runtimes. Look at the text instead:
+
+- **Search what reaches your application for an hour of 24.** Request logs, test fixtures and
+  configuration files: `24:00` finds a time, and `T24:` or ` 24:` a date and time.
+- **Search JSON columns that another program writes.** Before 10.1.0, a document holding
+  `24:00:00` loaded on .NET 11 as midnight. Now the row fails to load:
+  `SELECT id FROM t WHERE doc::text LIKE '%24:00%'` finds it.
+- **Say "the end of the day" another way.** Use an unbounded end, `[22:00,)`, or an inclusive
+  `23:59:59.9999999` bound
+  ([TimeRange and the custom timerange type](efcore.md#timerange-and-the-custom-timerange-type)).
