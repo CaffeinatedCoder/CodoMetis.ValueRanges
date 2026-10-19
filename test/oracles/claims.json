@@ -2928,7 +2928,7 @@
     "id": "R35-split-pieces-are-the-range",
     "source": "docs/ranges.md#split-a-range-into-pieces",
     "quote": "The pieces are adjacent and hold exactly the values of the range. So `RangeSet<DateRange, DateOnly>.From(contract.Split(DateRange.Month))` is `{contract}` again.",
-    "claim": "For every range type, bounded shape, inclusivity and positive step, RangeSet.From(range.Split(step)) equals RangeSet.From([range]); consecutive pieces are adjacent and strictly ordered; none is empty; piece i starts i steps from the range's start; the last is at most one step long and keeps the range's upper bound; the same holds for the calendar split, whose inner pieces are whole periods, and DateRange and LocalDateRange give the same pieces.",
+    "claim": "For every range type, bounded shape, inclusivity and positive step, RangeSet.From(range.Split(step)) equals RangeSet.From([range]); consecutive pieces are adjacent and strictly ordered; none is empty; piece i starts i steps from the range's start; the last is at most one step long and keeps the range's upper bound; the same holds for the calendar split, whose inner pieces are whole periods, and DateRange and LocalDateRange give the same pieces. A LocalDateTimeRange split by a period whose nanosecond count times n leaves long still reaches the range's end, one step per piece (#255).",
     "oracle": "metamorphic",
     "surfaces": [
       "*Range.Split"
