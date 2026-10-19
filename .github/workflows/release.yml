@@ -197,6 +197,8 @@ jobs:
     steps:
       # No checkout here, so no global.json to read: this job only pushes the verified packages
       # and any SDK of the line can do that. Bump it with global.json when the line moves.
+      # `dotnet-quality: preview` is there only because 11.0.x has no GA build yet for setup-dotnet to
+      # resolve. Drop it at .NET 11 GA, in the change that moves global.json to the GA SDK.
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:

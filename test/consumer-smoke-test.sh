@@ -87,6 +87,14 @@ assert_contains() {
     fi
 }
 
+# The one verdict and exit, so a consumer skipped on a line ends the script the same way as the last one.
+finish() {
+    [[ $failed -eq 0 ]] || { echo; echo "consumer smoke test FAILED"; exit 1; }
+    echo
+    echo "consumer smoke test passed ($version)"
+    exit 0
+}
+
 # Creates a consumer project outside the repository and installs one package of this repository, plus
 # any further packages from nuget.org given as id@version. Program.cs is written by the caller
 # beforehand, at $work/<name>.cs. Restores, builds, runs, and leaves the program's
@@ -568,10 +576,7 @@ complex_indexes_version=5.4.0
 
 if [[ "$tfm" != "net10.0" ]]; then
     echo "==> complexindexes: skipped on $tfm until EFCore.ComplexIndexes.PostgreSQL supports it (CaffeinatedCoder/EFCore.ComplexIndexes#38)"
-    [[ $failed -eq 0 ]] || { echo; echo "consumer smoke test FAILED"; exit 1; }
-    echo
-    echo "consumer smoke test passed ($version)"
-    exit 0
+    finish
 fi
 
 cat > "$work/complexindexes.cs" <<'CSHARP'
@@ -634,6 +639,4 @@ assert_contains 'EXCLUDE USING gist ("RoomId" WITH =, "Period" WITH &&)'        
 assert_contains 'UNIQUE ("RoomId", "Days" WITHOUT OVERLAPS)'                        "$work/complexindexes.out" "temporal constraint over a RangeSet (datemultirange) column"
 assert_contains 'UNIQUE ("RoomId", "Hours" WITHOUT OVERLAPS)'                       "$work/complexindexes.out" "temporal constraint over a TimeRange (timerange) column"
 
-[[ $failed -eq 0 ]] || { echo; echo "consumer smoke test FAILED"; exit 1; }
-echo
-echo "consumer smoke test passed ($version)"
+finish
