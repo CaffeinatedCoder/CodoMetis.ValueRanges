@@ -191,7 +191,7 @@ Every type you can parse implements `ISpanParsable<T>`. So `Parse` and `TryParse
 ```csharp
 ReadOnlySpan<char> line = "period=[2024-01-01,2024-12-31];rate=4.5".AsSpan();
 
-var period = DateRange.Parse(line[7..29], null);   // no substring allocated
+var period = DateRange.Parse(line[7..30], null);   // no substring allocated
 var tags   = StringSet.Parse("{a,b}".AsSpan(), null);
 var blocks = RangeSet<Int32Range, int>.Parse("{[1,5],[7,10]}".AsSpan(), null);
 ```

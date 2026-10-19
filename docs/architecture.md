@@ -446,7 +446,7 @@ database refuses, or the reverse (`numrange` holds NaN, `DecimalRange` cannot; `
 `24:00:00`, `TimeOnly` cannot); and what the literal looks like in ISO `DateStyle`. A domain the
 server does not ship (`timerange`, `float8range`) needs `CREATE TYPE … AS RANGE` on the consumer's
 side, and the measurement includes whether a `subtype_diff` is safe to declare. #153
-(`DoubleRange`) is the worked example: its measurement table is the issue body, and every design
+(`Float64Range`) is the worked example: its measurement table is the issue body, and every design
 decision in it follows from one row of that table.
 
 ### 2. Copy the nearest sibling on every axis
@@ -456,7 +456,7 @@ rename; then change only what step 1 measured.
 
 | Axis | One side | Other side | What it changes |
 |---|---|---|---|
-| Discrete / continuous | `Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange` | `DecimalRange`, `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange`, `LocalDateTimeRange`, `InstantRange` | `Finite` constructor and inclusiveness storage, the unbounded records, `CreateFinite` (canonicalizing via `DiscreteCanonical` or not), `IsDiscrete`, `NextValueAfter`/`PreviousValueBefore`, `Values`, what `Length` means |
+| Discrete / continuous | `Int32Range`, `Int64Range`, `DateRange`, `LocalDateRange`, `YearMonthRange` | `DecimalRange`, `Float64Range`, `Float32Range`, `DateTimeRange`, `DateTimeOffsetRange`, `TimeRange`, `LocalDateTimeRange`, `InstantRange` | `Finite` constructor and inclusiveness storage, the unbounded records, `CreateFinite` (canonicalizing via `DiscreteCanonical` or not), `IsDiscrete`, `NextValueAfter`/`PreviousValueBefore`, `Values`, what `Length` means |
 | Numeric / temporal | `Int32Range`, `DecimalRange`, `Int32Set`, `DecimalSet` | `DateRange`, `TimeRange`, `DateSet`, `TimeSet` and the NodaTime types | `ParseValue` through `IsoTemporal` / `NodaPatterns` rather than `T.Parse`, a pinned `FormatValue`, the strictness remark, the EF `storeValue` |
 | Primitive set / wrapper arity | `Int32Set` | `Int32Set<T>` | Copy **both**: the sweep pairs each primitive with its own arity (`primitive vs arity` family), and the arity carries `ElementJsonConverter`, the BCL-only constraint and a `GenericConverters.Register` line |
 | Core / NodaTime satellite | `DateRange`, `DateSet` | `LocalDateRange`, `LocalDateSet` | Own `ConvertersRegistered` for AOT, `NodaPatterns`, calendar normalization in `From` and `NormalizeElement`, the satellite's registration method rather than the core registry's table |
