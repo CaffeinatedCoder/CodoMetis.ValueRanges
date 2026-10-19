@@ -1,6 +1,6 @@
 # CodoMetis.ValueRanges
 
-Range types and value sets for .NET 10 that work entirely in memory. You get PostgreSQL's complete
+Range types and value sets for .NET 11 that work entirely in memory. You get PostgreSQL's complete
 range and set algebra, with no database dependency.
 
 You get two families of types. Both are immutable, and both are in canonical form from the moment
@@ -21,7 +21,7 @@ memory and in a query.
 dotnet add package CodoMetis.ValueRanges
 ```
 
-> Requires .NET 10 or later.
+> Requires .NET 11 or later; the 10.x line stays on .NET 10.
 
 **Native AOT and trimming compatible.** Your publish gets no trim or AOT warnings, and a NativeAOT
 consumer in CI verifies this. For JSON under Native AOT you need a source-generated context

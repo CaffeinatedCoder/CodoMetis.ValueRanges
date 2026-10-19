@@ -3,6 +3,19 @@
 The changes that affect the EF Core (Npgsql) package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [11.0.0-preview.1] — 2026-10-19
+
+The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF Core 11 and Npgsql 11. The 10.x line stays on .NET 10.
+
+### Breaking
+
+- Targets `net11.0` and references EF Core 11 and `Npgsql.EntityFrameworkCore.PostgreSQL` 11 (release candidates while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
+
+### Changed
+
+- EF Core: an `ExecuteUpdate` that sets a nullable value set inside a JSON column to a value that may be null is refused for the JSON array alone; Npgsql 11 writes the null outcome as JSON null, so the message no longer names a whole-document NULL ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).
+- EF Core: an empty captured list of ranges or sets reads no rows through EF Core 11's own `SELECT … WHERE FALSE`; the SQL differs from 10.x, the answers do not ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+
 ## [10.0.0] — 2026-10-19
 
 Nothing was removed or renamed. Some calls answer differently, and text PostgreSQL refuses is refused here too: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).

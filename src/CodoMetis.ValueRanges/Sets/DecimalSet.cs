@@ -119,7 +119,12 @@ public sealed class DecimalSet : IValueSet<decimal>, IValueSetFactory<DecimalSet
     public static bool operator !=(DecimalSet? left, DecimalSet? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<DecimalSet, decimal>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<DecimalSet, decimal>(this, format, provider);
 }
 
 /// <summary>
@@ -284,5 +289,10 @@ public sealed class DecimalSet<TElement> :
     public static bool operator !=(DecimalSet<TElement>? left, DecimalSet<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<DecimalSet<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<DecimalSet<TElement>, TElement>(this, format, provider);
 }

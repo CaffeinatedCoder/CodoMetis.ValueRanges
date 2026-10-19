@@ -74,14 +74,12 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
         RelationalParameterBasedSqlProcessorParameters   parameters
     ) : RelationalParameterBasedSqlProcessor(dependencies, parameters)
     {
-        // The provider expands a captured collection into VALUES rows here; an empty one leaves a
-        // VALUES with no rows, which the SQL generator refuses, so it is given the SQL that reads no
-        // rows before the guard judges the final tree.
+        // The provider expands a captured collection into VALUES rows here; an empty one becomes
+        // EF Core's SELECT of bare NULLs under WHERE FALSE, which PostgreSQL types as text, so the
+        // NULLs are given the column type every operator on them needs before the guard judges the
+        // final tree (#290).
         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
             => ValueSetSqlGuard.Check(
-                EmptyCollectionRewriter.Rewrite(
-                    inner.Process(queryExpression, parametersDecorator),
-                    Dependencies.SqlExpressionFactory,
-                    Dependencies.TypeMappingSource));
+                EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory));
     }
 }

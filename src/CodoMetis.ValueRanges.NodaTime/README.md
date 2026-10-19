@@ -80,7 +80,7 @@ slots.ToString();                              // {09:00:00,17:30:00}
 dotnet add package CodoMetis.ValueRanges.NodaTime
 ```
 
-> Requires .NET 10 or later. The EF Core package, [CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime), maps these types to PostgreSQL columns through `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`.
+> Requires .NET 11 or later; the 10.x line stays on .NET 10. The EF Core package, [CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime](https://www.nuget.org/packages/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime), maps these types to PostgreSQL columns through `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime`.
 
 ## JSON
 

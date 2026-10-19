@@ -77,9 +77,14 @@ public sealed class ExecuteUpdateGuardTests
     }
 
     // -- Null gets its own message (#57); what PostgreSQL does with each is measured in ExecuteUpdateJsonTests --
+    //
+    // Until 10.0.0 a value that may be null on some row was refused for a second reason, "writes NULL as
+    // the whole document": jsonb_set returned NULL for a NULL value. Npgsql 11 writes such a value through
+    // jsonb_set_lax, or coalesces it to JSON null, so the null outcome is right and only the JSON array is
+    // refused (#289).
 
     private const string ArrayReason = "stores a JSON array";
-    private const string NullReason  = "writes NULL as the whole document";
+    private const string NullReason  = "cannot type the untyped NULL (42804)";
 
     [TestMethod]
     public void ANullConstant_IsRefusedForWhatNullDoes()
@@ -93,7 +98,7 @@ public sealed class ExecuteUpdateGuardTests
     }
 
     [TestMethod]
-    public void AConditionalWithANullBranch_IsRefusedForBothOutcomes()
+    public void AConditionalWithANullBranch_IsRefusedForTheJsonArrayOnly()
     {
         var some = StringSet.From("a");
         AssertMaybeNullRefusal(() => new UpdateTestContext().Rows.ExecuteUpdate(
@@ -101,7 +106,7 @@ public sealed class ExecuteUpdateGuardTests
     }
 
     [TestMethod]
-    public void ANullableColumn_IsRefusedForBothOutcomes()
+    public void ANullableColumn_IsRefusedForTheJsonArrayOnly()
         => AssertMaybeNullRefusal(() => new UpdateTestContext().Rows.ExecuteUpdate(
             s => s.SetProperty(r => r.Doc.MaybeTags, r => r.MaybeCodes)));
 
@@ -133,6 +138,6 @@ public sealed class ExecuteUpdateGuardTests
 
         StringAssert.Contains(refusal.Message, "'Doc.MaybeTags' inside a JSON column.");
         StringAssert.Contains(refusal.Message, ArrayReason);
-        StringAssert.Contains(refusal.Message, NullReason);
+        Assert.IsFalse(refusal.Message.Contains(NullReason), refusal.Message);
     }
 }

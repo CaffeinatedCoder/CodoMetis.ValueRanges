@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL</RootNamespace>
@@ -24,7 +24,7 @@ The full range algebra translates from LINQ to SQL exactly as for the BCL-based 
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.0" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="11.0.0-rc.1.1" />
     </ItemGroup>
 
 </Project>

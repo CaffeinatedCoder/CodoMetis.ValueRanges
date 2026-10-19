@@ -2,9 +2,8 @@ Seed: CompareTo with a null range is rewritten only when compared with 0 and onl
 Oracles: RangeOrderParityTests
 Fails: CompareTo(null) == 1, >= 1, > -1, != -1 and 1 == CompareTo(null) (no rows, memory every row), and a NULL column, which Comparer<T>.Default orders equal to null and before every range
 History: found by the final pre-release analysis (#256, #261) before 10.0.0 shipped
-
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
-index 284394f..3c3b2f9 100644
+index 9fc15ab..82d169d 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
 @@ -20,8 +20,8 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
@@ -15,10 +14,10 @@ index 284394f..3c3b2f9 100644
 -/// either side answer in SQL as <c>Comparer&lt;T&gt;.Default</c> does — see <see cref="NullOperandCompareToRewriter"/>.
 +/// <see cref="CollectionParameterExpander"/>. A fourth makes <c>CompareTo</c> against a null range
 +/// answer in SQL as it does in memory — see <see cref="NullOperandCompareToRewriter"/>.
+ /// A fifth keeps <c>RangeSet.Contains</c> out of EF Core's own rewrite of <c>Contains</c> on a
+ /// read-only collection — see <see cref="RangeSetContainsRewriter"/>.
  /// </para>
- /// <para>
- /// The value set refusals — a server-computed <c>Union</c> consumed by an order- or
-@@ -184,28 +184,24 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+@@ -189,28 +189,24 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
      }
  
      /// <summary>
@@ -60,7 +59,7 @@ index 284394f..3c3b2f9 100644
      /// </para>
      /// </remarks>
      private sealed class NullOperandCompareToRewriter : ExpressionVisitor
-@@ -214,117 +210,61 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+@@ -219,117 +215,61 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
  
          protected override Expression VisitBinary(BinaryExpression node)
          {

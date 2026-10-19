@@ -200,7 +200,8 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
 
       # Publishes exactly what was verified — the packages are not rebuilt here.
       - name: Download packages
@@ -233,7 +234,7 @@ jobs:
       # are reported and skipped instead of failing the job. Pushes are not atomic across packages,
       # so retry with "Re-run failed jobs" on the same run: that logs in afresh (the temporary key
       # expires an hour after login) and pushes the same verified artifact. A fresh run rebuilds —
-      # from the same commit, since release tags are immutable, but with whatever SDK 10.0.x is
+      # from the same commit, since release tags are immutable, but with whatever SDK 11.0.x is
       # then, so the remaining packages would not be the ones verified with those already pushed.
       - name: Push to NuGet
         env:

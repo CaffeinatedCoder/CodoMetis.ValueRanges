@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <Version>10.0.0</Version>
+        <Version>11.0.0-preview.1</Version>
         <Authors>CaffeinatedCoder</Authors>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -64,8 +64,23 @@
     -->
     <PropertyGroup>
         <EnablePackageValidation>true</EnablePackageValidation>
-        <PackageValidationBaselineVersion>9.1.0</PackageValidationBaselineVersion>
+        <PackageValidationBaselineVersion>10.0.0</PackageValidationBaselineVersion>
     </PropertyGroup>
+
+    <!--
+        The 11 line against the 10.x baseline (#103). Package validation pairs assets by the
+        baseline's frameworks: the baseline ships net10.0, this line ships net11.0 only, and a net11.0
+        asset does not serve a net10.0 consumer, so the baseline's framework is reported as dropped
+        (PKV006) and no member comparison runs. Ignoring the framework is that statement made
+        explicit — it is dropped, on purpose, one TFM per line — and it leaves nothing for the
+        validator to compare until 11.0.0 is the baseline. Until then the public surface is held
+        equal to 10.0.0 by hand: `dotnet apicompat` (Microsoft.DotNet.ApiCompat.Tool) over the
+        baseline's and this build's assemblies, run for each preview and quoted in its PR. Remove
+        this once PackageValidationBaselineVersion names a net11.0 release.
+    -->
+    <ItemGroup>
+        <PackageValidationBaselineFrameworkToIgnore Include="net10.0" />
+    </ItemGroup>
 
     <!--
         The latest release of the other supported line, or empty while only one line has a release.

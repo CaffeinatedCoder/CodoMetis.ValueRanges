@@ -5,7 +5,7 @@
              reflection path cannot ship unannotated. The NativeAOT consumer in
              test/consumer-smoke-test.sh proves the behaviour, which the analyzers cannot. -->
         <IsAotCompatible>true</IsAotCompatible>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <!-- Types live in the shared CodoMetis.ValueRanges namespace: a segment named

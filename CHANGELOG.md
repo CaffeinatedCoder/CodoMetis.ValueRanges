@@ -11,6 +11,23 @@ A version's section is the GitHub release's notes. Each line is one change: what
 to do about it, and a link to the guide with the detail. [CONTRIBUTING.md](CONTRIBUTING.md#changelog)
 has the rules.
 
+## [11.0.0-preview.1] — 2026-10-19
+
+The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. Nothing was removed or renamed. The 10.x line stays on .NET 10 ([Branches and releases](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CONTRIBUTING.md#branches-and-releases)).
+
+### Breaking
+
+- All four packages target `net11.0` and need the .NET 11 runtime, one target framework per line; the EF Core packages reference EF Core 11 and `Npgsql.EntityFrameworkCore.PostgreSQL` 11 (release candidates while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
+
+### Changed
+
+- EF Core: an `ExecuteUpdate` that sets a nullable value set inside a JSON column to a value that may be null is refused for the JSON array alone; Npgsql 11 writes the null outcome as JSON null, so the message no longer names a whole-document NULL ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).
+- EF Core: an empty captured list of ranges or sets reads no rows through EF Core 11's own `SELECT … WHERE FALSE`; the SQL differs from 10.x, the answers do not ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+
+### Fixed
+
+- Value sets: every set type implements `IFormattable` itself, so `ToString()` and formatting no longer run the interface's default, whose shared-generic stub traps under Native AOT with ILCompiler 11 RC2 ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+
 ## [10.0.0] — 2026-10-19
 
 Nothing was removed or renamed. Some calls answer differently, and text PostgreSQL refuses is refused here too: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).

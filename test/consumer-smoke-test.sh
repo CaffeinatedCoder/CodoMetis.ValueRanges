@@ -50,6 +50,9 @@ export NUGET_PACKAGES="$work/packages"
 
 version="$(dotnet msbuild "$repo_root/src/CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj" -getProperty:Version)"
 version="$(echo "$version" | tr -d '[:space:]')"
+# The consumers target what the packages target, so the 10.x and 11.x lines run the same script.
+tfm="$(dotnet msbuild "$repo_root/src/CodoMetis.ValueRanges/CodoMetis.ValueRanges.csproj" -getProperty:TargetFramework)"
+tfm="$(echo "$tfm" | tr -d '[:space:]')"
 
 if [[ -z "$feed" ]]; then
     feed="$work/feed"
@@ -102,7 +105,7 @@ scaffold_consumer() {
     echo "==> $name: consumer project, $package"
     mkdir -p "$app"
     cd "$app"
-    run dotnet new console --framework net10.0 --output .
+    run dotnet new console --framework "$tfm" --output .
 
     cat > nuget.config <<XML
 <?xml version="1.0" encoding="utf-8"?>
@@ -556,7 +559,20 @@ assert_contains '"Tags" @> ARRAY['"'"'x'"'"']::text[]'  "$work/postgres.out" "va
 # packages restore and compose in one consumer, from the feeds a consumer uses. GenerateCreateScript
 # runs the other package's differ (registered by UseNpgsqlComplexIndexes()), which renders the same
 # statements a migration would, and needs no database.
+#
+# Only on the 10 line until EFCore.ComplexIndexes.PostgreSQL ships its own 11.0.0-preview.1
+# (CaffeinatedCoder/EFCore.ComplexIndexes#38): 5.4.x pins Npgsql.EntityFrameworkCore.PostgreSQL to
+# [10.0.0, 11.0.0), which a net11.0 consumer cannot restore. CaffeinatedCoder/EFCore.ComplexIndexes#42
+# moves the version and drops the condition (#103).
 complex_indexes_version=5.4.0
+
+if [[ "$tfm" != "net10.0" ]]; then
+    echo "==> complexindexes: skipped on $tfm until EFCore.ComplexIndexes.PostgreSQL supports it (CaffeinatedCoder/EFCore.ComplexIndexes#38)"
+    [[ $failed -eq 0 ]] || { echo; echo "consumer smoke test FAILED"; exit 1; }
+    echo
+    echo "consumer smoke test passed ($version)"
+    exit 0
+fi
 
 cat > "$work/complexindexes.cs" <<'CSHARP'
 using CodoMetis.ValueRanges;

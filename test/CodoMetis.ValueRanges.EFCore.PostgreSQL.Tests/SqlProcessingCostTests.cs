@@ -4,7 +4,6 @@ using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Query;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests;
 
@@ -28,14 +27,13 @@ public sealed class SqlProcessingCostTests
     {
         using var context = new TestDbContext();
         var factory  = context.GetService<ISqlExpressionFactory>();
-        var mappings = context.GetService<IRelationalTypeMappingSource>();
 
         const int depth = 12;
         var counter = new VisitCounter();
         Expression tree = Expression.Constant(0);
         for (var level = 0; level < depth; level++) tree = new CountingNode(tree, counter);
 
-        EmptyCollectionRewriter.Rewrite(tree, factory, mappings);
+        EmptyCollectionRewriter.Rewrite(tree, factory);
 
         Assert.AreEqual(depth, counter.Visits, $"A chain of {depth} nodes was visited {counter.Visits} times.");
     }

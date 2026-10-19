@@ -3,6 +3,14 @@
 The changes that affect the NodaTime EF Core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [11.0.0-preview.1] — 2026-10-19
+
+The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF Core 11 and Npgsql 11. The 10.x line stays on .NET 10.
+
+### Breaking
+
+- Targets `net11.0` and references `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime` 11 (a release candidate while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
+
 ## [10.0.0] — 2026-10-19
 
 ### Breaking

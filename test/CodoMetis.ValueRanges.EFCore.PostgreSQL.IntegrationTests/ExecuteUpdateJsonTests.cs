@@ -111,12 +111,13 @@ public sealed class ExecuteUpdateJsonTests
 
     // -- Null: refused, with a message of its own (#57) --
     //
-    // Measured against PostgreSQL 17 with the refusal disabled: a constant null and a null parameter
-    // both reach the server as jsonb_set("Doc", '{MaybeTags}', to_jsonb(NULL)) — the provider inlines
-    // a null parameter — and fail with 42804, the untyped NULL. A value that may be null on some rows
-    // is typed (to_jsonb(CASE … THEN NULL ELSE @p END)), and jsonb_set returns NULL for a NULL value:
-    // the UPDATE wrote NULL as the whole document and failed only because "Doc" is NOT NULL (23502).
-    // The non-null branch would write the JSON array, so it keeps the to_jsonb message and adds this.
+    // Measured against PostgreSQL 16 with the refusal disabled (Npgsql 11; #289): a constant null and a
+    // null parameter both reach the server as jsonb_set_lax("Doc", '{MaybeTags}', to_jsonb(NULL)) — the
+    // provider inlines a null parameter — and fail with 42804, the untyped NULL. A value that may be null
+    // on some rows is typed (to_jsonb(CASE … THEN NULL ELSE @p END)), and jsonb_set_lax writes JSON null
+    // for it: the property is null afterwards and the row loads, as after SaveChanges. Until 10.0.0 that
+    // went through jsonb_set, which returned NULL for a NULL value and wrote NULL as the whole document.
+    // The non-null branch writes the JSON array, which is what the refusal is for.
 
     [TestMethod]
     public async Task ANullValueSetInsideTheDocument_IsRefusedForWhatNullDoes_AndTheRowStillLoads()
@@ -136,7 +137,7 @@ public sealed class ExecuteUpdateJsonTests
                 var refusal = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                     () => update.JsonDocuments.Where(r => r.Id == id).ExecuteUpdateAsync(setter));
                 StringAssert.Contains(refusal.Message, "'Doc.MaybeTags' inside a JSON column to null");
-                StringAssert.Contains(refusal.Message, "writes NULL as the whole document");
+                StringAssert.Contains(refusal.Message, "cannot type the untyped NULL (42804)");
                 StringAssert.Contains(refusal.Message, "SaveChanges, which writes JSON null");
                 Assert.IsFalse(refusal.Message.Contains("JSON array"), refusal.Message);
             }
@@ -146,7 +147,7 @@ public sealed class ExecuteUpdateJsonTests
     }
 
     [TestMethod]
-    public async Task AValueSetThatMayBeNull_IsRefusedForBothOutcomes_AndTheRowStillLoads()
+    public async Task AValueSetThatMayBeNull_IsRefusedForTheJsonArray_AndTheRowStillLoads()
     {
         ContainerLifecycle.RequireDatabase();
         await SeedWithMaybeTags(9643);
@@ -159,7 +160,7 @@ public sealed class ExecuteUpdateJsonTests
                             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Doc.MaybeTags, r => r.Id > 0 ? null : some)));
             StringAssert.Contains(refusal.Message, "'Doc.MaybeTags' inside a JSON column.");
             StringAssert.Contains(refusal.Message, "JSON array");
-            StringAssert.Contains(refusal.Message, "writes NULL as the whole document");
+            Assert.IsFalse(refusal.Message.Contains("whole document"), refusal.Message);
         }
 
         Assert.AreEqual(MaybeSeeded, (await Reload(9643)).MaybeTags);
