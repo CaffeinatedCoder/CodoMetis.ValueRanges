@@ -3,7 +3,7 @@
 The changes that affect the NodaTime package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
-## [10.1.0]
+## [10.1.0] — 2026-10-19
 
 ### Fixed
 
