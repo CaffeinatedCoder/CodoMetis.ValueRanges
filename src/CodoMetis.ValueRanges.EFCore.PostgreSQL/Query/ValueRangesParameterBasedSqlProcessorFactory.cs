@@ -75,8 +75,9 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
     ) : RelationalParameterBasedSqlProcessor(dependencies, parameters)
     {
         // The provider expands a captured collection into VALUES rows here; an empty one leaves a
-        // VALUES with no rows, which the SQL generator refuses, so it is given the SQL that reads no
-        // rows before the guard judges the final tree.
+        // VALUES with no rows, which the SQL generator refuses (EF Core 10.0.0 and 10.0.1), or EF
+        // Core's own replacement with bare NULLs (10.0.2 and later), so it is given the typed SQL
+        // that reads no rows before the guard judges the final tree.
         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
             => ValueSetSqlGuard.Check(
                 EmptyCollectionRewriter.Rewrite(

@@ -74,11 +74,14 @@ public sealed class SetCollectionTranslationTests
     }
 
     /// <summary>
-    /// An empty captured collection expands to a <c>VALUES</c> with no rows, which EF Core's SQL
-    /// generator refuses ("Empty collections are not supported as inline query roots", #137). It is
-    /// given one row of typed <c>NULL</c>s and <c>FALSE</c> on its <c>WHERE</c> instead — EF Core folds
-    /// the predicate away under it — so the subquery reads no rows and <c>Any</c> is
-    /// <see langword="false"/>, <c>Count</c> is <c>0</c>.
+    /// An empty captured collection expands to a <c>VALUES</c> with no rows (#137). On EF Core 10.0.0
+    /// and 10.0.1 the plugin gives it one row of typed <c>NULL</c>s and <c>FALSE</c> on its <c>WHERE</c>
+    /// — EF Core folds the predicate away under it. EF Core 10.0.2 and later read no rows for it
+    /// themselves — a table-less <c>SELECT</c> of <c>NULL</c>s under <c>WHERE FALSE</c> — and the plugin
+    /// casts each <c>NULL</c> to the column's type, since a bare one is <c>text</c> to PostgreSQL and
+    /// fails the operator on it (#302). Either way the subquery reads no rows, so <c>Any</c> is
+    /// <see langword="false"/> and <c>Count</c> is <c>0</c>. One SQL per shape, chosen by the EF Core
+    /// this host resolved (<see cref="EmptyCollectionSql"/>).
     /// </summary>
     [TestMethod]
     public void Any_OverAnEmptyCapturedList_ReadsNoRows()
@@ -86,7 +89,7 @@ public sealed class SetCollectionTranslationTests
         var wanted = new List<StringSet>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::text[])) AS w(\"Value\")     WHERE FALSE)",
+            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("text[]", "w.\"Value\" && b.\"Tags\"")})",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
     }
 
@@ -97,7 +100,7 @@ public sealed class SetCollectionTranslationTests
 
         StringAssert.Contains(
             Where(db => db.Bookings.Where(b => wanted.Count(w => w.IsSubsetOf(b.Tags)) == 0)),
-            "WHERE (     SELECT count(*)::int     FROM (VALUES (NULL::text[])) AS w(\"Value\")     WHERE FALSE) = 0");
+            $"WHERE (     SELECT count(*)::int     {EmptyCollectionSql.FromNoRows("text[]", "w.\"Value\" <@ b.\"Tags\"")}) = 0");
     }
 
     [TestMethod]

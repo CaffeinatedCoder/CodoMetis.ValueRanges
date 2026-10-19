@@ -85,13 +85,22 @@ public sealed class RangeCollectionTranslationTests
             "FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\") = 2");
     }
 
+    /// <summary>
+    /// An empty captured collection sent one parameter per range expands to a <c>VALUES</c> with no
+    /// rows (#137). On EF Core 10.0.0 and 10.0.1 the plugin reads no rows for it: one row of typed
+    /// <c>NULL</c>s under <c>FALSE</c>, with the predicate folded away under it. EF Core 10.0.2 and
+    /// later read no rows for it themselves — a table-less <c>SELECT</c> of <c>NULL</c>s under
+    /// <c>WHERE FALSE</c> — and the plugin casts each <c>NULL</c> to the column's type, since a bare one
+    /// is <c>text</c> to PostgreSQL and fails the operator on it (#302). One SQL per shape, chosen by
+    /// the EF Core this host resolved (<see cref="EmptyCollectionSql"/>).
+    /// </summary>
     [TestMethod]
     public void AnyAlone_OverAnEmptyCapturedList_ReadsNoRows()
     {
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::int4range)) AS w(\"Value\")     WHERE FALSE)",
+            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" && b.\"Seats\"")})",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -107,10 +116,8 @@ public sealed class RangeCollectionTranslationTests
     }
 
     /// <summary>
-    /// An empty captured collection sent one parameter per range expands to a <c>VALUES</c> with no
-    /// rows, which EF Core's SQL generator refuses (#137). It reads no rows instead: one row of typed
-    /// <c>NULL</c>s under <c>FALSE</c>, with the predicate folded away under it. <c>Contains</c> over it
-    /// is EF Core's own <c>FALSE</c>, folded out of the <c>OR</c>.
+    /// The same beside a <c>Contains</c>, which the empty list makes EF Core's own <c>FALSE</c>, folded
+    /// out of the <c>OR</c>; the <c>Any</c> reads no rows in the shape this host's EF Core gives it.
     /// </summary>
     [TestMethod]
     public void AnyBesideContains_OverAnEmptyCapturedList_ReadsNoRows()
@@ -118,7 +125,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::int4range)) AS w(\"Value\")     WHERE FALSE)",
+            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" && b.\"Seats\"")})",
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
