@@ -88,10 +88,9 @@ the work, and close it from the PR (`Closes #n`).
   an `epic` without a milestone; a finding it produces belongs to the release epic it ships in
 - **Roadmap:** the pinned `roadmap` issue (#34) holds every epic as a sub-issue
 - **Branches:** up to two lines are supported at once, 10.x (LTS, .NET 10) and 11.x (.NET 11).
-  Until the `v10.0.0` tag: `main` is 10.0.0; `release/9.x` holds 9.x patches and then takes no
-  changes; `net11` holds the .NET 11 retarget, ships `11.0.0-preview.N`, and merges `main`
-  forward after every change, so nothing lands on `net11` that `main` should have. At the tag,
-  `release/10.x` is cut from it and `net11` becomes `main`. After it, a change for both merges
+  Until the `v10.0.0` tag: `main` is 10.0.0, and `release/9.x` holds 9.x patches and then takes no
+  changes. There is no preview branch. At the tag, `release/10.x` is cut from it, and `main` is
+  retargeted to .NET 11 (#103) and ships `11.0.0-preview.N` until 11.0.0. After it, a change for both merges
   into `main` first and is cherry-picked (`-x`) into a PR against `release/10.x`; additions ship
   as 10.x minors for six months after `v11.0.0`, after which 10.x takes fixes only. An issue
   fixed only on a release branch is closed by hand, because `Closes #n` acts only on `main`. SECURITY.md has one

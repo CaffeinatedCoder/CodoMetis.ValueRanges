@@ -63,7 +63,7 @@ in the next preview.
 
 - **Until 10.0.0 ships**, one line is supported: 9.1.x.
 - **When 10.0.0 ships**, 9.x stops receiving fixes and 10.0.x takes its row. The 11.0.0 previews
-  continue and still have no row.
+  that follow on `main` have no row.
 - **When 11.0.0 ships**, the table gets its second row: 11.0.x, and below it the latest 10.x minor.
   From then on each line's row moves when that line ships a minor.
 
