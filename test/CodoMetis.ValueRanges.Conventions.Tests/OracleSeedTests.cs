@@ -31,9 +31,17 @@ public sealed class OracleSeedTests
         var oracles = OracleCatalogue.Oracles;
         Assert.IsTrue(oracles.Count >= KnownOracles, $"Found {oracles.Count} registered oracles, fewer than the {KnownOracles} known to exist.");
 
+        // A class compiled out on this line stays registered (its seed still holds on the line that runs
+        // it) only with a record in compiled-out.json, which `tools/oracles.cs seeds` skips it by.
+        var recorded = OracleCatalogue.CompiledOut.Select(record => record.Class).ToHashSet(StringComparer.Ordinal);
+        string? Project(string @class) =>
+            OracleCatalogue.TestClasses.TryGetValue(@class, out var project) ? project
+          : recorded.Contains(@class) && OracleCatalogue.CompiledOutTestClasses.TryGetValue(@class, out project) ? project
+          : null;
+
         var misplaced = oracles
-                       .Where(oracle => !OracleCatalogue.TestClasses.TryGetValue(oracle.Class, out var project) || project != oracle.Project)
-                       .Select(oracle => $"{oracle.Class} (registered in {oracle.Project}, found in {(OracleCatalogue.TestClasses.TryGetValue(oracle.Class, out var p) ? p : "no project")})")
+                       .Where(oracle => Project(oracle.Class) != oracle.Project)
+                       .Select(oracle => $"{oracle.Class} (registered in {oracle.Project}, found in {Project(oracle.Class) ?? "no project"})")
                        .ToList();
 
         Assert.AreEqual(0, misplaced.Count, "oracles.json names a class that is not a [TestClass] in that project: " + string.Join(", ", misplaced));
