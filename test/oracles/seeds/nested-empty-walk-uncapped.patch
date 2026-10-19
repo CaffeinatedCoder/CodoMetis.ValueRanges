@@ -1,0 +1,18 @@
+Seed: the nested-empty walk has no depth limit, so a nest of empty arrays deeper than PostgreSQL's six dimensions reads as {} and a deep enough literal overflows the stack
+Oracles: NestedLiteralDepthContractTests, LiteralCorpusProbeTests, LiteralGrammarParityTests
+Fails: the seven-level and 1,000-level rows for every set type; the seven-level rows of the malformed dimension decoration family; NestedEmptyArrays_ReadAsPostgres17AndLaterReadThem_AndPostgres16Rejects
+History: the 10.0.0 nested-empty walk (#128, #240) before the MAXDIM cap (#248, #250); the depths are bounded so the planted defect answers rather than crashes the test host
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+index 67e0810..2fb0e9b 100644
+--- a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
++++ b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
+@@ -148,7 +148,7 @@ internal static class SetFormat
+         // when it is not a rectangular nest of empty arrays.
+         static string? Shape(ReadOnlySpan<char> s, ref int position, int depth)
+         {
+-            if (depth > MaxDimensions || position == s.Length || s[position] != '{') return null;
++            if (position == s.Length || s[position] != '{') return null;
+             position++;
+             Skip(s, ref position);
+             if (position < s.Length && s[position] == '}')
