@@ -151,4 +151,26 @@ public sealed class InfinityShiftRoundTripTests
         Assert.AreEqual("2025-12-31", moved.Lower);
         Assert.AreEqual(unmoved.Upper, moved.Upper, "the end that stands for infinity) moved with the range before #224");
     }
+
+    /// <summary>
+    /// A finite date range ending the day before PostgreSQL's last date loads as <c>[x,9999-12-29]</c>.
+    /// Shifting it a day forward would land its end on 9999-12-30, which stands for <c>infinity)</c>, so it
+    /// throws (#260); before, it saved as <c>[2026-01-02,9999-12-31)</c> and a shift back could not
+    /// restore it. A shift back and forth saves the row unchanged.
+    /// </summary>
+    [TestMethod]
+    public async Task Date_FiniteEndBelowInfinity_CannotBeShiftedOntoIt_AndRoundTrips()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var (lower, upper) = await RoundTrip<DateRange>(
+            2251, "Period", "daterange('2026-01-01', '9999-12-30')", r => r.Period, range =>
+            {
+                Assert.AreEqual("[2026-01-01,9999-12-29]", range.ToString());
+                Assert.ThrowsExactly<OverflowException>(() => range.Shift(1));
+                return range.Shift(-1).Shift(1);
+            });
+
+        Assert.AreEqual(("2026-01-01", "9999-12-30"), (lower, upper));
+    }
 }

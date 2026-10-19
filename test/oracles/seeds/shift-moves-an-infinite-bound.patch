@@ -4,17 +4,17 @@ Fails: every edge row of the seven infinity-backed types (DateRange, DateTimeRan
 History: shipped in the 10.0.0 previews, found by the pre-tag analysis, fixed in 10.0.0 (#224)
 
 diff --git a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
-index 886aa4c..14a7bac 100644
+index 13024c5..1a67070 100644
 --- a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
 +++ b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
-@@ -53,8 +53,8 @@ internal static class RangeArithmetic
+@@ -55,8 +55,8 @@ internal static class RangeArithmetic
          where TRange : IRangeFactory<TRange, T>, IRange<T>
          where T : struct, IComparable<T>, IEquatable<T>
          => Move<TRange, T>(range,
--                           value => lowerIsInfinity(value) ? value : lower(value),
--                           value => upperIsInfinity(value) ? value : upper(value));
+-                           value => lowerIsInfinity(value) ? value : Finite(lower(value), lowerIsInfinity),
+-                           value => upperIsInfinity(value) ? value : Finite(upper(value), upperIsInfinity));
 +                           lower,
 +                           upper);
  
-     /// <summary>
-     /// Runs one step of an element type's arithmetic and reports a result outside the type's values
+     // A finite bound stays finite: landing on the value that stands for an infinity is a move past
+     // the last finite value, and throws as one does.

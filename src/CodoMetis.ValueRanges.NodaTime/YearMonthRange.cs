@@ -473,7 +473,7 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// <param name="months">How far to move the range, in months.</param>
     /// <returns>The moved range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="YearMonth"/> can hold.</exception>
-    public YearMonthRange Shift(int months) => RangeArithmetic.MoveKeepingInfinity<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(months)), value => RangeArithmetic.Checked(() => value.PlusMonths(months)), IsInfinity, IsInfinity);
+    public YearMonthRange Shift(int months) => RangeArithmetic.MoveKeepingInfinity<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(months)), value => RangeArithmetic.Checked(() => value.PlusMonths(months)), StartIsInfinity, EndIsInfinity);
 
     /// <summary>
     /// Returns the range grown by <paramref name="months"/>, in months on both sides: the lower bound moves down
@@ -490,13 +490,20 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// <param name="months">How far to move each bound outward, in months.</param>
     /// <returns>The grown, or shrunk, range.</returns>
     /// <exception cref="OverflowException">A moved bound is outside the values <see cref="YearMonth"/> can hold.</exception>
-    public YearMonthRange Expand(int months) => RangeArithmetic.MoveKeepingInfinity<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(checked(-months))), value => RangeArithmetic.Checked(() => value.PlusMonths(months)), IsInfinity, IsInfinity);
+    public YearMonthRange Expand(int months) => RangeArithmetic.MoveKeepingInfinity<YearMonthRange, YearMonth>(this, value => RangeArithmetic.Checked(() => value.PlusMonths(checked(-months))), value => RangeArithmetic.Checked(() => value.PlusMonths(months)), StartIsInfinity, EndIsInfinity);
 
     /// <summary>
-    /// Whether <paramref name="value"/> is an extreme that stands for PostgreSQL's <c>-infinity</c> or
-    /// <c>infinity</c>, which <see cref="Shift"/> and <see cref="Expand"/> leave where it is (#224).
+    /// Whether a lower bound stands for PostgreSQL's <c>-infinity</c>, which <see cref="Shift"/> and
+    /// <see cref="Expand"/> leave where it is (#224): the first month, whose first day the store writes
+    /// as <c>-infinity</c>. The last month as a lower bound starts on 9999-12-01, a date, so it moves.
     /// </summary>
-    private static bool IsInfinity(YearMonth value) => value == MinIso || value == MaxIso;
+    private static bool StartIsInfinity(YearMonth start) => start == MinIso;
+
+    /// <summary>
+    /// Whether an upper bound stands for <c>infinity</c>: the last month, whose last day the store
+    /// writes as <c>infinity</c>. The first month as an upper bound ends on a date, so it moves (#257).
+    /// </summary>
+    private static bool EndIsInfinity(YearMonth end) => end == MaxIso;
 
     /// <inheritdoc />
     public override sealed string ToString()

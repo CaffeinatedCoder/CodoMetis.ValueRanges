@@ -1,0 +1,18 @@
+Seed: DateRange counts a closed end at the minimum as -infinity, though its exclusive end, 0001-01-02, is a date
+Oracles: RangeArithmeticOracleTests
+Fails: the DateRange row [0001-01-01,0001-01-01].Shift(1): the end stays at the minimum
+History: shipped with #224, found by the final pre-release analysis, fixed in 10.0.0 (#257)
+
+diff --git a/src/CodoMetis.ValueRanges/DateRange.cs b/src/CodoMetis.ValueRanges/DateRange.cs
+index c9eea56..89828cf 100644
+--- a/src/CodoMetis.ValueRanges/DateRange.cs
++++ b/src/CodoMetis.ValueRanges/DateRange.cs
+@@ -500,7 +500,7 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
+     /// <c>[x,9999-12-30]</c> (#117). Not at the minimum: a closed end there is <c>[-infinity,0001-01-02)</c>
+     /// in PostgreSQL's half-open form, whose upper bound is a date (#257).
+     /// </summary>
+-    private static bool EndIsInfinity(DateOnly end) => end.DayNumber >= DateOnly.MaxValue.DayNumber - 1;
++    private static bool EndIsInfinity(DateOnly end) => end == DateOnly.MinValue || end.DayNumber >= DateOnly.MaxValue.DayNumber - 1;
+ 
+     /// <inheritdoc />
+     public override sealed string ToString()

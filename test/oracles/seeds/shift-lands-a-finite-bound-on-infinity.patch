@@ -1,0 +1,21 @@
+Seed: a Shift or Expand that lands a finite bound on the value that stands for infinity keeps it there, so it saves as the infinity and Shift(d).Shift(-d) is not the range
+Oracles: RangeArithmeticOracleTests
+Fails: the two-steps-from-the-infinity rows of all seven infinity-backed types: the move onto the infinity returns a range where it should throw
+History: introduced with #224, found by the final pre-release analysis, fixed in 10.0.0 (#260)
+
+diff --git a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+index 13024c5..ac60ba0 100644
+--- a/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
++++ b/src/CodoMetis.ValueRanges/Internals/RangeArithmetic.cs
+@@ -61,10 +61,7 @@ internal static class RangeArithmetic
+     // A finite bound stays finite: landing on the value that stands for an infinity is a move past
+     // the last finite value, and throws as one does.
+     private static T Finite<T>(T moved, Func<T, bool> isInfinity)
+-        => isInfinity(moved)
+-               ? throw new OverflowException(
+-                   $"The moved bound would be {moved}, which stands for PostgreSQL's infinity; a finite bound cannot move there.")
+-               : moved;
++        => moved;
+ 
+     /// <summary>
+     /// Runs one step of an element type's arithmetic and reports a result outside the type's values
