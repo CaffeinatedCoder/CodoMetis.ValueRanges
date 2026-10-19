@@ -1108,6 +1108,20 @@
     ]
   },
   {
+    "id": "E63-yearmonthrange-exclusive-infinity-fails-to-load",
+    "source": "docs/efcore.md#rows-written-by-other-tools",
+    "quote": "A `YearMonthRange` column can't load the exclusive form at all. `[2026-01-01,infinity)` holds every day up to 9999-12-30, which ends part-way through a month, so the query throws `InvalidOperationException`, as it does for any range that covers part of a month.",
+    "claim": "A YearMonthRange column holding daterange [x,infinity) or (-infinity,x) throws InvalidOperationException naming the partial month when loaded, while [x,infinity] loads as [x-month,9999-12], [-infinity,x) as [-9998-01, month before x] and an absent bound as an unbounded side.",
+    "oracle": "exception",
+    "surfaces": [
+      "YearMonthRange.CreateFinite",
+      "NodaTimeInteropExtensions.ToYearMonthRange"
+    ],
+    "heldBy": [
+      "TimeAndYearMonthIntegrationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",

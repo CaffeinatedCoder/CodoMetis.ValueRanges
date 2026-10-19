@@ -5,7 +5,9 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
-No change in this package.
+### Fixed
+
+- Docs: a `YearMonthRange` column holding an exclusive `infinity)` or `(-infinity` throws `InvalidOperationException` when it loads, because the range covers part of a month. Ask other tools to write an absent or inclusive bound ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#rows-written-by-other-tools)).
 
 ## [9.1.0] — 2026-10-17
 
