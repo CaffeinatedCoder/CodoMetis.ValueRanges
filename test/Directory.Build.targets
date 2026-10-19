@@ -1,0 +1,31 @@
+<Project>
+    <!--
+        Floats the EF test projects to a newer EF Core and Npgsql EF patch than the floor, for one run:
+
+            dotnet test <project> -p:EfFloat=10.0.13 -p:NpgsqlEfFloat=10.0.3
+
+        A consumer of the EF packages resolves the newest patch, while src/ compiles against the floor
+        it ships (Npgsql EF 10.0.0, which resolves EF Core 10.0.0). Direct references in a test project
+        win over the ones it reaches through src/, so the test host loads the newer assemblies while
+        the plugin stays built against the floor: exactly a consumer's situation. #302 came in through
+        that gap — every floor run was green, and an empty captured list failed on the server on every
+        EF Core patch from 10.0.2 on. CI's newest-patch legs pass both properties (dotnet.yml, #297).
+
+        Without EfFloat nothing changes, and the floor stays what every other run tests. NpgsqlEfFloat
+        is set alongside it because Npgsql EF 10.0.1 and later require EF Core 10.0.4 or newer, so
+        floating EF Core alone would not move the provider, and floating the provider alone would
+        move EF Core to whatever it resolves rather than to a version the run names. Design is a
+        direct reference of two of these projects and must match EF Core, so it is updated, not added.
+
+        The condition matches the project name rather than listing projects, so a new EF test project
+        floats with the others. Nothing under src/ sees this file, and the consumer smoke test builds
+        its projects outside the repository.
+    -->
+    <ItemGroup Condition="'$(EfFloat)' != '' and $(MSBuildProjectName.Contains('EFCore'))">
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(EfFloat)" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="$(EfFloat)" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="$(NpgsqlEfFloat)" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="$(NpgsqlEfFloat)" />
+        <PackageReference Update="Microsoft.EntityFrameworkCore.Design" Version="$(EfFloat)" />
+    </ItemGroup>
+</Project>
