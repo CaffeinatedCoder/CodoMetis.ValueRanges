@@ -44,6 +44,8 @@ public class SetDimensionDecorationTests
     [DataRow("{{{{}}},{{{}}}}", "{}")]
     [DataRow("{{{},{}},{{},{}},{{},{}}}", "{}")]
     [DataRow("{{{{}},{{}}},{{{}},{{}}}}", "{}")]
+    [DataRow("{{{{{{}}}}}}", "{}")]             // six levels, PostgreSQL's MAXDIM
+    [DataRow("{{{{{{},{}}}}}}", "{}")]
     public void Reads_AsPostgresReadsIt(string literal, string expected)
         => Assert.AreEqual(expected, Int32Set.Parse(literal, CultureInfo.InvariantCulture).ToString());
 
@@ -82,6 +84,8 @@ public class SetDimensionDecorationTests
     [DataRow("{{{},{},{}},{{},{}}}")]
     [DataRow("{{{{}},{{}}},{{{}},{{},{}}}}")]
     [DataRow("{{{{}},{{}}},{{{}}}}")]
+    [DataRow("{{{{{{{}}}}}}}")]                 // seven levels, beyond MAXDIM (#250)
+    [DataRow("{{{{{{{},{}}}}}}}")]
     [DataRow("{{},}")]
     [DataRow("{{}}x")]
     [DataRow("{{1},{}}")]
