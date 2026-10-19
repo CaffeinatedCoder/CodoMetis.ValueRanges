@@ -114,13 +114,37 @@ jobs:
   # One leg per supported PostgreSQL major of the 10.x line: 16, the floor, and 18, the newest
   # (SECURITY.md, #215). VALUERANGES_POSTGRES_IMAGE picks the shared container's image in both
   # projects (PostgresServer.cs); tests that start servers of their own versions are unaffected.
+  #
+  # And one per EF Core: the floor the EF packages ship against (Npgsql EF 10.0.0, which resolves
+  # EF Core 10.0.0), and the newest published 10.0 patch, which is what a consumer's application
+  # resolves (#297). The newest-patch legs float only the EF test projects, through the two
+  # properties test/Directory.Build.targets reads; src/ still compiles against the floor, as the
+  # package a consumer restores was. They also run the EF translation projects, which the test job
+  # runs on the floor only. #302 is why: every floor run was green while an empty captured list
+  # failed on the server on every EF Core patch from 10.0.2 on.
+  #
+  # A scheduled run against EF Core's unpublished servicing builds is not here: GitHub fires
+  # `schedule` only from the default branch, and the dnceng `dotnet10` feed ends at 10.0.0 (#297).
   integration-legs:
-    name: Integration (PostgreSQL ${{ matrix.postgres }})
+    name: Integration (PostgreSQL ${{ matrix.postgres }}, EF Core ${{ matrix.ef-core || 'floor' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         postgres: [ 16, 18 ]
+        ef: [ floor, newest-patch ]
+        include:
+          # The newest published EF Core 10 and Npgsql EF 10 patches; a new patch is a bump here and
+          # nowhere else. Look them up with
+          #   dotnet package search Microsoft.EntityFrameworkCore --exact-match
+          #   dotnet package search Npgsql.EntityFrameworkCore.PostgreSQL --exact-match
+          # The pair must restore together: Npgsql EF names its minimum EF Core (10.0.1 to 10.0.3
+          # need 10.0.4 or newer).
+          - ef: newest-patch
+            ef-core: 10.0.13
+            npgsql-ef: 10.0.3
+    env:
+      EF_FLOAT: ${{ matrix.ef-core && format('-p:EfFloat={0} -p:NpgsqlEfFloat={1}', matrix.ef-core, matrix.npgsql-ef) || '' }}
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -130,11 +154,33 @@ jobs:
         with:
           global-json-file: global.json
 
+      # EF_FLOAT is empty on the floor legs, and must reach restore and build alike on the others:
+      # restore picks the packages, build copies them next to the test assemblies.
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore $EF_FLOAT
 
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: dotnet build -c Release --no-restore $EF_FLOAT
+
+      # A float that does not reach a test host tests the floor a second time and passes, so a
+      # renamed property or project would retire these legs silently. Each EF test host's deps.json
+      # must name the versions this leg asked for.
+      - name: Check the EF test hosts resolved the newest patch
+        if: matrix.ef-core
+        env:
+          EF_CORE: ${{ matrix.ef-core }}
+          NPGSQL_EF: ${{ matrix.npgsql-ef }}
+        run: |
+          for project in test/*EFCore*/; do
+            deps=("$project"bin/Release/*/"$(basename "$project")".deps.json)
+            for package in "Microsoft.EntityFrameworkCore/$EF_CORE" "Npgsql.EntityFrameworkCore.PostgreSQL/$NPGSQL_EF"; do
+              if ! grep -q "\"$package\"" "${deps[0]}"; then
+                echo "::error::${deps[0]} does not resolve $package, so this leg would test the floor."
+                exit 1
+              fi
+            done
+            echo "$project resolves EF Core $EF_CORE and Npgsql EF $NPGSQL_EF"
+          done
 
       # CI=true turns an unavailable container into a failure instead of an inconclusive skip.
       # Without it a broken Docker setup would retire the layer that is the authority on
@@ -142,29 +188,37 @@ jobs:
       #
       # More than one project because some configuration is per process: the InfinityDisabled
       # project runs with an AppContext switch that Npgsql and the plugin read once.
+      #
+      # Every project runs even after one fails, so a leg reports all of its failures: the step's
+      # shell stops at the first failing command, and the glob puts the translation projects last.
       - name: Integration tests
         env:
           CI: true
           VALUERANGES_POSTGRES_IMAGE: postgres:${{ matrix.postgres }}-alpine
         run: |
-          for project in test/*IntegrationTests/; do
+          projects=(test/*IntegrationTests/)
+          [[ -n "$EF_FLOAT" ]] && projects=(test/*EFCore*/)
+          failed=0
+          for project in "${projects[@]}"; do
             echo "==> $project"
-            dotnet test "$project" -c Release --no-build \
+            dotnet test "$project" -c Release --no-build $EF_FLOAT \
               --logger "trx;LogFileName=$(basename "$project").trx" \
-              --results-directory TestResults
+              --results-directory TestResults || failed=1
           done
+          exit $failed
 
       - name: Upload test results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: always()
         with:
-          name: test-results-integration-postgres-${{ matrix.postgres }}
+          name: test-results-integration-postgres-${{ matrix.postgres }}-ef-${{ matrix.ef }}
           path: TestResults/*.trx
           if-no-files-found: ignore
 
   # The required status check: branch protection names "Integration (live PostgreSQL)", and a matrix
   # job reports one check per leg instead, so this job carries the name and passes only when every
-  # leg passed. `if: always()` makes it report a failure rather than be skipped when a leg fails.
+  # leg passed — the newest-patch legs as much as the floor ones. `if: always()` makes it report a
+  # failure rather than be skipped when a leg fails.
   integration:
     name: Integration (live PostgreSQL)
     runs-on: ubuntu-latest

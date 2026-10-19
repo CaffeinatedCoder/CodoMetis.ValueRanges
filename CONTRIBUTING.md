@@ -38,6 +38,19 @@ VALUERANGES_POSTGRES_IMAGE=postgres:18-alpine dotnet test test/CodoMetis.ValueRa
 
 A server older than 16 fails every test that needs it, with the server's version in the message.
 
+The EF packages are built against their floor (Npgsql EF 10.0.0, so EF Core 10.0.0), but a consumer's
+application resolves the newest patch. CI therefore runs the four EF test projects twice: on the floor,
+and with the test hosts floated to the newest published EF Core and Npgsql EF 10 patch while `src/`
+stays on the floor (`test/Directory.Build.targets`). Both are required. To run the float locally, pass
+the two versions, which CI keeps in the `integration-legs` matrix of `.github/workflows/dotnet.yml`:
+
+```bash
+dotnet test test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests -p:EfFloat=10.0.13 -p:NpgsqlEfFloat=10.0.3
+```
+
+A floor-only CI missed #302 that way: an empty captured list failed on the server on every EF Core
+patch from 10.0.2 on.
+
 ## The quality bar
 
 This package's characteristic failure is not a crash. It is a value that looks right, compares
