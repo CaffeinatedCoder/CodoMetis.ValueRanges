@@ -463,7 +463,7 @@ element's upper bound.
 ## Move or widen a range
 
 `Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the
-inclusiveness of each bound:
+inclusiveness of each bound, unless the move leaves nothing between the bounds:
 
 ```csharp
 var week = DateRange.CreateFinite(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 7));
@@ -518,6 +518,11 @@ Good to know:
   whole month: `LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1))` is
   `LocalDateRange.Month(2026, 3)`, and moving it back gives February again. A start on the 31st
   still clips: January 31 plus one month is February 28.
+- **A month or year shift of a short range can give you `Empty`.** The start and the day after the
+  end clip separately, so they can meet. `[2024-02-28,2024-02-28]` moved by one year starts on
+  2025-02-28 and would end the day before, so it is `Empty`. PostgreSQL gives the same answer for
+  that `daterange`, and so does `LocalDateTimeRange` for `[2024-02-28,2024-02-29)`. It happens only
+  for a range ending on the 28th to the 31st, a few days long at most. A whole month never empties.
 - **They run in memory only.** PostgreSQL has no range arithmetic. See
   [What runs where](efcore.md#what-runs-where).
 

@@ -2757,8 +2757,8 @@
   {
     "id": "R28-shift-and-expand-keep-shape",
     "source": "docs/ranges.md#move-or-widen-a-range",
-    "quote": "`Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the inclusiveness of each bound:",
-    "claim": "For every range type, shape and inclusivity, r.Shift(d) is r with both finite bounds moved by d and r.Expand(a) is r with the lower bound moved by -a and the upper by +a, each keeping its inclusiveness; Empty and Infinite come back unchanged and an unbounded side stays unbounded; r.Shift(d).Shift(-d) == r for an exact step, Expand(a) contains r for a >= 0, Expand(a) is the hull of Shift(-a) and Shift(a), and Expand(-a) their intersection. A DateTimeRange bound keeps its own DateTimeKind and a DateTimeOffsetRange bound its own offset through Shift, Expand and every Split piece.",
+    "quote": "`Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the inclusiveness of each bound, unless the move leaves nothing between the bounds:",
+    "claim": "For every range type, shape and inclusivity, unless the moved bounds meet or cross and the result is Empty, r.Shift(d) is r with both finite bounds moved by d and r.Expand(a) is r with the lower bound moved by -a and the upper by +a, each keeping its inclusiveness; Empty and Infinite come back unchanged and an unbounded side stays unbounded; r.Shift(d).Shift(-d) == r for an exact step, Expand(a) contains r for a >= 0, Expand(a) is the hull of Shift(-a) and Shift(a), and Expand(-a) their intersection. A DateTimeRange bound keeps its own DateTimeKind and a DateTimeOffsetRange bound its own offset through Shift, Expand and every Split piece.",
     "oracle": "metamorphic",
     "surfaces": [
       "*Range.Shift",
@@ -2835,7 +2835,7 @@
     "id": "R31-shift-by-months-follows-calendar",
     "source": "docs/ranges.md#move-or-widen-a-range",
     "quote": "A `LocalDateRange` moves the day after its last day, as PostgreSQL stores a `daterange`, so a whole month moves to a whole month: `LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1))` is `LocalDateRange.Month(2026, 3)`, and moving it back gives February again.",
-    "claim": "LocalDateRange.Shift and Expand by a period of months move the upper bound as its exclusive end and step back a day, so Month(y, m).Shift(P1M) is Month(y, m + 1), Quarter(y, q).Shift(P3M) the next quarter and Year(y).Shift(P1Y) the next year, for every month of a leap and a non-leap year, and the shift back restores the range, as PostgreSQL moves the daterange [first, next first) and LocalDateTimeRange moves [first, next first); a start on the 31st still clips to the shorter month; YearMonthRange.Quarter(y, q).Shift(3) is the next quarter; a period with a time part throws ArgumentException.",
+    "claim": "LocalDateRange.Shift and Expand by a period of months move the upper bound as its exclusive end and step back a day, so Month(y, m).Shift(P1M) is Month(y, m + 1), Quarter(y, q).Shift(P3M) the next quarter and Year(y).Shift(P1Y) the next year, for every month of a leap and a non-leap year, and the shift back restores the range, as PostgreSQL moves the daterange [first, next first) and LocalDateTimeRange moves [first, next first); a start on the 31st still clips to the shorter month; YearMonthRange.Quarter(y, q).Shift(3) is the next quarter; a period with a time part throws ArgumentException. Because the start and the day after the end clip separately, a short range ending on the 28th to 31st can shift to Empty, as PostgreSQL's daterange and LocalDateTimeRange do: [2024-02-28,2024-02-28] by P1Y, [2024-03-30,2024-03-30] and [2024-01-29,2024-01-29] by P1M, [2023-12-30,2023-12-30] by P-1M (#259).",
     "oracle": "claim",
     "surfaces": [
       "LocalDateRange.Shift",
@@ -2844,7 +2844,8 @@
       "YearMonthRange.Shift"
     ],
     "heldBy": [
-      "NodaTimeShiftExpandTests"
+      "NodaTimeShiftExpandTests",
+      "CalendarShiftAgreementTests"
     ]
   },
   {
@@ -3083,6 +3084,21 @@
     ],
     "heldBy": [
       "NonGenericComparableContractTests"
+    ]
+  },
+  {
+    "id": "R45-month-shift-can-empty",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "`[2024-02-28,2024-02-28]` moved by one year starts on 2025-02-28 and would end the day before, so it is `Empty`.",
+    "claim": "A month or year Shift of a short LocalDateRange ending on the 28th to 31st returns Empty exactly when the clipped start passes the clipped day-after-the-end, as PostgreSQL's daterange(d + interval, (d + 1) + interval) and LocalDateTimeRange [d,d+1).Shift do; a whole month or quarter never empties.",
+    "oracle": "claim",
+    "surfaces": [
+      "LocalDateRange.Shift",
+      "LocalDateTimeRange.Shift"
+    ],
+    "heldBy": [
+      "NodaTimeShiftExpandTests",
+      "CalendarShiftAgreementTests"
     ]
   },
   {

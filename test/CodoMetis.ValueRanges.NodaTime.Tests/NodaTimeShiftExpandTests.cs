@@ -116,4 +116,52 @@ public class NodaTimeShiftExpandTests
         Assert.AreEqual(LocalDateTimeRange.CreateFinite(new LocalDateTime(2026, 3, 29, 9, 0), new LocalDateTime(2026, 3, 29, 10, 0)),
                         slot.Shift(Period.FromDays(1)));
     }
+
+    /// <summary>
+    /// A month or year shift of a short range ending on the 28th to 31st can be <c>Empty</c>: the start
+    /// and the day after the end clip separately and can meet. That is PostgreSQL's answer for the
+    /// <c>daterange</c> and <c>LocalDateTimeRange</c>'s for the same days, and the maintainer kept it (#259).
+    /// </summary>
+    [TestMethod]
+    public void LocalDateRange_ShortRangeByMonths_CanBeEmpty_AsLocalDateTimeRangeIs()
+    {
+        static LocalDateRange Day(int year, int month, int day) => LocalDateRange.CreateFinite(new LocalDate(year, month, day), new LocalDate(year, month, day));
+
+        Assert.AreEqual(LocalDateRange.Empty, Day(2024, 2, 28).Shift(Period.FromYears(1)));
+        Assert.AreEqual(LocalDateRange.Empty, Day(2024, 3, 30).Shift(Period.FromMonths(1)));
+        Assert.AreEqual(LocalDateRange.Empty, Day(2024, 1, 29).Shift(Period.FromMonths(1)));
+        Assert.AreEqual(LocalDateRange.Empty, Day(2023, 12, 30).Shift(Period.FromMonths(-1)));
+        Assert.AreEqual(LocalDateTimeRange.Empty,
+                        LocalDateTimeRange.CreateFinite(new LocalDateTime(2024, 2, 28, 0, 0), new LocalDateTime(2024, 2, 29, 0, 0)).Shift(Period.FromYears(1)));
+
+        // A whole month never empties, and a range of days that does not end late in a month never does.
+        Assert.AreEqual(LocalDateRange.Month(2025, 2), LocalDateRange.Month(2024, 2).Shift(Period.FromYears(1)));
+        Assert.AreEqual(Day(2024, 4, 15), Day(2024, 3, 15).Shift(Period.FromMonths(1)));
+
+        // The sweep the analysis ran: every day from December 2023 to March 2025, lengths 0 to 35,
+        // and steps of a month, a year and thirteen months either way. The date range moves exactly
+        // as the date-time range over the same days, [start, end + 1), Empty included.
+        var failures = new List<string>();
+        var empties  = 0;
+        Period[] steps = [Period.FromMonths(1), Period.FromMonths(-1), Period.FromYears(1), Period.FromYears(-1), Period.FromMonths(13)];
+
+        for (var start = new LocalDate(2023, 12, 1); start <= new LocalDate(2025, 3, 31); start = start.PlusDays(1))
+        for (var length = 0; length <= 35; length++)
+        foreach (var step in steps)
+        {
+            var end      = start.PlusDays(length);
+            var dates    = LocalDateRange.CreateFinite(start, end).Shift(step);
+            var times    = LocalDateTimeRange.CreateFinite(start.AtMidnight(), end.PlusDays(1).AtMidnight()).Shift(step);
+            var asTimes  = dates is LocalDateRange.Finite f
+                               ? LocalDateTimeRange.CreateFinite(f.Start.AtMidnight(), f.End.PlusDays(1).AtMidnight())
+                               : LocalDateTimeRange.Empty;
+
+            if (dates.IsEmpty()) empties++;
+            if (asTimes != times)
+                failures.Add($"[{start:yyyy-MM-dd},{end:yyyy-MM-dd}] + {step} → {dates}, the date-time range gives {times}");
+        }
+
+        Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures.Take(20)));
+        Assert.IsTrue(empties > 0, "the sweep should reach the ranges a month shift empties");
+    }
 }
