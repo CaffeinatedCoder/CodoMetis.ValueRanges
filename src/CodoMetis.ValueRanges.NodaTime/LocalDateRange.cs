@@ -561,11 +561,12 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     private static bool IsInfinity(LocalDate value) => value == LocalDate.MinIsoValue || value == LocalDate.MaxIsoValue;
 
     /// <summary>
-    /// <see cref="IsInfinity"/> for a closed end, which also stands for <c>infinity)</c> the day before
-    /// the maximum, because its exclusive end is the maximum: a column holding <c>[x,infinity)</c>
-    /// reads as <c>[x,9999-12-30]</c> (#117).
+    /// Whether a closed end stands for <c>infinity</c>: at the maximum, and the day before it, because
+    /// its exclusive end is the maximum — a column holding <c>[x,infinity)</c> reads as
+    /// <c>[x,9999-12-30]</c> (#117). Not at the minimum: a closed end there is <c>[-infinity,0001-01-02)</c>
+    /// in PostgreSQL's half-open form, whose upper bound is a date (#257).
     /// </summary>
-    private static bool EndIsInfinity(LocalDate end) => end == LocalDate.MinIsoValue || end >= LocalDate.MaxIsoValue.PlusDays(-1);
+    private static bool EndIsInfinity(LocalDate end) => end >= LocalDate.MaxIsoValue.PlusDays(-1);
 
     /// <summary>
     /// Moves a closed upper bound as the exclusive end PostgreSQL stores for it — the day after —

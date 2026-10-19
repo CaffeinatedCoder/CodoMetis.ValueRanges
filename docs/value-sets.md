@@ -341,7 +341,9 @@ Good to know:
   fails (`FormatException`), as it does on the server. Before 10.0 every decoration failed.
 - **Nested empty arrays read as empty.** `{{}}` and `{{},{}}` are `{}`. PostgreSQL 17 and later read
   them as `{}`, and PostgreSQL 16 rejects them. A nested array that holds an element, such as `{{1}}`,
-  is two-dimensional and still fails (`FormatException`). Before 10.0 the empty ones failed too.
+  is two-dimensional and still fails (`FormatException`). So does a nest that is ragged, such as
+  `{{{},{}},{{}}}`, or deeper than six levels, PostgreSQL's limit: every version rejects those. Before
+  10.0 the empty ones failed too.
 - **Before 10.0, `GuidSet` read `Guid.Parse`'s grammar.** `{(6f9619ff-8b86-d011-b42d-00c04fc964ff)}`
   parsed, `{" 6f9619ff-8b86-d011-b42d-00c04fc964ff"}` was trimmed, and the hyphen-group form failed.
 

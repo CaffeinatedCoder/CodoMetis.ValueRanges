@@ -273,7 +273,7 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     public IEnumerable<LocalDateTimeRange> Split(Period step)
     {
         NodaPeriods.RequirePositive(step, nameof(step));
-        return RangeSplitting.Split<LocalDateTimeRange, LocalDateTime>(this, RangeSplitting.Steps<LocalDateTime>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n))));
+        return RangeSplitting.Split<LocalDateTimeRange, LocalDateTime>(this, RangeSplitting.Steps<LocalDateTime>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n)), previous => RangeArithmetic.Checked(() => previous.Plus(step))));
     }
 
     /// <summary>
