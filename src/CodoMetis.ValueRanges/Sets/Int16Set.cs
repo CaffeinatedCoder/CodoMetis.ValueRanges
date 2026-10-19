@@ -116,7 +116,12 @@ public sealed class Int16Set : IValueSet<short>, IValueSetFactory<Int16Set, shor
     public static bool operator !=(Int16Set? left, Int16Set? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<Int16Set, short>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#299, dotnet/runtime#136073).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<Int16Set, short>(this, format, provider);
 }
 
 /// <summary>
@@ -280,5 +285,10 @@ public sealed class Int16Set<TElement> :
     public static bool operator !=(Int16Set<TElement>? left, Int16Set<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<Int16Set<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#299, dotnet/runtime#136073).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<Int16Set<TElement>, TElement>(this, format, provider);
 }
