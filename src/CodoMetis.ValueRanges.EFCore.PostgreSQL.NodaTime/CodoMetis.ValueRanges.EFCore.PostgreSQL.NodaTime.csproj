@@ -24,7 +24,7 @@ The full range algebra translates from LINQ to SQL exactly as for the BCL-based 
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="11.0.0-rc.1.1" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="11.0.0-rc.2" />
     </ItemGroup>
 
 </Project>

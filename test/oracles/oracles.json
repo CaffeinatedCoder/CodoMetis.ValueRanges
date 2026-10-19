@@ -337,5 +337,14 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "NativeTemporalKeyTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "claim",
+    "against": "Npgsql 11's temporal-key model validation for every discovered range and multirange type, and PostgreSQL 18's WITHOUT OVERLAPS and PERIOD over DateRange, RangeSet, TimeRange and YearMonthRange columns",
+    "needs": [
+      "docker"
+    ]
   }
 ]

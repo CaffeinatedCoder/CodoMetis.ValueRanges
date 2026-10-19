@@ -14,7 +14,7 @@
           The design-time services `dotnet ef migrations add` builds (MigrationScaffoldTests), at the
           EF Core version the provider resolves. Test-only: the shipping package never references it.
       -->
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.1.26425.128" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.2.26504.105" />
     </ItemGroup>
 
     <ItemGroup>

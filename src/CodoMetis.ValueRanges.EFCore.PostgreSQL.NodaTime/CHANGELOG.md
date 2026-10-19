@@ -11,6 +11,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 
 - Targets `net11.0` and references `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime` 11 (a release candidate while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
 
+### Added
+
+- EF Core: Npgsql 11's own temporal keys accept `YearMonthRange` and the NodaTime range and multirange columns. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over them on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
+
 ## [10.1.0] — 2026-10-19
 
 No change in this package. The NodaTime ranges and sets get the EF Core package's fixes for an empty captured list (EF Core 10.0.2 and later) and for `RangeSet.Contains` on the planned EF Core 10.0.15 (dotnet/efcore#37081).

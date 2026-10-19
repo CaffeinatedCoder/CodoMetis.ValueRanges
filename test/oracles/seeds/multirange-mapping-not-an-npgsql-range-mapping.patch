@@ -1,0 +1,23 @@
+Seed: RangeSet columns map through a type mapping that is not an INpgsqlRangeTypeMapping, so Npgsql 11 rejects a WITHOUT OVERLAPS key over any multirange column
+Oracles: NativeTemporalKeyTests
+Fails: every RangeSet<TRange, T> in the discovered sweep, and the datemultirange key
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Storage/ValueRangeSetTypeMapping.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Storage/ValueRangeSetTypeMapping.cs
+index ca30740..ce787d3 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Storage/ValueRangeSetTypeMapping.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Storage/ValueRangeSetTypeMapping.cs
+@@ -18,7 +18,7 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
+ /// </summary>
+ /// <typeparam name="TRange">The range type the set is composed of.</typeparam>
+ /// <typeparam name="T">The element type of the ranges.</typeparam>
+-internal sealed class ValueRangeSetTypeMapping<TRange, T> : RelationalTypeMapping, IStoreTextMapping<RangeSet<TRange, T>>, INpgsqlRangeTypeMapping
++internal sealed class ValueRangeSetTypeMapping<TRange, T> : RelationalTypeMapping, IStoreTextMapping<RangeSet<TRange, T>>
+     where TRange : class, IRangeFactory<TRange, T>, IRange<T>
+     where T : struct, IComparable<T>, IEquatable<T>
+ {
+@@ -103,5 +103,4 @@ internal sealed class ValueRangeSetTypeMapping<TRange, T> : RelationalTypeMappin
+     // INpgsqlRangeTypeMapping; it checks the mapping, not the store type name (#150). The comparer it asks for
+     // orders key values in the update pipeline. Every range type and RangeSet is already IComparable<T> in
+     // PostgreSQL's order, so EF's default applies and none is supplied. Npgsql reads the interface nowhere else.
+-    IComparer? INpgsqlRangeTypeMapping.CreateCurrentValueComparer(Type clrType) => null;
+ }
