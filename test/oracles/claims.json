@@ -3128,6 +3128,21 @@
     ]
   },
   {
+    "id": "R47-projected-compareto-null",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "A projected `CompareTo`, such as `Select(b => b.Period.CompareTo(other))`, returns the same number in the query as in memory, also for a `null` operand.",
+    "claim": "A range or multirange CompareTo projected or ordered by in an EF Core query, over a nullable column, against a null and a non-null operand, returns for every row the number Comparer<T>.Default.Compare(column, operand) returns, and sorts as it does; a null operand translates to the constant 1 and a non-null one to EF Core's own CASE.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests",
+      "QueryTranslationTests"
+    ]
+  },
+  {
     "id": "S01-canonical-set",
     "source": "docs/value-sets.md#value-sets",
     "quote": "Every set is immutable and deduplicated, sorted, and free of nulls.",

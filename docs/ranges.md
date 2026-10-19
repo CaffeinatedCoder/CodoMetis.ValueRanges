@@ -432,7 +432,9 @@ Good to know:
   `null` range on the right, the query returns the rows memory returns: `> 0`, `>= 0` and `!= 0` hold
   for every row, and `< 0`, `<= 0` and `== 0` for none. The same holds when you compare `CompareTo`
   with `-1` or `1`, which EF Core also turns into operators. `CompareTo` answers only `-1`, `0` or `1`,
-  so `== 1` means "sorts after" in memory as in SQL.
+  so `== 1` means "sorts after" in memory as in SQL. A projected `CompareTo`, such as
+  `Select(b => b.Period.CompareTo(other))`, returns the same number in the query as in memory, also for
+  a `null` operand.
 - **A NULL column compares as `Comparer<T>.Default` orders a null.** It is equal to a `null` range,
   and before every other range. So with a `null` operand, a NULL column matches `== 0`, `>= 0` and
   `<= 0`, and with a non-null operand it compares lower, so it matches `< 0`, `<= 0` and `!= 0`. In
