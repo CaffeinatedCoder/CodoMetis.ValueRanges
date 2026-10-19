@@ -5,7 +5,9 @@ covers all four packages, which share one version number and release together.
 
 ## [10.1.0]
 
-No change in this package.
+### Fixed
+
+- NodaTime: `ToString` on `LocalDateSet`, `LocalTimeSet`, `LocalDateTimeSet`, `InstantSet` and `YearMonthSet`, and on their wrapper sets, runs in a `net11.0` Native AOT consumer, where the process ended with `SIGTRAP` on the first call ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
 
 ## [10.0.0] — 2026-10-19
 

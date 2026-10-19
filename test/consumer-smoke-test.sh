@@ -29,6 +29,18 @@
 #   SMOKE_AOT_LINKER_ARGS — extra native linker arguments for the AOT consumer, space-separated,
 #   for SDK builds whose link line needs library paths the toolchain does not find by itself
 #   (Homebrew's dotnet on macOS: "-L/opt/homebrew/opt/openssl@3/lib -L/opt/homebrew/opt/brotli/lib").
+#
+#   SMOKE_AOT_SDK — the .NET SDK version to pin the AOT consumer to, as `dotnet --list-sdks` prints
+#   it ("11.0.100-rc.2.26504.105"). The consumer gets a global.json naming it and targets that SDK's
+#   framework (net11.0), so its publish runs that SDK's ILCompiler over the net10.0 packages — the
+#   configuration in which the released 10.0.0 trapped (SIGTRAP on the first value set ToString,
+#   #299, dotnet/runtime#136073), and the check to repeat by hand until the 10.x CI has a .NET 11
+#   SDK leg (#297). The SDK has to sit in the dotnet root the `dotnet` on PATH resolves, beside the
+#   .NET 10 SDK the repository's global.json needs. With neither installed, put both into one
+#   folder and that folder first on PATH:
+#     dotnet-install.sh --channel 11.0 --quality preview --install-dir ~/dotnet-smoke --no-path
+#     dotnet-install.sh --channel 10.0 --install-dir ~/dotnet-smoke --no-path
+#     PATH=~/dotnet-smoke:$PATH SMOKE_AOT_SDK=11.0.100-rc.2.26504.105 test/consumer-smoke-test.sh
 
 set -euo pipefail
 
@@ -102,7 +114,14 @@ scaffold_consumer() {
     echo "==> $name: consumer project, $package"
     mkdir -p "$app"
     cd "$app"
-    run dotnet new console --framework net10.0 --output .
+    # A pinned SDK (consumer_sdk, from SMOKE_AOT_SDK) goes in before `dotnet new`, so the template,
+    # the restore and the publish all run on it, and the consumer targets that SDK's framework.
+    local framework=net10.0
+    if [[ -n "${consumer_sdk:-}" ]]; then
+        printf '{ "sdk": { "version": "%s", "rollForward": "disable" } }\n' "$consumer_sdk" > global.json
+        framework="net${consumer_sdk%%.*}.0"
+    fi
+    run dotnet new console --framework "$framework" --output .
 
     cat > nuget.config <<XML
 <?xml version="1.0" encoding="utf-8"?>
@@ -321,6 +340,18 @@ Case("aot-gap", () => Int32Range.CreateFinite(1, 3).Gap(Int32Range.CreateFinite(
 Case("aot-range-agg", () => JsonSerializer.Serialize(new[] { Float64Range.CreateFinite(1, 2), Float64Range.CreateFinite(1.5, 3) }.RangeAgg(), ctx.RangeSetFloat64RangeDouble));
 Case("aot-range-intersect-agg-sets", () => new[] { RangeSet<Int32Range, int>.Parse("{[1,2]}", null), RangeSet<Int32Range, int>.Parse("{[2,5]}", null) }.RangeIntersectAgg()!.ToString());
 
+// Every value set family's ToString. Before #299 each ran through the interface's default
+// IFormattable.ToString, whose shared-generic stub ILCompiler 11 RC2 compiles to a trap.
+Case("aot-set-tostring-every-family", () => string.Join(" ",
+    StringSet.From("a"), GuidSet.From(Guid.Empty), Int16Set.From(1), Int32Set.From(1), Int64Set.From(1),
+    DecimalSet.From(1.5m), Float32Set.From(0.5f), Float64Set.From(0.5),
+    DateSet.From(new DateOnly(2026, 1, 1)), TimeSet.From(new TimeOnly(9, 30)),
+    DateTimeSet.From(new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc)),
+    DateTimeOffsetSet.From(new DateTimeOffset(2026, 1, 1, 9, 30, 0, TimeSpan.Zero)),
+    LocalDateSet.From(new LocalDate(2026, 1, 1)), LocalTimeSet.From(new LocalTime(9, 30)),
+    LocalDateTimeSet.From(new LocalDateTime(2026, 1, 1, 9, 30)), InstantSet.From(Instant.FromUtc(2026, 1, 1, 9, 30)),
+    YearMonthSet.From(new YearMonth(2026, 1))));
+
 public sealed record Declared(CodoMetis.ValueRanges.Core.IRange<DateOnly> Period, CodoMetis.ValueRanges.Core.IValueSet<string> Tags);
 
 public sealed class TaggedDateRange : JsonConverter<DateRange>
@@ -419,9 +450,11 @@ public readonly record struct Code(int Value) : IFormattable, IParsable<Code>, I
 }
 CSHARP
 
+consumer_sdk="${SMOKE_AOT_SDK:-}"
 scaffold_consumer aot CodoMetis.ValueRanges.NodaTime
+consumer_sdk=""
 
-echo "==> aot: publishing with Native AOT"
+echo "==> aot: publishing with Native AOT (SDK $(dotnet --version))"
 rid="$(dotnet --info | awk '/^ *RID:/ { print $2; exit }')"
 {
     echo '<Project><ItemGroup>'
@@ -430,10 +463,18 @@ rid="$(dotnet --info | awk '/^ *RID:/ { print $2; exit }')"
 } > "$work/aot/Directory.Build.targets"
 run dotnet publish "$work/aot" -c Release -r "$rid" -p:PublishAot=true -p:TrimmerSingleWarn=false -o "$work/aot/native"
 echo "$output" > "$work/aot.publish"
-"$work/aot/native/aot" > "$work/aot.native.out" 2>&1 || true
+"$work/aot/native/aot" > "$work/aot.native.out" 2>&1 && native_exit=0 || native_exit=$?
 sed 's/^/      /' "$work/aot.native.out"
 
 echo "==> aot: asserting"
+# A trap after the last asserted line would otherwise pass: 133 is SIGTRAP, what ILCompiler 11 RC2
+# compiled into every value set's ToString before #299.
+if (( native_exit != 0 )); then
+    echo "  FAIL: the native binary exited with $native_exit"
+    failed=1
+else
+    echo "  ok: the native binary ran to the end"
+fi
 if grep -E "warning IL[0-9]+" "$work/aot.publish" | grep -q "CodoMetis"; then
     echo "  FAIL: the packages raise trim/AOT warnings in a consumer's publish"
     grep -E "warning IL[0-9]+" "$work/aot.publish" | grep "CodoMetis" | sed 's/^/      /'
@@ -489,6 +530,7 @@ assert_contains 'aot-gaps={[2026-01-06,2026-01-09]}' "$work/aot.native.out" "AOT
 assert_contains 'aot-gap=[4,9]' "$work/aot.native.out" "AOT: Gap"
 assert_contains 'aot-range-agg="{[1,3)}"' "$work/aot.native.out" "AOT: RangeAgg over Float64Range"
 assert_contains 'aot-range-intersect-agg-sets={[2,2]}' "$work/aot.native.out" "AOT: RangeIntersectAgg over RangeSets"
+assert_contains 'aot-set-tostring-every-family={a} {00000000-0000-0000-0000-000000000000} {1} {1} {1} {1.5} {0.5} {0.5} {2026-01-01} {09:30:00.0000000} {2026-01-01T09:30:00.0000000Z} {2026-01-01T09:30:00.0000000+00:00} {2026-01-01} {09:30:00} {2026-01-01T09:30:00} {2026-01-01T09:30:00Z} {2026-01}' "$work/aot.native.out" "AOT: ToString on every value set family (#299)"
 
 # ── EF Core + NodaTime satellite: the whole dependency chain ──────────────────────────────────────
 

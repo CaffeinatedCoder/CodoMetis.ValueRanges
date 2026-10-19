@@ -15,6 +15,7 @@ has the rules.
 
 ### Fixed
 
+- Value sets: `ToString` on every value set, in the core and NodaTime packages, runs in a `net11.0` Native AOT consumer, where the process ended with `SIGTRAP` on the first call ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
 - EF Core: `Any` or `Count` over an empty captured list of ranges or value sets returns `false` or `0` on EF Core 10.0.2 and later, where it failed with `42883: operator does not exist: text && int4range`. The stopgap `AppContext.SetSwitch("Microsoft.EntityFrameworkCore.Issue37216", true)` also brings back EF Core's own failure on empty lists of other types ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
 
 ## [10.0.0] — 2026-10-19
