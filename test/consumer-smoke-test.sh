@@ -193,6 +193,7 @@ assert_contains "contains=True"   "$work/core.out" "value set membership"
 # ── Native AOT: core + NodaTime, published and run as a native binary ────────────────────────────
 
 cat > "$work/aot.cs" <<'CSHARP'
+using System.Collections;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -275,6 +276,51 @@ Case("aot-default-options", () => string.Join(" ", new Func<string>[]
 Case("aot-typeconverter", () => TypeDescriptor.GetConverter(typeof(RangeSet<Int64Range, long>)).ConvertFromInvariantString("{[1,5]}")!.ToString()!);
 #pragma warning restore IL2026
 
+// ── The 10.0.0 additions under AOT (#254) ──────────────────────────────────────────────────────────
+// The float ranges: a value, a variant and a dictionary key, and range sets this program never builds
+// (the closed-converter registration case). The texts are PostgreSQL's float8out and float4out.
+var f64 = Float64Range.CreateFinite(0.1, 2.9802322387695312e-08 + 1);
+Case("aot-f64-range", () => JsonSerializer.Serialize(f64, ctx.Float64Range));
+Case("aot-f64-range-read", () => JsonSerializer.Deserialize("\"[1e23,2e23)\"", ctx.Float64Range)!.ToString());
+Case("aot-f64-variant-read", () => JsonSerializer.Deserialize("\"[1.5,)\"", ctx.Float64RangeUnboundedEnd)!.ToString());
+Case("aot-f64-key", () => JsonSerializer.Serialize(new Dictionary<Float64Range, int> { [f64] = 1 }, ctx.DictionaryFloat64RangeInt32));
+Case("aot-f64-rangeset-read", () => JsonSerializer.Deserialize("\"{[1,2),[3,4)}\"", ctx.RangeSetFloat64RangeDouble)!.ToString());
+Case("aot-f32-range-read", () => JsonSerializer.Deserialize("\"[0.1,1e6)\"", ctx.Float32Range)!.ToString());
+Case("aot-f32-rangeset-read", () => JsonSerializer.Deserialize("\"{[0.1,1e6)}\"", ctx.RangeSetFloat32RangeSingle)!.ToString());
+Case("aot-f32-set-read", () => JsonSerializer.Deserialize("[1000000,0.1]", ctx.Float32Set)!.ToString());
+Case("aot-f64-nan-refused", () => JsonSerializer.Deserialize("\"[NaN,1)\"", ctx.Float64Range)!.ToString());
+
+// IComparable in PostgreSQL's range order, the non-generic path included (Array.Sort over object, ArrayList).
+object?[] boxed = [Int32Range.CreateFinite(5, 9), null, Int32Range.Empty, Int32Range.CreateUnboundedStart(3)];
+Case("aot-icomparable-object-sort", () => { Array.Sort(boxed); return string.Join(" ", boxed.Select(b => b?.ToString() ?? "null")); });
+var months = new List<DateRange> { DateRange.Month(2026, 3), DateRange.Empty, DateRange.Month(2026, 1) };
+Case("aot-icomparable-generic-sort", () => { months.Sort(); return string.Join(" ", months); });
+var boxedSets = new ArrayList { RangeSet<Int64Range, long>.Parse("{[5,6]}", null), RangeSet<Int64Range, long>.Parse("{[1,2]}", null) };
+Case("aot-icomparable-rangeset-arraylist", () => { boxedSets.Sort(); return string.Join(" ", boxedSets.Cast<object>()); });
+Case("aot-icomparable-comparer-default", () => Comparer<LocalDateRange>.Default.Compare(LocalDateRange.Month(2026, 1), LocalDateRange.Month(2026, 2)).ToString());
+
+// Shift, Expand, Split and Values(step), through JSON where the result has a converter.
+Case("aot-shift-int64", () => JsonSerializer.Serialize(Int64Range.CreateFinite(1, 10).Shift(5), ctx.Int64Range));
+Case("aot-expand-decimal", () => JsonSerializer.Serialize(DecimalRange.CreateFinite(1.5m, 2.5m).Expand(0.25m), ctx.DecimalRange));
+Case("aot-shift-float64", () => JsonSerializer.Serialize(Float64Range.CreateFinite(0.1, 0.2).Shift(0.1), ctx.Float64Range));
+Case("aot-split-int64", () => JsonSerializer.Serialize(Int64Range.CreateFinite(1, 10).Split(4).ToList(), ctx.ListInt64Range));
+Case("aot-split-float32", () => JsonSerializer.Serialize(Float32Range.CreateFinite(0f, 1f).Split(0.25f).ToList(), ctx.ListFloat32Range));
+Case("aot-split-datetime", () => JsonSerializer.Serialize(DateTimeRange.CreateFinite(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc)).Split(TimeSpan.FromHours(4)).ToList(), ctx.ListDateTimeRange));
+Case("aot-split-by-month", () => JsonSerializer.Serialize(DateRange.CreateFinite(new DateOnly(2026, 1, 15), new DateOnly(2026, 3, 10)).Split(DateRange.Month).ToList(), ctx.ListDateRange));
+Case("aot-values-step-int32", () => string.Join(",", Int32Range.CreateFinite(1, 10).Values(3)));
+Case("aot-shift-localdate", () => JsonSerializer.Serialize(LocalDateRange.Month(2026, 2).Shift(Period.FromMonths(1)), ctx.LocalDateRange));
+
+// The calendar factories, core and NodaTime, and one as a dictionary key.
+Case("aot-cal-date", () => string.Join(" ", DateRange.Month(2026, 2), DateRange.Quarter(2026, 4), DateRange.Year(2026), DateRange.IsoWeek(2026, 1), DateRange.IsoWeek(new DateOnly(2027, 1, 1))));
+Case("aot-cal-noda", () => string.Join(" ", LocalDateRange.IsoWeek(2026, 53), LocalDateRange.Month(new LocalDate(2024, 2, 10)), YearMonthRange.Quarter(2026, 2)));
+Case("aot-cal-json", () => JsonSerializer.Serialize(new Dictionary<YearMonthRange, LocalDateRange> { [YearMonthRange.Quarter(2026, 1)] = LocalDateRange.IsoWeek(2026, 1) }, ctx.DictionaryYearMonthRangeLocalDateRange));
+
+// Gap, Gaps and the aggregates, over ranges and over sets.
+Case("aot-gaps", () => RangeSet<DateRange, DateOnly>.Parse("{[2026-01-01,2026-01-05],[2026-01-10,2026-01-12]}", null).Gaps().ToString());
+Case("aot-gap", () => Int32Range.CreateFinite(1, 3).Gap(Int32Range.CreateFinite(10, 12)).ToString());
+Case("aot-range-agg", () => JsonSerializer.Serialize(new[] { Float64Range.CreateFinite(1, 2), Float64Range.CreateFinite(1.5, 3) }.RangeAgg(), ctx.RangeSetFloat64RangeDouble));
+Case("aot-range-intersect-agg-sets", () => new[] { RangeSet<Int32Range, int>.Parse("{[1,2]}", null), RangeSet<Int32Range, int>.Parse("{[2,5]}", null) }.RangeIntersectAgg()!.ToString());
+
 public sealed record Declared(CodoMetis.ValueRanges.Core.IRange<DateOnly> Period, CodoMetis.ValueRanges.Core.IValueSet<string> Tags);
 
 public sealed class TaggedDateRange : JsonConverter<DateRange>
@@ -314,6 +360,21 @@ public readonly record struct Key(string Value) : IFormattable, IParsable<Key>
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(object))]
 [JsonSerializable(typeof(DateTimeOffsetSet))]
+[JsonSerializable(typeof(Float64Range))]
+[JsonSerializable(typeof(Float64Range.UnboundedEnd), TypeInfoPropertyName = "Float64RangeUnboundedEnd")]
+[JsonSerializable(typeof(Dictionary<Float64Range, int>))]
+[JsonSerializable(typeof(RangeSet<Float64Range, double>))]
+[JsonSerializable(typeof(Float32Range))]
+[JsonSerializable(typeof(RangeSet<Float32Range, float>))]
+[JsonSerializable(typeof(Float32Set))]
+[JsonSerializable(typeof(Int64Range))]
+[JsonSerializable(typeof(DecimalRange))]
+[JsonSerializable(typeof(List<Int64Range>))]
+[JsonSerializable(typeof(List<Float32Range>))]
+[JsonSerializable(typeof(List<DateTimeRange>))]
+[JsonSerializable(typeof(List<DateRange>))]
+[JsonSerializable(typeof(LocalDateRange))]
+[JsonSerializable(typeof(Dictionary<YearMonthRange, LocalDateRange>))]
 [JsonSerializable(typeof(DateTimeOffset))]
 [JsonSerializable(typeof(Declared))]
 internal partial class SmokeJson : JsonSerializerContext;
@@ -399,6 +460,35 @@ assert_contains 'aot-default-options=InvalidOperationException InvalidOperationE
 assert_contains 'aot-typeconverter={[1,5]}'                    "$work/aot.native.out" "AOT: TypeConverter for a RangeSet the program never constructs"
 assert_contains 'aot-interface={"Period":"[2026-01-01,2026-06-30]","Tags":["alpha"]}' "$work/aot.native.out" "AOT: interface-declared properties write through the runtime type"
 assert_contains 'aot-union-converter="tag:[2026-01-01,2026-06-30]" [2026-01-01,2026-06-30]' "$work/aot.native.out" "AOT: a union converter on the options reaches the variant"
+assert_contains 'aot-f64-range="[0.1,1.0000000298023224)"' "$work/aot.native.out" "AOT: a Float64Range serializes as float8out text"
+assert_contains 'aot-f64-range-read=[9.999999999999999e+22,1.9999999999999998e+23)' "$work/aot.native.out" "AOT: a Float64Range deserializes"
+assert_contains 'aot-f64-variant-read=[1.5,)' "$work/aot.native.out" "AOT: a Float64Range variant deserializes"
+assert_contains 'aot-f64-key={"[0.1,1.0000000298023224)":1}' "$work/aot.native.out" "AOT: a Float64Range is a dictionary key"
+assert_contains 'aot-f64-rangeset-read={[1,2),[3,4)}' "$work/aot.native.out" "AOT: a RangeSet<Float64Range> the program never constructs deserializes"
+assert_contains 'aot-f32-range-read=[0.1,1e+06)' "$work/aot.native.out" "AOT: a Float32Range deserializes and prints float4out text"
+assert_contains 'aot-f32-rangeset-read={[0.1,1e+06)}' "$work/aot.native.out" "AOT: a RangeSet<Float32Range> the program never constructs deserializes"
+assert_contains 'aot-f32-set-read={0.1,1e+06}' "$work/aot.native.out" "AOT: a Float32Set deserializes"
+assert_contains 'aot-f64-nan-refused=FAILED JsonException' "$work/aot.native.out" "AOT: a NaN bound is refused"
+assert_contains 'aot-icomparable-object-sort=null empty (,2] [5,9]' "$work/aot.native.out" "AOT: Array.Sort over object uses the non-generic IComparable"
+assert_contains 'aot-icomparable-generic-sort=empty [2026-01-01,2026-01-31] [2026-03-01,2026-03-31]' "$work/aot.native.out" "AOT: List<DateRange>.Sort uses the range order"
+assert_contains 'aot-icomparable-rangeset-arraylist={[1,2]} {[5,6]}' "$work/aot.native.out" "AOT: ArrayList.Sort over RangeSets"
+assert_contains 'aot-icomparable-comparer-default=-1' "$work/aot.native.out" "AOT: Comparer<LocalDateRange>.Default"
+assert_contains 'aot-shift-int64="[6,15]"' "$work/aot.native.out" "AOT: Shift"
+assert_contains 'aot-expand-decimal="[1.25,2.75)"' "$work/aot.native.out" "AOT: Expand"
+assert_contains 'aot-shift-float64="[0.2,0.30000000000000004)"' "$work/aot.native.out" "AOT: Shift on a Float64Range is IEEE addition"
+assert_contains 'aot-split-int64=["[1,4]","[5,8]","[9,10]"]' "$work/aot.native.out" "AOT: Split on a discrete range"
+assert_contains 'aot-split-float32=["[0,0.25)","[0.25,0.5)","[0.5,0.75)","[0.75,1)"]' "$work/aot.native.out" "AOT: Split on a Float32Range"
+assert_contains 'aot-split-datetime=["[2026-01-01T00:00:00.0000000Z,2026-01-01T04:00:00.0000000Z)","[2026-01-01T04:00:00.0000000Z,2026-01-01T08:00:00.0000000Z)","[2026-01-01T08:00:00.0000000Z,2026-01-01T12:00:00.0000000Z)"]' "$work/aot.native.out" "AOT: Split by a TimeSpan"
+assert_contains 'aot-split-by-month=["[2026-01-15,2026-01-31]","[2026-02-01,2026-02-28]","[2026-03-01,2026-03-10]"]' "$work/aot.native.out" "AOT: Split(DateRange.Month)"
+assert_contains 'aot-values-step-int32=1,4,7,10' "$work/aot.native.out" "AOT: Values(step)"
+assert_contains 'aot-shift-localdate="[2026-03-01,2026-03-31]"' "$work/aot.native.out" "AOT: Shift by a NodaTime Period"
+assert_contains 'aot-cal-date=[2026-02-01,2026-02-28] [2026-10-01,2026-12-31] [2026-01-01,2026-12-31] [2025-12-29,2026-01-04] [2026-12-28,2027-01-03]' "$work/aot.native.out" "AOT: the DateRange calendar factories"
+assert_contains 'aot-cal-noda=[2026-12-28,2027-01-03] [2024-02-01,2024-02-29] [2026-04,2026-06]' "$work/aot.native.out" "AOT: the NodaTime calendar factories"
+assert_contains 'aot-cal-json={"[2026-01,2026-03]":"[2025-12-29,2026-01-04]"}' "$work/aot.native.out" "AOT: calendar ranges as JSON key and value"
+assert_contains 'aot-gaps={[2026-01-06,2026-01-09]}' "$work/aot.native.out" "AOT: Gaps"
+assert_contains 'aot-gap=[4,9]' "$work/aot.native.out" "AOT: Gap"
+assert_contains 'aot-range-agg="{[1,3)}"' "$work/aot.native.out" "AOT: RangeAgg over Float64Range"
+assert_contains 'aot-range-intersect-agg-sets={[2,2]}' "$work/aot.native.out" "AOT: RangeIntersectAgg over RangeSets"
 
 # ── EF Core + NodaTime satellite: the whole dependency chain ──────────────────────────────────────
 
