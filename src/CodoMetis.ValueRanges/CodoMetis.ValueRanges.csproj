@@ -5,13 +5,13 @@
              reflection path cannot ship unannotated. The NativeAOT consumer in
              test/consumer-smoke-test.sh proves the behaviour, which the analyzers cannot. -->
         <IsAotCompatible>true</IsAotCompatible>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <PackageId>CodoMetis.ValueRanges</PackageId>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <Description>In-memory range and multirange types for .NET 10, mirroring PostgreSQL's six built-in range domains (int4range, int8range, numrange, daterange, tsrange, tstzrange) plus TimeRange over TimeOnly — the time-of-day range PostgreSQL users conventionally add as CREATE TYPE timerange AS RANGE (subtype = time), and Float64Range and Float32Range over finite double and float (the custom float8range and float4range). Each type is a discriminated union of five sealed variants (Finite, UnboundedStart, UnboundedEnd, EmptyRange, Infinity) with invalid states unrepresentable at compile time.
+        <Description>In-memory range and multirange types for .NET 11, mirroring PostgreSQL's six built-in range domains (int4range, int8range, numrange, daterange, tsrange, tstzrange) plus TimeRange over TimeOnly — the time-of-day range PostgreSQL users conventionally add as CREATE TYPE timerange AS RANGE (subtype = time), and Float64Range and Float32Range over finite double and float (the custom float8range and float4range). Each type is a discriminated union of five sealed variants (Finite, UnboundedStart, UnboundedEnd, EmptyRange, Infinity) with invalid states unrepresentable at compile time.
 
 Includes the full PostgreSQL interval algebra — Contains, Overlaps, IsAdjacentTo, Intersect, Union, Except, Complement, Merge (range_merge), bound accessors (lower/upper/lower_inc/upper_inc), the RangeAgg/RangeIntersectAgg aggregates, Gap/Gaps, Shift/Expand, Split, the Month/Quarter/Year/IsoWeek calendar factories and IComparable in PostgreSQL's range order — plus RangeSet&lt;TRange, T&gt; as an immutable, always-normalized multirange with the complete multirange operator matrix.
 

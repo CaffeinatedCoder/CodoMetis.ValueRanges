@@ -143,7 +143,12 @@ public sealed class Float32Set : IValueSet<float>, IValueSetFactory<Float32Set, 
     public static bool operator !=(Float32Set? left, Float32Set? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<Float32Set, float>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<Float32Set, float>(this, format, provider);
 }
 
 /// <summary>
@@ -333,5 +338,10 @@ public sealed class Float32Set<TElement> :
     public static bool operator !=(Float32Set<TElement>? left, Float32Set<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<Float32Set<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<Float32Set<TElement>, TElement>(this, format, provider);
 }

@@ -3,6 +3,18 @@
 The changes that affect the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [11.0.0-preview.1] — 2026-10-19
+
+The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. The 10.x line stays on .NET 10.
+
+### Breaking
+
+- Targets `net11.0` and needs the .NET 11 runtime, one target framework per line.
+
+### Fixed
+
+- Value sets: every set type implements `IFormattable` itself, so `ToString()` and formatting no longer run the interface's default, whose shared-generic stub traps under Native AOT with ILCompiler 11 RC2 ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+
 ## [10.0.0] — 2026-10-19
 
 Nothing was removed or renamed. Some calls answer differently, and text PostgreSQL refuses is refused here too: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).

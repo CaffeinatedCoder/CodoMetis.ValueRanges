@@ -6,7 +6,7 @@
 [![dev.to](https://img.shields.io/badge/dev.to-Article-3B82F6)](https://dev.to/caffeinatedcoder/the-interval-is-the-thing-modelling-range-types-as-first-class-domain-objects-in-net-3jha)
 [![hashnode](https://img.shields.io/badge/hashnode.dev-Article-3B82F6)](https://codometis.hashnode.dev/stop-modeling-time-with-two-columns-codometis-valueranges-brings-interval-logic-to-your-net-domain?utm_source=hashnode&utm_medium=feed)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com)
+[![.NET 11](https://img.shields.io/badge/.NET-11-512BD4)](https://dotnet.microsoft.com)
 [![Native AOT: core + NodaTime](https://img.shields.io/badge/Native%20AOT-core%20%2B%20NodaTime-3B82F6)](docs/serialization.md#native-aot)
 
 Immutable **range types** (`[2025-06-01, 2025-06-08]`) and **value sets** (`{alpha, beta}`) for
@@ -20,7 +20,7 @@ multirange and array columns, so one expression means the same thing in a unit t
 dotnet add package CodoMetis.ValueRanges
 ```
 
-You need .NET 10 or later. To run your LINQ queries as SQL, add the EF Core package,
+You need .NET 11 or later (the 10.x line stays on .NET 10). To run your LINQ queries as SQL, add the EF Core package,
 [`CodoMetis.ValueRanges.EFCore.PostgreSQL`](docs/efcore.md). It needs PostgreSQL 16 or later. For NodaTime types, add the
 [NodaTime packages](#nodatime).
 

@@ -74,11 +74,11 @@ public sealed class SetCollectionTranslationTests
     }
 
     /// <summary>
-    /// An empty captured collection expands to a <c>VALUES</c> with no rows, which EF Core's SQL
-    /// generator refuses ("Empty collections are not supported as inline query roots", #137). It is
-    /// given one row of typed <c>NULL</c>s and <c>FALSE</c> on its <c>WHERE</c> instead — EF Core folds
-    /// the predicate away under it — so the subquery reads no rows and <c>Any</c> is
-    /// <see langword="false"/>, <c>Count</c> is <c>0</c>.
+    /// An empty captured collection expands to a <c>VALUES</c> with no rows (#137). EF Core 11 reads
+    /// no rows for it itself — a table-less <c>SELECT</c> of <c>NULL</c>s under <c>WHERE FALSE</c> — and
+    /// the plugin casts each <c>NULL</c> to the column's type, since a bare one is <c>text</c> to
+    /// PostgreSQL and fails the operator on it (#290); so <c>Any</c> is <see langword="false"/> and
+    /// <c>Count</c> is <c>0</c>.
     /// </summary>
     [TestMethod]
     public void Any_OverAnEmptyCapturedList_ReadsNoRows()
@@ -86,7 +86,7 @@ public sealed class SetCollectionTranslationTests
         var wanted = new List<StringSet>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::text[])) AS w(\"Value\")     WHERE FALSE)",
+            "WHERE EXISTS (     SELECT 1     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" && b.\"Tags\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
     }
 
@@ -97,7 +97,7 @@ public sealed class SetCollectionTranslationTests
 
         StringAssert.Contains(
             Where(db => db.Bookings.Where(b => wanted.Count(w => w.IsSubsetOf(b.Tags)) == 0)),
-            "WHERE (     SELECT count(*)::int     FROM (VALUES (NULL::text[])) AS w(\"Value\")     WHERE FALSE) = 0");
+            "WHERE (     SELECT count(*)::int     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" <@ b.\"Tags\") = 0");
     }
 
     [TestMethod]

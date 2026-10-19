@@ -2,7 +2,7 @@
 
 ## Overview
 
-CodoMetis.ValueRanges is a .NET 10 class library providing type-safe range types that mirror PostgreSQL's six built-in range domains. Each range is a discriminated union of five sealed variants, making invalid states unrepresentable and pattern matching exhaustive by contract. A companion EF Core package (`CodoMetis.ValueRanges.EFCore.PostgreSQL`) bridges these types to `NpgsqlRange<T>` for LINQ-to-SQL translation.
+CodoMetis.ValueRanges is a .NET 11 class library (the 10.x line stays on .NET 10) providing type-safe range types that mirror PostgreSQL's six built-in range domains. Each range is a discriminated union of five sealed variants, making invalid states unrepresentable and pattern matching exhaustive by contract. A companion EF Core package (`CodoMetis.ValueRanges.EFCore.PostgreSQL`) bridges these types to `NpgsqlRange<T>` for LINQ-to-SQL translation.
 
 ## Range Types
 

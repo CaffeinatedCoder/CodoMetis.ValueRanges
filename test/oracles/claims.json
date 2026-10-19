@@ -514,8 +514,8 @@
   {
     "id": "E27-executeupdate-null-fails",
     "source": "docs/efcore.md#put-a-range-or-set-inside-a-json-column",
-    "quote": "fails for every type — a range or multirange in Npgsql (`42804`); a value set is refused before it reaches Npgsql, because a `NULL` written there would turn the whole document into `NULL`. Set it to `null` with `SaveChanges`, or replace the whole JSON property",
-    "claim": "ExecuteUpdate setting a range, temporal range or multirange property inside a JSON document to null fails with PostgreSQL error 42804; a value set property set to null (constant or parameter) is refused by the plugin with InvalidOperationException before reaching Npgsql, with a message of its own naming the whole-document NULL rather than the JSON array, and one that may be null names both; the row still loads afterwards, and SaveChanges or replacing the whole JSON property writes the null.",
+    "quote": "fails for every type — a range or multirange in Npgsql (`42804`, the untyped `NULL` in `to_jsonb(NULL)`); a value set is refused before it reaches Npgsql, for the same reason. Set it to `null` with `SaveChanges`, or replace the whole JSON property",
+    "claim": "ExecuteUpdate setting a range, temporal range or multirange property inside a JSON document to null fails with PostgreSQL error 42804; a value set property set to null (constant or parameter) is refused by the plugin with InvalidOperationException before reaching Npgsql, with a message of its own naming the untyped NULL rather than the JSON array, and one that may be null is refused for the JSON array; the row still loads afterwards, and SaveChanges or replacing the whole JSON property writes the null.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Empty",

@@ -10,7 +10,7 @@ dotnet build CodoMetis.ValueRanges.slnx
 dotnet test
 ```
 
-`global.json` pins the SDK to the line's major (10.0.x on `main`), so install a .NET 10 SDK; a
+`global.json` pins the SDK to the line's major (11.0.x on `main`, 10.0.x on `release/10.x`), so install a .NET 11 SDK; a
 newer major on the machine is refused rather than silently used ([branches and
 releases](#branches-and-releases)).
 
@@ -177,7 +177,10 @@ fails outright.
   on, a minor on one line moves its row and `CompanionLineRelease` on the other branch in a PR of
   its own. The table gets its second row in the PR that opens the first version after `v11.0.0`.
 - **The ApiCompat baseline** is the latest stable release before the version being prepared,
-  never a preview: the 11 line validates against 10.0.0 until 11.0.0 ships.
+  never a preview: the 11 line validates against 10.0.0 until 11.0.0 ships. Package validation
+  cannot pair a `net11.0` asset with a `net10.0` baseline, so until then `Directory.Build.props`
+  ignores the baseline's framework and each preview's PR quotes a `dotnet apicompat` run over the
+  two assemblies instead; the mechanical gate returns when 11.0.0 is the baseline.
 - **GitHub's Latest release** is the highest stable version. The release workflow decides it
   rather than trusting the API's default, so a 10.x tag pushed after 11.0.0 exists, or any
   preview, can't take Latest from it.

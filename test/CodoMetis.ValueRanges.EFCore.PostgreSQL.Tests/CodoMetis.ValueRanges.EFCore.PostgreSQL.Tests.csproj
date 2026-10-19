@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
@@ -14,7 +14,7 @@
           The design-time services `dotnet ef migrations add` builds (MigrationScaffoldTests), at the
           EF Core version the provider resolves. Test-only: the shipping package never references it.
       -->
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.1.26425.128" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
@@ -15,18 +15,29 @@
             Test-only, and only here: ComplexIndexesCrossTests proves that this package's columns work
             under EFCore.ComplexIndexes.PostgreSQL's temporal and exclusion constraints and GiST indexes.
             Neither shipping package references the other.
+
+            Off on the 11 line until ComplexIndexes ships its own 11.0.0-preview.1
+            (CaffeinatedCoder/EFCore.ComplexIndexes#38): 5.4.x pins Npgsql.EntityFrameworkCore.PostgreSQL
+            to [10.0.0, 11.0.0), which a net11.0 restore cannot satisfy. The condition keeps the reference
+            and the test file where they are, so CaffeinatedCoder/EFCore.ComplexIndexes#42 restores them
+            by moving the version and dropping the condition (#103).
         -->
-        <PackageReference Include="EFCore.ComplexIndexes.PostgreSQL" Version="5.4.0" />
+        <PackageReference Include="EFCore.ComplexIndexes.PostgreSQL" Version="5.4.0" Condition="'$(TargetFramework)' == 'net10.0'" />
         <!--
             The design-time services and C# compiled-model generator `dotnet ef dbcontext optimize` runs, at
             the EF Core version the provider resolves, and the Roslyn they bring, which compiles the generated
             model in-process (CompiledModelJsonTests). Test-only: the shipping package never references it.
         -->
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.1.26425.128" />
     </ItemGroup>
 
     <ItemGroup>
         <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' != 'net10.0'">
+        <!-- With the package reference above, and back with it (CaffeinatedCoder/EFCore.ComplexIndexes#42). -->
+        <Compile Remove="ComplexIndexesCrossTests.cs" />
     </ItemGroup>
 
     <ItemGroup>

@@ -91,7 +91,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::int4range)) AS w(\"Value\")     WHERE FALSE)",
+            "WHERE EXISTS (     SELECT 1     FROM (         SELECT NULL::int4range AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" && b.\"Seats\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -108,9 +108,10 @@ public sealed class RangeCollectionTranslationTests
 
     /// <summary>
     /// An empty captured collection sent one parameter per range expands to a <c>VALUES</c> with no
-    /// rows, which EF Core's SQL generator refuses (#137). It reads no rows instead: one row of typed
-    /// <c>NULL</c>s under <c>FALSE</c>, with the predicate folded away under it. <c>Contains</c> over it
-    /// is EF Core's own <c>FALSE</c>, folded out of the <c>OR</c>.
+    /// rows (#137). EF Core 11 reads no rows for it itself — a table-less <c>SELECT</c> of <c>NULL</c>s
+    /// under <c>WHERE FALSE</c> — and the plugin casts each <c>NULL</c> to the column's type, since a
+    /// bare one is <c>text</c> to PostgreSQL and fails the operator on it (#290). <c>Contains</c> over
+    /// it is EF Core's own <c>FALSE</c>, folded out of the <c>OR</c>.
     /// </summary>
     [TestMethod]
     public void AnyBesideContains_OverAnEmptyCapturedList_ReadsNoRows()
@@ -118,7 +119,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (NULL::int4range)) AS w(\"Value\")     WHERE FALSE)",
+            "WHERE EXISTS (     SELECT 1     FROM (         SELECT NULL::int4range AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" && b.\"Seats\")",
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 

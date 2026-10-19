@@ -116,7 +116,12 @@ public sealed class Int64Set : IValueSet<long>, IValueSetFactory<Int64Set, long>
     public static bool operator !=(Int64Set? left, Int64Set? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<Int64Set, long>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<Int64Set, long>(this, format, provider);
 }
 
 /// <summary>
@@ -273,5 +278,10 @@ public sealed class Int64Set<TElement> :
     public static bool operator !=(Int64Set<TElement>? left, Int64Set<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<Int64Set<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<Int64Set<TElement>, TElement>(this, format, provider);
 }

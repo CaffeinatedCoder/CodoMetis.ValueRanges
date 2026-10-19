@@ -170,7 +170,12 @@ public sealed class YearMonthSet : IValueSet<YearMonth>, IValueSetFactory<YearMo
     public static bool operator !=(YearMonthSet? left, YearMonthSet? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<YearMonthSet, YearMonth>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<YearMonthSet, YearMonth>(this, format, provider);
 }
 
 /// <summary>
@@ -349,5 +354,10 @@ public sealed class YearMonthSet<TElement> :
     public static bool operator !=(YearMonthSet<TElement>? left, YearMonthSet<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<YearMonthSet<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<YearMonthSet<TElement>, TElement>(this, format, provider);
 }

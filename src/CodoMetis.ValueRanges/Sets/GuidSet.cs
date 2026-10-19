@@ -118,7 +118,12 @@ public sealed class GuidSet : IValueSet<Guid>, IValueSetFactory<GuidSet, Guid>, 
     public static bool operator !=(GuidSet? left, GuidSet? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<GuidSet, Guid>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<GuidSet, Guid>(this, format, provider);
 }
 
 /// <summary>
@@ -276,5 +281,10 @@ public sealed class GuidSet<TElement> :
     public static bool operator !=(GuidSet<TElement>? left, GuidSet<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<GuidSet<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#291).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<GuidSet<TElement>, TElement>(this, format, provider);
 }
