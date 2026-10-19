@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Numerics;
 
 namespace CodoMetis.ValueRanges.Internals;
 
@@ -13,8 +12,8 @@ namespace CodoMetis.ValueRanges.Internals;
 /// had one element here and two there (#115). A magnitude that does not fit still overflows.
 /// </summary>
 /// <remarks>
-/// The check compares the value, not the text: the text's digits and exponent are read exactly
-/// (<see cref="BigInteger"/>) and compared with the parsed decimal's mantissa and scale, so
+/// The check compares the value, not the text: the text's significant digits and exponent are read
+/// exactly and compared with the parsed decimal's mantissa and scale, so
 /// <c>1e3</c>, <c>+1.5</c>, <c>007.50</c> and a trailing zero beyond the 28th decimal place — all
 /// the same number as what <see cref="decimal"/> holds — pass, and only a text that names a
 /// different number fails. Shared by <c>DecimalRange.ParseValue</c> and <c>DecimalSet.ParseValue</c>,
@@ -40,6 +39,15 @@ internal static class DecimalLiteral
     }
 
     /// <summary>Whether <paramref name="value"/> is exactly the number <paramref name="text"/> spells.</summary>
+    /// <remarks>
+    /// Both sides are reduced to <c>significand · 10^exponent</c> with no trailing zero in the
+    /// significand, which spells each non-zero number one way only, so the check is two integer
+    /// comparisons. The text's significant digits are counted before any are kept, and more than 29 —
+    /// the most a decimal mantissa has — are refused, so the work is one pass over the text and a
+    /// constant, whatever its length or exponent. Until #276 the digits were buffered on the stack at
+    /// the text's length (a long element overflowed it, which kills the process) and the exponent went
+    /// into <c>BigInteger.Pow</c> (<c>{0e-10000000}</c> ran for minutes).
+    /// </remarks>
     private static bool Represents(decimal value, ReadOnlySpan<char> text)
     {
         // The text, already accepted by decimal.Parse: [ws][sign]digits[.digits][(e|E)[sign]digits][ws].
@@ -47,36 +55,57 @@ internal static class DecimalLiteral
         if (text.Length > 0 && text[0] is '+' or '-') text = text[1..];
 
         var exponentAt = text.IndexOfAny('e', 'E');
-        var exponent   = 0;
-        if (exponentAt >= 0)
+        var digits     = exponentAt < 0 ? text : text[..exponentAt];
+
+        // The significant digits, from the first non-zero one to the last; the zeros after the last
+        // are only counted, as they may end the text.
+        UInt128 significand = 0;
+        var count    = 0;
+        var zeros    = 0;
+        var fraction = 0;
+        var point    = false;
+        foreach (var c in digits)
         {
-            exponent = int.Parse(text[(exponentAt + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
-            text     = text[..exponentAt];
+            if (c == '.')
+            {
+                point = true;
+                continue;
+            }
+
+            if (point) fraction++;
+            if (c == '0')
+            {
+                if (count > 0) zeros++;
+                continue;
+            }
+
+            count += zeros + 1;
+            if (count > 29) return false;
+            for (; zeros > 0; zeros--) significand *= 10;
+            significand = significand * 10 + (uint)(c - '0');
         }
 
-        var pointAt  = text.IndexOf('.');
-        var fraction = pointAt < 0 ? 0 : text.Length - pointAt - 1;
-        Span<char> digits = stackalloc char[text.Length];
-        var count = 0;
-        foreach (var c in text)
-        {
-            if (c != '.') digits[count++] = c;
-        }
+        // Zero, which decimal.Parse reads as zero whatever the exponent.
+        if (count == 0) return true;
 
-        // The text is spelled / 10^spelledScale; the decimal is mantissa / 10^scale.
-        var spelled      = count == 0 ? BigInteger.Zero : BigInteger.Parse(digits[..count], NumberStyles.None, CultureInfo.InvariantCulture);
-        var spelledScale = fraction - exponent;
-        if (spelledScale < 0)
-        {
-            spelled     *= BigInteger.Pow(10, -spelledScale);
-            spelledScale = 0;
-        }
+        // Beyond Int32, decimal.Parse has overflowed or read zero from non-zero digits.
+        var exponent = 0;
+        if (exponentAt >= 0
+         && !int.TryParse(text[(exponentAt + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent))
+            return false;
 
+        // The text is significand · 10^spelledExponent; past ±28 decimal cannot hold it.
+        var spelledExponent = (long)exponent - fraction + zeros;
+        if (spelledExponent is < -28 or > 28) return false;
+
+        // The decimal is mantissa / 10^scale, reduced the same way.
         Span<int> bits = stackalloc int[4];
         decimal.GetBits(value, bits);
-        var mantissa = new BigInteger((uint)bits[2]) << 64 | new BigInteger((uint)bits[1]) << 32 | new BigInteger((uint)bits[0]);
-        var scale    = (bits[3] >> 16) & 0xFF;
+        var mantissa = (UInt128)(uint)bits[2] << 64 | (UInt128)(uint)bits[1] << 32 | (uint)bits[0];
+        var power    = -((bits[3] >> 16) & 0xFF);
+        if (mantissa == 0) return false;
+        for (; mantissa % 10 == 0; power++) mantissa /= 10;
 
-        return spelled * BigInteger.Pow(10, scale) == mantissa * BigInteger.Pow(10, spelledScale);
+        return mantissa == significand && power == spelledExponent;
     }
 }

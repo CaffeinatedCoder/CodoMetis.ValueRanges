@@ -89,6 +89,76 @@ public sealed class DecimalPrecisionTests
         Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<DecimalSet>("[1e30]"));
     }
 
+    /// <summary>
+    /// The exponent costs nothing (#276): until 10.0.0 it went into <c>BigInteger.Pow</c>, so a ten-character
+    /// element cost work that grew faster than its exponent, and <c>{0e-10000000}</c> ran for minutes. The
+    /// allocation bound fails, rather than hangs, against that code: the rows it survives come first.
+    /// </summary>
+    [TestMethod]
+    public void Exponent_CostsNoWorkProportionalToItself()
+    {
+        DecimalSet.TryParse("{1e-1}", null, out _);
+        foreach (var text in new[] { "1e-1000000", "0e-1000000", "5e-100000", "0.1e1000000" })
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            DecimalSet.TryParse($"{{{text}}}", null, out _);
+            DecimalRange.TryParse($"[{text},)", null, out _);
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.IsLessThan(16 * 1024, allocated, $"{text} allocated {allocated} bytes");
+        }
+
+        Assert.AreEqual(DecimalSet.From(0m), DecimalSet.Parse("{0e-10000000}", null));
+        Assert.AreEqual(DecimalRange.CreateUnboundedStart(0m), DecimalRange.Parse("(,0e10000000)", null));
+        var error = Assert.ThrowsExactly<FormatException>(() => DecimalSet.Parse("{1e-10000000}", null));
+        StringAssert.Contains(error.Message, "More precision than decimal holds");
+    }
+
+    /// <summary>
+    /// An exponent beyond <see cref="int"/> is refused with <see cref="FormatException"/>, as <c>Parse</c>
+    /// documents, unless the digits are zero (#276): it was read with <c>int.Parse</c>, which threw
+    /// <see cref="OverflowException"/> for text <c>decimal.Parse</c> had already accepted.
+    /// </summary>
+    [TestMethod]
+    public void ExponentBeyondInt32_IsReadOrRefusedAsFormat()
+    {
+        Assert.AreEqual(DecimalSet.From(0m), DecimalSet.Parse("{0e99999999999}", null));
+        Assert.AreEqual(DecimalSet.From(0m), DecimalSet.Parse("{-0.000e-99999999999}", null));
+        Assert.ThrowsExactly<FormatException>(() => DecimalSet.Parse("{1e-99999999999}", null));
+        Assert.ThrowsExactly<FormatException>(() => DecimalRange.Parse("[1e-99999999999,)", null));
+    }
+
+    /// <summary>
+    /// The text's length costs no stack (#276): until 10.0.0 its digits were buffered on the stack at its
+    /// length, so an element <c>decimal.Parse</c> accepts — leading or trailing zeros — overflowed it, which
+    /// no handler catches: <c>TryParse</c> and JSON killed the process. Against that code this test kills the
+    /// host rather than fails; it runs on a 256 KB thread so the input it needs stays small.
+    /// </summary>
+    [TestMethod]
+    public void LongElement_CostsNoStackProportionalToItsLength()
+    {
+        var zeros = new string('0', 1_000_000);
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                Assert.AreEqual(DecimalSet.From(1m), DecimalSet.Parse($"{{1.{zeros}}}", null));
+                Assert.AreEqual(DecimalSet.From(5m), DecimalSet.Parse($"{{{zeros}5}}", null));
+                Assert.IsFalse(DecimalSet.TryParse($"{{0.{zeros}1}}", null, out _));
+                Assert.IsFalse(DecimalRange.TryParse($"[1.{zeros}1,)", null, out _));
+                Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<DecimalSet>($"[0.{zeros}1]"));
+            }
+            catch (Exception e)
+            {
+                failure = e;
+            }
+        }, maxStackSize: 256 * 1024);
+        thread.Start();
+        thread.Join();
+
+        if (failure is not null) throw failure;
+    }
+
     /// <summary>A magnitude that does not fit still overflows, as before: only excess precision was folded in silently.</summary>
     [TestMethod]
     public void MagnitudeBeyondDecimal_StillOverflows()
