@@ -120,7 +120,12 @@ public sealed class DateSet : IValueSet<DateOnly>, IValueSetFactory<DateSet, Dat
     public static bool operator !=(DateSet? left, DateSet? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<DateSet, DateOnly>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#299, dotnet/runtime#136073).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<DateSet, DateOnly>(this, format, provider);
 }
 
 /// <summary>
@@ -280,5 +285,10 @@ public sealed class DateSet<TElement> :
     public static bool operator !=(DateSet<TElement>? left, DateSet<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<DateSet<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#299, dotnet/runtime#136073).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<DateSet<TElement>, TElement>(this, format, provider);
 }

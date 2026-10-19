@@ -148,7 +148,12 @@ public sealed class InstantSet : IValueSet<Instant>, IValueSetFactory<InstantSet
     public static bool operator !=(InstantSet? left, InstantSet? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<InstantSet, Instant>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#299, dotnet/runtime#136073).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<InstantSet, Instant>(this, format, provider);
 }
 
 /// <summary>
@@ -299,5 +304,10 @@ public sealed class InstantSet<TElement> :
     public static bool operator !=(InstantSet<TElement>? left, InstantSet<TElement>? right) => !(left == right);
 
     /// <inheritdoc />
-    public override string ToString() => ((IFormattable)this).ToString(null, CultureInfo.InvariantCulture);
+    public override string ToString() => SetFormat.Format<InstantSet<TElement>, TElement>(this, null, CultureInfo.InvariantCulture);
+
+    // Implemented here rather than left to the interface's default: ILCompiler 11 RC2 compiles the
+    // default's shared-generic stub to a trap under Native AOT (#299, dotnet/runtime#136073).
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
+        => SetFormat.Format<InstantSet<TElement>, TElement>(this, format, provider);
 }
