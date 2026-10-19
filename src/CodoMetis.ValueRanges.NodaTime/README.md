@@ -189,7 +189,7 @@ dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime
 options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRangesNodaTime());
 ```
 
-That one line implies both `UseNodaTime()` (the Npgsql NodaTime plugin) and `UseValueRanges()` (the core EF Core package). So BCL and NodaTime range types work side by side in one model. The full algebra runs as SQL, as described in [Entity Framework Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md). That includes the discrete `upper(x) - 1` compensation for `LocalDateRange`, and the EF Core NodaTime package's own `RangeAgg`/`RangeIntersectAgg` overloads inside `GroupBy` projections.
+That one line implies both `UseNodaTime()` (the Npgsql NodaTime plugin) and `UseValueRanges()` (the core EF Core package). So BCL and NodaTime range types work side by side in one model. The full algebra runs as SQL, as described in [Entity Framework Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md). That includes the discrete `upper(x) - 1` compensation for `LocalDateRange`, and this package's `RangeAgg`/`RangeIntersectAgg` overloads inside `GroupBy` projections, which the EF Core NodaTime package registers.
 
 The same call registers the five **value set** types. They map to native array columns, and you configure nothing beyond the property itself:
 

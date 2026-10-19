@@ -5,9 +5,13 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
+### Breaking
+
+- EF Core: the packages support PostgreSQL 16 and later. 9.x said 14 or later, but nothing older than 16 was tested ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#run-postgresql-16-or-later)).
+
 ### Fixed
 
-- Docs: a `YearMonthRange` column holding an exclusive `infinity)` or `(-infinity` throws `InvalidOperationException` when it loads, because the range covers part of a month. Ask other tools to write an absent or inclusive bound ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#rows-written-by-other-tools)).
+- Docs: a `YearMonthRange` column holding an exclusive `infinity)` or `(-infinity` throws when it loads. Ask other tools to write an absent or inclusive bound ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#rows-written-by-other-tools)).
 
 ## [9.1.0] — 2026-10-17
 

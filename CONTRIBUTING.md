@@ -189,7 +189,8 @@ is written for someone deciding what to change before they upgrade. The package 
 same form, with the entries that affect that package.
 
 - **The heading** is `## [x.y.z] — yyyy-mm-dd`. Write entries under the version being prepared,
-  never under `Unreleased`.
+  never under `Unreleased`. The date is the tag's: set it in all five changelogs in the commit that
+  gets tagged, because no test or workflow checks it.
 - **One optional line first**, for a version where something can break you: what kind of change it
   is, and a link to its section of [docs/migration.md](docs/migration.md).
 - **Then the sections, in this order:** `### Changed answers` (a minor only, see
@@ -203,6 +204,9 @@ same form, with the entries that affect that package.
   "`RangeSet.Contains(T)` on the infinite set returns `true`, where it threw …". Start with the area
   where it helps a reader skim (`JSON:`, `Literals:`, `EF Core:`, `NodaTime:`). In `Added`, lead
   with the new member in bold.
+- **Keep each section in area order:** `Ranges`, `Value sets`, `Literals`, `JSON`, `ASP.NET Core`,
+  `EF Core`, `NodaTime`, `Docs`, so a reader finds an area's lines together. In `Added`, the core
+  members come first, then `EF Core:`, then `Docs:`. Use no headings below the three sections.
 - **End with a link** to the guide that explains it. Links are absolute
   (`https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/…`), because the
   release page can't resolve a relative one.

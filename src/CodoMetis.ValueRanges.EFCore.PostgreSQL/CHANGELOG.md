@@ -5,20 +5,26 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
+Nothing was removed or renamed. Some calls answer differently, and text PostgreSQL refuses is refused here too: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).
+
+### Breaking
+
+- EF Core: the packages support PostgreSQL 16 and later. 9.x said 14 or later, but nothing older than 16 was tested ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#run-postgresql-16-or-later)).
+- EF Core: `Any` and `Count` over a captured list of ranges return the in-memory answer, where a list with overlapping, adjacent or empty ranges answered differently. `EF.Parameter(list)` there throws ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-any-and-count-over-a-captured-list-of-ranges)).
+
 ### Added
 
-- **`Float64Range` maps to the custom `float8range`** (`float8multirange` for `RangeSet<Float64Range, double>`), created with `HasPostgresRange("float8range", "double precision")` and no `subtype_diff`, plus `EnableUnmappedTypes()`. `Float64Set` and `Float64Set<T>` map to `double precision[]`. A stored `NaN` or infinity throws on load, and a `NaN` parameter throws before the query runs ([Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types)).
-- **`Float32Range` maps to the custom `float4range`** (`float4multirange`), created with `HasPostgresRange("float4range", "real")` and `EnableUnmappedTypes()`. `Float32Set` and `Float32Set<T>` map to `real[]` ([Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types)).
-- **EF Core: `CompareTo` against 0** on a range or multirange runs as `<`, `<=`, `>`, `>=` or `=`, and returns the rows the same comparison returns in memory ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
-- **EF Core: a range with a multirange operand** runs as the operator with the range on the left (`b."Period" &< b."Blocked"`), and `RangeSet.IsContainedBy` as `<@` ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
-- **EF Core: `RangeAgg` and `RangeIntersectAgg` over a multirange column** run as `range_agg` and `range_intersect_agg` over the multirange inside a `GroupBy` projection ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
-- **Docs: PostgreSQL 18 temporal keys over a range column**, `UNIQUE (… WITHOUT OVERLAPS)` and `FOREIGN KEY (… PERIOD …)`, declared through `EFCore.ComplexIndexes.PostgreSQL`'s `HasTemporalConstraint` and `HasTemporalForeignKey`, and `UseNpgsqlComplexIndexes()` as the way to have `EnsureCreated()` create them ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18)).
+- **EF Core: `Float64Range` and `Float32Range` map to custom `float8range` and `float4range` types** through `HasPostgresRange` and `EnableUnmappedTypes()`, and their sets to `double precision[]` and `real[]` ([Custom range types](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#custom-range-types)).
+- **EF Core: `CompareTo` against 0** on a range or multirange runs as `<`, `<=`, `>`, `>=` or `=` ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
+- **EF Core: a range with a multirange operand** runs as the operator with the range on the left, and `RangeSet.IsContainedBy` as `<@` ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#query-ranges-with-linq)).
+- **EF Core: `RangeAgg` and `RangeIntersectAgg` over a multirange column** inside a `GroupBy` projection ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
+- **Docs: PostgreSQL 18 temporal keys over a range column** (`WITHOUT OVERLAPS`, `PERIOD`), declared through `EFCore.ComplexIndexes.PostgreSQL` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18)).
 - **`Gap`**, **`Gaps()`** and **`Gaps(window)`** run as SQL: `range_merge` over a multirange difference for `Gap`, and a multirange difference for `Gaps` ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
 
 ### Fixed
 
-- Docs: a query that runs in the database over a `NaN` or infinite float that another tool stored answers in PostgreSQL's order; only loading the row throws. A CHECK constraint per column kind keeps such values out ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#keep-nan-and-infinity-out-of-a-float-column)).
-- EF Core: `Any` or `Count` with a predicate over an empty captured list of value sets, or of ranges beside a `Contains`, returns `false` or `0`, as in memory. It threw `InvalidOperationException` ("Empty collections are not supported as inline query roots") ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+- EF Core: `Any` or `Count` with a predicate over an empty captured list of value sets, or of ranges beside a `Contains`, returns `false` or `0`, where it threw `InvalidOperationException` ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+- Docs: a database query over a `NaN` or infinite float another tool stored answers in PostgreSQL's order, and a CHECK constraint keeps such values out ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#keep-nan-and-infinity-out-of-a-float-column)).
 
 ## [9.1.0] — 2026-10-17
 

@@ -93,8 +93,9 @@ Each comparison runs as one PostgreSQL operator:
 | `IsContainedBy` | `<@` |
 | `IsStrictlyLeftOf` / `IsStrictlyRightOf` | `<<` / `>>` |
 | `DoesNotExtendLeftOf` / `DoesNotExtendRightOf` | `&<` / `&>` |
+| `CompareTo` against 0 | `<`, `<=`, `>`, `>=`, `=` |
 
-`IsAdjacentTo` runs as `-|-`. All of these work on ranges, and on a `RangeSet` with either a range
+`IsAdjacentTo` runs as `-|-`. All of these work on ranges and on a `RangeSet`, with either a range
 or a multirange as the argument.
 
 You can combine ranges in the database too:
@@ -172,7 +173,9 @@ table. In a `Select`, EF Core computes them in memory after it loads the rows.
 |---|---|
 | `Intersect`, `Except`, `Add` on value sets | PostgreSQL's array type has no intersection, difference or sorted insert |
 | `Length` on any range | the empty range measures 0 where `upper(x) - lower(x)` yields `NULL`, and `int4range` overflows `int4` before a cast can widen it |
-| `Values()` on a discrete range | `generate_series` returns rows, not a scalar |
+| `Values()` and `Values(step)` on a discrete range, `Split` on any range | `generate_series` returns rows, not a scalar |
+| `Shift`, `Expand` on any range | PostgreSQL has no range arithmetic, and rebuilding the range from `lower(x) + d` answers differently for the empty range, `time` past midnight, a daylight-saving change and `infinity` |
+| `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column | not translated yet: PostgreSQL has no calendar-range function. Built from values your code passes in, the range is sent as one constant, so comparing a column against a month runs as SQL |
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | arrays and multiranges convert only through `unnest` and a custom aggregate |
 | `Clamp(value)` on any range | the empty and unbounded shapes have no bound to clamp to |
 | the value set indexer, `set[0]` | canonical order is the CLR comparer's, not the server's |
