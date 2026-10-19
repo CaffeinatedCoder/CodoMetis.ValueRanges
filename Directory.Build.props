@@ -64,7 +64,7 @@
     -->
     <PropertyGroup>
         <EnablePackageValidation>true</EnablePackageValidation>
-        <PackageValidationBaselineVersion>10.0.0</PackageValidationBaselineVersion>
+        <PackageValidationBaselineVersion>10.1.0</PackageValidationBaselineVersion>
     </PropertyGroup>
 
     <!--
@@ -74,7 +74,7 @@
         (PKV006) and no member comparison runs. Ignoring the framework is that statement made
         explicit — it is dropped, on purpose, one TFM per line — and it leaves nothing for the
         validator to compare until 11.0.0 is the baseline. Until then the public surface is held
-        equal to 10.0.0 by hand: `dotnet apicompat` (Microsoft.DotNet.ApiCompat.Tool) over the
+        equal to the 10.x baseline by hand: `dotnet apicompat` (Microsoft.DotNet.ApiCompat.Tool) over the
         baseline's and this build's assemblies, run for each preview and quoted in its PR. Remove
         this once PackageValidationBaselineVersion names a net11.0 release.
     -->
