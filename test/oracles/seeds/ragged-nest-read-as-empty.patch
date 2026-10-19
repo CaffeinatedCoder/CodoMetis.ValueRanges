@@ -4,71 +4,15 @@ Fails: the ragged rows of the malformed dimension decoration family for every va
 History: the 10.0.0 nested-empty reading (#128) as first written (#231)
 
 diff --git a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
-index 275d118..588c201 100644
+index 67e0810..0d4a755 100644
 --- a/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
 +++ b/src/CodoMetis.ValueRanges/Internals/SetFormat.cs
-@@ -127,50 +127,43 @@ internal static class SetFormat
-     }
- 
-     /// <summary>
--    /// Whether the literal is a rectangular nest of empty arrays, <c>{{}}</c>, <c>{{},{}}</c> or
--    /// <c>{{{},{}},{{},{}}}</c>, which PostgreSQL 17 and later read as the empty array <c>{}</c>
--    /// (PostgreSQL 16 refuses them). Every sibling must have the same shape, the same count at every level
--    /// below it, not only the same depth: <c>{{{},{}},{{}}}</c> is refused by every version, and until
--    /// #231 it read as <c>{}</c> here. Mixed depths, <c>{{},{{}}}</c>, and any element make it a
--    /// multi-dimensional literal instead.
-+    /// Whether the literal is empty arrays nested to one depth, <c>{{}}</c> or <c>{{},{}}</c>, which
-+    /// PostgreSQL 17 and later read as the empty array <c>{}</c> (PostgreSQL 16 refuses them). Mixed
-+    /// depths, <c>{{},{{}}}</c>, and any element make it a multi-dimensional literal instead.
-     /// </summary>
-     private static bool IsNestOfEmptyArrays(ReadOnlySpan<char> s)
-     {
-         var position = 0;
--        return Shape(s, ref position) is { } shape && shape.Contains(',') && position == s.Length;
-+        return Depth(s, ref position) > 1 && position == s.Length;
- 
--        // The nest's shape as a signature, "0" for {} and "n×child" for n siblings of one shape, or null
--        // when it is not a rectangular nest of empty arrays.
--        static string? Shape(ReadOnlySpan<char> s, ref int position)
-+        static int Depth(ReadOnlySpan<char> s, ref int position)
-         {
--            if (position == s.Length || s[position] != '{') return null;
-+            if (position == s.Length || s[position] != '{') return -1;
-             position++;
-             Skip(s, ref position);
-             if (position < s.Length && s[position] == '}')
-             {
-                 position++;
--                return "0";
-+                return 1;
-             }
- 
--            var child = Shape(s, ref position);
--            var count = 1;
--            while (child is not null)
-+            var depth = Depth(s, ref position);
-+            while (depth > 0)
-             {
-                 Skip(s, ref position);
--                if (position == s.Length) return null;
-+                if (position == s.Length) return -1;
+@@ -166,7 +166,7 @@ internal static class SetFormat
                  if (s[position] == '}')
                  {
                      position++;
 -                    return $"{count},{child}";
-+                    return depth + 1;
++                    return $"n,{child}";
                  }
  
--                if (s[position++] != ',') return null;
-+                if (s[position++] != ',') return -1;
-                 Skip(s, ref position);
--                if (Shape(s, ref position) != child) return null;
--                count++;
-+                if (Depth(s, ref position) != depth) return -1;
-             }
- 
--            return null;
-+            return -1;
-         }
- 
-         static void Skip(ReadOnlySpan<char> s, ref int position)
+                 if (s[position++] != ',') return null;

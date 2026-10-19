@@ -243,6 +243,12 @@
     ]
   },
   {
+    "class": "NestedLiteralDepthContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "exception",
+    "against": "PostgreSQL's MAXDIM: every discovered set type refuses a literal nested deeper than six dimensions through Parse, TryParse and the TypeConverter, at depths the old recursion survived"
+  },
+  {
     "class": "DecorativeElementContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "exception",
