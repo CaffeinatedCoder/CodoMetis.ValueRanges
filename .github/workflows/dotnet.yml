@@ -1,11 +1,10 @@
-# Build and test on every push to main, a release branch or net11, and on every pull request.
+# Build and test on every push to main or a release branch, and on every pull request.
 # Two lines are supported from 11.0.0 on (CONTRIBUTING.md#branches-and-releases), and each branch
 # that ships one needs the same checks as main's:
 #
-#   - main is the next release. Until the v10.0.0 tag that is 10.0.0; after it, the 11 line.
+#   - main is the next release. Until the v10.0.0 tag that is 10.0.0; after it, the 11 line, retargeted
+#     to .NET 11 right after the tag and shipping 11.0.0-preview.N until 11.0.0.
 #   - release/9.x holds 9.x patches until the v10.0.0 tag, then takes no changes.
-#   - net11 holds the .NET 11 retarget and ships 11.0.0-preview.N until the v10.0.0 tag, merging
-#     main forward after every 10.0.0 fix. At the tag it becomes main.
 #   - release/10.x is cut from the v10.0.0 tag and holds the LTS line: 10.x minors (additions for
 #     six months after v11.0.0, fixes only after that) and patches, cherry-picked from main.
 #
@@ -43,7 +42,7 @@ name: .NET
 
 on:
   push:
-    branches: [ "main", "release/**", "net11" ]
+    branches: [ "main", "release/**" ]
   pull_request:
   workflow_dispatch:
 

@@ -119,15 +119,15 @@ it ships from. The tag must match that `Version`, or the release workflow stops 
   `main` first; once it has merged, cherry-pick it onto a branch from `release/9.x`
   (`git cherry-pick -x`, so the commit names the original) and open a PR into `release/9.x` that
   links the `main` PR. Only loud fixes and additions go to 9.x. A silent fix waits for 10.0.0.
-- **`net11`** holds the .NET 11 retarget on top of `main` and ships `11.0.0-preview.N`, tagged
-  `v11.0.0-preview.N` on `net11`. Nothing lands on `net11` that `main` should have: every change
-  goes into `main`, and `net11` merges `main` forward after each one, so the 11 line never lacks a
-  10.0.0 fix.
+- **There is no preview branch.** The .NET 11 retarget waits for the tag, so 11.0.0 is validated
+  against a 10.0.0 that is on NuGet and starts with every 10.0.0 fix.
 
 ### At the `v10.0.0` tag
 
-Cut `release/10.x` from the tag, merge `net11` into `main`, and delete `net11`. `release/9.x` takes
-no changes from then on, and a fix reaches 9.x users only by upgrading.
+Cut `release/10.x` from the tag. Then retarget `main` to .NET 11 (#103) in a PR that also moves
+`Version` to `11.0.0-preview.1` and the ApiCompat baseline and SECURITY.md row to 10.0.0, and tag
+the previews `v11.0.0-preview.N` on `main`. `release/9.x` takes no changes from then on, and a fix
+reaches 9.x users only by upgrading.
 
 ### After the `v10.0.0` tag
 
