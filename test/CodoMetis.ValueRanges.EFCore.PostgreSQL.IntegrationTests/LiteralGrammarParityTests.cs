@@ -303,10 +303,11 @@ public sealed class LiteralGrammarParityTests
     {
         ContainerLifecycle.RequireDatabase();
 
-        string[] empties = ["{{}}", "{{},{}}", "{ {} }", "{{{}},{{}}}", "{{{},{}}}", "{{{},{}},{{},{}}}", "{{{{}}},{{{}}}}"];
+        string[] empties = ["{{}}", "{{},{}}", "{ {} }", "{{{}},{{}}}", "{{{},{}}}", "{{{},{}},{{},{}}}", "{{{{}}},{{{}}}}", "{{{{{{}}}}}}"];
         string[] nested  = ["{{1}}", "{{1},{2}}"];
         // Mixed depths, a nest holding an element, and ragged nests whose siblings differ in count (#231).
-        string[] mixed   = ["{{},{{}}}", "{{},{1}}", "{{},}", "{{{},{}},{{}}}", "{{{}},{{},{}}}", "{{{{}},{{}}},{{{}}}}"];
+        string[] mixed   = ["{{},{{}}}", "{{},{1}}", "{{},}", "{{{},{}},{{}}}", "{{{}},{{},{}}}", "{{{{}},{{}}},{{{}}}}",
+                            "{{{{{{{}}}}}}}"];
 
         var failures = new List<string>();
         var majors = new List<int>();

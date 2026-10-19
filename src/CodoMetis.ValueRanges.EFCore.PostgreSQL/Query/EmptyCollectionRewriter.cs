@@ -50,7 +50,10 @@ internal static class EmptyCollectionRewriter
     {
         protected override Expression VisitExtension(Expression node)
         {
-            if (base.VisitExtension(node) is not SelectExpression select) return base.VisitExtension(node);
+            // Visit once: visiting the children again for the return doubled the work at every level,
+            // so a tree of depth d took 2^d visits, on every query the plugin processes (#249).
+            var visited = base.VisitExtension(node);
+            if (visited is not SelectExpression select) return visited;
             if (!select.Tables.Any(IsEmptyValues)) return select;
 
             var columns = ColumnCollector.Of(select);

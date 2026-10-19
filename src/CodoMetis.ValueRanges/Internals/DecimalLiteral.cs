@@ -24,6 +24,11 @@ internal static class DecimalLiteral
 {
     internal static decimal Parse(ReadOnlySpan<char> s)
     {
+        // PostgreSQL text cannot hold U+0000, and decimal.Parse and BigInteger.Parse ignore trailing
+        // NULs, so "31\0" read as 31 until #251.
+        if (s.Contains('\0'))
+            throw new FormatException($"Expected a number, sign, digits, point and exponent, with no NUL character: '{LiteralExcerpt.Of(s)}'.");
+
         var value = decimal.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture);
 
         return Represents(value, s)
