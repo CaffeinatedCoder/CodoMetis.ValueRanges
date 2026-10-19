@@ -22,6 +22,8 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// one parameter per element, because neither can be bound as one array parameter — see
 /// <see cref="CollectionParameterExpander"/>. A fourth makes <c>CompareTo</c> with a null range on
 /// either side answer in SQL as <c>Comparer&lt;T&gt;.Default</c> does — see <see cref="NullOperandCompareToRewriter"/>.
+/// A fifth keeps <c>RangeSet.Contains</c> out of EF Core's own rewrite of <c>Contains</c> on a
+/// read-only collection — see <see cref="RangeSetContainsRewriter"/>.
 /// </para>
 /// <para>
 /// The value set refusals — a server-computed <c>Union</c> consumed by an order- or
@@ -37,7 +39,8 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
         => CollectionParameterExpander.Expand(
             RangeVariantConstantRetyper.Instance.Visit(
-                NullOperandCompareToRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))),
+                NullOperandCompareToRewriter.Instance.Visit(
+                    RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)))),
             DefaultCollectionMode(eventData.Context));
 
     private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)
@@ -326,6 +329,32 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
                    (_, ConstantExpression { Value: false }) => left,
                    _                                        => Expression.OrElse(left, right)
                };
+    }
+
+    /// <summary>
+    /// Turns <c>set.Contains(x)</c> on a <see cref="RangeSet{TRange,T}"/> into the static
+    /// <see cref="RangeSetContains"/> call that stands for it.
+    /// </summary>
+    /// <remarks>
+    /// The EF Core 10 patch that carries dotnet/efcore#37081 (10.0.15), and EF Core 11, rewrite every
+    /// method named <c>Contains</c> on an <see cref="IReadOnlyCollection{T}"/> into
+    /// <c>Queryable.Contains</c> over the element type before translation. A
+    /// <see cref="RangeSet{TRange,T}"/> is a read-only list of its ranges, so <c>Contains(T)</c>,
+    /// <c>Contains(IRange&lt;T&gt;)</c> and <c>Contains(RangeSet)</c> all matched, and the two whose
+    /// operand is not a range failed inside EF Core with an <see cref="ArgumentException"/> before any
+    /// translator ran (#288). The static form has a declaring type that is not a collection, which EF
+    /// Core's rewrite does not touch; <see cref="ValueRangesMethodCallTranslator"/> translates it to
+    /// <c>@&gt;</c> as before. On the 10.0.0 floor the instance call translated as it was, which is why
+    /// the SQL tests could not see the defect: <c>RangeSetContainsShapeTests</c> asserts the tree.
+    /// </remarks>
+    private sealed class RangeSetContainsRewriter : ExpressionVisitor
+    {
+        public static readonly RangeSetContainsRewriter Instance = new();
+
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+            => node is { Object: { } set, Arguments: [var operand] } && RangeSetContains.Equivalent(node.Method) is { } equivalent
+                   ? Expression.Call(equivalent, Visit(set), Visit(operand))
+                   : base.VisitMethodCall(node);
     }
 
     private sealed class RangeSetOperatorRewriter : ExpressionVisitor

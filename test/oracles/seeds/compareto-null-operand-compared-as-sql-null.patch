@@ -4,15 +4,16 @@ Fails: every CompareTo comparison with a null operand that memory answers true (
 History: found by the pre-tag analysis (#179), fixed before 10.0.0 shipped (#220)
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
-index 3c3b2f9..d36cb56 100644
+index bb01834..9ca25d3 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
-@@ -37,7 +37,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+@@ -39,8 +39,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
      public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
          => CollectionParameterExpander.Expand(
              RangeVariantConstantRetyper.Instance.Visit(
--                NullOperandCompareToRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))),
-+                RangeSetOperatorRewriter.Instance.Visit(queryExpression)),
+-                NullOperandCompareToRewriter.Instance.Visit(
+-                    RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)))),
++                RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))),
              DefaultCollectionMode(eventData.Context));
  
      private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)

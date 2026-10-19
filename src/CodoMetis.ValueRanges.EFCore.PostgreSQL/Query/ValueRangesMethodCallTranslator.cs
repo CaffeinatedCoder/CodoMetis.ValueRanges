@@ -109,7 +109,12 @@ internal sealed class ValueRangesMethodCallTranslator(
             return TranslateRangeExtensionCall(method, arguments);
 
         if (declaringType is { IsGenericType: true } && declaringType.GetGenericTypeDefinition() == typeof(RangeSet<,>))
-            return TranslateRangeSetCall(instance, declaringType, method, arguments);
+            return TranslateRangeSetCall(instance, declaringType, method.Name, arguments);
+
+        // The static form of RangeSet.Contains the interceptor substitutes (RangeSetContains): the set
+        // is the first argument, and the method translates as the instance call it stands for.
+        if (declaringType == typeof(RangeSetContains) && arguments.Count == 2)
+            return TranslateRangeSetCall(arguments[0], method.GetParameters()[0].ParameterType, nameof(RangeSet<,>.Contains), [arguments[1]]);
 
         if (declaringType is not null
             && RangeTypeRegistry.TryGetByClrType(declaringType, out var definition, out var isSet)
@@ -296,7 +301,7 @@ internal sealed class ValueRangesMethodCallTranslator(
     private SqlExpression? TranslateRangeSetCall(
         SqlExpression?               instance,
         Type                         declaringType,
-        MethodInfo                   method,
+        string                       methodName,
         IReadOnlyList<SqlExpression> arguments
     )
     {
@@ -322,7 +327,7 @@ internal sealed class ValueRangesMethodCallTranslator(
              : expression.Type == definition.ElementClrType          ? ApplyElementMapping(expression, definition)
                                                                      : Range(expression);
 
-        switch (method.Name)
+        switch (methodName)
         {
             case nameof(RangeSet<,>.Contains) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.Contains(Set(instance), Operand(arguments[0]));
