@@ -639,7 +639,7 @@ beyond `UseValueRanges()`:
 ```csharp
 // 1. The database needs the type — this generates
 //    CREATE TYPE timerange AS RANGE (SUBTYPE = time) in your migrations
-//    (PostgreSQL 14+ auto-creates timemultirange alongside it):
+//    (PostgreSQL auto-creates timemultirange alongside it):
 modelBuilder.HasPostgresRange("timerange", "time");
 
 // 2. Npgsql needs permission to resolve the unmapped type on the wire:

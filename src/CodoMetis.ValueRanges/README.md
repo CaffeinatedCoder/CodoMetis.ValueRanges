@@ -7,7 +7,7 @@ You get two families of types. Both are immutable, and both are in canonical for
 you create them:
 
 - **Range types.** The six element types PostgreSQL ships built-in range types for, plus
-  `TimeRange`. Each range type is a discriminated union of five sealed variants.
+  `TimeRange`, `Float64Range` and `Float32Range`. Each range type is a discriminated union of five sealed variants.
   `RangeSet<TRange, T>` is the matching multirange, and it is always kept normalized.
 - **Value sets (v6).** Sets of scalar values, deduplicated and sorted, that PostgreSQL stores as a
   native array.

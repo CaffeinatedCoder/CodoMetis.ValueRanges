@@ -704,7 +704,7 @@ In an EF Core query, all four run as the SQL aggregates inside a `GroupBy` proje
 ## RangeSet — multirange support
 
 `RangeSet<TRange, T>` holds several ranges as one value. It is the in-memory version of a
-PostgreSQL 14+ multirange (`int4multirange`, `nummultirange`, …). A set is immutable, and it is
+PostgreSQL multirange (`int4multirange`, `nummultirange`, …). A set is immutable, and it is
 always normalized.
 
 ```csharp
