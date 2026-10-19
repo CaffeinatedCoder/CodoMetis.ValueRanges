@@ -296,4 +296,46 @@ public class TimeAndYearMonthIntegrationTests
 
         Assert.AreEqual(set, loaded.BillingPeriods);
     }
+
+    // -------------------------------------------------------------------------
+    // A stored 24:00:00 bound, written by another tool (#108)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// PostgreSQL's <c>time</c> holds <c>24:00:00</c> and <c>TimeOnly</c> doesn't, so a row another
+    /// tool wrote with that bound throws when it loads, and so does a projection of the bound.
+    /// The exception is Npgsql's <c>time</c> read, not this library's. The two remedies the docs give
+    /// load: an unbounded end, and the <c>UPDATE</c> that rewrites the stored row to one.
+    /// </summary>
+    [TestMethod]
+    public async Task TimeRange_AStored2400Bound_ThrowsOnLoad_AndTheDocumentedRemediesLoad()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await Seed(new Reservation { Id = 7161 }, new Reservation { Id = 7162 });
+
+        await using (var writer = new IntegrationDbContext())
+        {
+            await writer.Database.ExecuteSqlRawAsync(
+                """UPDATE "Reservations" SET "OpeningHours" = '[22:00,24:00)'::timerange WHERE "Id" IN (7161, 7162)""");
+        }
+
+        await using (var reader = new IntegrationDbContext())
+        {
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
+                () => reader.Reservations.SingleAsync(r => r.Id == 7161));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
+                () => reader.Reservations.Where(r => r.Id == 7161).Select(r => r.OpeningHours.UpperBound()).SingleAsync());
+        }
+
+        await using (var fixer = new IntegrationDbContext())
+        {
+            await fixer.Database.ExecuteSqlRawAsync(
+                """UPDATE "Reservations" SET "OpeningHours" = timerange(lower("OpeningHours"), NULL) WHERE "Id" = 7162""");
+        }
+
+        await using var context = new IntegrationDbContext();
+        Assert.AreEqual(TimeRange.CreateUnboundedEnd(new TimeOnly(22, 0)),
+                        (await context.Reservations.SingleAsync(r => r.Id == 7162)).OpeningHours);
+    }
 }

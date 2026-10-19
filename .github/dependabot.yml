@@ -44,10 +44,11 @@ updates:
       # The ASP.NET Core packages version with the shared framework: 11.x needs net11.0.
       - dependency-name: "Microsoft.AspNetCore*"
         update-types: [ "version-update:semver-major" ]
-      # Reached only through the EF Core test project's Microsoft.EntityFrameworkCore.Design reference
-      # (-> Microsoft.Build.Tasks.Core, Microsoft.CodeAnalysis.Workspaces.MSBuild), which exists for
-      # MigrationScaffoldTests. Scaffolding never signs or verifies XML or parses PKCS data, and no
-      # shipping project references Design, so consumers never receive either package. Dependabot's
+      # Reached only through the Microsoft.EntityFrameworkCore.Design reference of two test projects
+      # (-> Microsoft.Build.Tasks.Core, Microsoft.CodeAnalysis.Workspaces.MSBuild): the EF Core tests,
+      # for MigrationScaffoldTests, and the integration tests, for CompiledModelJsonTests (#43).
+      # Neither scaffolding nor compiled-model generation signs or verifies XML or parses PKCS data,
+      # and no shipping project references Design, so consumers never receive either package. Dependabot's
       # remedy is a direct pin of a toolchain internal in the test csproj (#160, #161), and every new
       # advisory brings another one. The alerts are dismissed as not used (#194); NU1903 stays a
       # warning (Directory.Build.props), so a new advisory still shows up at build time.
