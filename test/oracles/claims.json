@@ -2758,7 +2758,7 @@
     "id": "R28-shift-and-expand-keep-shape",
     "source": "docs/ranges.md#move-or-widen-a-range",
     "quote": "`Shift` moves a range, and `Expand` grows it on both sides. Both keep the shape and the inclusiveness of each bound:",
-    "claim": "For every range type, shape and inclusivity, r.Shift(d) is r with both finite bounds moved by d and r.Expand(a) is r with the lower bound moved by -a and the upper by +a, each keeping its inclusiveness; Empty and Infinite come back unchanged and an unbounded side stays unbounded; r.Shift(d).Shift(-d) == r for an exact step, Expand(a) contains r for a >= 0, Expand(a) is the hull of Shift(-a) and Shift(a), and Expand(-a) their intersection. A DateTimeRange bound keeps its own DateTimeKind and a DateTimeOffsetRange bound its own offset through Shift, Expand and every Split piece.",
+    "claim": "For every range type, shape and inclusivity, r.Shift(d) is r with both finite bounds moved by d and r.Expand(a) is r with the lower bound moved by -a and the upper by +a, each keeping its inclusiveness; Empty and Infinite come back unchanged and an unbounded side stays unbounded; r.Shift(d).Shift(-d) == r for an exact step, Expand(a) contains r for a >= 0, Expand(a) is the hull of Shift(-a) and Shift(a), and Expand(-a) their intersection. A DateTimeRange bound keeps its own DateTimeKind and a DateTimeOffsetRange bound its own offset through Shift, Expand and every Split piece. Where a move would land a finite bound on a value standing for infinity it throws instead (R44), so the round trip holds wherever the move succeeds.",
     "oracle": "metamorphic",
     "surfaces": [
       "*Range.Shift",
@@ -3058,7 +3058,7 @@
     "id": "R42-shift-keeps-infinite-bounds",
     "source": "docs/ranges.md#move-or-widen-a-range",
     "quote": "`Shift` and `Expand` leave such a bound alone, as `infinity - 1` is still `infinity` in PostgreSQL.",
-    "claim": "On DateRange, DateTimeRange, DateTimeOffsetRange, LocalDateRange, LocalDateTimeRange, InstantRange and YearMonthRange, Shift and Expand leave a bound at the element type's least or greatest value where it is, and on the two closed date ranges also an end the day before the maximum; a finite bound moved past an extreme still throws OverflowException; Shift(d).Shift(-d) is the identity on such a range; a row read from a tsrange, tstzrange or daterange open to infinity (inclusive for daterange), moved and saved, still holds infinity, and one read from daterange [x,infinity) saves the same upper bound moved or not.",
+    "claim": "On DateRange, DateTimeRange, DateTimeOffsetRange, LocalDateRange, LocalDateTimeRange, InstantRange and YearMonthRange, Shift and Expand leave a bound at the element type's least or greatest value where it is, and on the two closed date ranges also an end the day before the maximum, but not a closed end at the minimum, which moves (as YearMonthRange's first month as an end does) (#257); a finite bound moved past an extreme still throws OverflowException; Shift(d).Shift(-d) is the identity on such a range; a row read from a tsrange, tstzrange or daterange open to infinity (inclusive for daterange), moved and saved, still holds infinity, and one read from daterange [x,infinity) saves the same upper bound moved or not.",
     "oracle": "metamorphic",
     "surfaces": [
       "*Range.Shift",
@@ -3083,6 +3083,23 @@
     ],
     "heldBy": [
       "NonGenericComparableContractTests"
+    ]
+  },
+  {
+    "id": "R44-finite-bound-cannot-land-on-infinity",
+    "source": "docs/ranges.md#move-or-widen-a-range",
+    "quote": "`Shift` and `Expand` throw `OverflowException` when they would move a finite bound onto a value that stands for infinity, as they do for a move past it.",
+    "claim": "On the seven infinity-backed range types, a Shift or Expand that would move a finite bound onto a value that stands for infinity (an extreme, or a closed date range's end the day before the maximum) throws OverflowException, and one step short of it Shift(d).Shift(-d) and Expand(d).Expand(-d) are the identity; a stored finite daterange [2026-01-01,9999-12-30) cannot be shifted onto infinity) and round-trips unchanged.",
+    "oracle": "exception",
+    "surfaces": [
+      "*Range.Shift",
+      "*Range.Expand"
+    ],
+    "heldBy": [
+      "RangeArithmeticOracleTests",
+      "RangeShiftExpandTests",
+      "NodaTimeShiftExpandTests",
+      "InfinityShiftRoundTripTests"
     ]
   },
   {

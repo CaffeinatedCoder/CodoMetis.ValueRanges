@@ -40,8 +40,10 @@ internal static class RangeArithmetic
     /// <c>infinity</c>: a bound that stands for one stays where it is, as <c>infinity ± d</c> stays
     /// infinite in PostgreSQL (#224). Moving it as a date turned a row read from
     /// <c>[x,infinity)</c> into a finite range on its way back. A finite bound moved past an extreme
-    /// still throws. Each side has its own test, because a closed date range's upper bound stands
-    /// for <c>infinity)</c> one day before the extreme, where its exclusive end is.
+    /// still throws, and so does one that would land on a value standing for an infinity (#260):
+    /// saved, it would come back as the infinity, so <c>Shift(d).Shift(-d)</c> would no longer be the
+    /// range. Each side has its own test, because a closed date range's upper bound stands for
+    /// <c>infinity)</c> one day before the extreme, where its exclusive end is.
     /// </summary>
     internal static TRange MoveKeepingInfinity<TRange, T>(
         TRange         range,
@@ -53,8 +55,16 @@ internal static class RangeArithmetic
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
         => Move<TRange, T>(range,
-                           value => lowerIsInfinity(value) ? value : lower(value),
-                           value => upperIsInfinity(value) ? value : upper(value));
+                           value => lowerIsInfinity(value) ? value : Finite(lower(value), lowerIsInfinity),
+                           value => upperIsInfinity(value) ? value : Finite(upper(value), upperIsInfinity));
+
+    // A finite bound stays finite: landing on the value that stands for an infinity is a move past
+    // the last finite value, and throws as one does.
+    private static T Finite<T>(T moved, Func<T, bool> isInfinity)
+        => isInfinity(moved)
+               ? throw new OverflowException(
+                   $"The moved bound would be {moved}, which stands for PostgreSQL's infinity; a finite bound cannot move there.")
+               : moved;
 
     /// <summary>
     /// Runs one step of an element type's arithmetic and reports a result outside the type's values

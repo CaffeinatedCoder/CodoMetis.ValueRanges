@@ -51,26 +51,29 @@ public sealed class RangeArithmeticOracleTests
     private static readonly int[] Steps = [-3, -1, 0, 1, 2, 3];
 
     /// <summary>
+    /// The element types whose extremes stand for PostgreSQL's <c>-infinity</c> and <c>infinity</c>. On these
+    /// a bound that stands for an infinity stays where it is under <c>Shift</c> and <c>Expand</c> (#224); a
+    /// finite bound moved onto such a value, or past it, throws (#260). Per type: a value two grid steps
+    /// above the minimum, the first value that stands for <c>infinity</c> as an upper bound (the day
+    /// before the maximum for a closed date range, whose exclusive end the maximum is), a value two grid
+    /// steps below it, and whether a closed upper bound at the minimum is a finite value (#257).
+    /// </summary>
+    private static readonly Dictionary<Type, (object AboveMin, object EndSentinel, object BelowEnd, bool MinEndIsFinite)> InfinityBacked = new()
+    {
+        [typeof(DateOnly)]       = (DateOnly.MinValue.AddDays(2), DateOnly.MaxValue.AddDays(-1), DateOnly.MaxValue.AddDays(-3), true),
+        [typeof(DateTime)]       = (DateTime.MinValue.AddMinutes(60), DateTime.MaxValue, DateTime.MaxValue.AddMinutes(-60), false),
+        [typeof(DateTimeOffset)] = (DateTimeOffset.MinValue.AddMinutes(60), DateTimeOffset.MaxValue, DateTimeOffset.MaxValue.AddMinutes(-60), false),
+        [typeof(LocalDate)]      = (LocalDate.MinIsoValue.PlusDays(2), LocalDate.MaxIsoValue.PlusDays(-1), LocalDate.MaxIsoValue.PlusDays(-3), true),
+        [typeof(LocalDateTime)]  = (LocalDateTime.MinIsoValue.PlusMinutes(60), LocalDateTime.MaxIsoValue, LocalDateTime.MaxIsoValue.PlusMinutes(-60), false),
+        [typeof(Instant)]        = (Instant.MinValue.Plus(Duration.FromMinutes(60)), Instant.MaxValue, Instant.MaxValue.Minus(Duration.FromMinutes(60)), false),
+        [typeof(YearMonth)]      = (new YearMonth(-9998, 3), new YearMonth(9999, 12), new YearMonth(9999, 10), true)
+    };
+
+    /// <summary>
     /// The step at the domain's extremes, where it differs from the grid step. Adding half a unit to
     /// <see cref="double.MaxValue"/> rounds back to it, as IEEE addition does, so the overflow past the last
     /// value is asked for with one unit in the last place there (2^971) instead.
     /// </summary>
-    /// <summary>
-    /// The element types whose extremes stand for PostgreSQL's <c>-infinity</c> and <c>infinity</c>, each
-    /// with a value two grid steps below its maximum. On these a bound at an extreme stays where it is
-    /// under <c>Shift</c> and <c>Expand</c> (#224), and a finite bound moved past one still throws.
-    /// </summary>
-    private static readonly Dictionary<Type, object> InfinityBacked = new()
-    {
-        [typeof(DateOnly)]       = DateOnly.MaxValue.AddDays(-2),
-        [typeof(DateTime)]       = DateTime.MaxValue.AddMinutes(-60),
-        [typeof(DateTimeOffset)] = DateTimeOffset.MaxValue.AddMinutes(-60),
-        [typeof(LocalDate)]      = LocalDate.MaxIsoValue.PlusDays(-2),
-        [typeof(LocalDateTime)]  = LocalDateTime.MaxIsoValue.PlusMinutes(-60),
-        [typeof(Instant)]        = Instant.MaxValue.Minus(Duration.FromMinutes(60)),
-        [typeof(YearMonth)]      = new YearMonth(9999, 10)
-    };
-
     private static readonly Dictionary<Type, Func<int, object>> EdgeSteps = new()
     {
         [typeof(double)] = k => k * Math.ScaleB(1.0, 971),
@@ -196,7 +199,7 @@ public sealed class RangeArithmeticOracleTests
         ];
 
         var edge     = EdgeSteps.GetValueOrDefault(typeof(T), step);
-        var infinite = InfinityBacked.TryGetValue(typeof(T), out var belowMax);
+        var infinite = InfinityBacked.TryGetValue(typeof(T), out var sentinels);
 
         foreach (var (name, range, atMin, atMax) in edges)
         {
@@ -248,17 +251,57 @@ public sealed class RangeArithmeticOracleTests
             }
         }
 
-        // A finite bound two steps below the maximum moves up to it, and past it throws, infinity or not.
         if (infinite)
         {
-            var near = TRange.CreateFinite((T)belowMax!, (T)belowMax!, true, true);
-            foreach (var (k, expected) in new[] { (1, false), (3, true) })
+            var (aboveMin, endSentinel, belowEnd) = ((T)sentinels.AboveMin, (T)sentinels.EndSentinel, (T)sentinels.BelowEnd);
+
+            // A finite bound two steps from a value that stands for an infinity moves one step and back
+            // to itself; two steps would land on the infinity, and that throws, as a move past it does (#260).
+            foreach (var (name, range, toward) in new[]
+                     {
+                         ("two steps below the infinite end", TRange.CreateFinite(belowEnd, belowEnd, true, true), 1),
+                         ("two steps above the minimum", TRange.CreateFinite(aboveMin, aboveMin, true, true), -1)
+                     })
+            {
+                Same($"{name}: Shift({toward}).Shift({-toward})", () => Call(shift, Call(shift, range, toward, edge), -toward, edge), range);
+                Same($"{name}: Expand(1).Expand(-1)", () => Call(expand, Call(expand, range, 1, edge), -1, edge), range);
+                Throws($"{name}: Shift({2 * toward}) onto the infinity", () => Call(shift, range, 2 * toward, edge), true);
+                Throws($"{name}: Shift({3 * toward}) past it", () => Call(shift, range, 3 * toward, edge), true);
+                Throws($"{name}: Expand(2) onto the infinity", () => Call(expand, range, 2, edge), true);
+            }
+
+            // The first value that stands for infinity at the upper end stays there: for a closed date
+            // range that is the day before the maximum, the form [x,infinity) loads as (#257).
+            var openEnded = TRange.CreateFinite(middle, endSentinel, true, true);
+            checks++;
+            var shiftedBack = Outcome(() => Equals(Call(shift, openEnded, -1, edge).UpperBound(), endSentinel) ? "kept" : Call(shift, openEnded, -1, edge).ToString());
+            if (shiftedBack != "kept")
+                failures.Add($"{label} {openEnded} Shift(-1) → {shiftedBack}, expected the upper bound to stay where it stands for infinity");
+
+            // A closed end at the minimum is a finite value where its exclusive end is a date, so it moves (#257).
+            if (sentinels.MinEndIsFinite)
             {
                 checks++;
-                var outcome = Outcome(() => Call(shift, near, k, edge));
+                var atMinimum = TRange.CreateFinite(min, min, true, true);
+                var moved     = Outcome(() => Equals(Call(shift, atMinimum, 1, edge).UpperBound(), min) ? "kept" : "moved");
+                if (moved != "moved")
+                    failures.Add($"{label} {atMinimum} Shift(1) → upper bound {moved}, expected the closed end at the minimum to move");
+            }
+
+            void Same(string operation, Func<TRange> run, TRange expected)
+            {
+                checks++;
+                var outcome = Outcome(run);
+                if (outcome != expected.ToString())
+                    failures.Add($"{label} {operation} → {outcome}, expected {expected}");
+            }
+
+            void Throws(string operation, Func<TRange> run, bool expected)
+            {
+                checks++;
+                var outcome = Outcome(run);
                 if ((outcome == $"throws {nameof(OverflowException)}") != expected)
-                    failures.Add($"{label} {near} Shift({k}) below the domain edge → {outcome}, expected "
-                               + (expected ? nameof(OverflowException) : "a range"));
+                    failures.Add($"{label} {operation} → {outcome}, expected " + (expected ? nameof(OverflowException) : "a range"));
             }
         }
 

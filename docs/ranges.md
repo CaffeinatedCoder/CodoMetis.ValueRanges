@@ -502,8 +502,14 @@ Good to know:
   `infinity` and `-infinity`. `Shift` and `Expand` leave such a bound alone, as `infinity - 1`
   is still `infinity` in PostgreSQL. A closed date range counts the day before the maximum too,
   because a column holding `[2026-01-01,infinity)` loads as `[2026-01-01,9999-12-30]`. So that
-  range shifted back a day is `[2025-12-31,9999-12-30]`, and it still ends at infinity. The
-  integer and float ranges have no infinity, so their extremes still throw.
+  range shifted back a day is `[2025-12-31,9999-12-30]`, and it still ends at infinity. A closed
+  date range's end at the minimum is a date, though, and moves. The integer and float ranges have
+  no infinity, so their extremes still throw.
+- **A finite bound can't move onto infinity.** `Shift` and `Expand` throw `OverflowException` when
+  they would move a finite bound onto a value that stands for infinity, as they do for a move past
+  it. Saved, the bound would come back as infinity, and shifting back wouldn't restore the range.
+  So `DateRange.CreateFinite(new DateOnly(9999, 12, 1), new DateOnly(9999, 12, 29)).Shift(1)`
+  throws, because its end would land on 9999-12-30.
 - **A `Float64Range` or `Float32Range` moves by IEEE addition.** Each moved bound is rounded to the nearest `double`,
   so `[0.1,1).Shift(0.2)` starts at `0.30000000000000004`. A bound pushed past `double.MaxValue`
   throws `OverflowException`, as for the other types. A `NaN` or infinite step throws
