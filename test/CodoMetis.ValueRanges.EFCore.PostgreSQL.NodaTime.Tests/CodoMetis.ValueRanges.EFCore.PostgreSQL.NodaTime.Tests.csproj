@@ -17,6 +17,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The post-interception query tree reader (#288), shared with the base package's translation tests; one copy, linked. -->
+        <Compile Include="..\CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests\InterceptedQuery.cs" Link="InterceptedQuery.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime\CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime.csproj" />
     </ItemGroup>
 
