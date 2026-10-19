@@ -1,0 +1,18 @@
+Seed: LocalDateTimeRange.Split(Period) ends when the period's nanoseconds times n overflows long, though the boundary is still inside the domain
+Oracles: RangeSplitOracleTests
+Fails: the nanosecond-period row: ten pieces of the expected 284, the last about 8,700 years wide
+History: missed by the #219 fix, found by the final pre-release analysis, fixed in 10.0.0 (#255)
+
+diff --git a/src/CodoMetis.ValueRanges.NodaTime/LocalDateTimeRange.cs b/src/CodoMetis.ValueRanges.NodaTime/LocalDateTimeRange.cs
+index 679e282..1b14e0e 100644
+--- a/src/CodoMetis.ValueRanges.NodaTime/LocalDateTimeRange.cs
++++ b/src/CodoMetis.ValueRanges.NodaTime/LocalDateTimeRange.cs
+@@ -273,7 +273,7 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
+     public IEnumerable<LocalDateTimeRange> Split(Period step)
+     {
+         NodaPeriods.RequirePositive(step, nameof(step));
+-        return RangeSplitting.Split<LocalDateTimeRange, LocalDateTime>(this, RangeSplitting.Steps<LocalDateTime>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n)), previous => RangeArithmetic.Checked(() => previous.Plus(step))));
++        return RangeSplitting.Split<LocalDateTimeRange, LocalDateTime>(this, RangeSplitting.Steps<LocalDateTime>(this, (start, n) => start.Plus(NodaPeriods.Times(step, n))));
+     }
+ 
+     /// <summary>
