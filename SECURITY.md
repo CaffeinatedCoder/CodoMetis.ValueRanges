@@ -53,17 +53,16 @@ maintained.
 
 | Version | Supported |
 |---|---|
-| 9.1.x | ✅ |
-| < 9.1 | ❌ |
+| 10.0.x | ✅ |
+| < 10.0 | ❌ |
 
 Previews (`11.0.0-preview.N`) are not supported versions and have no row: a fix reaches a preview
 in the next preview.
 
 ### How the table changes
 
-- **Until 10.0.0 ships**, one line is supported: 9.1.x.
-- **When 10.0.0 ships**, 9.x stops receiving fixes and 10.0.x takes its row. The 11.0.0 previews
-  that follow on `main` have no row.
+- **Until 11.0.0 ships**, one line is supported: the latest 10.x minor. 9.x stopped receiving fixes
+  when 10.0.0 shipped. The 11.0.0 previews on `main` have no row.
 - **When 11.0.0 ships**, the table gets its second row: 11.0.x, and below it the latest 10.x minor.
   From then on each line's row moves when that line ships a minor.
 
@@ -71,7 +70,6 @@ in the next preview.
 
 There is no fixed end-of-support date. Each line is tied to the .NET release it targets:
 
-- **9.x** targets **.NET 10** (`net10.0`, EF Core 10) and receives fixes until 10.0.0 ships.
 - **10.x**, the LTS line, targets **.NET 10** (`net10.0`, EF Core 10, PostgreSQL 16+). The intention
   is to maintain it for as long as Microsoft supports .NET 10 (LTS, until November 2028).
 - **11.x** targets **.NET 11** (`net11.0`, EF Core 11, Npgsql 11, PostgreSQL 16+), as previews until
