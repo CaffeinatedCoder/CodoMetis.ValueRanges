@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using CodoMetis.ValueRanges.Internals;
 
@@ -134,6 +135,14 @@ public interface IValueSetFactory<TSet, T> : ISpanParsable<TSet>, IFormattable
     /// <paramref name="format"/>. Without one it is ignored: the literal is a wire format and is
     /// always invariant.
     /// </param>
+    // NoInlining: ILCompiler 11 inlines this default into the instantiating thunk of the shared-generic
+    // interface, where the receiver is typed as the thunk's module type, so the cast of `this` fails and
+    // the thunk is compiled to a trap (SIGTRAP, exit 133) in a net11.0 Native AOT consumer — measured on
+    // 11.0.100-rc.2.26504.105 (#299, #315, dotnet/runtime#136073). Every set family also overrides
+    // IFormattable.ToString itself, which is what the shipped 10.1.0 relies on; the attribute keeps a
+    // family that forgets the override from trapping. The range default (IRangeFactory) did not trap in
+    // the same publish, which prints range text through it, so it is left alone.
+    [MethodImpl(MethodImplOptions.NoInlining)]
     string IFormattable.ToString(string? format, IFormatProvider? provider)
         => SetFormat.Format<TSet, T>((IValueSet<T>)this, format, provider);
 }
