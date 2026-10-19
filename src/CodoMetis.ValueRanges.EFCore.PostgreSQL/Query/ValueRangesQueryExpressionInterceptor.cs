@@ -246,6 +246,36 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
                          And(And(Not(receiverNull), Not(operandNull)), comparison)));
         }
 
+        /// <summary>
+        /// A <c>CompareTo</c> that is not compared with a number — projected, ordered by, added to —
+        /// answers the number itself. EF Core writes it as <c>CASE WHEN a = b THEN 0 WHEN a &gt; b THEN 1
+        /// WHEN a &lt; b THEN -1 END</c>, which is <c>NULL</c> for a null operand, and reading that NULL into
+        /// an <see cref="int"/> threw where memory answers 1 (#253). So it becomes the same split by
+        /// nullness as a comparison, as one conditional: EF Core writes that as one <c>CASE</c>, and the
+        /// branches a constant or a non-nullable column rules out fold away.
+        /// </summary>
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+        {
+            if (CompareToCall(node) is not { } call) return base.VisitMethodCall(node);
+
+            var receiver = Visit(call.Object)!;
+            var operand  = Visit(call.Arguments[0]);
+            var compared = call.Update(receiver, [operand]);
+
+            var receiverNull = IsNull(receiver);
+            var operandNull  = IsNull(operand);
+
+            // Comparer<T>.Default: (null, null) is 0, (null, x) is -1, (x, null) is 1.
+            return Choose(receiverNull,
+                          Choose(operandNull, Expression.Constant(0), Expression.Constant(-1)),
+                          Choose(operandNull, Expression.Constant(1), compared));
+        }
+
+        private static Expression Choose(Expression test, Expression whenTrue, Expression whenFalse)
+            => test is ConstantExpression { Value: bool value }
+                   ? value ? whenTrue : whenFalse
+                   : Expression.Condition(test, whenTrue, whenFalse);
+
         private static bool IsComparison(ExpressionType type)
             => type is ExpressionType.Equal or ExpressionType.NotEqual
                     or ExpressionType.LessThan or ExpressionType.LessThanOrEqual

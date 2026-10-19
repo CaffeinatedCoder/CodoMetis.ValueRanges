@@ -224,6 +224,56 @@ public sealed class RangeOrderParityTests
         }
     }
 
+    /// <summary>
+    /// <c>CompareTo</c> projected, not compared: the query returns the number memory's
+    /// <see cref="Comparer{T}.Default"/> returns, for a null and a non-null operand over a nullable
+    /// range and multirange column. A null operand made the <c>CASE</c> EF Core writes yield
+    /// <c>NULL</c>, which threw on reading it into an <see cref="int"/> (#253).
+    /// </summary>
+    [TestMethod]
+    public async Task ProjectedCompareTo_ReturnsTheNumberTheDefaultComparerReturns()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = await NullableOrderContext.CreateDatabase();
+        Int32Range?[] seats = [null, Int32Range.Empty, Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(2, 3), Int32Range.Infinite];
+        var rows = seats.Select((range, index) => new NullableOrderRow
+        {
+            Id     = index + 1,
+            Seats  = range,
+            Blocks = range is null ? null : RangeSet<Int32Range, int>.From([range])
+        }).ToList();
+
+        await using (var seed = new NullableOrderContext(connectionString))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            seed.Rows.AddRange(rows);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = new NullableOrderContext(connectionString);
+
+        foreach (var (name, operand, setOperand) in new[]
+                 {
+                     ("null", (Int32Range?)null, (RangeSet<Int32Range, int>?)null),
+                     ("[1,5]", Int32Range.CreateFinite(1, 5), RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5)]))
+                 })
+        {
+            var ranges = await context.Rows.OrderBy(r => r.Id).Select(r => r.Seats!.CompareTo(operand)).ToListAsync();
+            CollectionAssert.AreEqual(rows.Select(r => Comparer<Int32Range>.Default.Compare(r.Seats, operand)).ToList(), ranges,
+                                      $"range CompareTo({name}) projected");
+
+            var sets = await context.Rows.OrderBy(r => r.Id).Select(r => r.Blocks!.CompareTo(setOperand)).ToListAsync();
+            CollectionAssert.AreEqual(rows.Select(r => Comparer<RangeSet<Int32Range, int>>.Default.Compare(r.Blocks, setOperand)).ToList(), sets,
+                                      $"multirange CompareTo({name}) projected");
+
+            var ordered = await context.Rows.OrderBy(r => r.Seats!.CompareTo(operand)).ThenBy(r => r.Id).Select(r => r.Id).ToListAsync();
+            CollectionAssert.AreEqual(
+                rows.OrderBy(r => Comparer<Int32Range>.Default.Compare(r.Seats, operand)).ThenBy(r => r.Id).Select(r => r.Id).ToList(), ordered,
+                $"ordered by CompareTo({name})");
+        }
+    }
+
     private static bool Holds(int comparison, ExpressionType op, int k, bool callOnLeft)
     {
         var (left, right) = callOnLeft ? (comparison, k) : (k, comparison);
