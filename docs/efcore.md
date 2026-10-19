@@ -236,6 +236,13 @@ find the slot free. Only a database constraint is atomic.
 
 ### Reject overlapping rows with an exclusion constraint
 
+> **On EF Core 11, `EFCore.ComplexIndexes.PostgreSQL` is succeeded by `CodoMetis.EFCore.SchemaKit.PostgreSQL`.**
+> ComplexIndexes 5.x stays on EF Core 10, so you can't install it beside the 11 packages. SchemaKit
+> isn't on NuGet yet ([CaffeinatedCoder/EFCore.ComplexIndexes#38](https://github.com/CaffeinatedCoder/EFCore.ComplexIndexes/issues/38)).
+> Until it is, use the 10.x packages with ComplexIndexes 5.x, or add the constraint with explicit SQL
+> in a migration. Temporal keys don't wait for it: on EF Core 11, use
+> [Npgsql's temporal keys](#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18).
+
 PostgreSQL's tool for this is an exclusion constraint.
 [`EFCore.ComplexIndexes.PostgreSQL`](https://www.nuget.org/packages/EFCore.ComplexIndexes.PostgreSQL)
 declares one from your model. It accepts a range column mapped by this package exactly as it accepts
@@ -346,6 +353,8 @@ a `RangeSet<DateRange, DateOnly>`, a `TimeRange` and a `YearMonthRange` column f
 On the 10.x line (EF Core 10), Npgsql has no temporal keys of its own, and this section declares them
 through `EFCore.ComplexIndexes.PostgreSQL` instead. On EF Core 11, use
 [Npgsql's temporal keys](#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18).
+ComplexIndexes 5.x can't be installed beside the 11 packages, and its EF Core 11 successor,
+`CodoMetis.EFCore.SchemaKit.PostgreSQL`, isn't on NuGet yet.
 
 PostgreSQL 18 has this rule built in, as a temporal key: a `UNIQUE` constraint whose last column is a
 range column marked `WITHOUT OVERLAPS`. `EFCore.ComplexIndexes.PostgreSQL` declares one with

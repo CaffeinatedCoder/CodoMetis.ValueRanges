@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace CodoMetis.ValueRanges.Conventions.Tests;
 
@@ -59,8 +60,19 @@ internal static partial class OracleCatalogue
         "docs/getting-started.md"
     ];
 
-    /// <summary>Every <c>[TestClass]</c> name under <c>test/</c>, with the project directory that declares it.</summary>
-    internal static IReadOnlyDictionary<string, string> TestClasses { get; } = DiscoverTestClasses();
+    /// <summary>Every <c>[TestClass]</c> name under <c>test/</c> that its project compiles, with the project directory that declares it.</summary>
+    internal static IReadOnlyDictionary<string, string> TestClasses => s_testClasses.Compiled;
+
+    /// <summary>
+    /// Every <c>[TestClass]</c> in a file its project removes from compilation (<c>&lt;Compile Remove&gt;</c>
+    /// under the project's target framework), with that project. Such a class holds nothing on this line.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> CompiledOutTestClasses => s_testClasses.CompiledOut;
+
+    /// <summary>The compiled-out test classes something still names, each with the issue that compiles it back.</summary>
+    internal static IReadOnlyList<CompiledOutRecord> CompiledOut { get; } = Load<List<CompiledOutRecord>>("compiled-out.json");
+
+    private static readonly (Dictionary<string, string> Compiled, Dictionary<string, string> CompiledOut) s_testClasses = DiscoverTestClasses();
 
     /// <summary>GitHub's heading slug: lower case, punctuation dropped, spaces to hyphens.</summary>
     internal static string Slug(string heading)
@@ -132,10 +144,12 @@ internal static partial class OracleCatalogue
         ];
     }
 
-    private static Dictionary<string, string> DiscoverTestClasses()
+    private static (Dictionary<string, string> Compiled, Dictionary<string, string> CompiledOut) DiscoverTestClasses()
     {
-        var classes = new Dictionary<string, string>(StringComparer.Ordinal);
-        var testRoot = new DirectoryInfo(Path.Combine(RepoLayout.Root.FullName, "test"));
+        var compiled    = new Dictionary<string, string>(StringComparer.Ordinal);
+        var compiledOut = new Dictionary<string, string>(StringComparer.Ordinal);
+        var testRoot    = new DirectoryInfo(Path.Combine(RepoLayout.Root.FullName, "test"));
+        var removed     = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         foreach (var file in testRoot.EnumerateFiles("*.cs", SearchOption.AllDirectories))
         {
@@ -143,16 +157,65 @@ internal static partial class OracleCatalogue
              || file.FullName.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
                 continue;
 
-            var text = File.ReadAllText(file.FullName);
-            foreach (Match match in TestClassDeclaration().Matches(text))
-            {
-                var project = file.Directory!;
-                while (project.Parent is { } parent && parent.FullName != testRoot.FullName) project = parent;
+            var project = file.Directory!;
+            while (project.Parent is { } parent && parent.FullName != testRoot.FullName) project = parent;
+            if (!removed.TryGetValue(project.FullName, out var removedFiles))
+                removed[project.FullName] = removedFiles = RemovedCompileItems(project);
+
+            var classes = removedFiles.Contains(file.FullName) ? compiledOut : compiled;
+            foreach (Match match in TestClassDeclaration().Matches(File.ReadAllText(file.FullName)))
                 classes[match.Groups["name"].Value] = project.Name;
+        }
+
+        return (compiled, compiledOut);
+    }
+
+    /// <summary>
+    /// The full paths a test project's <c>&lt;Compile Remove="…"&gt;</c> items take out of its compilation,
+    /// with their conditions evaluated against the project's <c>TargetFramework</c>.
+    /// </summary>
+    /// <remarks>
+    /// Not MSBuild: only the shapes this repository uses, a file name relative to the project and a
+    /// condition that compares <c>$(TargetFramework)</c> with <c>==</c> or <c>!=</c>. Anything else
+    /// throws rather than guess, because a guess that keeps a removed file would count its classes as
+    /// holding claims again (#321).
+    /// </remarks>
+    private static HashSet<string> RemovedCompileItems(DirectoryInfo project)
+    {
+        var removed = new HashSet<string>(StringComparer.Ordinal);
+        var csproj  = project.EnumerateFiles("*.csproj").SingleOrDefault();
+        if (csproj is null) return removed;
+
+        var document = XDocument.Load(csproj.FullName);
+        if (document.Descendants("TargetFrameworks").Any())
+            throw new InvalidOperationException($"'{csproj.Name}' multi-targets; OracleCatalogue only evaluates a single TargetFramework.");
+        var framework = document.Descendants("TargetFramework").Select(element => element.Value.Trim()).SingleOrDefault()
+                     ?? throw new InvalidOperationException($"'{csproj.Name}' has no TargetFramework.");
+
+        foreach (var item in document.Descendants("Compile").Where(element => element.Attribute("Remove") is not null))
+        {
+            if (!item.AncestorsAndSelf().All(element => Applies(element.Attribute("Condition")?.Value, framework, csproj.Name)))
+                continue;
+
+            foreach (var path in item.Attribute("Remove")!.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (path.IndexOfAny(['*', '?', '$', '@', '%']) >= 0)
+                    throw new InvalidOperationException($"'{csproj.Name}' removes '{path}'; OracleCatalogue only evaluates plain file names.");
+                removed.Add(Path.GetFullPath(Path.Combine(project.FullName, path.Replace('\\', Path.DirectorySeparatorChar))));
             }
         }
 
-        return classes;
+        return removed;
+    }
+
+    private static bool Applies(string? condition, string framework, string csproj)
+    {
+        if (string.IsNullOrWhiteSpace(condition)) return true;
+        var match = Regex.Match(condition, @"^\s*'\$\(TargetFramework\)'\s*(?<op>==|!=)\s*'(?<value>[^']*)'\s*$");
+        if (!match.Success)
+            throw new InvalidOperationException($"'{csproj}' has a condition OracleCatalogue cannot evaluate: {condition}");
+        var equal = string.Equals(framework, match.Groups["value"].Value, StringComparison.OrdinalIgnoreCase);
+        return match.Groups["op"].Value == "==" ? equal : !equal;
     }
 
     [GeneratedRegex(@"\[TestClass\]\s*(?:\[[^\]]*\]\s*)*public\s+(?:sealed\s+|static\s+|partial\s+)*class\s+(?<name>\w+)", RegexOptions.Singleline)]
@@ -188,6 +251,9 @@ internal static partial class OracleCatalogue
         /// <summary>The heading slug after the <c>#</c>, or null for a claim about the whole file.</summary>
         internal string? Heading => Source.Contains('#') ? Source[(Source.IndexOf('#') + 1)..] : null;
     }
+
+    /// <summary>A test class its project compiles out on this line, the issue that compiles it back, and why.</summary>
+    internal sealed record CompiledOutRecord(string Class, string Project, int Issue, string Reason);
 
     /// <summary>One row of PostgreSQL's surface, keyed by its catalogue signature, and what the library does about it.</summary>
     internal sealed class PostgresSurfaceEntry
