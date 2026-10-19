@@ -67,11 +67,14 @@ public sealed class NonGenericComparableContractTests
 
         // A foreign argument throws: another range type, the element itself, and a range where a set is expected.
         object other = typeof(TRange) == typeof(Int32Range) ? DecimalRange.Empty : Int32Range.Empty;
-        foreach (var foreign in new[] { other, low, "[1,2)" })
+        // A nested type inside a generic one (List<int>.Enumerator) is generic without a backtick in its
+        // own name, which broke the message (#258).
+        foreach (var foreign in new[] { other, low, "[1,2)", new List<int>().GetEnumerator() })
         {
             var thrown = Assert.ThrowsExactly<ArgumentException>(() => NonGeneric(ranges[0]).CompareTo(foreign),
                                                                  $"{name}: CompareTo({foreign.GetType().Name})");
             StringAssert.Contains(thrown.Message, name);
+            StringAssert.Contains(thrown.Message, foreign.GetType().Name.Split('`')[0]);
         }
 
         Assert.ThrowsExactly<ArgumentException>(() => NonGeneric(sets[0]).CompareTo(ranges[0]), $"RangeSet<{name}>: CompareTo({name})");
