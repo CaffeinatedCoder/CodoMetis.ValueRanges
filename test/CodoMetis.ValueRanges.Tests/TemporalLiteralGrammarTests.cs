@@ -150,6 +150,8 @@ public class TemporalLiteralGrammarTests
     [DataRow("2027-02-01T09")]
     [DataRow("2027-02-01T09:30:00,5")]              // comma fraction
     [DataRow("2027-02-01T25:00:00")]
+    [DataRow("2027-02-01T24:00:00")]                // ISO 8601's end of day, which .NET 11 reads as the
+    [DataRow("2027-02-01 24:00")]                   // next day's midnight; PostgreSQL never prints it
     [DataRow("2027-02-01T09:30:00 BC")]
     [DataRow("2027-02-01T09:30:00+0530")]           // offsets are ±HH, ±HH:mm or ±HH:mm:ss
     [DataRow("2027-02-01T09:30:00+5:30")]
@@ -239,6 +241,8 @@ public class TemporalLiteralGrammarTests
     [DataRow("2026-01-01T09:30:00+16:00:00")]       // PostgreSQL stops at ±15:59:59
     [DataRow("2026-01-01T09:30:00+16:00")]
     [DataRow("2026-01-01 09:30:00-16")]
+    [DataRow("2026-01-01T24:00:00Z")]               // ISO 8601's end of day: .NET 11 would read the next day
+    [DataRow("2026-01-01 24:00:00+05:30:00")]
     [DataRow("2026-01-01T09:30:00+15:60")]
     [DataRow("2026-01-01T09:30:00+05:30:60")]
     [DataRow("2026-01-01T09:30:00x05:30:00")]       // a seconds offset needs its sign
@@ -283,7 +287,9 @@ public class TemporalLiteralGrammarTests
     [TestMethod]
     [DataRow("9:30 AM")]
     [DataRow("9:30")]
-    [DataRow("24:00:00")]                           // PostgreSQL's end of day: unrepresentable
+    [DataRow("24:00:00")]                           // PostgreSQL's end of day: unrepresentable, and
+    [DataRow("24:00")]                              // .NET 11 would read it as 00:00
+    [DataRow("24:00:00.0")]
     [DataRow("09.30")]
     [DataRow("09:30:00,5")]
     [DataRow("T09:30")]

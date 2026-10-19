@@ -149,6 +149,9 @@ and the forms PostgreSQL prints in its default ISO `DateStyle`, and nothing else
   `±HH:mm:ss`, read as `Local`. The wall clock is kept as written, and the offset is never applied.
 - **A `DateTimeOffset`** needs a `Z`, `±HH`, `±HH:mm` or `±HH:mm:ss`. The last form is how
   PostgreSQL writes its historical local-mean-time offsets. You get that instant at offset zero.
+- **An hour of 24 fails** (`FormatException`), on every runtime. ISO 8601 allows `24:00:00` as the
+  end of a day, but `TimeOnly` can't hold it, and PostgreSQL never prints a timestamp that way.
+  .NET 11 on its own would read it as midnight, or as the next day.
 - **An offset goes up to ±15:59:59,** as in PostgreSQL. A `DateTimeOffset` holds at most ±14:00, so
   for an offset beyond that you also get the instant at offset zero. `+16:00` fails
   (`FormatException`).

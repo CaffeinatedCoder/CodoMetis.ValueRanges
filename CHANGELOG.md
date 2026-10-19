@@ -13,6 +13,12 @@ has the rules.
 
 ## [10.1.0]
 
+One call answers differently, on the .NET 11 runtime only: [Changed answers in 10.1.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1010).
+
+### Changed answers
+
+- Literals: a time, `DateTime` or `DateTimeOffset` element with an hour of 24 throws `FormatException` on the .NET 11 runtime too, where it returned midnight: `{24:00:00}` read as `{00:00:00}` and `T24:00:00` as the next day. On .NET 10 it always threw ([#300](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/300), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1010)).
+
 ### Fixed
 
 - Value sets: `ToString` on every value set, in the core and NodaTime packages, runs in a `net11.0` Native AOT consumer, where the process ended with `SIGTRAP` on the first call ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
