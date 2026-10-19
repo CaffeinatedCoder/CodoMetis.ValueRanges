@@ -91,7 +91,7 @@ public sealed class MigrationServiceOwnershipConventionTests
             // DescendantNodes does not descend into trivia, so comments and XML docs are skipped.
             violations.AddRange(root.DescendantNodes().OfType<SimpleNameSyntax>()
                                     .Where(name => OwnedNames.Contains(name.Identifier.Text, StringComparer.Ordinal))
-                                    .Select(name => $"{Relative(file)}:{LineOf(name)} — `{LineText(name)}`"));
+                                    .Select(name => $"{Relative(file)}:{LineOf(name)} — {name.Identifier.Text} in `{LineText(name)}`"));
 
             // A service named by string (Type.GetType, a descriptor read from configuration) is the
             // same registration with the type checker taken out.
