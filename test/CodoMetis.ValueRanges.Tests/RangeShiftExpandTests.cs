@@ -181,7 +181,44 @@ public class RangeShiftExpandTests
         Assert.AreEqual(DateTimeOffsetRange.CreateFinite(DateTimeOffset.MinValue, DateTimeOffset.MaxValue),
                         DateTimeOffsetRange.CreateFinite(DateTimeOffset.MinValue, DateTimeOffset.MaxValue).Expand(TimeSpan.FromHours(1)));
 
-        // A finite end moved up to the day that stands for infinity) is allowed; past the maximum throws.
-        Assert.AreEqual("[2026-06-02,9999-12-30]", DateRange.CreateFinite(June(1), DateOnly.MaxValue.AddDays(-2)).Shift(1).ToString());
+        // A finite end moved onto the day that stands for infinity) throws, as a move past it does (#260).
+        Assert.ThrowsExactly<OverflowException>(() => DateRange.CreateFinite(June(1), DateOnly.MaxValue.AddDays(-2)).Shift(1));
     }
+
+    /// <summary>
+    /// A finite bound moved onto a value that stands for an infinity throws, as a move past one does,
+    /// because saved it would come back as the infinity and <c>Shift(d).Shift(-d)</c> would not be the
+    /// range (#260). One step short of it moves and comes back. On a closed date range the end's
+    /// infinity starts the day before the maximum, so the row there sits one day lower.
+    /// </summary>
+    [TestMethod]
+    public void Shift_AFiniteBoundOntoInfinity_Throws_AndOneStepShortRoundTrips()
+    {
+        var max   = DateOnly.MaxValue;
+        var dates = DateRange.CreateFinite(max.AddDays(-4), max.AddDays(-3));
+        Assert.AreEqual(dates, dates.Shift(1).Shift(-1));
+        Assert.ThrowsExactly<OverflowException>(() => dates.Shift(2), "the end would land on 9999-12-30, which stands for infinity)");
+        Assert.ThrowsExactly<OverflowException>(() => DateRange.CreateFinite(new DateOnly(9999, 12, 1), new DateOnly(9999, 12, 29)).Shift(1),
+                                                "the issue's example: [9999-12-01,9999-12-29] would end at infinity)");
+        Assert.ThrowsExactly<OverflowException>(() => DateRange.CreateFinite(DateOnly.MinValue.AddDays(2), June(1)).Shift(-2), "the start would land on -infinity");
+
+        var tick       = TimeSpan.FromTicks(1);
+        var timestamps = DateTimeRange.CreateFinite(new DateTime(2026, 1, 1), DateTime.MaxValue.AddTicks(-2));
+        Assert.AreEqual(timestamps, timestamps.Shift(tick).Shift(-tick));
+        Assert.ThrowsExactly<OverflowException>(() => timestamps.Shift(tick * 2));
+
+        var offsets = DateTimeOffsetRange.CreateFinite(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), DateTimeOffset.MaxValue.AddTicks(-2));
+        Assert.AreEqual(offsets, offsets.Shift(tick).Shift(-tick));
+        Assert.ThrowsExactly<OverflowException>(() => offsets.Expand(tick * 2));
+    }
+
+    /// <summary>
+    /// A closed end at the minimum date is a date, not <c>-infinity</c>: in PostgreSQL's half-open form
+    /// it is <c>[-infinity,0001-01-02)</c>, whose upper bound is finite. It moved nowhere before #257.
+    /// The start at the minimum still stands for <c>-infinity</c> and stays.
+    /// </summary>
+    [TestMethod]
+    public void Shift_AClosedEndAtTheMinimum_Moves()
+        => Assert.AreEqual(DateRange.CreateFinite(DateOnly.MinValue, DateOnly.MinValue.AddDays(5)),
+                           DateRange.CreateFinite(DateOnly.MinValue, DateOnly.MinValue).Shift(5));
 }

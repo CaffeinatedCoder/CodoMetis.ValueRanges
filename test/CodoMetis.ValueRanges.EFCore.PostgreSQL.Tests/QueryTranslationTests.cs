@@ -189,6 +189,21 @@ public sealed class QueryTranslationTests
     }
 
     [TestMethod]
+    public void ProjectedCompareTo_AgainstANullOperand_IsOne_AndAgainstANonNullOneIsEFCoresCase()
+    {
+        DateRange? none = null;
+        var some = DateRange.CreateFinite(new DateOnly(2024, 1, 1), new DateOnly(2024, 2, 1));
+        using var context = new TestDbContext();
+
+        // null sorts first, so every range compares 1 against it (#253).
+        Assert.Contains("SELECT 1", context.Bookings.Select(b => b.Period.CompareTo(none)).ToQueryString());
+
+        var sql = context.Bookings.Select(b => b.Period.CompareTo(some)).ToQueryString();
+        Assert.Contains("WHEN b.\"Period\" = @some THEN 0", sql);
+        Assert.DoesNotContain("IS NULL", sql);
+    }
+
+    [TestMethod]
     public void CompareTo_OnAMultirange_IsTheComparisonOperator()
     {
         var blocked = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5)]);

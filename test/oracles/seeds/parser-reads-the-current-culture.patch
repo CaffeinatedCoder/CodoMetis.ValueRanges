@@ -4,13 +4,13 @@ Fails: Parse, TryParse, TypeConverter, configuration and JSON reads of DecimalRa
 History: LiteralProviderContractTests varies only the provider, with the current culture left as the machine sets it, so it catches this only on a machine whose own culture is not invariant. Until 10.0.0 this seed passed CultureInfo.CurrentCulture to ParseValue from RangeFormat and SetFormat; once every element ParseValue ignored its provider (#115 for decimal, #127 for the integers) that planted nothing, and `oracles.cs seeds` reported it MISSED (#55)
 
 diff --git a/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs b/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs
-index 791dbee..0282185 100644
+index b5c3828..c477fbb 100644
 --- a/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs
 +++ b/src/CodoMetis.ValueRanges/Internals/DecimalLiteral.cs
-@@ -24,7 +24,7 @@ internal static class DecimalLiteral
- {
-     internal static decimal Parse(ReadOnlySpan<char> s)
-     {
+@@ -29,7 +29,7 @@ internal static class DecimalLiteral
+         if (s.Contains('\0'))
+             throw new FormatException($"Expected a number, sign, digits, point and exponent, with no NUL character: '{LiteralExcerpt.Of(s)}'.");
+ 
 -        var value = decimal.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture);
 +        var value = decimal.Parse(s, NumberStyles.Float, CultureInfo.CurrentCulture);
  
