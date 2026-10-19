@@ -10,6 +10,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 ### Breaking
 
 - Targets `net11.0` and references EF Core 11 and `Npgsql.EntityFrameworkCore.PostgreSQL` 11 (release candidates while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
+- EF Core: `EFCore.ComplexIndexes.PostgreSQL` 5.x stays on EF Core 10 and can't be installed beside the 11 packages. Its EF Core 11 successor, `CodoMetis.EFCore.SchemaKit.PostgreSQL`, isn't on NuGet yet ([CaffeinatedCoder/EFCore.ComplexIndexes#38](https://github.com/CaffeinatedCoder/EFCore.ComplexIndexes/issues/38)). For exclusion constraints until then, stay on 10.x or add the constraint with explicit SQL. Temporal keys are Npgsql's own on EF Core 11 ([Exclusion constraints](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint)).
 
 ### Added
 
