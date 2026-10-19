@@ -486,6 +486,9 @@ in order, starting with the most likely to affect you:
   `empty` ([details](#write-range-literals-with-the-lower-bound-first)).
 - **A minimal-API parameter typed as one shape answers 400 for another shape**, where it bound
   `null` and ran the handler ([details](#bind-a-shape-typed-parameter)).
+- **A record derived from a range type now throws `InvalidOperationException` when it is
+  constructed.** It compiled, and the range methods answered `false` for it. Use the five variants
+  the factories return ([details](ranges.md#why-the-discard-arm-must-throw)).
 
 ### Check `IsUnboundedStart()` and `IsUnboundedEnd()` on the infinite range
 

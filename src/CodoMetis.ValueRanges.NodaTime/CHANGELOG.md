@@ -5,19 +5,27 @@ covers all four packages, which share one version number and release together.
 
 ## [10.0.0] — 2026-10-17
 
+Nothing was removed or renamed. Some calls answer differently, and text PostgreSQL refuses is refused here too: [Migration from v9.x](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#migration-from-v9x).
+
 ### Breaking
 
-- ASP.NET Core: a minimal-API parameter typed as one shape, such as `LocalDateRange.Finite`, binds a literal of that shape and answers 400 for another shape, where it bound `null` and ran the handler for every literal that parsed. MVC was already correct ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- ASP.NET Core: a minimal-API parameter typed as one shape, such as `LocalDateRange.Finite`, answers 400 for a literal of another shape, where it bound `null` and ran the handler ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- Ranges: a record derived from a range type throws `InvalidOperationException` when it is constructed, where it compiled and `Contains` and `Overlaps` answered `false` for it ([Pattern matching](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#why-the-discard-arm-must-throw)).
+- Literals: a range or multirange literal whose lower bound is above its upper bound, such as `[5,1)`, throws `FormatException`, where it read as `empty`. `CreateFinite` still returns `Empty` ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#parse-a-literal)).
 
 ### Added
 
-- **`Parse` and `TryParse` on every shape** (`LocalDateRange.Finite.TryParse`, …), which read only a literal of that shape and throw `FormatException` or return `false` for another ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
-- **`IComparable<TRange>` and `IComparable` on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`**, in PostgreSQL's range order: empty first, then by lower bound, then by upper bound ([Sort ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#sort-ranges)).
-- **A range with a `RangeSet` operand** on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`, and `RangeSet.IsContainedBy`, as in the core package ([Compare a range with a set](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#compare-a-range-with-a-set)).
+- **`Parse` and `TryParse` on every shape** (`LocalDateRange.Finite.TryParse`, …), which accept only a literal of that shape ([Binding](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#bind-a-range-from-configuration)).
+- **`IComparable` on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`**, in PostgreSQL's range order: empty first, then by lower bound, then by upper bound ([Sort ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#sort-ranges)).
+- **A range with a `RangeSet` operand** on the four NodaTime range types, and **`RangeSet.IsContainedBy`**, as in the core package ([Compare a range with a set](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#compare-a-range-with-a-set)).
 - **`RangeAgg` and `RangeIntersectAgg` over a sequence of `RangeSet`** of a NodaTime range type, through the core package's generic overloads ([Aggregates](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#aggregate-a-sequence-of-ranges)).
-- **`Shift`** and **`Expand`** on the four NodaTime range types, by a `Period`, a `Duration` or a number of months. A period of months moves a `LocalDateRange`'s end as the day after it, so a whole month moves to a whole month, and a bound that stands for `infinity` stays where it is ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
-- **`LocalDateRange.Month`**, **`Quarter`**, **`Year`** and **`IsoWeek`**, and **`YearMonthRange.Quarter`** and **`Year`**. Weeks are ISO 8601 only, as `WeekYearRules.Iso` numbers them, and a date in another calendar is read as its ISO day ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week)).
-- **`Split`** on the four NodaTime range types, by a `Period`, a `Duration` or a number of months, or at a calendar period such as `LocalDateRange.Month`, and **`Values(step)`** on `LocalDateRange` and `YearMonthRange`. A period of months counts each boundary from the start ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#split-a-range-into-pieces)).
+- **`Shift`** and **`Expand`** on the four NodaTime range types, by a `Period`, a `Duration` or a number of months. A whole month moves to a whole month ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#move-or-widen-a-range)).
+- **`Split`** on the four NodaTime range types, by a `Period`, a `Duration`, a number of months or a calendar period, and **`Values(step)`** on `LocalDateRange` and `YearMonthRange` ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#split-a-range-into-pieces)).
+- **`LocalDateRange.Month`**, **`Quarter`**, **`Year`** and **`IsoWeek`**, and **`YearMonthRange.Quarter`** and **`Year`**. Weeks are ISO 8601 only, as `WeekYearRules.Iso` numbers them ([Ranges](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week)).
+
+### Fixed
+
+- NodaTime: `LocalDateTimeRange` and `LocalDateTimeSet` read `Z` or an offset and keep the wall clock, where they threw. `InstantRange` and `InstantSet` refuse an offset beyond ±15:59:59 ([Literals](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#dates-and-times-are-strict-iso-8601)).
 
 ## [9.1.0] — 2026-10-17
 
