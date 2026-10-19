@@ -54,9 +54,15 @@ internal static class RangeOrder
            };
 
     private static string TypeName(Type type)
-        => type.IsGenericType
-               ? $"{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>"
-               : type.Name;
+    {
+        if (!type.IsGenericType) return type.Name;
+
+        // A type nested in a generic one is generic too, but its own name has no arity suffix:
+        // List<int>.Enumerator is named "Enumerator" (#258).
+        var tick = type.Name.IndexOf('`');
+        var name = tick < 0 ? type.Name : type.Name[..tick];
+        return $"{name}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>";
+    }
 
     private readonly record struct Bound<T>(T Value, bool Inclusive, bool Absent)
         where T : struct, IComparable<T>, IEquatable<T>;
