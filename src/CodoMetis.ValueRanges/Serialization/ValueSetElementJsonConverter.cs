@@ -57,7 +57,9 @@ internal static class ValueSetElementJson
 
             case JsonTokenType.String when ReadsNumbersFromStrings(options):
                 var text = reader.GetString()!;
-                if (!long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number))
+                // long.TryParse ignores trailing NULs, and the number is re-formatted below, so a NUL
+                // the family's parser would refuse never reached it (#251).
+                if (text.Contains('\0') || !long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number))
                     throw new JsonException($"Cannot parse '{LiteralExcerpt.Of(text)}' as {typeof(T).Name}: a quoted number is an optional sign and digits.");
                 return number.ToString(CultureInfo.InvariantCulture);
 

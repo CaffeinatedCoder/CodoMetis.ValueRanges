@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Reflection;
 using CodoMetis.ValueRanges.Conventions.Tests;
 using CodoMetis.ValueRanges.Core;
@@ -117,6 +118,17 @@ public sealed class RangeOrderParityTests
         await Agree("null, 0 on the left: 0 < CompareTo", r => 0 < r.Seats.CompareTo(none));
         await Agree("null, 0 on the left: 0 >= CompareTo", r => 0 >= r.Seats.CompareTo(none));
         await Agree("null, negated: !(CompareTo < 0)", r => !(r.Seats.CompareTo(none) < 0));
+        // The forms EF Core also turns into operators, against the ±1 CompareTo answers (#256).
+        await Agree("null == 1",  r => r.Seats.CompareTo(none) == 1);
+        await Agree("null >= 1",  r => r.Seats.CompareTo(none) >= 1);
+        await Agree("null > -1",  r => r.Seats.CompareTo(none) > -1);
+        await Agree("null != -1", r => r.Seats.CompareTo(none) != -1);
+        await Agree("null, 1 on the left: 1 == CompareTo", r => 1 == r.Seats.CompareTo(none));
+        await Agree("null == -1", r => r.Seats.CompareTo(none) == -1);
+        await Agree("null < 1",   r => r.Seats.CompareTo(none) < 1);
+        await Agree("null <= -1", r => r.Seats.CompareTo(none) <= -1);
+        await Agree("non-null == 1", r => r.Seats.CompareTo(probe) == 1);
+        await Agree("non-null != -1", r => r.Seats.CompareTo(probe) != -1);
         await Agree("null multirange >", r => r.SeatBlocks.CompareTo(noSet) > 0);
         await Agree("null multirange <=", r => r.SeatBlocks.CompareTo(noSet) <= 0);
         Assert.HasCount(seats.Length, await mine.Where(r => r.Seats.CompareTo(none) > 0).ToListAsync(),
@@ -133,6 +145,216 @@ public sealed class RangeOrderParityTests
             rows.OrderBy(r => r.SeatBlocks).Select(r => r.Id).ToList(),
             await mine.OrderBy(r => r.SeatBlocks).Select(r => r.Id).ToListAsync(),
             "ORDER BY a multirange column");
+    }
+
+    /// <summary>
+    /// A nullable range and multirange column against a null and a non-null operand, through every
+    /// comparison of <c>CompareTo</c> with -1, 0 and 1 on either side, in a predicate and in
+    /// <c>ExecuteUpdate</c>. The answer is <see cref="Comparer{T}.Default"/>'s, row for row: two
+    /// nulls compare equal, and a null sorts before every range (#256, #261).
+    /// </summary>
+    [TestMethod]
+    public async Task CompareToOverANullableColumn_AgreesWithTheDefaultComparer_RowForRow()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = await NullableOrderContext.CreateDatabase();
+
+        Int32Range?[] seats =
+        [
+            null, Int32Range.Empty, Int32Range.Infinite, Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(2, 3),
+            Int32Range.CreateUnboundedStart(4, true), Int32Range.CreateUnboundedEnd(1)
+        ];
+        var rows = seats.Select((range, index) => new NullableOrderRow
+        {
+            Id     = index + 1,
+            Seats  = range,
+            Blocks = range is null ? null : RangeSet<Int32Range, int>.From([range])
+        }).ToList();
+
+        await using (var seed = new NullableOrderContext(connectionString))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            seed.Rows.AddRange(rows);
+            await seed.SaveChangesAsync();
+        }
+
+        ExpressionType[] operators =
+        [
+            ExpressionType.Equal, ExpressionType.NotEqual, ExpressionType.LessThan,
+            ExpressionType.LessThanOrEqual, ExpressionType.GreaterThan, ExpressionType.GreaterThanOrEqual
+        ];
+
+        var failures = new List<string>();
+        await using var context = new NullableOrderContext(connectionString);
+
+        foreach (var (operandName, operand, setOperand) in new[]
+                 {
+                     ("null", (Int32Range?)null, (RangeSet<Int32Range, int>?)null),
+                     ("[1,5]", Int32Range.CreateFinite(1, 5), RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5)]))
+                 })
+        foreach (var op in operators)
+        foreach (var k in new[] { -1, 0, 1 })
+        foreach (var callOnLeft in new[] { true, false })
+        {
+            var form = callOnLeft ? $"CompareTo({operandName}) {Symbol(op)} {k}" : $"{k} {Symbol(op)} CompareTo({operandName})";
+
+            failures.AddRange(await Mismatch($"range {form}", ComparePredicate(r => r.Seats, operand, op, k, callOnLeft),
+                                             row => Holds(Comparer<Int32Range>.Default.Compare(row.Seats, operand), op, k, callOnLeft)));
+            failures.AddRange(await Mismatch($"multirange {form}", ComparePredicate(r => r.Blocks, setOperand, op, k, callOnLeft),
+                                             row => Holds(Comparer<RangeSet<Int32Range, int>>.Default.Compare(row.Blocks, setOperand), op, k, callOnLeft)));
+        }
+
+        // ExecuteUpdate reads the same predicate (#256: CompareTo(none) == 1 updated no row).
+        Int32Range? none = null;
+        var updated = await context.Rows.Where(r => r.Seats!.CompareTo(none) == 1).ExecuteUpdateAsync(set => set.SetProperty(r => r.Marker, 1));
+        var expected = rows.Count(row => Comparer<Int32Range>.Default.Compare(row.Seats, none) == 1);
+        if (updated != expected) failures.Add($"ExecuteUpdate CompareTo(null) == 1: server updated {updated}, memory {expected}");
+
+        Assert.IsEmpty(failures, string.Join("\n", failures));
+
+        async Task<IEnumerable<string>> Mismatch(string label, System.Linq.Expressions.Expression<Func<NullableOrderRow, bool>> predicate,
+                                                 Func<NullableOrderRow, bool> inMemory)
+        {
+            var server = await context.Rows.Where(predicate).Select(r => r.Id).OrderBy(id => id).ToListAsync();
+            var memory = rows.Where(inMemory).Select(r => r.Id).OrderBy(id => id).ToList();
+            return server.SequenceEqual(memory)
+                       ? []
+                       : [$"{label}: server rows {string.Join(",", server)}, Comparer<T>.Default rows {string.Join(",", memory)}"];
+        }
+    }
+
+    /// <summary>
+    /// <c>CompareTo</c> projected, not compared: the query returns the number memory's
+    /// <see cref="Comparer{T}.Default"/> returns, for a null and a non-null operand over a nullable
+    /// range and multirange column. A null operand made the <c>CASE</c> EF Core writes yield
+    /// <c>NULL</c>, which threw on reading it into an <see cref="int"/> (#253).
+    /// </summary>
+    [TestMethod]
+    public async Task ProjectedCompareTo_ReturnsTheNumberTheDefaultComparerReturns()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = await NullableOrderContext.CreateDatabase();
+        Int32Range?[] seats = [null, Int32Range.Empty, Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(2, 3), Int32Range.Infinite];
+        var rows = seats.Select((range, index) => new NullableOrderRow
+        {
+            Id     = index + 1,
+            Seats  = range,
+            Blocks = range is null ? null : RangeSet<Int32Range, int>.From([range])
+        }).ToList();
+
+        await using (var seed = new NullableOrderContext(connectionString))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            seed.Rows.AddRange(rows);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = new NullableOrderContext(connectionString);
+
+        foreach (var (name, operand, setOperand) in new[]
+                 {
+                     ("null", (Int32Range?)null, (RangeSet<Int32Range, int>?)null),
+                     ("[1,5]", Int32Range.CreateFinite(1, 5), RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5)]))
+                 })
+        {
+            var ranges = await context.Rows.OrderBy(r => r.Id).Select(r => r.Seats!.CompareTo(operand)).ToListAsync();
+            CollectionAssert.AreEqual(rows.Select(r => Comparer<Int32Range>.Default.Compare(r.Seats, operand)).ToList(), ranges,
+                                      $"range CompareTo({name}) projected");
+
+            var sets = await context.Rows.OrderBy(r => r.Id).Select(r => r.Blocks!.CompareTo(setOperand)).ToListAsync();
+            CollectionAssert.AreEqual(rows.Select(r => Comparer<RangeSet<Int32Range, int>>.Default.Compare(r.Blocks, setOperand)).ToList(), sets,
+                                      $"multirange CompareTo({name}) projected");
+
+            var ordered = await context.Rows.OrderBy(r => r.Seats!.CompareTo(operand)).ThenBy(r => r.Id).Select(r => r.Id).ToListAsync();
+            CollectionAssert.AreEqual(
+                rows.OrderBy(r => Comparer<Int32Range>.Default.Compare(r.Seats, operand)).ThenBy(r => r.Id).Select(r => r.Id).ToList(), ordered,
+                $"ordered by CompareTo({name})");
+        }
+    }
+
+    private static bool Holds(int comparison, ExpressionType op, int k, bool callOnLeft)
+    {
+        var (left, right) = callOnLeft ? (comparison, k) : (k, comparison);
+        return op switch
+        {
+            ExpressionType.Equal              => left == right,
+            ExpressionType.NotEqual           => left != right,
+            ExpressionType.LessThan           => left < right,
+            ExpressionType.LessThanOrEqual    => left <= right,
+            ExpressionType.GreaterThan        => left > right,
+            ExpressionType.GreaterThanOrEqual => left >= right,
+            _                                 => throw new ArgumentOutOfRangeException(nameof(op))
+        };
+    }
+
+    private static string Symbol(ExpressionType op) => op switch
+    {
+        ExpressionType.Equal => "==", ExpressionType.NotEqual => "!=", ExpressionType.LessThan => "<",
+        ExpressionType.LessThanOrEqual => "<=", ExpressionType.GreaterThan => ">", _ => ">="
+    };
+
+    /// <summary>
+    /// <c>r =&gt; r.Column.CompareTo(operand) op k</c> (or <c>k op …</c>), with the operand captured so
+    /// that EF Core sends it as a parameter, as a consumer's variable would be.
+    /// </summary>
+    private static System.Linq.Expressions.Expression<Func<NullableOrderRow, bool>> ComparePredicate<TValue>(
+        System.Linq.Expressions.Expression<Func<NullableOrderRow, TValue?>> column, TValue? operand, ExpressionType op, int k, bool callOnLeft)
+        where TValue : class, IComparable<TValue>
+    {
+        var captured = System.Linq.Expressions.Expression.Field(
+            System.Linq.Expressions.Expression.Constant(new Captured<TValue> { Value = operand }), nameof(Captured<TValue>.Value));
+        var call = System.Linq.Expressions.Expression.Call(
+            column.Body, typeof(TValue).GetMethod(nameof(IComparable<TValue>.CompareTo), [typeof(TValue)])!, captured);
+        var number = System.Linq.Expressions.Expression.Constant(k);
+
+        var body = callOnLeft
+                       ? System.Linq.Expressions.Expression.MakeBinary(op, call, number)
+                       : System.Linq.Expressions.Expression.MakeBinary(op, number, call);
+
+        return System.Linq.Expressions.Expression.Lambda<Func<NullableOrderRow, bool>>(body, column.Parameters);
+    }
+
+    private sealed class Captured<TValue>
+    {
+        public TValue? Value;
+    }
+
+    public sealed class NullableOrderRow
+    {
+        public int Id { get; set; }
+
+        public Int32Range? Seats { get; set; }
+
+        public RangeSet<Int32Range, int>? Blocks { get; set; }
+
+        public int Marker { get; set; }
+    }
+
+    /// <summary>A database of its own, so that a nullable range column does not change the shared schema.</summary>
+    private sealed class NullableOrderContext(string connectionString) : DbContext
+    {
+        public DbSet<NullableOrderRow> Rows => Set<NullableOrderRow>();
+
+        public static async Task<string> CreateDatabase()
+        {
+            var name = $"nullable_order_{Guid.NewGuid():N}";
+            await using (var connection = new NpgsqlConnection(ContainerLifecycle.ServerConnectionString))
+            {
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand($"CREATE DATABASE {name}", connection);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            return new NpgsqlConnectionStringBuilder(ContainerLifecycle.ServerConnectionString) { Database = name }.ConnectionString;
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.Entity<NullableOrderRow>().Property(r => r.Id).ValueGeneratedNever();
     }
 
     private static async Task<List<string>> Sweep<TRange, T>(NpgsqlConnection connection)
