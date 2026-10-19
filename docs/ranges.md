@@ -430,7 +430,13 @@ Good to know:
 - **In a query, `CompareTo` against 0 runs as the comparison operator.** `b.Period.CompareTo(other) < 0`
   runs as `b."Period" < @other`, and `OrderBy(b => b.Period)` as `ORDER BY b."Period"`. With a
   `null` range on the right, the query returns the rows memory returns: `> 0`, `>= 0` and `!= 0` hold
-  for every row, and `< 0`, `<= 0` and `== 0` for none.
+  for every row, and `< 0`, `<= 0` and `== 0` for none. The same holds when you compare `CompareTo`
+  with `-1` or `1`, which EF Core also turns into operators. `CompareTo` answers only `-1`, `0` or `1`,
+  so `== 1` means "sorts after" in memory as in SQL.
+- **A NULL column compares as `Comparer<T>.Default` orders a null.** It is equal to a `null` range,
+  and before every other range. So with a `null` operand, a NULL column matches `== 0`, `>= 0` and
+  `<= 0`, and with a non-null operand it compares lower, so it matches `< 0`, `<= 0` and `!= 0`. In
+  memory, calling `CompareTo` on a null throws.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
   nullable column, the two orders differ only in where the nulls go.
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only

@@ -20,8 +20,8 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// rewrite gives a range constant EF Core inlined its union type — see
 /// <see cref="RangeVariantConstantRetyper"/>. A third sends a captured collection of value sets or ranges
 /// one parameter per element, because neither can be bound as one array parameter — see
-/// <see cref="CollectionParameterExpander"/>. A fourth makes <c>CompareTo</c> against a null range
-/// answer in SQL as it does in memory — see <see cref="NullOperandCompareToRewriter"/>.
+/// <see cref="CollectionParameterExpander"/>. A fourth makes <c>CompareTo</c> with a null range on
+/// either side answer in SQL as <c>Comparer&lt;T&gt;.Default</c> does — see <see cref="NullOperandCompareToRewriter"/>.
 /// </para>
 /// <para>
 /// The value set refusals — a server-computed <c>Union</c> consumed by an order- or
@@ -184,24 +184,28 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     }
 
     /// <summary>
-    /// Gives <c>a.CompareTo(b) op 0</c> over a range or multirange the answer memory gives when
-    /// <c>b</c> is <see langword="null"/>.
+    /// Gives a range or multirange <c>a.CompareTo(b)</c> compared with a number the answer
+    /// <see cref="Comparer{T}.Default"/> gives when <c>a</c> or <c>b</c> is <see langword="null"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// In memory <c>null</c> sorts before every range, so <c>CompareTo(null)</c> is positive: <c>&gt; 0</c>,
-    /// <c>&gt;= 0</c> and <c>!= 0</c> are true, and <c>&lt; 0</c>, <c>&lt;= 0</c> and <c>== 0</c> are
-    /// false. EF Core rewrites the comparison to <c>a op b</c>, and <c>a &gt; NULL</c> is SQL
-    /// <c>NULL</c>, so a null operand returned no rows for any of them (#220). The comparison therefore
-    /// gains the null test memory applies: <c>b IS NULL OR a &gt; b</c> for the first three,
-    /// <c>b IS NOT NULL AND a &lt; b</c> for the other three. EF Core folds the test away for a
-    /// parameter by its value, and for a column that cannot be null, so the SQL for a non-null
-    /// operand is the bare comparison.
+    /// EF Core rewrites <c>a.CompareTo(b) &gt; 0</c> to <c>a &gt; b</c>, and likewise <c>== 1</c>,
+    /// <c>&gt;= 1</c>, <c>&gt; -1</c>, <c>!= -1</c> and the other forms whose answer it can read off
+    /// the three results. In SQL, <c>a &gt; NULL</c> is <c>NULL</c>, so a null operand returned no
+    /// rows for any of them where memory, in which <c>null</c> sorts first, returns every row for
+    /// <c>&gt; 0</c> (#220, #256). A NULL column has no answer in memory at all: the call throws.
+    /// The order here is <see cref="Comparer{T}.Default"/>'s (#261): two nulls compare equal, a null
+    /// before any range.
     /// </para>
     /// <para>
-    /// The test is a reference comparison: a range record's <c>==</c> is its value equality, which
-    /// is not what a null test means. A non-null constant operand needs none and is left alone; a
-    /// null constant decides the comparison outright.
+    /// So the comparison <c>a.CompareTo(b) op k</c> is split by nullness, each case decided as
+    /// <see cref="Comparer{T}.Default"/> decides it: both null, <c>0 op k</c>; only <c>a</c>,
+    /// <c>-1 op k</c>; only <c>b</c>, <c>1 op k</c>; neither, the comparison itself, which EF Core still
+    /// turns into the btree operator. <c>CompareTo</c> answers -1, 0 or 1, so the three constants are
+    /// exact for any <c>k</c>. The null tests are reference comparisons, since a range record's
+    /// <c>==</c> is value equality; a constant's is decided here, and EF Core folds a parameter's by
+    /// its value and a non-nullable column's away, so the SQL for two non-null operands is the bare
+    /// operator.
     /// </para>
     /// </remarks>
     private sealed class NullOperandCompareToRewriter : ExpressionVisitor
@@ -210,61 +214,87 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
 
         protected override Expression VisitBinary(BinaryExpression node)
         {
-            var visited = base.VisitBinary(node);
-            if (visited is not BinaryExpression binary) return visited;
+            if (!IsComparison(node.NodeType)) return base.VisitBinary(node);
 
-            // a.CompareTo(b) op 0, or 0 op a.CompareTo(b) read as a.CompareTo(b) mirrored-op 0.
-            var (call, op) = (CompareToCall(binary.Left), IsZero(binary.Right), CompareToCall(binary.Right), IsZero(binary.Left)) switch
-                             {
-                                 ({ } left, true, _, _)  => (left, binary.NodeType),
-                                 (_, _, { } right, true) => (right, Mirror(binary.NodeType)),
-                                 _                       => (null, binary.NodeType)
-                             };
+            var (call, onLeft) = (CompareToCall(node.Left), CompareToCall(node.Right)) switch
+                                 {
+                                     ({ } left, _)  => (left, true),
+                                     (_, { } right) => (right, false),
+                                     _              => (null, false)
+                                 };
 
-            if (call is null || NullResult(op) is not { } whenNull) return binary;
+            if (call is null) return base.VisitBinary(node);
 
-            var operand = call.Arguments[0];
-            if (operand is ConstantExpression constant)
-                return constant.Value is null ? Expression.Constant(whenNull) : binary;
+            var receiver = Visit(call.Object)!;
+            var operand  = Visit(call.Arguments[0]);
+            var other    = Visit(onLeft ? node.Right : node.Left);
 
-            var isNull = Expression.ReferenceEqual(operand, Expression.Constant(null, operand.Type));
+            Expression Compare(Expression result)
+                => onLeft
+                       ? Expression.MakeBinary(node.NodeType, result, other)
+                       : Expression.MakeBinary(node.NodeType, other, result);
 
-            return whenNull
-                       ? Expression.OrElse(isNull, binary)
-                       : Expression.AndAlso(Expression.Not(isNull), binary);
+            var comparison = Compare(call.Update(receiver, [operand]));
+
+            var receiverNull = IsNull(receiver);
+            var operandNull  = IsNull(operand);
+
+            // Comparer<T>.Default: (null, null) is 0, (null, x) is -1, (x, null) is 1.
+            return Or(Or(And(And(receiverNull, operandNull), Decide(Compare(Expression.Constant(0)))),
+                         And(And(receiverNull, Not(operandNull)), Decide(Compare(Expression.Constant(-1))))),
+                      Or(And(And(Not(receiverNull), operandNull), Decide(Compare(Expression.Constant(1)))),
+                         And(And(Not(receiverNull), Not(operandNull)), comparison)));
         }
+
+        private static bool IsComparison(ExpressionType type)
+            => type is ExpressionType.Equal or ExpressionType.NotEqual
+                    or ExpressionType.LessThan or ExpressionType.LessThanOrEqual
+                    or ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual;
 
         private static MethodCallExpression? CompareToCall(Expression expression)
             => expression is MethodCallExpression
                {
                    Method: { Name: nameof(IComparable<int>.CompareTo), IsStatic: false, DeclaringType: { } declaringType } method,
                    Object: not null,
-                   Arguments: [{ Type.IsValueType: false }]
+                   Arguments: [{ Type.IsValueType: false } argument]
                } call
                && method.ReturnType == typeof(int)
+               && argument.Type != typeof(object)
                && RangeTypeRegistry.TryGetByClrType(declaringType, out _, out _)
                    ? call
                    : null;
 
-        private static bool IsZero(Expression expression) => expression is ConstantExpression { Value: 0 };
+        private static Expression IsNull(Expression expression)
+            => expression is ConstantExpression constant
+                   ? Expression.Constant(constant.Value is null)
+                   : Expression.ReferenceEqual(expression, Expression.Constant(null, expression.Type));
 
-        private static ExpressionType Mirror(ExpressionType op)
-            => op switch
+        // A comparison of two constants (-1 op 0) is decided now; one with a parameter or a column
+        // as the number is left for EF Core.
+        private static Expression Decide(Expression comparison)
+            => comparison is BinaryExpression { Left: ConstantExpression, Right: ConstantExpression }
+                   ? Expression.Constant(Expression.Lambda<Func<bool>>(comparison).Compile(preferInterpretation: true)())
+                   : comparison;
+
+        private static Expression Not(Expression expression)
+            => expression is ConstantExpression { Value: bool value } ? Expression.Constant(!value) : Expression.Not(expression);
+
+        private static Expression And(Expression left, Expression right)
+            => (left, right) switch
                {
-                   ExpressionType.LessThan           => ExpressionType.GreaterThan,
-                   ExpressionType.LessThanOrEqual    => ExpressionType.GreaterThanOrEqual,
-                   ExpressionType.GreaterThan        => ExpressionType.LessThan,
-                   ExpressionType.GreaterThanOrEqual => ExpressionType.LessThanOrEqual,
-                   _                                 => op
+                   (ConstantExpression { Value: false }, _) or (_, ConstantExpression { Value: false }) => Expression.Constant(false),
+                   (ConstantExpression { Value: true }, _) => right,
+                   (_, ConstantExpression { Value: true }) => left,
+                   _                                       => Expression.AndAlso(left, right)
                };
 
-        // CompareTo(null) is positive, so the comparison with 0 is decided.
-        private static bool? NullResult(ExpressionType op)
-            => op switch
+        private static Expression Or(Expression left, Expression right)
+            => (left, right) switch
                {
-                   ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual or ExpressionType.NotEqual => true,
-                   ExpressionType.LessThan or ExpressionType.LessThanOrEqual or ExpressionType.Equal          => false,
-                   _                                                                                          => null
+                   (ConstantExpression { Value: true }, _) or (_, ConstantExpression { Value: true }) => Expression.Constant(true),
+                   (ConstantExpression { Value: false }, _) => right,
+                   (_, ConstantExpression { Value: false }) => left,
+                   _                                        => Expression.OrElse(left, right)
                };
     }
 

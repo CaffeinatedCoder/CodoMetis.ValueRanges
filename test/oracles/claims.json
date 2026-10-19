@@ -797,7 +797,7 @@
     "id": "E45-compareto-runs-as-comparison-operator",
     "source": "docs/efcore.md#query-ranges-with-linq",
     "quote": "**`CompareTo` against 0** becomes `<`, `<=`, `>`, `>=` or `=`, for a range and a multirange, in the order `OrderBy` sorts by",
-    "claim": "A range or multirange CompareTo compared with 0 in a predicate translates to <, <=, >, >= or = between the operands, OrderBy on a range or multirange column translates to ORDER BY the column, and the rows returned match the same predicate and sort in memory, including for a null operand (where SQL's col > NULL alone returns no rows).",
+    "claim": "A range or multirange CompareTo compared with 0 in a predicate translates to <, <=, >, >= or = between the operands, OrderBy on a range or multirange column translates to ORDER BY the column, and the rows returned match the same predicate and sort in memory, including for a null operand or a NULL column, which compare as Comparer<T>.Default orders a null (where SQL's col > NULL alone returns no rows).",
     "oracle": "differential",
     "surfaces": [
       "*Range.CompareTo",
@@ -3083,6 +3083,48 @@
     ],
     "heldBy": [
       "NonGenericComparableContractTests"
+    ]
+  },
+  {
+    "id": "R44-compareto-null-against-any-number",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "The same holds when you compare `CompareTo` with `-1` or `1`, which EF Core also turns into operators.",
+    "claim": "In an EF Core predicate and in ExecuteUpdate, a range or multirange CompareTo against a null operand compared with -1, 0 or 1 by any operator, the number on either side, returns the rows Comparer<T>.Default returns in memory: CompareTo(null) == 1, >= 1, > -1 and != -1 match every non-null row, == -1, < 1 and <= -1 none.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests"
+    ]
+  },
+  {
+    "id": "R45-null-column-compares-as-default-comparer",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "**A NULL column compares as `Comparer<T>.Default` orders a null.** It is equal to a `null` range, and before every other range.",
+    "claim": "For a nullable range and multirange column, every comparison of CompareTo with -1, 0 or 1, on either side, against a null and a non-null operand, returns on the server exactly the rows for which Comparer<T>.Default.Compare(column, operand) satisfies it: a NULL column equals a null operand and sorts before a non-null one.",
+    "oracle": "differential",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderParityTests"
+    ]
+  },
+  {
+    "id": "R46-compareto-answers-minus-one-zero-or-one",
+    "source": "docs/ranges.md#sort-ranges",
+    "quote": "`CompareTo` answers only `-1`, `0` or `1`, so `== 1` means \"sorts after\" in memory as in SQL.",
+    "claim": "For every discovered range type and its RangeSet, CompareTo over every ordered pair of shapes answers -1, 0 or 1 and no other value.",
+    "oracle": "claim",
+    "surfaces": [
+      "*Range.CompareTo",
+      "RangeSet.CompareTo"
+    ],
+    "heldBy": [
+      "RangeOrderSignContractTests"
     ]
   },
   {
