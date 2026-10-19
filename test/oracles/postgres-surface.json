@@ -1490,7 +1490,7 @@
     "since": 18,
     "member": null,
     "translation": null,
-    "waiver": "a constraint, not a value operation; docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18 shows it through EFCore.ComplexIndexes.PostgreSQL's HasTemporalForeignKey, and Npgsql 11's HasPeriod is the native form on the 11.x line (#150)",
+    "waiver": "a constraint, not a value operation; docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18 shows it through Npgsql 11's WithPeriod() over this package's columns (#150), and #reject-overlapping-rows-with-a-temporal-key-postgresql-18 through EFCore.ComplexIndexes.PostgreSQL's HasTemporalForeignKey on the 10.x line",
     "issue": null
   },
   {
@@ -1499,7 +1499,7 @@
     "since": 18,
     "member": null,
     "translation": null,
-    "waiver": "a constraint, not a value operation; docs/efcore.md#reject-overlapping-rows-with-a-temporal-key-postgresql-18 shows the same rule as UNIQUE (… WITHOUT OVERLAPS) through EFCore.ComplexIndexes.PostgreSQL's HasTemporalConstraint, and Npgsql 11's HasWithoutOverlaps is the native form on the 11.x line (#150)",
+    "waiver": "a constraint, not a value operation; docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18 shows the rule as Npgsql 11's HasKey(…).WithoutOverlaps() over this package's columns (#150), and #reject-overlapping-rows-with-a-temporal-key-postgresql-18 as UNIQUE (… WITHOUT OVERLAPS) through EFCore.ComplexIndexes.PostgreSQL's HasTemporalConstraint on the 10.x line",
     "issue": null
   },
   {

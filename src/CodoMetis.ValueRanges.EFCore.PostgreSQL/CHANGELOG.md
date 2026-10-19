@@ -11,6 +11,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 
 - Targets `net11.0` and references EF Core 11 and `Npgsql.EntityFrameworkCore.PostgreSQL` 11 (release candidates while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
 
+### Added
+
+- EF Core: Npgsql 11's own temporal keys accept the range and multirange columns this package maps. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over a `DateRange`, a `TimeRange` or a `RangeSet`, on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
+
 ### Changed
 
 - EF Core: an `ExecuteUpdate` that sets a nullable value set inside a JSON column to a value that may be null is refused for the JSON array alone; Npgsql 11 writes the null outcome as JSON null, so the message no longer names a whole-document NULL ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).

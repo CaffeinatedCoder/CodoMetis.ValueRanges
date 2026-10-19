@@ -961,6 +961,92 @@
     ]
   },
   {
+    "id": "E64-native-temporal-key-over-mapped-columns",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18",
+    "quote": "On EF Core 11, Npgsql declares temporal keys itself, and every range and multirange column this package maps works as the period.",
+    "claim": "HasKey(…).WithoutOverlaps() with SetPostgresVersion(18, 0) over a DateRange, a RangeSet<DateRange, DateOnly>, a TimeRange (custom timerange) and a YearMonthRange column renders PRIMARY KEY (\"RoomId\", \"Period\" WITHOUT OVERLAPS) in the create script and creates it with EnsureCreated on PostgreSQL 18, which pg_get_constraintdef reads back verbatim; for every discovered range type and its RangeSet, the resolved mapping implements INpgsqlRangeTypeMapping and the model passes Npgsql's validation.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
+      "NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions.UseValueRangesNodaTime",
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite",
+      "YearMonthRange.CreateFinite",
+      "RangeSet.From"
+    ],
+    "heldBy": [
+      "NativeTemporalKeyTests"
+    ]
+  },
+  {
+    "id": "E65-native-temporal-key-rejects-overlap",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18",
+    "quote": "Its `SqlState` is `23P01` and its `ConstraintName` is the key's name. Adjacent bookings, and bookings for another room, are saved.",
+    "claim": "Under Npgsql's WITHOUT OVERLAPS key on PostgreSQL 18, a row overlapping an existing row for the same room in a DateRange, RangeSet<DateRange, DateOnly>, TimeRange or YearMonthRange column fails SaveChanges with DbUpdateException wrapping PostgresException 23P01 whose ConstraintName is the key's name; adjacent rows and rows for another room are saved and read back.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.CreateFinite",
+      "TimeRange.CreateFinite",
+      "YearMonthRange.CreateFinite",
+      "RangeSet.From"
+    ],
+    "heldBy": [
+      "NativeTemporalKeyTests"
+    ]
+  },
+  {
+    "id": "E66-native-period-foreign-key-coverage",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18",
+    "quote": "A booking is saved when the room's availabilities cover its period together, even across two adjacent rows. A booking that runs past them fails with `SqlState` `23503` (`foreign_key_violation`).",
+    "claim": "WithPeriod() over DateRange columns renders and creates FOREIGN KEY (\"RoomId\", PERIOD \"Period\") REFERENCES \"Availabilities\" (\"RoomId\", PERIOD \"Period\") on PostgreSQL 18; a dependent period covered by two adjacent principal rows is saved, and one past them fails with DbUpdateException wrapping PostgresException 23503.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.CreateFinite"
+    ],
+    "heldBy": [
+      "NativeTemporalKeyTests"
+    ]
+  },
+  {
+    "id": "E67-native-temporal-key-needs-set-postgres-version",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18",
+    "quote": "Without the call, building the model throws (`InvalidOperationException`) before any SQL is sent.",
+    "claim": "A model with HasKey(…).WithoutOverlaps() over a DateRange and no SetPostgresVersion(18, 0) throws InvalidOperationException naming SetPostgresVersion(18, 0) from GenerateCreateScript, with no database involved.",
+    "oracle": "exception",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "NativeTemporalKeyTests"
+    ]
+  },
+  {
+    "id": "E68-native-temporal-key-creates-btree-gist",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18",
+    "quote": "Npgsql adds `CREATE EXTENSION IF NOT EXISTS btree_gist` to the schema, because the key indexes the scalar column with GiST.",
+    "claim": "The create script of a model with a WITHOUT OVERLAPS key over a mapped range column contains CREATE EXTENSION IF NOT EXISTS btree_gist, and EnsureCreated on PostgreSQL 18 succeeds with it.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "NativeTemporalKeyTests"
+    ]
+  },
+  {
+    "id": "E69-native-temporal-key-in-migrations-and-ensurecreated",
+    "source": "docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18",
+    "quote": "**Migrations and `EnsureCreated()` both create the key.** It is part of EF Core's own model, so no extra registration is needed.",
+    "claim": "With only UseValueRanges() registered, the migration the design-time scaffolder writes carries the Npgsql:WithoutOverlaps annotation, and EnsureCreated creates the WITHOUT OVERLAPS key that pg_get_constraintdef reads back.",
+    "oracle": "claim",
+    "surfaces": [
+      "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges"
+    ],
+    "heldBy": [
+      "NativeTemporalKeyTests"
+    ]
+  },
+  {
     "id": "E54-float8range-custom-type-setup",
     "source": "docs/efcore.md#custom-range-types",
     "quote": "All three also need `EnableUnmappedTypes()` on the Npgsql data source, so Npgsql can send a type it doesn't know by name. The value sets need nothing extra: `Float64Set` is a native `double precision[]` column, and `Float32Set` a native `real[]` column.",

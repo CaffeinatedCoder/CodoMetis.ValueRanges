@@ -1,9 +1,11 @@
+using System.Collections;
 using System.Data.Common;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.Mapping;
 using NpgsqlTypes;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
@@ -15,7 +17,7 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 /// </summary>
 /// <typeparam name="TRange">The range type being mapped.</typeparam>
 /// <typeparam name="T">The element type of the range.</typeparam>
-internal sealed class ValueRangeTypeMapping<TRange, T> : RelationalTypeMapping, IStoreTextMapping<TRange>
+internal sealed class ValueRangeTypeMapping<TRange, T> : RelationalTypeMapping, IStoreTextMapping<TRange>, INpgsqlRangeTypeMapping
     where TRange : class, IRangeFactory<TRange, T>, IRange<T>
     where T : struct, IComparable<T>, IEquatable<T>
 {
@@ -98,4 +100,12 @@ internal sealed class ValueRangeTypeMapping<TRange, T> : RelationalTypeMapping, 
     /// <inheritdoc />
     public TRange ParseStoreText(string text)
         => TRange.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+
+    // Npgsql 11 accepts a WITHOUT OVERLAPS key or a PERIOD foreign key only over a mapping that implements
+    // INpgsqlRangeTypeMapping; it checks the mapping, not the store type name (#150). The comparer it asks for
+    // orders key values in the update pipeline. Every range type and RangeSet is already IComparable<T> in
+    // PostgreSQL's order, so EF's default applies and none is supplied. Npgsql reads the interface nowhere else.
+    // It lives in Npgsql's Storage.Internal.Mapping namespace, so a new Npgsql major may move it;
+    // NativeTemporalKeyTests fails if the check stops passing.
+    IComparer? INpgsqlRangeTypeMapping.CreateCurrentValueComparer(Type clrType) => null;
 }
