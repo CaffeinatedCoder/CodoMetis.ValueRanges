@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.Serialization;
@@ -149,6 +150,37 @@ public sealed class ValueSetContractTests
     {
         foreach (var (setType, elementType) in SetProbes.AllSetTypes())
             Invoke(nameof(AssertValuesAreCanonical), setType, elementType);
+    }
+
+    /// <summary>
+    /// The one rule here that is checked on a declaration rather than on behaviour, because its
+    /// behaviour cannot be observed where CI runs: a default interface method inlined into the
+    /// instantiating thunk of a shared-generic interface is compiled to a trap by ILCompiler 11
+    /// (dotnet/runtime#136073), and only a <c>net11.0</c> Native AOT publish under the .NET 11 SDK
+    /// shows it — the manual <c>SMOKE_AOT_SDK</c> run of <c>test/consumer-smoke-test.sh</c> (#299).
+    /// Every set family overrides <c>IFormattable.ToString</c> itself, so the default is not the
+    /// code a consumer runs today; the flag is what keeps a family added without that override from
+    /// trapping (#315).
+    /// </summary>
+    [TestMethod]
+    public void TheDefaultToString_OfTheSetFactoryInterface_IsNotInlined()
+    {
+        var defaults = typeof(IValueSetFactory<,>)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Where(method => method.Name.EndsWith("IFormattable.ToString", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.HasCount(1, defaults,
+            "IValueSetFactory<TSet, T> no longer declares exactly one default IFormattable.ToString, "
+          + "so this test is not looking at the method it guards.");
+
+        Assert.IsTrue(
+            defaults[0].MethodImplementationFlags.HasFlag(MethodImplAttributes.NoInlining),
+            "The default IFormattable.ToString of IValueSetFactory<TSet, T> lost [MethodImpl(NoInlining)]. "
+          + "ILCompiler 11 inlines it into the instantiating thunk, where the receiver cast fails, and "
+          + "compiles the thunk to a trap: a net11.0 Native AOT consumer ends with SIGTRAP (exit 133) on "
+          + "the first ToString of any set type that relies on the default (#299, #315, "
+          + "dotnet/runtime#136073).");
     }
 
     private static void Invoke(string method, Type setType, Type elementType)
