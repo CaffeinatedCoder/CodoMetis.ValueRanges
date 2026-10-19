@@ -168,6 +168,50 @@ public class TimeAndYearMonthIntegrationTests
         }
     }
 
+    /// <summary>
+    /// What a <see cref="YearMonthRange"/> column does with each way another tool can spell an open end
+    /// (#258). An absent bound and an inclusive infinity load as an unbounded side and as the last
+    /// month. An exclusive infinity does not: <c>[2026-01-01,infinity)</c> holds every day up to
+    /// 9999-12-30 (#117), which ends part-way through a month, so the load throws, as any range that
+    /// covers a partial month does. Reading it as the whole last month would change the row's value
+    /// when it is saved back, as <c>infinity]</c>.
+    /// </summary>
+    [TestMethod]
+    [DataRow(7191, "daterange('2026-01-01', NULL)", "[2026-01,)")]
+    [DataRow(7192, "daterange('2026-01-01', 'infinity', '[]')", "[2026-01,9999-12]")]
+    [DataRow(7193, "daterange('-infinity', '2026-02-01')", "[-9998-01,2026-01]")]
+    [DataRow(7194, "daterange('2026-01-01', 'infinity')", "not the last day of a month")]
+    [DataRow(7195, "daterange('-infinity', '2026-02-01', '()')", "not the first day of a month")]
+    public async Task YearMonthRange_AnOpenEndWrittenByAnotherTool_LoadsOrFailsLoudly(int id, string stored, string expected)
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await Seed(new Reservation { Id = id });
+        await using (var write = new IntegrationDbContext())
+        {
+            // The literal is this test's own constant, not input.
+#pragma warning disable EF1002
+            await write.Database.ExecuteSqlRawAsync($"UPDATE \"Reservations\" SET \"BillingPeriod\" = {stored} WHERE \"Id\" = {id}");
+#pragma warning restore EF1002
+        }
+
+        await using var context = new IntegrationDbContext();
+        string outcome;
+        try
+        {
+            outcome = (await context.Reservations.Where(r => r.Id == id).Select(r => r.BillingPeriod).SingleAsync()).ToString();
+        }
+        catch (Exception exception)
+        {
+            var root = exception;
+            while (root.InnerException is { } inner) root = inner;
+            Assert.IsInstanceOfType<InvalidOperationException>(root, exception.ToString());
+            outcome = root.Message;
+        }
+
+        StringAssert.Contains(outcome, expected, stored);
+    }
+
     [TestMethod]
     public async Task YearMonthRange_IsStoredAsMonthAlignedDateRange()
     {

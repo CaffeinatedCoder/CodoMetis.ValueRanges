@@ -545,6 +545,12 @@ If other tools write open-ended dates into your tables, have them write an absen
 (`'[2026-01-01,infinity]'`, which loads as `[2026-01-01,9999-12-31]`). The same holds for
 `LocalDateRange` ([Domain width](architecture.md#domain-width-and-the-boundary)).
 
+A `YearMonthRange` column can't load the exclusive form at all. `[2026-01-01,infinity)` holds every
+day up to 9999-12-30, which ends part-way through a month, so the query throws
+`InvalidOperationException`, as it does for any range that covers part of a month. `(-infinity,x)`
+fails the same way at its start. The absent and the inclusive forms work: `[2026-01-01,infinity]`
+loads as `[2026-01,9999-12]`, and `daterange('2026-01-01', NULL)` as `[2026-01,)`.
+
 The difference comes from reading rows normalized while leaving them as written. The alternatives
 are rewriting other tools' rows on read, or not translating `Count` at all, and neither is worth it
 for the common case. If you query `Count` on a table that other tools also write, put the data in
