@@ -134,16 +134,21 @@ internal static class SetFormat
     /// #231 it read as <c>{}</c> here. Mixed depths, <c>{{},{{}}}</c>, and any element make it a
     /// multi-dimensional literal instead.
     /// </summary>
+    /// <remarks>
+    /// The walk stops at <see cref="MaxDimensions"/> levels, PostgreSQL's MAXDIM: deeper nests are refused
+    /// by every version (#250), and the cap bounds the recursion, so a literal of thousands of nested
+    /// braces is refused instead of overflowing the stack, which no handler can catch (#248).
+    /// </remarks>
     private static bool IsNestOfEmptyArrays(ReadOnlySpan<char> s)
     {
         var position = 0;
-        return Shape(s, ref position) is { } shape && shape.Contains(',') && position == s.Length;
+        return Shape(s, ref position, depth: 1) is { } shape && shape.Contains(',') && position == s.Length;
 
         // The nest's shape as a signature, "0" for {} and "n×child" for n siblings of one shape, or null
         // when it is not a rectangular nest of empty arrays.
-        static string? Shape(ReadOnlySpan<char> s, ref int position)
+        static string? Shape(ReadOnlySpan<char> s, ref int position, int depth)
         {
-            if (position == s.Length || s[position] != '{') return null;
+            if (depth > MaxDimensions || position == s.Length || s[position] != '{') return null;
             position++;
             Skip(s, ref position);
             if (position < s.Length && s[position] == '}')
@@ -152,7 +157,7 @@ internal static class SetFormat
                 return "0";
             }
 
-            var child = Shape(s, ref position);
+            var child = Shape(s, ref position, depth + 1);
             var count = 1;
             while (child is not null)
             {
@@ -166,7 +171,7 @@ internal static class SetFormat
 
                 if (s[position++] != ',') return null;
                 Skip(s, ref position);
-                if (Shape(s, ref position) != child) return null;
+                if (Shape(s, ref position, depth + 1) != child) return null;
                 count++;
             }
 
@@ -178,6 +183,9 @@ internal static class SetFormat
             while (position < s.Length && LiteralWhiteSpace.Is(s[position])) position++;
         }
     }
+
+    /// <summary>PostgreSQL's MAXDIM: an array has at most six dimensions, so a literal nests at most six braces.</summary>
+    private const int MaxDimensions = 6;
 
     private static FormatException Malformed(ReadOnlySpan<char> s, string what)
         => new($"The input string '{LiteralExcerpt.Of(s)}' is not a valid array literal: {what}.");
