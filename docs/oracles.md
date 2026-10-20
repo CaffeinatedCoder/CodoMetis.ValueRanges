@@ -60,6 +60,12 @@ One entry per sentence a consumer-facing document states about behaviour, in a f
 - `surfaces` are the public members a probe of the claim calls, as `TypeName.Member` keys with `*` as a
   wildcard (`*Range.Parse`, `Int32Range+Finite.Start`, `RangeSet.Union`). Each must match a real member.
 - `heldBy` names the test classes that assert the claim. **Empty is allowed and is the worklist.**
+  A holder must be a class its project compiles: a file the project takes out with `<Compile Remove>`
+  (under its target framework) holds nothing on that line. When a holder is compiled out on one line
+  only, keep it in `heldBy` and record it in **`compiled-out.json`** (class, project, the issue that
+  compiles it back, why). `tools/oracles.cs status` then lists the claims it held alone as unheld, and
+  `seeds` skips its seeds. A record whose class is compiled again fails as stale. Since #321,
+  `ComplexIndexesCrossTests` is the one record on the 11 line, until #333.
 
 The claim sources, in order of authority: `README.md`, `docs/ranges.md`, `docs/value-sets.md`,
 `docs/serialization.md`, `docs/efcore.md`, `docs/getting-started.md`, then the package READMEs for

@@ -236,6 +236,13 @@ find the slot free. Only a database constraint is atomic.
 
 ### Reject overlapping rows with an exclusion constraint
 
+> **On EF Core 11, `EFCore.ComplexIndexes.PostgreSQL` is succeeded by `CodoMetis.EFCore.SchemaKit.PostgreSQL`.**
+> ComplexIndexes 5.x stays on EF Core 10, so you can't install it beside the 11 packages. SchemaKit
+> isn't on NuGet yet ([CaffeinatedCoder/EFCore.ComplexIndexes#38](https://github.com/CaffeinatedCoder/EFCore.ComplexIndexes/issues/38)).
+> Until it is, use the 10.x packages with ComplexIndexes 5.x, or add the constraint with explicit SQL
+> in a migration. Temporal keys don't wait for it: on EF Core 11, use
+> [Npgsql's temporal keys](#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18).
+
 PostgreSQL's tool for this is an exclusion constraint.
 [`EFCore.ComplexIndexes.PostgreSQL`](https://www.nuget.org/packages/EFCore.ComplexIndexes.PostgreSQL)
 declares one from your model. It accepts a range column mapped by this package exactly as it accepts
@@ -277,7 +284,77 @@ raises `23P01` (`exclusion_violation`), and you get a `DbUpdateException` wrappi
 Everything in this section was run against PostgreSQL 17 with a `DateRange` property, including
 the rejected overlap and the accepted adjacent pair.
 
+### Reject overlapping rows with Npgsql's temporal keys (PostgreSQL 18)
+
+On EF Core 11, Npgsql declares temporal keys itself, and every range and multirange column this
+package maps works as the period. Put the range column last in the key and mark the key
+`WithoutOverlaps()`:
+
+```csharp
+protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    => optionsBuilder.UseNpgsql(connectionString, npgsql => npgsql
+        .UseValueRanges()
+        .SetPostgresVersion(18, 0));
+
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+    => modelBuilder.Entity<Booking>()
+        .HasKey(b => new { b.RoomId, b.Period })
+        .WithoutOverlaps();
+```
+
+The table is created with this key:
+
+```sql
+CONSTRAINT "PK_Bookings" PRIMARY KEY ("RoomId", "Period" WITHOUT OVERLAPS)
+```
+
+A second booking for the same room whose `Period` overlaps an existing one fails with a
+`DbUpdateException` wrapping a `PostgresException`. Its `SqlState` is `23P01` and its
+`ConstraintName` is the key's name. Adjacent bookings, and bookings for another room, are saved.
+
+For a temporal foreign key, give the referenced entity such a key and mark the relationship
+`WithPeriod()`:
+
+```csharp
+modelBuilder.Entity<Availability>()
+    .HasKey(a => new { a.RoomId, a.Period })
+    .WithoutOverlaps();
+
+modelBuilder.Entity<Booking>()
+    .HasOne(b => b.Availability)
+    .WithMany()
+    .HasForeignKey(b => new { b.RoomId, b.Period })
+    .WithPeriod();
+```
+
+That gives `FOREIGN KEY ("RoomId", PERIOD "Period") REFERENCES "Availabilities" ("RoomId", PERIOD "Period")`.
+A booking is saved when the room's availabilities cover its period together, even across two adjacent
+rows. A booking that runs past them fails with `SqlState` `23503` (`foreign_key_violation`).
+
+Good to know:
+
+- **Call `SetPostgresVersion(18, 0)`.** Npgsql checks the PostgreSQL version it targets, not the
+  server it connects to. Without the call, building the model throws (`InvalidOperationException`)
+  before any SQL is sent. On PostgreSQL 16 and 17, use the
+  [exclusion constraint](#reject-overlapping-rows-with-an-exclusion-constraint) above.
+- **Every range and multirange type works as the period.** That includes `TimeRange` over the custom
+  `timerange`, `YearMonthRange`, and the `RangeSet<TRange, T>` multiranges.
+- **`btree_gist` is created for you.** Npgsql adds `CREATE EXTENSION IF NOT EXISTS btree_gist` to the
+  schema, because the key indexes the scalar column with GiST.
+- **Migrations and `EnsureCreated()` both create the key.** It is part of EF Core's own model, so no
+  extra registration is needed.
+
+Everything in this section was run against PostgreSQL 18 with Npgsql 11.0.0-rc.2, over a `DateRange`,
+a `RangeSet<DateRange, DateOnly>`, a `TimeRange` and a `YearMonthRange` column for the key, and a
+`DateRange` column for the foreign key.
+
 ### Reject overlapping rows with a temporal key (PostgreSQL 18)
+
+On the 10.x line (EF Core 10), Npgsql has no temporal keys of its own, and this section declares them
+through `EFCore.ComplexIndexes.PostgreSQL` instead. On EF Core 11, use
+[Npgsql's temporal keys](#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18).
+ComplexIndexes 5.x can't be installed beside the 11 packages, and its EF Core 11 successor,
+`CodoMetis.EFCore.SchemaKit.PostgreSQL`, isn't on NuGet yet.
 
 PostgreSQL 18 has this rule built in, as a temporal key: a `UNIQUE` constraint whose last column is a
 range column marked `WITHOUT OVERLAPS`. `EFCore.ComplexIndexes.PostgreSQL` declares one with

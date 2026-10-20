@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Data.Common;
 using CodoMetis.ValueRanges;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
@@ -8,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NodaTime;
 using NodaTime.Text;
 using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.Mapping;
 using NpgsqlTypes;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.NodaTime.Internal;
@@ -90,7 +92,7 @@ internal static class YearMonthRangeConversion
 /// <summary>
 /// Maps <see cref="YearMonthRange"/> to a month-aligned <c>daterange</c> column.
 /// </summary>
-internal sealed class YearMonthRangeTypeMapping : RelationalTypeMapping
+internal sealed class YearMonthRangeTypeMapping : RelationalTypeMapping, INpgsqlRangeTypeMapping
 {
     internal YearMonthRangeTypeMapping()
         : base(new RelationalTypeMappingParameters(
@@ -147,13 +149,16 @@ internal sealed class YearMonthRangeTypeMapping : RelationalTypeMapping
         // range up to 9999-12 — written as infinity, as Npgsql sends it.
         return $"'{StoreText<LocalDateRange>.Format(range)}'::{StoreType}";
     }
+    // As ValueRangeTypeMapping: Npgsql 11's WITHOUT OVERLAPS and PERIOD accept only a mapping that implements
+    // INpgsqlRangeTypeMapping (#150), and the value is already IComparable<T> in PostgreSQL's order.
+    IComparer? INpgsqlRangeTypeMapping.CreateCurrentValueComparer(Type clrType) => null;
 }
 
 /// <summary>
 /// Maps <see cref="RangeSet{TRange,T}"/> of <see cref="YearMonthRange"/> to a month-aligned
 /// <c>datemultirange</c> column.
 /// </summary>
-internal sealed class YearMonthRangeSetTypeMapping : RelationalTypeMapping
+internal sealed class YearMonthRangeSetTypeMapping : RelationalTypeMapping, INpgsqlRangeTypeMapping
 {
     internal YearMonthRangeSetTypeMapping()
         : base(new RelationalTypeMappingParameters(
@@ -206,6 +211,9 @@ internal sealed class YearMonthRangeSetTypeMapping : RelationalTypeMapping
 
         return $"'{StoreText<RangeSet<LocalDateRange, LocalDate>>.Format(set)}'::{StoreType}";
     }
+    // As ValueRangeTypeMapping: Npgsql 11's WITHOUT OVERLAPS and PERIOD accept only a mapping that implements
+    // INpgsqlRangeTypeMapping (#150), and the value is already IComparable<T> in PostgreSQL's order.
+    IComparer? INpgsqlRangeTypeMapping.CreateCurrentValueComparer(Type clrType) => null;
 }
 
 /// <summary>

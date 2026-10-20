@@ -87,14 +87,51 @@ public sealed class OracleCatalogueTests
     [TestMethod]
     public void EveryClaim_NamesTestClassesThatExist()
     {
-        var missing = OracleCatalogue.Claims
-                                     .SelectMany(claim => claim.HeldBy.Select(held => (claim.Id, held)))
-                                     .Where(pair => !OracleCatalogue.TestClasses.ContainsKey(pair.held))
-                                     .Select(pair => $"{pair.Id} → {pair.held}")
-                                     .ToList();
+        // A holder must be compiled, not merely present under test/: a class its project removes from
+        // compilation asserts nothing, so naming it would count the claim as held while no test holds it
+        // (#321). One that is compiled out on this line is allowed only with a record in compiled-out.json,
+        // which makes the gap and the issue that closes it visible (`tools/oracles.cs status` lists the
+        // claim as unheld).
+        var recorded = OracleCatalogue.CompiledOut.Select(record => record.Class).ToHashSet(StringComparer.Ordinal);
+        var missing  = new List<string>();
+        foreach (var (id, held) in OracleCatalogue.Claims.SelectMany(claim => claim.HeldBy.Select(held => (claim.Id, held))))
+        {
+            if (OracleCatalogue.TestClasses.ContainsKey(held)) continue;
+            if (OracleCatalogue.CompiledOutTestClasses.TryGetValue(held, out var project))
+            {
+                if (!recorded.Contains(held))
+                    missing.Add($"{id} → {held} (compiled out of {project}: record it in compiled-out.json with the issue that compiles it back, or name a test that is compiled)");
+                continue;
+            }
+
+            missing.Add($"{id} → {held}");
+        }
 
         Assert.IsTrue(OracleCatalogue.TestClasses.Count >= 100, $"Discovered only {OracleCatalogue.TestClasses.Count} test classes under test/.");
-        Assert.AreEqual(0, missing.Count, "heldBy names a test class that does not exist: " + string.Join(", ", missing));
+        Assert.AreEqual(0, missing.Count, "heldBy names a test class that is not compiled: " + string.Join(", ", missing));
+    }
+
+    [TestMethod]
+    public void EveryCompiledOutRecord_NamesAClassItsProjectCompilesOut()
+    {
+        // The other direction: a record outlives its gap the moment the class is compiled again, and
+        // would keep hiding a claim it no longer needs to (#333 removes the ComplexIndexes record).
+        var problems = new List<string>();
+        foreach (var record in OracleCatalogue.CompiledOut)
+        {
+            if (OracleCatalogue.TestClasses.TryGetValue(record.Class, out var compiledIn))
+                problems.Add($"{record.Class} is compiled again (in {compiledIn}): drop its record");
+            else if (!OracleCatalogue.CompiledOutTestClasses.TryGetValue(record.Class, out var project))
+                problems.Add($"{record.Class} is not a [TestClass] under test/");
+            else if (project != record.Project)
+                problems.Add($"{record.Class} is recorded in {record.Project} but compiled out of {project}");
+
+            if (record.Issue <= 0 || string.IsNullOrWhiteSpace(record.Reason))
+                problems.Add($"{record.Class} needs the issue that compiles it back and a reason");
+        }
+
+        CollectionAssert.AllItemsAreUnique(OracleCatalogue.CompiledOut.Select(record => record.Class).ToList(), "Duplicate compiled-out records.");
+        Assert.AreEqual(0, problems.Count, "compiled-out.json is out of step with the test projects: " + string.Join("; ", problems));
     }
 
     [TestMethod]
