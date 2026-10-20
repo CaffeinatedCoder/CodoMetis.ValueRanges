@@ -29,6 +29,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. Not
 
 - EF Core: an `ExecuteUpdate` that sets a nullable value set inside a JSON column to a value that may be null is refused for the JSON array alone; Npgsql 11 writes the null outcome as JSON null, so the message no longer names a whole-document NULL ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).
 - EF Core: an empty captured list of ranges or sets reads no rows through EF Core 11's own `SELECT … WHERE FALSE`; the SQL differs from 10.x, the answers do not ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
+- Packaging: a package's release notes on nuget.org and in Visual Studio are its version's section of its changelog, in plain text, ending with a link to the changelog at the version's tag, where they were a link to the latest changelog ([Changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)).
 
 ### Fixed
 
