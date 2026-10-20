@@ -96,6 +96,44 @@ assert_contains() {
     fi
 }
 
+assert_absent() {
+    if grep -qF -- "$1" "$2"; then
+        echo "  FAIL: $3 (found '$1' in $(basename "$2"))"
+        failed=1
+    else
+        echo "  ok: $3"
+    fi
+}
+
+# The release notes in each package are its version's section of its own CHANGELOG.md, in plain
+# text, ending with a link to that changelog at the version's tag (#346). PackagingConventionTests
+# compares a freshly generated nuspec with the section line for line; this reads the .nupkg itself,
+# which in the release workflow's mode is the package about to be pushed. The first line of the
+# section is checked in the plain form nuget.org shows: no heading marker, a link as `text (url)`,
+# no backticks or bold, and XML-escaped as the nuspec holds it.
+echo "==> Release notes in each package"
+for id in CodoMetis.ValueRanges CodoMetis.ValueRanges.NodaTime CodoMetis.ValueRanges.EFCore.PostgreSQL CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime; do
+    nuspec="$work/$id.nuspec"
+    notes="$work/$id.notes"
+    unzip -p "$feed/$id.$version.nupkg" "$id.nuspec" > "$nuspec"
+    sed -n '/<releaseNotes>/,/<\/releaseNotes>/p' "$nuspec" > "$notes"
+    first="$(awk -v heading="## [$version]" '
+        index($0, heading) == 1 { inside = 1; next }
+        inside && /^## / { exit }
+        inside && NF { print; exit }' "$repo_root/src/$id/CHANGELOG.md" \
+        | sed -E -e 's/^### //' -e 's/\[([^][]+)\]\((https?:\/\/[^()[:space:]]+)\)/\1 (\2)/g' -e 's/`//g' -e 's/\*\*//g' \
+                 -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+    if [[ -z "$first" ]]; then
+        echo "  FAIL: $id: src/$id/CHANGELOG.md has no '## [$version]' section with a line in it"
+        failed=1
+    else
+        assert_contains "<releaseNotes>$first" "$notes" "$id: release notes open with its '## [$version]' section"
+    fi
+    assert_contains "Full changelog: https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/v$version/src/$id/CHANGELOG.md</releaseNotes>" "$notes" "$id: release notes end with its changelog at v$version"
+    assert_absent '`' "$notes" "$id: release notes hold no Markdown backticks"
+    assert_absent '](' "$notes" "$id: release notes hold no Markdown links"
+done
+
 # Creates a consumer project outside the repository and installs one package of this repository, plus
 # any further packages from nuget.org given as id@version. Program.cs is written by the caller
 # beforehand, at $work/<name>.cs. Restores, builds, runs, and leaves the program's
