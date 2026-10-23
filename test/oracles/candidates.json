@@ -26,5 +26,152 @@
     "family": "(,max] needs max + 1 to canonicalize; PostgreSQL raises 22003",
     "issue": "#132",
     "method": "EveryEntryPoint_ReadsTheLiteralAsPostgresReadsIt"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "LowerBound() == null on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "LowerBound() != null on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "LowerBound().HasValue on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "UpperBound() == null on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "UpperBound() != null on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "(UpperBound() ?? max) >= v on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "(LowerBound() ?? min) <= v on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Select(UpperBound() ?? max) on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Select(new { Id, To = UpperBound() }).Where(To == null) on ",
+    "family": "lower()/upper() declared NULL only for a NULL argument",
+    "issue": "#349",
+    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "!IsEmpty() on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "!IsFinite() on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "!IsUnboundedEnd() on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "!UpperBoundInclusive() on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "!Overlaps(p) on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Contains(Empty) on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "IsContainedBy(Infinite) on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Intersect(p) != null on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Intersect(p) == Empty on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Gap(Empty).IsEmpty() on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Union(Infinite).Contains(v) on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "ExecutedQueryTests",
+    "row": "Merge(Infinite) == x on DateRange? null:",
+    "family": "a null receiver answers in memory where SQL answers NULL",
+    "issue": "#350",
+    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
   }
 ]
