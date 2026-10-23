@@ -1122,6 +1122,20 @@
     ]
   },
   {
+    "id": "E70-bounds-null-for-unbounded-or-empty-in-sql",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL` for an unbounded or empty range, and the in-memory methods match that.",
+    "claim": "In a query over a range column of any family, LowerBound() and UpperBound() are NULL exactly for the empty range and for the unbounded side, as in memory: compared with null, read through HasValue, coalesced with ?? in a filter or a projection, or compared with null after being projected, they select and return what the same expression gives over the rows as loaded.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
