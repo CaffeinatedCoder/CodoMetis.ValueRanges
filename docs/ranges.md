@@ -148,6 +148,10 @@ Good to know:
 Every query method is an extension method on `IRange<T>`. Each one works for any combination of
 shapes.
 
+If the range you call it on, or the range or set you pass, is `null`, a query method returns
+`false`. That is what the same query returns for a NULL column in the database. The `RangeSet`
+methods return `false` for a `null` range or set you pass, too.
+
 ### Check containment
 
 ```csharp

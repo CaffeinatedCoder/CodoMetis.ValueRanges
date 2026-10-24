@@ -1,0 +1,16 @@
+Seed: Contains(IRange) answers for a null range instead of false: the infinite range contains a null operand, and a null range contains the empty one
+Oracles: RangeNullPredicateContractTests
+Fails: EveryPredicate_AnswersFalseForANullRangeOrSetOnEitherSide, for null.Contains(empty) and (,).Contains(null) on every range type
+
+diff --git a/src/CodoMetis.ValueRanges/RangeExtensions.cs b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+--- a/src/CodoMetis.ValueRanges/RangeExtensions.cs
++++ b/src/CodoMetis.ValueRanges/RangeExtensions.cs
+@@ -205,8 +205,6 @@
+         /// </returns>
+         public bool Contains(IRange<T> other)
+         {
+-            if (range is null || other is null) return false;
+-
+             // ∅ ⊆ S for every S. "Every value in other also belongs to this range" is vacuously
+             // satisfied when other has no values, so there is nothing to check and no receiver
+             // shape that can refuse — the empty receiver included, since ∅ ⊆ ∅. This is also what
