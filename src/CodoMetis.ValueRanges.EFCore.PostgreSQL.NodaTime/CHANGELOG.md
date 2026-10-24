@@ -5,7 +5,9 @@ covers all four packages, which share one version number and release together.
 
 ## [10.2.0]
 
-No change in this package.
+### Changed answers
+
+- EF Core: `LowerBound()` and `UpperBound()` of a NodaTime range or multirange column, `YearMonthRange` included, are `NULL` in a query for an empty value and on an unbounded side, as in memory. So `== null` selects those rows, where it selected none on a required column, and `?? fallback` returns the fallback, where the row was missing ([#354](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/354), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
 
 ## [10.1.0] — 2026-10-19
 

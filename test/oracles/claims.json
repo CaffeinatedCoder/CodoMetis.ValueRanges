@@ -1124,12 +1124,14 @@
   {
     "id": "E70-bounds-null-for-unbounded-or-empty-in-sql",
     "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
-    "quote": "**`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL` for an unbounded or empty range, and the in-memory methods match that.",
-    "claim": "In a query over a range column of any family, LowerBound() and UpperBound() are NULL exactly for the empty range and for the unbounded side, as in memory: compared with null, read through HasValue, coalesced with ?? in a filter or a projection, or compared with null after being projected, they select and return what the same expression gives over the rows as loaded.",
+    "quote": "**`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL` for an unbounded or empty range, and the in-memory methods match that. So `== null`, `HasValue` and `??` on a bound select the same rows in a query as in memory, on a range or a `RangeSet` column.",
+    "claim": "In a query over a range or multirange column of any family, LowerBound() and UpperBound() are NULL exactly for the empty range or set and for the unbounded side, as in memory: compared with null, read through HasValue, coalesced with ?? in a filter or a projection, or compared with null after being projected, they select and return what the same expression gives over the rows as loaded.",
     "oracle": "differential",
     "surfaces": [
       "RangeExtensions.LowerBound",
-      "RangeExtensions.UpperBound"
+      "RangeExtensions.UpperBound",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound"
     ],
     "heldBy": [
       "ExecutedQueryTests"

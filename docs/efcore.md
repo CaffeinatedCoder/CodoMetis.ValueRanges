@@ -147,7 +147,9 @@ Good to know:
   have a gap. PostgreSQL normalizes multiranges the same way this library does, so the equality is
   exact ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
 - **`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL`
-  for an unbounded or empty range, and the in-memory methods match that.
+  for an unbounded or empty range, and the in-memory methods match that. So `== null`, `HasValue`
+  and `??` on a bound select the same rows in a query as in memory, on a range or a `RangeSet`
+  column.
 - **Discrete upper bounds are adjusted for you.** For `int4range`, `int8range` and `daterange`,
   PostgreSQL normalizes to the half-open form `[lower, upper)`. This library normalizes to the
   closed form `[lower, upper]`. So `UpperBound()` becomes `upper(x) - 1`, and

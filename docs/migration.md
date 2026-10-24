@@ -785,3 +785,42 @@ runtimes. Look at the text instead:
 - **Say "the end of the day" another way.** Use an unbounded end, `[22:00,)`, or an inclusive
   `23:59:59.9999999` bound
   ([TimeRange and the custom timerange type](efcore.md#timerange-and-the-custom-timerange-type)).
+
+## Changed answers in 10.2.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+Each section below says how to find the calls whose answer changed.
+
+### Check bound comparisons with `null` in queries
+
+Check EF Core queries that call `LowerBound()` or `UpperBound()` on a range or `RangeSet` column and
+then test the result for `null`. That covers `== null`, `!= null`, `HasValue` and `??` with a
+fallback, in a filter or a projection. It also covers a filter on a bound you projected first, which
+is what a data grid sends for a "blank" filter.
+
+PostgreSQL's `lower` and `upper` return `NULL` for an empty range and for an unbounded side. The
+in-memory methods return `null` for the same values. Before 10.2.0, the EF Core package declared
+that a bound is `NULL` only when the column is, and EF Core simplified the query on that basis. On a
+required column:
+
+| Query | Before 10.2.0 | Now |
+|---|---|---|
+| `Where(r => r.Period.LowerBound() == null)` | no rows | the empty rows and the rows with no lower bound |
+| `Where(r => r.Period.UpperBound() != null)`, or `HasValue` | every row | the rows with an upper bound |
+| `Where(r => (r.Period.UpperBound() ?? DateOnly.MaxValue) >= day)` | the empty rows and the rows with no upper bound are missing | those rows match through the fallback |
+| `Select(r => r.Period.UpperBound() ?? DateOnly.MaxValue)` | throws (`InvalidOperationException`) at an empty row or a row with no upper bound | returns the fallback for it |
+| `Select(r => new { To = r.Period.UpperBound() }).Where(x => x.To == null)` | no rows | the empty rows and the rows with no upper bound |
+
+On a nullable column, `LowerBound() == null` ran as the column's own `IS NULL`. It found the `NULL`
+rows and missed the empty and unbounded ones.
+
+This holds for every range type and for `RangeSet`: the .NET and NodaTime ranges, `TimeRange`, the
+float ranges and `YearMonthRange`. Code that runs in memory is unchanged.
+
+- **Search your queries for `LowerBound()` and `UpperBound()`.** Each one followed by `== null`,
+  `!= null`, `HasValue` or `??` now returns the rows the same code returns in memory.
+- **Keep or drop the workarounds you wrote for it.** A query that adds `IsEmpty()`,
+  `IsUnboundedStart()` or `IsUnboundedEnd()` beside the `null` test returns the same rows as before,
+  so the extra test is now optional.
+- **Check reports built on the old rows.** On a required column, a count of rows with no end date
+  was 0, and a filter on a date with a `??` fallback left out every open-ended row.
