@@ -636,11 +636,11 @@ public class ExecutedQueryTests
     /// <summary>
     /// <c>LowerBound()</c> and <c>UpperBound()</c> compared with <see langword="null"/>, read through
     /// <c>HasValue</c>, coalesced with <c>??</c> in a filter and a projection, and filtered after being
-    /// projected, for a range column of every family, against the same expression over the rows as
-    /// loaded. The bounds are NULL for the empty range and for the unbounded side of a non-null one, so
-    /// these forms only agree while EF Core knows <c>lower</c> and <c>upper</c> can be NULL for a non-null
-    /// argument (#349). Each failure line starts with the operation, then the column. Ids run from 2400
-    /// to 2659, twenty per family.
+    /// projected, for a range column and a multirange column of every family, against the same
+    /// expression over the rows as loaded. The bounds are NULL for the empty range and for the unbounded
+    /// side of a non-null one, so these forms only agree while EF Core knows <c>lower</c> and
+    /// <c>upper</c> can be NULL for a non-null argument (#349). Each failure line starts with the
+    /// operation, then the column. Ids run from 2400 to 2659, twenty per family.
     /// </summary>
     [TestMethod]
     public async Task BoundsComparedWithNull_SelectTheRowsMemorySelects()
@@ -652,25 +652,29 @@ public class ExecutedQueryTests
         LocalDate Day(int day) => new(2026, 3, day);
 
         var failures = new List<string>();
-        failures.AddRange(await BoundNullSweep(2400, r => r.Seats, 1, 10, 20, int.MinValue, int.MaxValue));
-        failures.AddRange(await BoundNullSweep(2420, r => r.Tickets, 1L, 10L, 20L, long.MinValue, long.MaxValue));
-        failures.AddRange(await BoundNullSweep(2440, r => r.Price, 1.5m, 10m, 20.25m, decimal.MinValue, decimal.MaxValue));
-        failures.AddRange(await BoundNullSweep(2460, r => r.Period, new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 15),
+        failures.AddRange(await BoundNullSweep(2400, r => r.Seats, r => r.SeatBlocks, 1, 10, 20, int.MinValue, int.MaxValue));
+        failures.AddRange(await BoundNullSweep(2420, r => r.Tickets, r => r.TicketBlocks, 1L, 10L, 20L, long.MinValue, long.MaxValue));
+        failures.AddRange(await BoundNullSweep(2440, r => r.Price, r => r.PriceBands, 1.5m, 10m, 20.25m, decimal.MinValue, decimal.MaxValue));
+        failures.AddRange(await BoundNullSweep(2460, r => r.Period, r => r.BlockedDays, new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 15),
                                                new DateOnly(2026, 3, 31), DateOnly.MinValue, DateOnly.MaxValue));
-        failures.AddRange(await BoundNullSweep(2480, r => r.LocalTime, at, at.AddDays(1), at.AddDays(2), DateTime.MinValue, DateTime.MaxValue));
-        failures.AddRange(await BoundNullSweep(2500, r => r.InstantTime, utc, utc.AddDays(1), utc.AddDays(2),
+        failures.AddRange(await BoundNullSweep(2480, r => r.LocalTime, r => r.WallClockWindows, at, at.AddDays(1), at.AddDays(2),
+                                               DateTime.MinValue, DateTime.MaxValue));
+        failures.AddRange(await BoundNullSweep(2500, r => r.InstantTime, r => r.InstantWindows, utc, utc.AddDays(1), utc.AddDays(2),
                                                DateTimeOffset.MinValue, DateTimeOffset.MaxValue));
-        failures.AddRange(await BoundNullSweep(2520, r => r.NodaPeriod, Day(1), Day(15), Day(31), LocalDate.MinIsoValue, LocalDate.MaxIsoValue));
-        failures.AddRange(await BoundNullSweep(2540, r => r.NodaWallClock, LocalDateTime.FromDateTime(at), LocalDateTime.FromDateTime(at.AddDays(1)),
-                                               LocalDateTime.FromDateTime(at.AddDays(2)), LocalDateTime.MinIsoValue, LocalDateTime.MaxIsoValue));
-        failures.AddRange(await BoundNullSweep(2560, r => r.NodaWindow, Instant.FromDateTimeOffset(utc), Instant.FromDateTimeOffset(utc.AddDays(1)),
-                                               Instant.FromDateTimeOffset(utc.AddDays(2)), Instant.MinValue, Instant.MaxValue));
+        failures.AddRange(await BoundNullSweep(2520, r => r.NodaPeriod, r => r.NodaBlockedDays, Day(1), Day(15), Day(31),
+                                               LocalDate.MinIsoValue, LocalDate.MaxIsoValue));
+        failures.AddRange(await BoundNullSweep(2540, r => r.NodaWallClock, r => r.NodaWallClocks, LocalDateTime.FromDateTime(at),
+                                               LocalDateTime.FromDateTime(at.AddDays(1)), LocalDateTime.FromDateTime(at.AddDays(2)),
+                                               LocalDateTime.MinIsoValue, LocalDateTime.MaxIsoValue));
+        failures.AddRange(await BoundNullSweep(2560, r => r.NodaWindow, r => r.NodaWindows, Instant.FromDateTimeOffset(utc),
+                                               Instant.FromDateTimeOffset(utc.AddDays(1)), Instant.FromDateTimeOffset(utc.AddDays(2)),
+                                               Instant.MinValue, Instant.MaxValue));
         // time is microsecond-precise, so TimeOnly.MaxValue would round to 24:00; any fallback the column holds will do.
-        failures.AddRange(await BoundNullSweep(2580, r => r.OpeningHours, new TimeOnly(9, 0), new TimeOnly(12, 0), new TimeOnly(17, 0),
-                                               TimeOnly.MinValue, new TimeOnly(23, 59, 59)));
-        failures.AddRange(await BoundNullSweep(2600, r => r.Score, 1.5, 10.0, 20.25, double.MinValue, double.MaxValue));
-        failures.AddRange(await BoundNullSweep(2620, r => r.Load, 1.5f, 10f, 20.25f, float.MinValue, float.MaxValue));
-        failures.AddRange(await BoundNullSweep(2640, r => r.BillingPeriod, new YearMonth(2026, 1), new YearMonth(2026, 6),
+        failures.AddRange(await BoundNullSweep(2580, r => r.OpeningHours, r => r.OpeningWindows, new TimeOnly(9, 0), new TimeOnly(12, 0),
+                                               new TimeOnly(17, 0), TimeOnly.MinValue, new TimeOnly(23, 59, 59)));
+        failures.AddRange(await BoundNullSweep(2600, r => r.Score, r => r.ScoreBands, 1.5, 10.0, 20.25, double.MinValue, double.MaxValue));
+        failures.AddRange(await BoundNullSweep(2620, r => r.Load, r => r.LoadBands, 1.5f, 10f, 20.25f, float.MinValue, float.MaxValue));
+        failures.AddRange(await BoundNullSweep(2640, r => r.BillingPeriod, r => r.BillingPeriods, new YearMonth(2026, 1), new YearMonth(2026, 6),
                                                new YearMonth(2026, 12), new YearMonth(1, 1), new YearMonth(9999, 12)));
 
         Candidates.Verdict(nameof(ExecutedQueryTests), failures,
@@ -679,14 +683,16 @@ public class ExecutedQueryTests
     }
 
     /// <summary>
-    /// Seeds one row per shape into <paramref name="column"/> — finite across, below and above
-    /// <paramref name="v"/>, unbounded on either side of it, infinite and empty — and runs every bound
-    /// operation on the server and over the rows as loaded. <paramref name="min"/> and
+    /// Seeds one row per shape into <paramref name="column"/>, and the same shape as a one-element
+    /// multirange into <paramref name="set"/> — finite across, below and above <paramref name="v"/>,
+    /// unbounded on either side of it, infinite and empty — and runs every bound operation on both
+    /// columns, on the server and over the rows as loaded. <paramref name="min"/> and
     /// <paramref name="max"/> are the <c>??</c> fallbacks; they must round-trip through the column's
     /// element type, or the projection disagrees for that reason alone.
     /// </summary>
     private static async Task<List<string>> BoundNullSweep<TRange, T>(
-        int firstId, Expression<Func<Reservation, TRange>> column, T a, T v, T b, T min, T max)
+        int firstId, Expression<Func<Reservation, TRange>> column, Expression<Func<Reservation, RangeSet<TRange, T>>> set,
+        T a, T v, T b, T min, T max)
         where TRange : class, IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
     {
@@ -703,77 +709,91 @@ public class ExecutedQueryTests
             ("empty", TRange.Empty)
         ];
 
-        var property = (PropertyInfo)((MemberExpression)column.Body).Member;
-        var names    = new Dictionary<int, string>();
-        var rows     = new List<Reservation>();
+        var property    = (PropertyInfo)((MemberExpression)column.Body).Member;
+        var setProperty = (PropertyInfo)((MemberExpression)set.Body).Member;
+        var names       = new Dictionary<int, string>();
+        var rows        = new List<Reservation>();
         foreach (var (shape, index) in shapes.Select((shape, index) => (shape, index)))
         {
             var row = new Reservation { Id = firstId + index };
             property.SetValue(row, shape.Range);
+            setProperty.SetValue(row, RangeSet<TRange, T>.From(shape.Range));
             rows.Add(row);
             names[row.Id] = shape.Name;
         }
 
         await Seed([.. rows]);
 
-        var row0  = column.Parameters[0];
-        var label = $"{property.Name} ({typeof(TRange).Name})";
-        var lastId = firstId + shapes.Length - 1;
+        var row0      = column.Parameters[0];
+        var setColumn = Expression.Property(row0, setProperty);
+        var lastId    = firstId + shapes.Length - 1;
 
-        // The operation written over the range as IRange<T>, spliced onto the column, so the call is
-        // the one a consumer's r.Column.LowerBound() makes.
-        Expression<Func<Reservation, TOut>> On<TOut>(Expression<Func<Reservation, IRange<T>, TOut>> operation) =>
-            Expression.Lambda<Func<Reservation, TOut>>(FuzzEngine.Splice(operation, row0, column.Body), row0);
+        await using var context = new IntegrationDbContext();
+        var mine     = context.Reservations.Where(r => r.Id >= firstId && r.Id <= lastId);
+        var loaded   = await mine.AsNoTracking().OrderBy(r => r.Id).ToListAsync();
+        var failures = new List<string>();
+
+        // The range's bounds are the IRange<T> extensions and the set's its own methods, each spliced
+        // onto its column, so the call is the one a consumer's r.Column.LowerBound() makes.
+        await Sweep($"{property.Name} ({typeof(TRange).Name})",
+                    Bound<IRange<T>>(column.Body, (_, x) => x.LowerBound()), Bound<IRange<T>>(column.Body, (_, x) => x.UpperBound()));
+        await Sweep($"{setProperty.Name} (RangeSet<{typeof(TRange).Name}>)",
+                    Bound<RangeSet<TRange, T>>(setColumn, (_, x) => x.LowerBound()), Bound<RangeSet<TRange, T>>(setColumn, (_, x) => x.UpperBound()));
+
+        return failures;
+
+        Expression<Func<Reservation, T?>> Bound<TColumn>(Expression on, Expression<Func<Reservation, TColumn, T?>> bound) =>
+            Expression.Lambda<Func<Reservation, T?>>(FuzzEngine.Splice(bound, row0, on), row0);
+
+        // The operation written over the bound, spliced onto it.
+        Expression<Func<Reservation, TOut>> Over<TOut>(Expression<Func<Reservation, T?>> bound, Expression<Func<Reservation, T?, TOut>> operation) =>
+            Expression.Lambda<Func<Reservation, TOut>>(FuzzEngine.Splice(operation, row0, bound.Body), row0);
 
         // (bound ?? fallback) op v, with both values captured, so EF Core sends them as parameters.
         Expression<Func<Reservation, bool>> Coalesced(ExpressionType comparison, Expression<Func<Reservation, T?>> bound, T fallback) =>
             Expression.Lambda<Func<Reservation, bool>>(
                 Expression.MakeBinary(comparison, Expression.Coalesce(bound.Body, Captured(fallback)), Captured(v)), row0);
 
-        (string Name, Expression<Func<Reservation, bool>> Filter)[] filters =
-        [
-            ("LowerBound() == null",       On((_, x) => x.LowerBound() == null)),
-            ("LowerBound() != null",       On((_, x) => x.LowerBound() != null)),
-            ("LowerBound().HasValue",      On((_, x) => x.LowerBound().HasValue)),
-            ("UpperBound() == null",       On((_, x) => x.UpperBound() == null)),
-            ("UpperBound() != null",       On((_, x) => x.UpperBound() != null)),
-            ("(UpperBound() ?? max) >= v", Coalesced(ExpressionType.GreaterThanOrEqual, On((_, x) => x.UpperBound()), max)),
-            ("(LowerBound() ?? min) <= v", Coalesced(ExpressionType.LessThanOrEqual, On((_, x) => x.LowerBound()), min))
-        ];
-
-        await using var context = new IntegrationDbContext();
-        var mine   = context.Reservations.Where(r => r.Id >= firstId && r.Id <= lastId);
-        var loaded = await mine.AsNoTracking().OrderBy(r => r.Id).ToListAsync();
-        var failures = new List<string>();
-
-        foreach (var (name, filter) in filters)
+        async Task Sweep(string label, Expression<Func<Reservation, T?>> lower, Expression<Func<Reservation, T?>> upper)
         {
-            var memory = loaded.Where(filter.Compile()).Select(r => r.Id).ToList();
-            await Agree(name, () => mine.Where(filter).Select(r => r.Id).OrderBy(id => id).ToListAsync(), memory);
+            (string Name, Expression<Func<Reservation, bool>> Filter)[] filters =
+            [
+                ("LowerBound() == null",       Over(lower, (_, x) => x == null)),
+                ("LowerBound() != null",       Over(lower, (_, x) => x != null)),
+                ("LowerBound().HasValue",      Over(lower, (_, x) => x.HasValue)),
+                ("UpperBound() == null",       Over(upper, (_, x) => x == null)),
+                ("UpperBound() != null",       Over(upper, (_, x) => x != null)),
+                ("(UpperBound() ?? max) >= v", Coalesced(ExpressionType.GreaterThanOrEqual, upper, max)),
+                ("(LowerBound() ?? min) <= v", Coalesced(ExpressionType.LessThanOrEqual, lower, min))
+            ];
+
+            foreach (var (name, filter) in filters)
+            {
+                var memory = loaded.Where(filter.Compile()).Select(r => r.Id).ToList();
+                await Agree(label, name, () => mine.Where(filter).Select(r => r.Id).OrderBy(id => id).ToListAsync(), memory);
+            }
+
+            var projection = Expression.Lambda<Func<Reservation, T>>(Expression.Coalesce(upper.Body, Captured(max)), row0);
+            var projected  = loaded.Select(projection.Compile()).ToList();
+            try
+            {
+                var server = await mine.OrderBy(r => r.Id).Select(projection).ToListAsync();
+                if (!server.SequenceEqual(projected))
+                    failures.Add($"Select(UpperBound() ?? max) on {label}: server [{string.Join(", ", server)}], memory [{string.Join(", ", projected)}]");
+            }
+            catch (Exception e) when (e is InvalidOperationException or DbException)
+            {
+                failures.Add($"Select(UpperBound() ?? max) on {label}: server threw {e.GetType().Name}: {e.Message}");
+            }
+
+            // The filter a grid's "blank" header filter sends: the bound projected first, compared after.
+            var withUpper = Over(upper, (r, x) => new { r.Id, To = x });
+            await Agree(label, "Select(new { Id, To = UpperBound() }).Where(To == null)",
+                        () => mine.Select(withUpper).Where(t => t.To == null).Select(t => t.Id).OrderBy(id => id).ToListAsync(),
+                        [.. loaded.Select(withUpper.Compile()).Where(t => t.To == null).Select(t => t.Id)]);
         }
 
-        var projection = Expression.Lambda<Func<Reservation, T>>(Expression.Coalesce(On((_, x) => x.UpperBound()).Body, Captured(max)), row0);
-        var projected  = loaded.Select(projection.Compile()).ToList();
-        try
-        {
-            var server = await mine.OrderBy(r => r.Id).Select(projection).ToListAsync();
-            if (!server.SequenceEqual(projected))
-                failures.Add($"Select(UpperBound() ?? max) on {label}: server [{string.Join(", ", server)}], memory [{string.Join(", ", projected)}]");
-        }
-        catch (Exception e) when (e is InvalidOperationException or DbException)
-        {
-            failures.Add($"Select(UpperBound() ?? max) on {label}: server threw {e.GetType().Name}: {e.Message}");
-        }
-
-        // The filter a grid's "blank" header filter sends: the bound projected first, compared after.
-        var withUpper = On((r, x) => new { r.Id, To = x.UpperBound() });
-        await Agree("Select(new { Id, To = UpperBound() }).Where(To == null)",
-                    () => mine.Select(withUpper).Where(t => t.To == null).Select(t => t.Id).OrderBy(id => id).ToListAsync(),
-                    [.. loaded.Select(withUpper.Compile()).Where(t => t.To == null).Select(t => t.Id)]);
-
-        return failures;
-
-        async Task Agree(string operation, Func<Task<List<int>>> server, List<int> memory)
+        async Task Agree(string label, string operation, Func<Task<List<int>>> server, List<int> memory)
         {
             try
             {
