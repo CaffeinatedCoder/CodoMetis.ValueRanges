@@ -262,6 +262,28 @@ public sealed class QueryTranslationTests
         StringAssert.Contains(sql, "ORDER BY lower(b.\"Period\")");
     }
 
+    /// <summary>
+    /// <c>lower</c> and <c>upper</c> are NULL for an empty or unbounded operand that is not NULL itself,
+    /// so a required column's bound can still be NULL. Declared as propagating its argument's
+    /// nullability, EF Core folded these to <c>WHERE FALSE</c> and dropped the <c>COALESCE</c> (#349).
+    /// <c>ExecutedQueryTests.BoundsComparedWithNull_SelectTheRowsMemorySelects</c> is the authority.
+    /// </summary>
+    [TestMethod]
+    public void BoundComparedWithNull_OnARequiredColumn_TestsTheBound()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.LowerBound() == null || b.BlockedDays.UpperBound() == null));
+        StringAssert.Contains(sql, "lower(b.\"Period\") IS NULL");
+        StringAssert.Contains(sql, "upper(b.\"BlockedDays\") IS NULL");
+        Assert.IsFalse(sql.Contains("FALSE"), sql);
+    }
+
+    [TestMethod]
+    public void BoundCoalesced_OnARequiredColumn_KeepsTheCoalesce()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => (b.Period.UpperBound() ?? DateOnly.MaxValue) >= Day));
+        StringAssert.Contains(sql, "COALESCE(upper(b.\"Period\") - 1, ");
+    }
+
     [TestMethod]
     public void UpperBound_Discrete_CompensatesHalfOpenCanonicalization()
     {

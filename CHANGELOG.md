@@ -13,6 +13,12 @@ has the rules.
 
 ## [10.2.0]
 
+Some calls answer differently: [Changed answers in 10.2.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020).
+
+### Changed answers
+
+- EF Core: `LowerBound()` and `UpperBound()` in a query are `NULL` for an empty range or set and on an unbounded side, as in memory. So `== null` selects those rows, where it selected none on a required column, and `?? fallback` returns the fallback, where the row was missing ([#354](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/354), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+
 ## [10.1.0] — 2026-10-19
 
 One call answers differently, on the .NET 11 runtime only: [Changed answers in 10.1.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1010).
