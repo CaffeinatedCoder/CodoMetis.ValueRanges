@@ -3,6 +3,10 @@
 The changes that affect the NodaTime EF Core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [10.2.0]
+
+No change in this package.
+
 ## [10.1.0] — 2026-10-19
 
 No change in this package. The NodaTime ranges and sets get the EF Core package's fixes for an empty captured list (EF Core 10.0.2 and later) and for `RangeSet.Contains` on the planned EF Core 10.0.15 (dotnet/efcore#37081).

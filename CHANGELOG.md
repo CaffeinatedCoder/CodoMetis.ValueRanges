@@ -11,6 +11,8 @@ A version's section is the GitHub release's notes. Each line is one change: what
 to do about it, and a link to the guide with the detail. [CONTRIBUTING.md](CONTRIBUTING.md#changelog)
 has the rules.
 
+## [10.2.0]
+
 ## [10.1.0] — 2026-10-19
 
 One call answers differently, on the .NET 11 runtime only: [Changed answers in 10.1.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1010).
