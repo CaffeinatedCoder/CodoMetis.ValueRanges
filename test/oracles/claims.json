@@ -183,7 +183,8 @@
     "heldBy": [
       "RangeAggregateParityTests",
       "RangeAggregateTests",
-      "ExecutedQueryTests"
+      "ExecutedQueryTests",
+      "FilteredAggregateProbeTests"
     ]
   },
   {
@@ -1220,7 +1221,9 @@
       "RangeSet.UpperBound"
     ],
     "heldBy": [
-      "ExecutedQueryTests"
+      "ExecutedQueryTests",
+      "OuterJoinProbeTests",
+      "DeclaredNullabilityTests"
     ]
   },
   {
@@ -1237,7 +1240,11 @@
     ],
     "heldBy": [
       "ExecutedQueryTests",
-      "NullOperandTranslationTests"
+      "NullOperandTranslationTests",
+      "OuterJoinProbeTests",
+      "NullableOperandPairProbeTests",
+      "QuantifierProbeTests",
+      "RepeatedExecutionProbeTests"
     ]
   },
   {
@@ -1253,7 +1260,8 @@
       "RangeSet.UpperBound"
     ],
     "heldBy": [
-      "ExecutedQueryTests"
+      "ExecutedQueryTests",
+      "FilteredAggregateProbeTests"
     ]
   },
   {

@@ -1,6 +1,6 @@
 Seed: a range or multirange predicate over a NULL column is NULL in SQL, so its negation drops the row EF Core keeps for its own types
-Oracles: ExecutedQueryTests
-Fails: EveryPredicate_OverANullableColumn_IsFalseForTheNullRow, the negated filter and the projection of every predicate on the NULL row of Period and Blocks
+Oracles: ExecutedQueryTests, OuterJoinProbeTests, NullableOperandPairProbeTests, QuantifierProbeTests, RepeatedExecutionProbeTests
+Fails: EveryPredicate_OverANullableColumn_IsFalseForTheNullRow, the negated filter and the projection of every predicate on the NULL row of Period and Blocks; OuterJoinProbeTests, the negated filter and the projection of every range and RangeSet predicate on a parent without a child; NullableOperandPairProbeTests, the same on every row with a NULL operand; QuantifierProbeTests, the quantifiers and compound predicates over the NULL row; RepeatedExecutionProbeTests, every execution with a NULL operand
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
