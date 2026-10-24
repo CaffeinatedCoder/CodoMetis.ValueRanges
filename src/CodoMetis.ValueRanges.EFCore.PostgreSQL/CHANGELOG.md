@@ -23,6 +23,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 - EF Core: an `ExecuteUpdate` that sets a nullable value set inside a JSON column to a value that may be null is refused for the JSON array alone; Npgsql 11 writes the null outcome as JSON null, so the message no longer names a whole-document NULL ([JSON columns](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#put-a-range-or-set-inside-a-json-column)).
 - EF Core: an empty captured list of ranges or sets reads no rows through EF Core 11's own `SELECT … WHERE FALSE`; the SQL differs from 10.x, the answers do not ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
 
+### Fixed
+
+- Docs: an ordering by `LowerBound()` or `UpperBound()` puts the empty rows and those without that bound where PostgreSQL puts NULLs, last ascending and first descending, also on a required column. A `!= null` key in front sorts them as memory does ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
+
 ## [10.1.0] — 2026-10-19
 
 ### Fixed

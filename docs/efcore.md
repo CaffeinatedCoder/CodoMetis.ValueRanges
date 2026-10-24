@@ -100,6 +100,7 @@ Since v4 you can also read bounds, merge ranges, aggregate per group and compare
 
 ```csharp
 // ORDER BY lower(b."Period") — bound accessors: lower / upper / lower_inc / upper_inc
+// A row with no lower bound, or an empty one, sorts last (see "Good to know" below)
 bookings.OrderBy(b => b.Period.LowerBound());
 
 // range_merge(b."Period", @other) and range_merge(b."BlockedDays")
@@ -158,6 +159,15 @@ Good to know:
   for an unbounded or empty range, and the in-memory methods match that. So `== null`, `HasValue`
   and `??` on a bound select the same rows in a query as in memory, on a range or a `RangeSet`
   column.
+- **Ordering by a bound puts the rows without it where PostgreSQL puts NULLs.**
+  `OrderBy(b => b.Period.LowerBound())` sorts the empty rows and the rows with no lower bound last,
+  and `OrderByDescending(b => b.Period.UpperBound())` sorts those with no upper bound first. That
+  holds on a required column too, because the bound is NULL there. In memory, `null` sorts first
+  ascending and last descending. To sort as memory does, put a `!= null` key in front:
+  `OrderBy(b => b.Period.LowerBound() != null).ThenBy(b => b.Period.LowerBound())`, or
+  `OrderByDescending` and `ThenByDescending` for the other direction. To sort open starts first, as a
+  range's own order does, order by the range: `OrderBy(b => b.Period)`
+  ([Sort ranges](ranges.md#sort-ranges)).
 - **Discrete upper bounds are adjusted for you.** For `int4range`, `int8range` and `daterange`,
   PostgreSQL normalizes to the half-open form `[lower, upper)`. This library normalizes to the
   closed form `[lower, upper]`. So `UpperBound()` becomes `upper(x) - 1`, and

@@ -38,6 +38,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. Not
 ### Fixed
 
 - Value sets: every set type implements `IFormattable` itself, so `ToString()` and formatting no longer run the interface's default, whose shared-generic stub traps under Native AOT with ILCompiler 11 RC2 ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
+- Docs: an ordering by `LowerBound()` or `UpperBound()` puts the empty rows and those without that bound where PostgreSQL puts NULLs, last ascending and first descending, also on a required column. A `!= null` key in front sorts them as memory does ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
 
 ## [10.1.0] — 2026-10-19
 

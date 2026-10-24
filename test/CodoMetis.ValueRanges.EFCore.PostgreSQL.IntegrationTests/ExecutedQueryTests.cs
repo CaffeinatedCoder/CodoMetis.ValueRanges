@@ -634,6 +634,76 @@ public class ExecutedQueryTests
     }
 
     /// <summary>
+    /// An ordering by <c>LowerBound()</c> or <c>UpperBound()</c> puts the empty rows and the rows without
+    /// that bound where PostgreSQL puts NULLs, last ascending and first descending, also on a required
+    /// column; memory puts a <see langword="null"/> first ascending and last descending (#359,
+    /// <c>docs/efcore.md#read-bounds-merge-ranges-and-aggregate</c>). With a <c>Bound() != null</c> key in
+    /// front, the database orders as memory does, in both directions. Over a range and a multirange
+    /// column. Ids 2700 to 2708.
+    /// </summary>
+    [TestMethod]
+    public async Task OrderingByABound_PutsTheRowsWithoutItWherePostgresPutsNulls()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        Int32Range[] shapes =
+        [
+            Int32Range.CreateFinite(1, 20, true, true), Int32Range.CreateFinite(1, 1, true, true), Int32Range.CreateFinite(20, 20, true, true),
+            Int32Range.CreateUnboundedStart(1, true), Int32Range.CreateUnboundedStart(20, true),
+            Int32Range.CreateUnboundedEnd(1, true), Int32Range.CreateUnboundedEnd(20, true),
+            Int32Range.Infinite, Int32Range.Empty
+        ];
+        await Seed([.. shapes.Select((shape, index) => new Reservation
+        {
+            Id = 2700 + index, Seats = shape, SeatBlocks = RangeSet<Int32Range, int>.From(shape)
+        })]);
+
+        await using var context = new IntegrationDbContext();
+        var mine     = context.Reservations.Where(r => r.Id >= 2700 && r.Id <= 2708);
+        var loaded   = await mine.AsNoTracking().ToListAsync();
+        var failures = new List<string>();
+
+        foreach (var (name, key) in new (string, Expression<Func<Reservation, int?>>)[]
+                 {
+                     ("Seats.LowerBound()", r => r.Seats.LowerBound()),
+                     ("Seats.UpperBound()", r => r.Seats.UpperBound()),
+                     ("SeatBlocks.LowerBound()", r => r.SeatBlocks.LowerBound()),
+                     ("SeatBlocks.UpperBound()", r => r.SeatBlocks.UpperBound())
+                 })
+        {
+            var compiled = key.Compile();
+            var present  = Expression.Lambda<Func<Reservation, bool>>(
+                Expression.NotEqual(key.Body, Expression.Constant(null, typeof(int?))), key.Parameters);
+
+            foreach (var descending in new[] { false, true })
+            {
+                var order = descending ? $"OrderByDescending({name})" : $"OrderBy({name})";
+
+                var memory = (descending ? loaded.OrderByDescending(compiled) : loaded.OrderBy(compiled))
+                            .ThenBy(r => r.Id).Select(r => r.Id).ToList();
+
+                // The documented placement: the same order, with the rows whose bound is null moved to
+                // the end ascending and to the front descending.
+                var withoutBound = memory.Where(id => compiled(loaded.Single(r => r.Id == id)) is null).ToList();
+                var withBound    = memory.Except(withoutBound).ToList();
+                List<int> documented = descending ? [.. withoutBound, .. withBound] : [.. withBound, .. withoutBound];
+
+                var plain = await (descending ? mine.OrderByDescending(key) : mine.OrderBy(key))
+                                 .ThenBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                if (!plain.SequenceEqual(documented))
+                    failures.Add($"{order}: [{string.Join(",", plain)}], documented [{string.Join(",", documented)}]");
+
+                var keyed = await (descending ? mine.OrderByDescending(present).ThenByDescending(key) : mine.OrderBy(present).ThenBy(key))
+                                 .ThenBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                if (!keyed.SequenceEqual(memory))
+                    failures.Add($"{order} after a Bound() != null key: [{string.Join(",", keyed)}], memory [{string.Join(",", memory)}]");
+            }
+        }
+
+        Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>
     /// <c>LowerBound()</c> and <c>UpperBound()</c> compared with <see langword="null"/>, read through
     /// <c>HasValue</c>, coalesced with <c>??</c> in a filter and a projection, and filtered after being
     /// projected, for a range column and a multirange column of every family, against the same
