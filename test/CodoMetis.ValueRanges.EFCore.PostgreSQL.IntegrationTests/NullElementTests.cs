@@ -89,6 +89,7 @@ public class NullElementTests
 
         // It threw InvalidOperationException reading the NULL into bool.
         CollectionAssert.AreEqual(new[] { true, false }, await db.Rows.OrderBy(r => r.Id).Select(r => r.Period.Contains(r.Day!.Value)).ToListAsync());
+        CollectionAssert.AreEqual(new[] { true, false }, await db.Rows.OrderBy(r => r.Id).Select(r => r.Blocks.Contains(r.Day!.Value)).ToListAsync());
     }
 
     [TestMethod]
@@ -101,6 +102,7 @@ public class NullElementTests
         CollectionAssert.AreEqual(new[] { 1 }, await Ids(db.Rows.Where(r => windows.All(x => x.Contains(r.Day!.Value)))));
         CollectionAssert.AreEqual(new[] { 2 }, await Ids(db.Rows.Where(r => !windows.All(x => x.Contains(r.Day!.Value)))));
     }
+
     [TestMethod]
     public async Task RangeFactories_OverANullElement_AreNull()
     {
@@ -116,5 +118,21 @@ public class NullElementTests
 
         var built = await db.Rows.OrderBy(r => r.Id).Select(r => DateRange.CreateUnboundedStart(r.Day!.Value, true)).ToListAsync();
         CollectionAssert.AreEqual(new DateRange?[] { DateRange.CreateUnboundedStart(March(7), true), null }, built);
+    }
+
+    [TestMethod]
+    public async Task RangeFactories_OverANullElement_AreNull_WhereAPredicateConsumesThem()
+    {
+        await using var db = await Seeded();
+        var v = March(9);
+        var windows = new List<DateRange> { DateRange.CreateFinite(March(3), March(8), true, true) };
+
+        // Built from a NULL element, (,) contained and overlapped everything, so each of these answered true for row 2.
+        CollectionAssert.AreEqual(new[] { true, false }, await db.Rows.OrderBy(r => r.Id).Select(r => DateRange.CreateUnboundedEnd(r.Day!.Value, true).Contains(v)).ToListAsync());
+        CollectionAssert.AreEqual(new[] { 1 }, await Ids(db.Rows.Where(r => r.Period.Overlaps(DateRange.CreateUnboundedEnd(r.Day!.Value, true)))));
+        CollectionAssert.AreEqual(new[] { 2 }, await Ids(db.Rows.Where(r => !r.Period.Overlaps(DateRange.CreateUnboundedEnd(r.Day!.Value, true)))));
+        CollectionAssert.AreEqual(new[] { true, false }, await db.Rows.OrderBy(r => r.Id).Select(r => r.Period.Overlaps(DateRange.CreateUnboundedEnd(r.Day!.Value, true))).ToListAsync());
+        CollectionAssert.AreEqual(new[] { 1 }, await Ids(db.Rows.Where(r => windows.All(x => x.Overlaps(DateRange.CreateUnboundedEnd(r.Day!.Value, true))))));
+        CollectionAssert.AreEqual(new[] { 2 }, await Ids(db.Rows.Where(r => !windows.All(x => x.Overlaps(DateRange.CreateUnboundedEnd(r.Day!.Value, true))))));
     }
 }
