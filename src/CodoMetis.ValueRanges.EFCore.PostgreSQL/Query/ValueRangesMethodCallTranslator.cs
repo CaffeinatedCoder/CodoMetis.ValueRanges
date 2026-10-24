@@ -113,9 +113,11 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// <summary>
     /// A predicate with a NULL range or multirange on either side is <c>false</c>: what EF Core answers
     /// for a predicate over NULL on its own types, and what the in-memory predicates answer for a null
-    /// (#350, #355). Each range or multirange operand becomes <c>x IS NOT NULL AND &lt;predicate&gt;</c>.
-    /// EF Core's nullability processing drops the check for a required column and a non-null parameter,
-    /// and writes <c>x IS NULL OR NOT (…)</c> under a negation, so a negated predicate keeps the NULL row.
+    /// (#350, #355), and so is one with a NULL element: <c>Contains(T)</c> over the optional side of an
+    /// outer join or a nullable column read with <c>.Value</c> (#381). Each range, multirange or element
+    /// operand becomes <c>x IS NOT NULL AND &lt;predicate&gt;</c>. EF Core's nullability processing drops
+    /// the check for a required column and a non-null parameter, and writes <c>x IS NULL OR NOT (…)</c>
+    /// under a negation, so a negated predicate keeps the NULL row.
     /// </summary>
     /// <remarks>
     /// <c>CompareTo</c> never reaches this: EF Core turns <c>a.CompareTo(b) op k</c> into a comparison,
@@ -123,15 +125,27 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// </remarks>
     private SqlExpression FalseOverNull(SqlExpression predicate, IReadOnlyList<SqlExpression> operands)
     {
-        for (var index = operands.Count - 1; index >= 0; index--)
+        var unwrapped = operands.Select(Unwrap).ToList();
+
+        // The element type is the one of the range or multirange the predicate is over.
+        IRangeTypeDefinition? ranges = null;
+        foreach (var operand in unwrapped)
+            if (RangeTypeRegistry.TryGetByClrType(operand.Type, out ranges, out _)) break;
+
+        for (var index = unwrapped.Count - 1; index >= 0; index--)
         {
-            var operand = Unwrap(operands[index]);
-            if (!RangeTypeRegistry.TryGetByClrType(operand.Type, out var definition, out var isSet))
+            var operand = unwrapped[index];
+
+            SqlExpression mapped;
+            if (RangeTypeRegistry.TryGetByClrType(operand.Type, out var definition, out var isSet))
+                mapped = operand.TypeMapping is null
+                    ? sqlExpressionFactory.ApplyTypeMapping(operand, isSet ? definition.RangeSetTypeMapping : definition.RangeTypeMapping)
+                    : operand;
+            else if (ranges is not null && (Nullable.GetUnderlyingType(operand.Type) ?? operand.Type) == ranges.ElementClrType)
+                mapped = operand.TypeMapping is null ? ApplyElementMapping(operand, ranges) : operand;
+            else
                 continue;
 
-            var mapped = operand.TypeMapping is null
-                ? sqlExpressionFactory.ApplyTypeMapping(operand, isSet ? definition.RangeSetTypeMapping : definition.RangeTypeMapping)
-                : operand;
             predicate = sqlExpressionFactory.AndAlso(sqlExpressionFactory.IsNotNull(mapped), predicate);
         }
 
