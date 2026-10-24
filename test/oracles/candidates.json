@@ -57,20 +57,6 @@
   },
   {
     "oracle": "OuterJoinProbeTests",
-    "row": "p.Window.Contains(c.From) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "OuterJoinProbeTests",
-    "row": "p.WindowBlocks.Contains(c.From) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "OuterJoinProbeTests",
     "row": "p.Labels.Remove(c.Name) [",
     "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
     "issue": "#360",
@@ -138,48 +124,6 @@
     "family": "a range factory over a NULL element builds a range, not NULL",
     "issue": "#382",
     "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "NullableOperandPairProbeTests",
-    "row": "r.A.Contains(r.Day.Value) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
-  },
-  {
-    "oracle": "NullableOperandPairProbeTests",
-    "row": "(r.Flag ? r.A : r.B).Contains(r.Day.Value) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
-  },
-  {
-    "oracle": "NullableOperandPairProbeTests",
-    "row": "(r.A ?? r.B).Contains(r.Day.Value) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
-  },
-  {
-    "oracle": "NullableOperandPairProbeTests",
-    "row": "r.SetA.Contains(r.Day.Value) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
-  },
-  {
-    "oracle": "NullableOperandPairProbeTests",
-    "row": "(r.Flag ? r.SetA : r.SetB).Contains(r.Day.Value) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
-  },
-  {
-    "oracle": "NullableOperandPairProbeTests",
-    "row": "(r.SetA ?? r.SetB).Contains(r.Day.Value) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
   },
   {
     "oracle": "NullableOperandPairProbeTests",
@@ -257,48 +201,6 @@
     "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
     "issue": "#360",
     "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
-  },
-  {
-    "oracle": "QuantifierProbeTests",
-    "row": "@[[3,8]].All(x => x.Contains(r.Day.Value)) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
-  },
-  {
-    "oracle": "QuantifierProbeTests",
-    "row": "@[[3,8],[3,8]].All(x => x.Contains(r.Day.Value)) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
-  },
-  {
-    "oracle": "QuantifierProbeTests",
-    "row": "@[empty,(,),[3,8],[20,)].All(x => x.Contains(r.Day.Value)) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
-  },
-  {
-    "oracle": "QuantifierProbeTests",
-    "row": "@[{[3,8]}].All(x => x.Contains(r.Day.Value)) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
-  },
-  {
-    "oracle": "QuantifierProbeTests",
-    "row": "@[{[3,8]},{[3,8]}].All(x => x.Contains(r.Day.Value)) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
-  },
-  {
-    "oracle": "QuantifierProbeTests",
-    "row": "@[{},{(,)}].All(x => x.Contains(r.Day.Value)) [",
-    "family": "a NULL element makes Contains NULL, not false",
-    "issue": "#381",
-    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
   },
   {
     "oracle": "RepeatedExecutionProbeTests",
