@@ -67,6 +67,9 @@
             (see test/oracles/README.md). Linked, not referenced, so the projects stay independent.
         -->
         <Compile Include="..\oracles\Candidates.cs" Link="Candidates.cs" />
+        <Compile Include="..\oracles\TranslationSupport.cs" Link="TranslationSupport.cs" />
+        <!-- The public query members the translation-support probe runs (TranslationSupportProbeTests, #384). -->
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\QueryMembers.cs" Link="QueryMembers.cs" />
         <Compile Include="..\oracles\StringOverloads.cs" Link="StringOverloads.cs" />
     </ItemGroup>
 

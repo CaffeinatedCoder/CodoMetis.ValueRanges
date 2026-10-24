@@ -412,5 +412,14 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "TranslationSupportProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "test/oracles/translation-support.json and memory over the rows as loaded, for every public query member (QueryMembers) over every discovered range and value set type it applies to, run where the server must evaluate it (a filter, a null test, an ordering, HAVING) with a column operand and in a final projection",
+    "needs": [
+      "docker"
+    ]
   }
 ]
