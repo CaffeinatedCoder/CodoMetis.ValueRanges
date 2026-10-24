@@ -72,7 +72,7 @@ options.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
 
 bookings.Where(b => b.Period.Contains(day));      // b."Period" @> @day
 bookings.Where(b => b.Period.Overlaps(request));  // b."Period" && @request
-bookings.OrderBy(b => b.Period.LowerBound());     // ORDER BY lower(b."Period")
+bookings.OrderBy(b => b.Period.LowerBound());     // ORDER BY lower(b."Period"); no start sorts last
 ```
 
 **→ [Getting started](docs/getting-started.md)** takes you from an empty project to a first query

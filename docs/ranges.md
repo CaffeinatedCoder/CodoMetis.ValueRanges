@@ -448,7 +448,9 @@ Good to know:
   `<= 0`, and with a non-null operand it compares lower, so it matches `< 0`, `<= 0` and `!= 0`. In
   memory, calling `CompareTo` on a null throws.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
-  nullable column, the two orders differ only in where the nulls go.
+  nullable column, the two orders differ only in where the nulls go. An ordering by `LowerBound()` or
+  `UpperBound()` meets the same difference on any column, because the bound of an empty or unbounded
+  range is NULL ([Read bounds](efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
   the lower bound, so it ties `[1,5]` with `[1,9]` ([Sort ranges the way a set does](#sort-ranges-the-way-a-set-does)).
 
