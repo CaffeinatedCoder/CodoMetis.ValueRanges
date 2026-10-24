@@ -9,6 +9,7 @@ covers all four packages, which share one version number and release together.
 
 - Ranges: `RangeAgg()` and `RangeIntersectAgg()` skip a `null` range or set, as `range_agg` and `range_intersect_agg` skip a NULL row. With a `null` after another range, `RangeIntersectAgg()` returned `empty`, or threw after `(,)`, and `RangeAgg()` threw unless an input was `(,)` ([#363](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/363), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
 - Ranges: `RangeSet.From`, a collection expression and `RangeSet.Create` throw `ArgumentException` for a `null` range, where they built a set holding `null`, whose `IsEmpty()` was `false`. `Union` and `Except` called on a `null` range throw too ([#357](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/357), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+- Ranges: a predicate called on a `null` range, or given a `null` range or set, returns `false`, as a query does over a NULL column. `Contains(Empty)`, `IsContainedBy((,))` and `(,).Contains(null)` returned `true`, and `Contains(T)` and a `null` set operand threw ([#357](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/357), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
 
 ## [10.1.0] — 2026-10-19
 

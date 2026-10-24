@@ -86,6 +86,14 @@ with either a range or a multirange on the other side. Since 10.0.0 they also wo
 multirange on the other side, as the operator with the range on the left
 (`b."Period" &< b."Blocked"`), and `RangeSet.IsContainedBy` runs as `<@`.
 
+On a nullable column, a predicate over a NULL value is `false`, and its negation `true`. That is what
+EF Core does for a `string` or `string[]` column, and what the methods return in memory for a `null`
+range. So `!b.Period.Overlaps(other)` keeps the rows whose `Period` is NULL, as
+`!b.Name.StartsWith("a")` keeps the rows whose `Name` is NULL. The SQL adds
+`b."Period" IS NULL OR NOT (…)` for a nullable column and nothing for a required one. Value set
+predicates follow the same rule in a query, though in memory they throw for a `null` set.
+`CompareTo` keeps its own rule for a NULL column ([Sort ranges](ranges.md#sort-ranges)).
+
 ### Read bounds, merge ranges and aggregate
 
 Since v4 you can also read bounds, merge ranges, aggregate per group and compare multiranges:

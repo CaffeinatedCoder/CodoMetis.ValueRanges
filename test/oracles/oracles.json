@@ -108,6 +108,12 @@
     "against": "a null range refused, never stored or dropped, through every way to build a range set of every range type"
   },
   {
+    "class": "RangeNullPredicateContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "claim",
+    "against": "every Boolean range and range-set predicate answers false with a null range or set on either side, for every range type"
+  },
+  {
     "class": "MappingParityTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "claim",

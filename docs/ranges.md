@@ -148,6 +148,14 @@ Good to know:
 Every query method is an extension method on `IRange<T>`. Each one works for any combination of
 shapes.
 
+If the range you call it on, or the range or set you pass, is `null`, a query method returns
+`false`. That is what the same query returns for a NULL column in the database. The `RangeSet`
+methods return `false` for a `null` range or set you pass, too.
+
+The methods that build a range or a set have no answer for a `null` range. `Union` and `Except`
+throw `ArgumentException`. `Intersect`, `Gap` and `Merge` return a value or throw, depending on the
+range you pass, so check for `null` before you call them.
+
 ### Check containment
 
 ```csharp
