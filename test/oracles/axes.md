@@ -52,6 +52,9 @@ request culture and configuration × every type are varied by `HostCultureProbeT
 | `Npgsql.DisableDateTimeInfinityConversions` | off, on | every integration project (off); `InfinityConversionsDisabledTests` (on, temporal extremes only — per process, hence its own project) |
 | Temporal value | sub-microsecond, the extremes, each `DateTimeKind` | `TemporalStoreParityTests`, `RangeRoundTripTests`, `ProviderConversionTests` |
 | Composition on a translated `Union` | every operator and clause the guard knows | `UnionCanonicalityTests` (results, not SQL) |
+| Where a NULL comes from | a nullable column; the optional side of an outer join (navigation, `GroupJoin` with `DefaultIfEmpty`, `LeftJoin`) over required columns; two nullable operands, a `CASE` and a `COALESCE` of them; a nullable element read through `.Value`; a captured `null`; a list holding `null`; an aggregate over no input | `ExecutedQueryTests` (one nullable column); `OuterJoinProbeTests`; `NullableOperandPairProbeTests`; `QuantifierProbeTests` (lists); `RepeatedExecutionProbeTests` (captured `null`); `FilteredAggregateProbeTests`; `DeclaredNullabilityTests` (every emitted function, typed `NULL`s) |
+| Query composition | filter, negated filter, projection; `Any`, `All`, `Count`, `Contains` over a captured list; `P && Q`, `P \|\| Q`, negated, De Morgan; a predicate over a value-producing member; `HAVING`, `HAVING NOT`, ordering by an aggregate's bound | `QuantifierProbeTests`, `FilteredAggregateProbeTests`, and `CompositionRunner`'s partition check in every composition sweep |
+| Execution | once; the same query again with its parameter walked null → finite → empty → `(,)` → null and back, a list walked empty → one → duplicate → `null` → empty; `EF.CompileQuery`, `EF.CompileAsyncQuery` | every sweep (once); `RepeatedExecutionProbeTests` |
 | Rows written by other tools | non-canonical arrays; `infinity` spelled by another writer | `SetIntegrationTests` (arrays, E21); #117 (ranges, found once) |
 | Model | runtime model, compiled model | `TemporalStoreTextTests` (compiled model, wrapper family) |
 | Server | `postgres:18-alpine`; the surface listing for 17 and 18 | `ContainerLifecycle`; `postgres-surface.catalog.txt` |
@@ -59,7 +62,8 @@ request culture and configuration × every type are varied by `HostCultureProbeT
 Pairs no test varies: `DisableDateTimeInfinityConversions` × JSON document × NodaTime; shape pair × every
 range type against PostgreSQL (three domains today; the fuzz sweep samples the rest); another writer's
 spelling × every read path (column, JSON document, `ExecuteUpdate`); compiled model × every wrapper family;
-a second PostgreSQL major in CI.
+a second PostgreSQL major in CI; the composition axes above × every range and set type (the composition
+sweeps run over `DateRange`, its `RangeSet` and `StringSet`).
 
 ## Hosting and AOT (A01–A03, J31)
 

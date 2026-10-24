@@ -1,6 +1,6 @@
 Seed: a value set predicate over a NULL column is NULL in SQL, so its negation drops the row EF Core keeps for string[]
-Oracles: ExecutedQueryTests
-Fails: EveryPredicate_OverANullableColumn_IsFalseForTheNullRow, the negated filter and the projection of every predicate on the NULL row of Tags
+Oracles: ExecutedQueryTests, OuterJoinProbeTests, NullableOperandPairProbeTests, QuantifierProbeTests, RepeatedExecutionProbeTests
+Fails: EveryPredicate_OverANullableColumn_IsFalseForTheNullRow, the negated filter and the projection of every predicate on the NULL row of Tags; OuterJoinProbeTests, the negated filter and the projection of every value set predicate on a parent without a child; NullableOperandPairProbeTests, the same on every row with a NULL value set; QuantifierProbeTests, the value set quantifiers and compound predicates over the NULL row; RepeatedExecutionProbeTests, every execution with a NULL value set
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs

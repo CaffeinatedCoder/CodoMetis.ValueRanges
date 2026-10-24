@@ -265,6 +265,32 @@ range collection no `Contains` reads also fails loudly, as `42809` for `Any(==)`
 found #137: `Any` or `Count` with a predicate over an empty collection the plugin sends one parameter per
 element throws.
 
+### The composition sweeps
+
+The sweeps above vary shapes, types and operand kinds, mostly in a projection over one nullable column at
+most. #349, #350, #355, #360 and #361 came from how a translated call *composes*: where a NULL comes from,
+what a filter, a negation or EF Core's null semantics do around it, and what the next execution reuses. Six
+classes in the integration project (#362) vary that instead, each over `DateRange`, its `RangeSet` and
+`StringSet`, with the members discovered (`Composition/CompositionMembers.cs`):
+
+| Class | What it composes |
+|---|---|
+| `OuterJoinProbeTests` (#375) | every member over the child of a parent without one: a navigation, `GroupJoin` with `DefaultIfEmpty`, `LeftJoin`; the range factories over the child's element columns |
+| `NullableOperandPairProbeTests` (#376) | every binary member over two nullable columns, a `CASE` and a `COALESCE` of them, on every (null, value) pair; equality and `CompareTo` under their own rules |
+| `QuantifierProbeTests` (#377) | `Any`, `All`, `Count`, `Contains` over captured lists holding a NULL; `P && Q`, `P \|\| Q` against De Morgan; a predicate over a value-producing member |
+| `RepeatedExecutionProbeTests` (#378) | the same query run again with its parameter walked null → finite → empty → `(,)` → null and back; `EF.CompileQuery` and `EF.CompileAsyncQuery` |
+| `FilteredAggregateProbeTests` (#379) | `RangeAgg` and `RangeIntersectAgg` over groups a filter empties, all NULL, holding `empty`, or reached by a `LeftJoin` with no rows, consumed by every member, `HAVING` and an ordering |
+| `DeclaredNullabilityTests` (#380) | every function the translators emit, its declaration against `pg_proc.proisstrict` and the server; and every translated value's null test against its projection |
+
+Their reference is `Composition/NullRule.cs`: the expression rewritten so that a NULL never reaches the
+library, the explicit guard a consumer writes over loaded rows. A predicate with a null on either side is
+`false` and its negation `true` (rule (c)); a value-producing member over a null, or over a missing element,
+has no value; equality and `CompareTo` keep their documented rules; the aggregates skip a null. So what the
+library does *today* for a null in memory (#350's 11.0.0 half) is never what a row is judged against. Beside
+the reference, `CompositionRunner` checks every call without one: `Where(P)` and `Where(!P)` partition the
+rows, and `Select(P)` is `true` exactly on `Where(P)`'s; for a value, the same with `== null`. A
+declaration that disagrees with the server shows there even where memory has no answer.
+
 ## How to use it
 
 **Run the oracles.** They are ordinary tests; `dotnet test` runs them all. The registered classes are

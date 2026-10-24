@@ -1,6 +1,6 @@
 Seed: RangeAgg and RangeIntersectAgg fold a null input in instead of skipping it, as range_agg and range_intersect_agg skip a NULL row
-Oracles: RangeAggregateParityTests
-Fails: Aggregates_OverANullableColumn_SkipTheNullRows, for every group with its NULL row after another input
+Oracles: RangeAggregateParityTests, FilteredAggregateProbeTests
+Fails: Aggregates_OverANullableColumn_SkipTheNullRows, for every group with its NULL row after another input; FilteredAggregateProbeTests, every consumption of RangeIntersectAgg over the groups holding a NULL after another input
 
 diff --git a/src/CodoMetis.ValueRanges/RangeAggregateExtensions.cs b/src/CodoMetis.ValueRanges/RangeAggregateExtensions.cs
 --- a/src/CodoMetis.ValueRanges/RangeAggregateExtensions.cs
