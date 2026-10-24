@@ -123,6 +123,25 @@ public sealed class RangeCollectionTranslationTests
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
+    /// <summary>
+    /// EF Core gives the empty root its <c>_ord</c> ordering column too, typed like the elements, and
+    /// the plugin cast it to <c>int4range</c> with them (#319). It is an integer when the list has
+    /// elements, so a shape comparing it with one would have failed on the server for the empty list
+    /// only. Only the element column is cast; <c>_ord</c> is <c>0</c>, as on the EF Core 10.0.0 path.
+    /// </summary>
+    [TestMethod]
+    public void FirstOrDefault_OverAnEmptyCapturedList_KeepsTheOrderingColumnAnInteger()
+    {
+        var       empty   = new List<Int32Range>();
+        using var context = new TestDbContext();
+
+        var sql = context.Bookings.Select(b => empty.Where(w => w.Overlaps(b.Seats)).FirstOrDefault()).ToQueryString().ReplaceLineEndings(" ");
+
+        Assert.AreEqual(
+            "SELECT (     SELECT e.\"Value\"     FROM (         SELECT 0 AS _ord, NULL::int4range AS \"Value\"         WHERE FALSE     ) AS e     WHERE e.\"Value\" IS NOT NULL AND e.\"Value\" && b.\"Seats\"     ORDER BY e._ord     LIMIT 1) FROM \"Bookings\" AS b",
+            sql);
+    }
+
     [TestMethod]
     public void Contains_OverEFParameter_IsRefusedWithWhatToWriteInstead()
     {
