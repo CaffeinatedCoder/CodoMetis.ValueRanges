@@ -102,6 +102,12 @@
     "against": "a null element refused, never dropped, through every entry point of every reference-element set type"
   },
   {
+    "class": "RangeSetNullContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "exception",
+    "against": "a null range refused, never stored or dropped, through every way to build a range set of every range type"
+  },
+  {
     "class": "MappingParityTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "claim",
