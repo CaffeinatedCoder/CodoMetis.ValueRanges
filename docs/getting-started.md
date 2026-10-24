@@ -193,7 +193,7 @@ var colliding = context.Bookings.Where(b => b.Period.Overlaps(request)).ToList()
 // WHERE b."Tags" @> ARRAY[@tag]::text[]        — a plain GIN index serves this
 var tagged = context.Bookings.Where(b => b.Tags.Contains("vip")).ToList();
 
-// ORDER BY lower(b."Period")
+// ORDER BY lower(b."Period"); a booking with no start, or an empty period, sorts last
 var chronological = context.Bookings.OrderBy(b => b.Period.LowerBound()).ToList();
 ```
 
