@@ -573,7 +573,8 @@
       "YearMonthRange.CreateUnboundedStart"
     ],
     "heldBy": [
-      "NodaQueryTranslationTests"
+      "NodaQueryTranslationTests",
+      "TranslationSupportProbeTests"
     ]
   },
   {
@@ -595,7 +596,8 @@
     ],
     "heldBy": [
       "ClientSideOnlyTranslationTests",
-      "ClientSideOnlyProjectionTests"
+      "ClientSideOnlyProjectionTests",
+      "TranslationSupportProbeTests"
     ]
   },
   {
