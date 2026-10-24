@@ -54,5 +54,313 @@
     "family": "a null receiver answers in memory where SQL answers NULL",
     "issue": "#350",
     "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "p.Window.Contains(c.From) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "p.WindowBlocks.Contains(c.From) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "p.Labels.Remove(c.Name) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "c.Tags.Union(p.Labels) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "c.Tags.Union(@{a}) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "p.Labels.Union(c.Tags) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "DateRange.CreateFinite(c.From, c.To) [",
+    "family": "a range factory over a NULL element builds a range, not NULL",
+    "issue": "#382",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "DateRange.CreateFinite(c.From, c.To).IsEmpty() [",
+    "family": "a range factory over a NULL element builds a range, not NULL",
+    "issue": "#382",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "DateRange.CreateUnboundedStart(c.To) [",
+    "family": "a range factory over a NULL element builds a range, not NULL",
+    "issue": "#382",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "DateRange.CreateUnboundedStart(c.To).Contains(@2026-03-07) [",
+    "family": "a range factory over a NULL element builds a range, not NULL",
+    "issue": "#382",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "DateRange.CreateUnboundedEnd(c.From) [",
+    "family": "a range factory over a NULL element builds a range, not NULL",
+    "issue": "#382",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "OuterJoinProbeTests",
+    "row": "DateRange.CreateUnboundedEnd(c.From).Contains(@2026-03-07) [",
+    "family": "a range factory over a NULL element builds a range, not NULL",
+    "issue": "#382",
+    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "r.A.Contains(r.Day.Value) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.Flag ? r.A : r.B).Contains(r.Day.Value) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.A ?? r.B).Contains(r.Day.Value) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "r.SetA.Contains(r.Day.Value) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.Flag ? r.SetA : r.SetB).Contains(r.Day.Value) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.SetA ?? r.SetB).Contains(r.Day.Value) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "r.TagsA.Remove(r.Label) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.Flag ? r.TagsA : r.TagsB).Remove(r.Label) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.TagsA ?? r.TagsB).Remove(r.Label) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "r.TagsA.Union(r.TagsB) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "r.TagsA.Union((r.Flag ? r.TagsB : r.TagsA)) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "r.TagsA.Union((r.TagsB ?? r.TagsA)) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.Flag ? r.TagsA : r.TagsB).Union(r.TagsB) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.Flag ? r.TagsA : r.TagsB).Union((r.Flag ? r.TagsB : r.TagsA)) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.Flag ? r.TagsA : r.TagsB).Union((r.TagsB ?? r.TagsA)) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.TagsA ?? r.TagsB).Union(r.TagsB) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "NullableOperandPairProbeTests",
+    "row": "(r.TagsA ?? r.TagsB).Union((r.Flag ? r.TagsB : r.TagsA)) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryBinaryMember_OverTwoNullableOperands_AnswersAsRuleC"
+  },
+  {
+    "oracle": "QuantifierProbeTests",
+    "row": "@[[3,8]].All(x => x.Contains(r.Day.Value)) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
+  },
+  {
+    "oracle": "QuantifierProbeTests",
+    "row": "@[[3,8],[3,8]].All(x => x.Contains(r.Day.Value)) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
+  },
+  {
+    "oracle": "QuantifierProbeTests",
+    "row": "@[empty,(,),[3,8],[20,)].All(x => x.Contains(r.Day.Value)) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
+  },
+  {
+    "oracle": "QuantifierProbeTests",
+    "row": "@[{[3,8]}].All(x => x.Contains(r.Day.Value)) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
+  },
+  {
+    "oracle": "QuantifierProbeTests",
+    "row": "@[{[3,8]},{[3,8]}].All(x => x.Contains(r.Day.Value)) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
+  },
+  {
+    "oracle": "QuantifierProbeTests",
+    "row": "@[{},{(,)}].All(x => x.Contains(r.Day.Value)) [",
+    "family": "a NULL element makes Contains NULL, not false",
+    "issue": "#381",
+    "method": "Quantifiers_OverCapturedLists_AnswerAsRuleCAndAgreeWithEachOther"
+  },
+  {
+    "oracle": "RepeatedExecutionProbeTests",
+    "row": "@p.Union(r.Tags) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "CapturedOperand_WalkedThroughNullFiniteEmptyAndInfinite_AnswersAsRuleCEveryTime"
+  },
+  {
+    "oracle": "RepeatedExecutionProbeTests",
+    "row": "r.Tags.Union(@p) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "CapturedOperand_WalkedThroughNullFiniteEmptyAndInfinite_AnswersAsRuleCEveryTime"
+  },
+  {
+    "oracle": "DeclaredNullabilityTests",
+    "row": "r.Tags.Remove(r.Label) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryTranslatedValue_IsNullInAFilterExactlyWhereItIsNullInAProjection"
+  },
+  {
+    "oracle": "DeclaredNullabilityTests",
+    "row": "r.RequiredTags.Remove(r.Label) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryTranslatedValue_IsNullInAFilterExactlyWhereItIsNullInAProjection"
+  },
+  {
+    "oracle": "DeclaredNullabilityTests",
+    "row": "r.Tags.Union(@{a}) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryTranslatedValue_IsNullInAFilterExactlyWhereItIsNullInAProjection"
+  },
+  {
+    "oracle": "DeclaredNullabilityTests",
+    "row": "r.Tags.Union(@null) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryTranslatedValue_IsNullInAFilterExactlyWhereItIsNullInAProjection"
+  },
+  {
+    "oracle": "DeclaredNullabilityTests",
+    "row": "r.RequiredTags.Union(@null) [",
+    "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
+    "issue": "#360",
+    "method": "EveryTranslatedValue_IsNullInAFilterExactlyWhereItIsNullInAProjection"
+  },
+  {
+    "oracle": "DeclaredNullabilityTests",
+    "row": "array_cat(text[], text[]):",
+    "family": "value set Union or Remove is declared NULL for a NULL argument, but array_cat and array_remove are not strict",
+    "issue": "#360",
+    "method": "EveryEmittedFunction_IsDeclaredAsPostgresEvaluatesIt"
+  },
+  {
+    "oracle": "DeclaredNullabilityTests",
+    "row": "array_remove(text[], text):",
+    "family": "value set Union or Remove is declared NULL for a NULL argument, but array_cat and array_remove are not strict",
+    "issue": "#360",
+    "method": "EveryEmittedFunction_IsDeclaredAsPostgresEvaluatesIt"
   }
 ]

@@ -358,5 +358,59 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "OuterJoinProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "rule (c) over the rows as loaded, with the missing child guarded explicitly (NullRule), for every discovered range, RangeSet and value set member over the child of a parent without one × a navigation, GroupJoin with DefaultIfEmpty and LeftJoin × a filter, a negated filter and a projection",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "NullableOperandPairProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "rule (c) over the rows as loaded (NullRule), for every discovered binary range, RangeSet and value set member over two nullable columns, a CASE and a COALESCE of them, on every (null, value) pair, with equality and CompareTo under their own documented rules",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "QuantifierProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "metamorphic",
+    "against": "rule (c) over the rows as loaded (NullRule), and inside the database All(P) against !Any(!P), Count(P) == 0 against !Any(P) and De Morgan's forms, for Any, All, Count and Contains over captured lists (empty, one, duplicate, holding NULL, every shape) and nullable columns, compound predicates and predicates over value-producing members",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "RepeatedExecutionProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "rule (c) over the rows as loaded (NullRule) on every execution, for every discovered binary member and quantifier with its captured operand or list walked through null, finite, empty and infinite and back, and as EF.CompileQuery and EF.CompileAsyncQuery delegates",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "FilteredAggregateProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "RangeAgg and RangeIntersectAgg in memory over the same inputs with E07 mapped, for groups that are ordinary, filtered empty, all NULL, holding empty or (,), and a key left-joined to no rows × every discovered consumption of the result in a projection, HAVING, HAVING NOT and an ordering by a bound",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "DeclaredNullabilityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "pg_proc.proisstrict and the server's answer over typed NULLs and samples, for every function the translators emit; and EF Core's null test against the projected value, for every translated value over nullable and required columns and a captured null",
+    "needs": [
+      "docker"
+    ]
   }
 ]
