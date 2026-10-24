@@ -35,6 +35,7 @@
             (see test/oracles/README.md). Linked, not referenced, so the projects stay independent.
         -->
         <Compile Include="..\oracles\Candidates.cs" Link="Candidates.cs" />
+        <Compile Include="..\oracles\TranslationSupport.cs" Link="TranslationSupport.cs" />
         <!--
             The clone-divergence sweep's engine (docs/oracles.md#the-clone-divergence-sweep). Linked here
             and compiled into tools/oracles.cs through tools/Directory.Build.props, so the test and the

@@ -54,5 +54,12 @@
     "family": "a null receiver answers in memory where SQL answers NULL",
     "issue": "#350",
     "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
+  },
+  {
+    "oracle": "TranslationSupportProbeTests",
+    "row": "RangeLowerBoundComparer<TRange, T>.Compare(TRange, TRange) on ",
+    "family": "EF Core rewrites any Compare(a, b) to the natural order, so the lower-bound comparer runs as SQL in the range order",
+    "issue": "#396",
+    "method": "EveryQueryMember_RunsWhereTheInventorySays"
   }
 ]
