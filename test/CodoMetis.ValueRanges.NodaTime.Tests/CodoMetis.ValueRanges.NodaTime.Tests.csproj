@@ -21,4 +21,9 @@
       <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.NodaTime\CodoMetis.ValueRanges.NodaTime.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- One reflection sweep for both packages' per-type aggregate overloads (#361). -->
+        <Compile Include="..\CodoMetis.ValueRanges.Tests\AggregateNullInputs.cs" Link="AggregateNullInputs.cs" />
+    </ItemGroup>
+
 </Project>
