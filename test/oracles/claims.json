@@ -112,8 +112,8 @@
   {
     "id": "E04-factories-translate-guarded",
     "source": "docs/efcore.md#query-ranges-with-linq",
-    "quote": "**`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor calls inside a guard. As in memory, a start after the end gives you an empty range.",
-    "claim": "When a factory is called on column values inside a query, it translates to a CASE-guarded range constructor and the server-built range equals what the in-memory factory builds, including Empty for inverted bounds.",
+    "quote": "**`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor calls inside a guard. As in memory, a start after the end gives you an empty range. Over a NULL element, such as a column of a missing child in an outer join, the range is NULL, as EF Core's own `AddDays` is.",
+    "claim": "When a factory is called on column values inside a query, it translates to a CASE-guarded range constructor and the server-built range equals what the in-memory factory builds, including Empty for inverted bounds; over a NULL element (the optional side of an outer join, or a nullable column read with .Value) it is NULL, and the SQL over required elements carries no null test.",
     "oracle": "differential",
     "surfaces": [
       "*Range.CreateFinite",
@@ -124,7 +124,9 @@
     "heldBy": [
       "QueryTranslationTests",
       "MultirangeCoverageTests",
-      "NodaQueryTranslationTests"
+      "NodaQueryTranslationTests",
+      "NullOperandTranslationTests",
+      "OuterJoinProbeTests"
     ]
   },
   {

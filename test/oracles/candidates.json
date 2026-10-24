@@ -84,48 +84,6 @@
     "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
   },
   {
-    "oracle": "OuterJoinProbeTests",
-    "row": "DateRange.CreateFinite(c.From, c.To) [",
-    "family": "a range factory over a NULL element builds a range, not NULL",
-    "issue": "#382",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "OuterJoinProbeTests",
-    "row": "DateRange.CreateFinite(c.From, c.To).IsEmpty() [",
-    "family": "a range factory over a NULL element builds a range, not NULL",
-    "issue": "#382",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "OuterJoinProbeTests",
-    "row": "DateRange.CreateUnboundedStart(c.To) [",
-    "family": "a range factory over a NULL element builds a range, not NULL",
-    "issue": "#382",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "OuterJoinProbeTests",
-    "row": "DateRange.CreateUnboundedStart(c.To).Contains(@2026-03-07) [",
-    "family": "a range factory over a NULL element builds a range, not NULL",
-    "issue": "#382",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "OuterJoinProbeTests",
-    "row": "DateRange.CreateUnboundedEnd(c.From) [",
-    "family": "a range factory over a NULL element builds a range, not NULL",
-    "issue": "#382",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
-    "oracle": "OuterJoinProbeTests",
-    "row": "DateRange.CreateUnboundedEnd(c.From).Contains(@2026-03-07) [",
-    "family": "a range factory over a NULL element builds a range, not NULL",
-    "issue": "#382",
-    "method": "EveryMember_OverAMissingChild_AnswersAsRuleC"
-  },
-  {
     "oracle": "NullableOperandPairProbeTests",
     "row": "r.TagsA.Remove(r.Label) [",
     "family": "value set Union or Remove over a NULL operand projects a value where its NULL test answers NULL",
