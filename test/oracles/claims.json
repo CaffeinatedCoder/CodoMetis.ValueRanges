@@ -3206,6 +3206,24 @@
     ]
   },
   {
+    "id": "R48-aggregates-skip-null-inputs",
+    "source": "docs/ranges.md#aggregate-a-sequence-of-ranges",
+    "quote": "**A `null` range is skipped**, as PostgreSQL skips a `NULL` row. So a group over a nullable column aggregates the ranges it has, and a sequence of nothing but `null` counts as empty.",
+    "claim": "RangeAgg and RangeIntersectAgg over ranges of every type (every per-type overload, core and NodaTime) and over sets skip a null element wherever it stands, answering what the same sequence without it answers; a sequence of only nulls answers as an empty one. Over a nullable range, multirange and NodaTime range column, range_agg and range_intersect_agg agree with them for every subset of inputs with a NULL row at every position, except that a group of only NULLs is NULL for range_agg where RangeAgg answers the empty set (the zero-rows case of E07).",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg",
+      "RangeAggregateExtensions.RangeIntersectAgg",
+      "NodaTimeRangeAggregateExtensions.RangeAgg",
+      "NodaTimeRangeAggregateExtensions.RangeIntersectAgg"
+    ],
+    "heldBy": [
+      "RangeAggregateTests",
+      "NodaTimeRangeAggregateTests",
+      "RangeAggregateParityTests"
+    ]
+  },
+  {
     "id": "S01-canonical-set",
     "source": "docs/value-sets.md#value-sets",
     "quote": "Every set is immutable and deduplicated, sorted, and free of nulls.",

@@ -824,3 +824,33 @@ float ranges and `YearMonthRange`. Code that runs in memory is unchanged.
   so the extra test is now optional.
 - **Check reports built on the old rows.** On a required column, a count of rows with no end date
   was 0, and a filter on a date with a `??` fallback left out every open-ended row.
+
+### Check `RangeAgg` and `RangeIntersectAgg` over `null` ranges
+
+Check code that aggregates ranges in memory from a source that can hold `null`: the values of a
+nullable property, or query results you load first and aggregate afterwards.
+
+PostgreSQL's `range_agg` and `range_intersect_agg` skip a `NULL` row, so a `GroupBy` over a
+nullable column aggregates the ranges it has. Before 10.2.0 the in-memory versions didn't. With `a`
+as `[1,10]` and `b` as `[5,25]`:
+
+| Sequence | Before 10.2.0 | Now |
+|---|---|---|
+| `[a, b, null].RangeIntersectAgg()` | `empty` | `[5,10]` |
+| `[null, a, b].RangeIntersectAgg()` | `[5,10]` | `[5,10]` |
+| `[(,), null].RangeIntersectAgg()` | throws `NullReferenceException` | `(,)` |
+| `[a, null].RangeAgg()` | throws `InvalidOperationException` | `{[1,10]}` |
+| `[null].RangeAgg()` | a set holding `null`: `Count` is 1, `IsEmpty()` is `false` | `{}` |
+
+Over sets, a `null` set made `RangeAgg()` throw `NullReferenceException`, and `RangeIntersectAgg()`
+too when it came after another set. Now it is skipped. This holds for every range type, the NodaTime
+ones included. Queries are unchanged, because the database already skipped NULL rows.
+
+- **Search for `RangeIntersectAgg()` over a sequence that can hold `null`.** A `!` in
+  `rows.Select(r => r.Period!).RangeIntersectAgg()` often marks the place: it silenced the nullable
+  warning for a property that can be `null`.
+- **Remove a `Where(r => r.Period != null)` you added before aggregating, if you like.** The answer is
+  the same with or without it.
+- **A group of nothing but `null` still differs from the database.** In memory `RangeAgg()` returns
+  the empty set, where the query returns `null`, as for zero rows
+  ([Read bounds, merge ranges and aggregate](efcore.md#read-bounds-merge-ranges-and-aggregate)).

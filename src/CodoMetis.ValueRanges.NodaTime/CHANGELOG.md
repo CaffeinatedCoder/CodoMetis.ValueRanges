@@ -5,7 +5,9 @@ covers all four packages, which share one version number and release together.
 
 ## [10.2.0]
 
-No change in this package.
+### Changed answers
+
+- Ranges: `RangeAgg()` and `RangeIntersectAgg()` over `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange` skip a `null` range, as `range_agg` and `range_intersect_agg` skip a NULL row. With a `null` after another range, `RangeIntersectAgg()` returned `empty`, or threw after `(,)`, and `RangeAgg()` threw unless an input was `(,)` ([#363](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/363), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
 
 ## [10.1.0] — 2026-10-19
 
