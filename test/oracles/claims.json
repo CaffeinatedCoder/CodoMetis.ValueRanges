@@ -1241,6 +1241,22 @@
     ]
   },
   {
+    "id": "E72-ordering-by-a-bound-puts-nulls-where-postgres-does",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**Ordering by a bound puts the rows without it where PostgreSQL puts NULLs.** `OrderBy(b => b.Period.LowerBound())` sorts the empty rows and the rows with no lower bound last, and `OrderByDescending(b => b.Period.UpperBound())` sorts those with no upper bound first. That holds on a required column too, because the bound is NULL there.",
+    "claim": "Over a required range column and a required multirange column holding every shape, ordering by LowerBound() or UpperBound(), ascending or descending, gives the in-memory order with the rows whose bound is null moved to the end ascending and to the front descending; with a Bound() != null key in front (OrderBy/ThenBy, or OrderByDescending/ThenByDescending), it gives the in-memory order exactly.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",

@@ -1,0 +1,16 @@
+Seed: lower() and upper() are declared NULL only for a NULL argument again, so EF Core takes the bound of a required column as never NULL (#349)
+Oracles: ExecutedQueryTests
+Fails: BoundsComparedWithNull_SelectTheRowsMemorySelects on every operation and column, and OrderingByABound_PutsTheRowsWithoutItWherePostgresPutsNulls on the Bound() != null key, which folds to TRUE
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -681,7 +681,7 @@
+             name,
+             [argument],
+             nullable: true,
+-            argumentsPropagateNullability: [false],
++            argumentsPropagateNullability: [true],
+             typeof(Nullable<>).MakeGenericType(definition.ElementClrType),
+             ElementMapping(definition));
+ 
