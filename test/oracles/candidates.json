@@ -29,55 +29,6 @@
   },
   {
     "oracle": "ExecutedQueryTests",
-    "row": "!IsEmpty() on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "!IsFinite() on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "!IsUnboundedEnd() on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "!UpperBoundInclusive() on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "!Overlaps(p) on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "Contains(Empty) on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "IsContainedBy(Infinite) on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
     "row": "Intersect(p) != null on DateRange? null:",
     "family": "a null receiver answers in memory where SQL answers NULL",
     "issue": "#350",
@@ -93,13 +44,6 @@
   {
     "oracle": "ExecutedQueryTests",
     "row": "Gap(Empty).IsEmpty() on DateRange? null:",
-    "family": "a null receiver answers in memory where SQL answers NULL",
-    "issue": "#350",
-    "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "Union(Infinite).Contains(v) on DateRange? null:",
     "family": "a null receiver answers in memory where SQL answers NULL",
     "issue": "#350",
     "method": "PredicatesOverANullableColumn_SelectTheRowsMemorySelects"

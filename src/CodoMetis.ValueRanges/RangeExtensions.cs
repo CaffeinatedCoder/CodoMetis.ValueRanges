@@ -143,6 +143,10 @@ public static class RangeExtensions
         /// </returns>
         public bool Contains(T value)
         {
+            // A predicate over a null range is false, as a predicate over a NULL column is in a
+            // query (#350). The same holds for every predicate below with a null on either side.
+            if (range is null) return false;
+
             value = range.NormalizeElement(value);
             return range switch
             {
@@ -201,6 +205,8 @@ public static class RangeExtensions
         /// </returns>
         public bool Contains(IRange<T> other)
         {
+            if (range is null || other is null) return false;
+
             // ∅ ⊆ S for every S. "Every value in other also belongs to this range" is vacuously
             // satisfied when other has no values, so there is nothing to check and no receiver
             // shape that can refuse — the empty receiver included, since ∅ ⊆ ∅. This is also what
@@ -256,7 +262,7 @@ public static class RangeExtensions
         /// <see cref="IInfinityRange{T}"/> overlaps with every non-empty range.
         /// </returns>
         public bool Overlaps(IRange<T> other) =>
-            range switch
+            range is not null && other is not null && range switch
             {
                 IEmptyRange<T> => false,
 
@@ -561,7 +567,8 @@ public static class RangeExtensions
         /// contained by every range, the empty range included.
         /// </returns>
         public bool Contains(RangeSet<TRange, T> other) =>
-            other.IsEmpty() || (range.Contains(other[0]) && range.Contains(other[^1]));
+            range is not null && other is not null
+         && (other.IsEmpty() || (range.Contains(other[0]) && range.Contains(other[^1])));
 
         /// <summary>
         /// Determines whether every value of this range is contained in <paramref name="other"/> —
@@ -573,7 +580,7 @@ public static class RangeExtensions
         /// <see langword="true"/> if one element of <paramref name="other"/> contains this range;
         /// always <see langword="true"/> for the empty range.
         /// </returns>
-        public bool IsContainedBy(RangeSet<TRange, T> other) => other.Contains(range);
+        public bool IsContainedBy(RangeSet<TRange, T> other) => other is not null && other.Contains(range);
 
         /// <summary>
         /// Determines whether this range shares at least one value with <paramref name="other"/> —
@@ -582,7 +589,7 @@ public static class RangeExtensions
         /// </summary>
         /// <param name="other">The set to test against.</param>
         /// <returns><see langword="true"/> if some element of <paramref name="other"/> overlaps this range.</returns>
-        public bool Overlaps(RangeSet<TRange, T> other) => other.Overlaps(range);
+        public bool Overlaps(RangeSet<TRange, T> other) => other is not null && other.Overlaps(range);
 
         /// <summary>
         /// Determines whether this range ends strictly before <paramref name="other"/> begins — the
@@ -594,7 +601,7 @@ public static class RangeExtensions
         /// <paramref name="other"/>; always <see langword="false"/> when either is empty.
         /// </returns>
         public bool IsStrictlyLeftOf(RangeSet<TRange, T> other) =>
-            !other.IsEmpty() && range.IsStrictlyLeftOf(other[0]);
+            other is not null && !other.IsEmpty() && range.IsStrictlyLeftOf(other[0]);
 
         /// <summary>
         /// Determines whether this range begins strictly after <paramref name="other"/> ends — the
@@ -606,7 +613,7 @@ public static class RangeExtensions
         /// <paramref name="other"/>; always <see langword="false"/> when either is empty.
         /// </returns>
         public bool IsStrictlyRightOf(RangeSet<TRange, T> other) =>
-            !other.IsEmpty() && range.IsStrictlyRightOf(other[^1]);
+            other is not null && !other.IsEmpty() && range.IsStrictlyRightOf(other[^1]);
 
         /// <summary>
         /// Determines whether this range does not extend to the right of <paramref name="other"/> —
@@ -624,7 +631,7 @@ public static class RangeExtensions
         /// always <see langword="false"/> when either is empty.
         /// </returns>
         public bool DoesNotExtendRightOf(RangeSet<TRange, T> other) =>
-            !other.IsEmpty() && range.DoesNotExtendRightOf(other[^1]);
+            other is not null && !other.IsEmpty() && range.DoesNotExtendRightOf(other[^1]);
 
         /// <summary>
         /// Determines whether this range does not extend to the left of <paramref name="other"/> —
@@ -637,7 +644,7 @@ public static class RangeExtensions
         /// always <see langword="false"/> when either is empty.
         /// </returns>
         public bool DoesNotExtendLeftOf(RangeSet<TRange, T> other) =>
-            !other.IsEmpty() && range.DoesNotExtendLeftOf(other[0]);
+            other is not null && !other.IsEmpty() && range.DoesNotExtendLeftOf(other[0]);
 
         /// <summary>
         /// Determines whether this range and <paramref name="other"/> are adjacent — the PostgreSQL
@@ -650,7 +657,7 @@ public static class RangeExtensions
         /// <see langword="true"/> if this range attaches seamlessly before or after the set;
         /// always <see langword="false"/> when either is empty or infinite.
         /// </returns>
-        public bool IsAdjacentTo(RangeSet<TRange, T> other) => other.IsAdjacentTo(range);
+        public bool IsAdjacentTo(RangeSet<TRange, T> other) => other is not null && other.IsAdjacentTo(range);
 
         /// <summary>
         /// Returns the smallest single range containing both this range and

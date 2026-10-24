@@ -71,7 +71,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(10, 20) };
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\")",
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -82,7 +82,7 @@ public sealed class RangeCollectionTranslationTests
 
         StringAssert.Contains(
             Where(db => db.Bookings.Where(b => wanted.Count(w => w.Overlaps(b.Seats)) == 2)),
-            "FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\") = 2");
+            "FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\") = 2");
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" && b.\"Seats\"")})",
+            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\"")})",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -111,7 +111,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(10, 20) };
 
         Assert.AreEqual(
-            "WHERE b.\"Seats\" IN (@wanted1, @wanted2) OR EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\")",
+            "WHERE b.\"Seats\" IN (@wanted1, @wanted2) OR EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\")",
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -125,7 +125,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" && b.\"Seats\"")})",
+            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\"")})",
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 

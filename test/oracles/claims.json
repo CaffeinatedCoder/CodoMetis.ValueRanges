@@ -1138,6 +1138,23 @@
     ]
   },
   {
+    "id": "E71-predicate-over-a-null-column-is-false",
+    "source": "docs/efcore.md#query-ranges-with-linq",
+    "quote": "On a nullable column, a predicate over a NULL value is `false`, and its negation `true`.",
+    "claim": "Over a nullable range, multirange and value set column, every discovered Boolean predicate of RangeExtensions, RangeSet and ValueSetExtensions, with the column on either side, selects in a filter, a negated filter and a projection what the same expression selects over the rows as loaded, with false for a NULL row where memory throws; a required column's SQL carries no null check, and a nullable one reads x IS NULL OR NOT (…) under a negation.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsEmpty",
+      "RangeSet.Overlaps",
+      "ValueSetExtensions.Contains"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests",
+      "NullOperandTranslationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -2221,6 +2238,20 @@
     ]
   },
   {
+    "id": "M18-rangeset-refuses-a-null-range",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "A `null` range is not an empty range, so it isn't dropped. Creating a set from one throws `ArgumentException`, wherever it stands among the inputs.",
+    "claim": "For every range type of both libraries, RangeSet.From over an IEnumerable and over a span, and RangeSet.Create (the collection-expression builder), throw ArgumentException for a null range placed first, after a bounded range, after the empty range or after the infinite one; Union and Except called on a null range throw an ArgumentException too, where each built a set holding null.",
+    "oracle": "exception",
+    "surfaces": [
+      "RangeSet.From",
+      "RangeSet.Create"
+    ],
+    "heldBy": [
+      "RangeSetNullContractTests"
+    ]
+  },
+  {
     "id": "R01-createfinite-degenerate-is-empty",
     "source": "docs/ranges.md#create-a-range",
     "quote": "**An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form an empty or inverted interval. Examples are `start > end`, or equal bounds that are both exclusive.",
@@ -3221,6 +3252,26 @@
       "RangeAggregateTests",
       "NodaTimeRangeAggregateTests",
       "RangeAggregateParityTests"
+    ]
+  },
+  {
+    "id": "R49-predicates-false-for-a-null",
+    "source": "docs/ranges.md#ask-questions-about-a-range",
+    "quote": "If the range you call it on, or the range or set you pass, is `null`, a query method returns `false`. That is what the same query returns for a NULL column in the database. The `RangeSet` methods return `false` for a `null` range or set you pass, too.",
+    "claim": "For every range type of both libraries, every public bool member of RangeExtensions answers false, without throwing, with null as the range it is called on, as the operand, or both, against every shape and set probe; and every Boolean instance member of RangeSet taking a range or a set answers false for a null operand.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.Contains",
+      "RangeSet.IsContainedBy",
+      "RangeSet.Overlaps",
+      "RangeSet.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeNullPredicateContractTests"
     ]
   },
   {

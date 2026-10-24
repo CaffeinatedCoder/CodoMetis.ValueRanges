@@ -907,6 +907,247 @@ public class ExecutedQueryTests
     private static MemberExpression Captured<T>(T value) =>
         Expression.Field(Expression.Constant(new StrongBox<T>(value)), nameof(StrongBox<>.Value));
 
+    /// <summary>A captured variable of a type known only at run time, which EF Core sends as a parameter.</summary>
+    private static MemberExpression Captured(object value, Type type) =>
+        Expression.Field(Expression.Constant(Activator.CreateInstance(typeof(StrongBox<>).MakeGenericType(type), value)),
+                         nameof(StrongBox<>.Value));
+
+    /// <summary>
+    /// Every Boolean predicate over a nullable range, multirange and value set column, with the column
+    /// on either side, in a filter, a negated filter and a projection, against the same expression over
+    /// the rows as loaded (#355). The predicates are discovered (every public <c>bool</c> member of
+    /// <see cref="RangeExtensions"/>, of <see cref="RangeSet{TRange,T}"/> and of
+    /// <see cref="ValueSetExtensions"/>), so one added later is swept with no edit here.
+    /// </summary>
+    /// <remarks>
+    /// A predicate with a NULL range, multirange or value set on either side is <c>false</c>, and its
+    /// negation <c>true</c>: what EF Core answers for its own types, and what the range predicates answer
+    /// in memory for a null (#350). Where memory throws for a null instead (a <see cref="RangeSet{TRange,T}"/>
+    /// member called on a null set, or a value set predicate, which refuses a null set), the expected
+    /// answer is that rule rather than the exception. A predicate EF Core cannot translate is counted and
+    /// left out. The columns live in a database of their own, so the shared schema keeps its required
+    /// columns.
+    /// </remarks>
+    [TestMethod]
+    public async Task EveryPredicate_OverANullableColumn_IsFalseForTheNullRow()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = await NullablePredicateContext.CreateDatabase();
+
+        DateOnly March(int day) => new(2026, 3, day);
+        DateRange Days(int from, int to) => DateRange.CreateFinite(March(from), March(to), true, true);
+        (DateRange? Period, RangeSet<DateRange, DateOnly>? Blocks, StringSet? Tags)[] values =
+        [
+            (null, null, null),
+            (Days(1, 10), RangeSet<DateRange, DateOnly>.From(Days(1, 10)), StringSet.From(["a"])),
+            (DateRange.Empty, RangeSet<DateRange, DateOnly>.Empty, StringSet.Empty),
+            (DateRange.Infinite, RangeSet<DateRange, DateOnly>.Infinite, StringSet.From(["a", "b"])),
+            (DateRange.CreateUnboundedEnd(March(20), true),
+             RangeSet<DateRange, DateOnly>.From(Days(20, 25), DateRange.CreateUnboundedEnd(March(27), true)),
+             StringSet.From(["b"]))
+        ];
+
+        await using (var seed = new NullablePredicateContext(connectionString))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            seed.Rows.AddRange(values.Select((value, index) => new NullablePredicateRow
+            {
+                Id = index + 1, Period = value.Period, Blocks = value.Blocks, Tags = value.Tags
+            }));
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = new NullablePredicateContext(connectionString);
+        var rows = await context.Rows.AsNoTracking().OrderBy(r => r.Id).ToListAsync();
+        var row  = Expression.Parameter(typeof(NullablePredicateRow), "r");
+
+        // What each parameter can be given besides a column, as (value, declared type) so a captured
+        // range is typed as its union, not as the shape it happens to be.
+        (object Value, Type Type)[] Probes(Type parameter) =>
+            parameter == typeof(DateOnly)                      ? [(March(3), typeof(DateOnly))]
+          : parameter == typeof(string)                        ? [("a", typeof(string))]
+          : parameter.IsAssignableFrom(typeof(StringSet))      ? [(StringSet.From(["a"]), typeof(StringSet)), (StringSet.Empty, typeof(StringSet))]
+          : parameter == typeof(RangeSet<DateRange, DateOnly>) ? [(RangeSet<DateRange, DateOnly>.From(Days(3, 8)), parameter), (RangeSet<DateRange, DateOnly>.Empty, parameter)]
+          :                                                      [(Days(1, 5), typeof(DateRange)), (DateRange.Empty, typeof(DateRange)), (DateRange.Infinite, typeof(DateRange))];
+
+        // The nullable column a parameter can take, if any.
+        string? ColumnFor(Type parameter) =>
+            parameter.IsAssignableFrom(typeof(DateRange))      ? nameof(NullablePredicateRow.Period)
+          : parameter == typeof(RangeSet<DateRange, DateOnly>) ? nameof(NullablePredicateRow.Blocks)
+          : parameter.IsAssignableFrom(typeof(StringSet))      ? nameof(NullablePredicateRow.Tags)
+          :                                                      null;
+
+        Expression Column(string name) => Expression.Property(row, name);
+
+        static MethodInfo? Close(MethodInfo method, Type[] one, Type[] two)
+        {
+            try
+            {
+                return method.GetGenericArguments().Length switch
+                {
+                    0 => method,
+                    1 => method.MakeGenericMethod(one),
+                    2 => method.MakeGenericMethod(two),
+                    _ => null
+                };
+            }
+            catch (ArgumentException)
+            {
+                return null; // a constraint the probe types do not meet
+            }
+        }
+
+        var predicates = new List<(string Name, Expression Body)>();
+
+        // The extensions, ranges and value sets: the column as the value called on, and as the operand.
+        foreach (var (declaring, one, two) in new[]
+                 {
+                     (typeof(RangeExtensions), new[] { typeof(DateOnly) }, new[] { typeof(DateRange), typeof(DateOnly) }),
+                     (typeof(ValueSetExtensions), new[] { typeof(string) }, new[] { typeof(StringSet), typeof(string) })
+                 })
+        {
+            foreach (var method in declaring.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                                            .Where(method => method.ReturnType == typeof(bool))
+                                            .Select(method => Close(method, one, two))
+                                            .OfType<MethodInfo>())
+            {
+                var parameters = method.GetParameters();
+                if (ColumnFor(parameters[0].ParameterType) is not { } receiver) continue;
+
+                if (parameters.Length == 1)
+                {
+                    predicates.Add(($"{method.Name}() on {receiver}", Expression.Call(method, Column(receiver))));
+                    continue;
+                }
+
+                foreach (var (value, type) in Probes(parameters[1].ParameterType))
+                    predicates.Add(($"{method.Name}({value}) on {receiver}", Expression.Call(method, Column(receiver), Captured(value, type))));
+
+                if (ColumnFor(parameters[1].ParameterType) is { } operand)
+                    foreach (var (value, type) in Probes(parameters[0].ParameterType))
+                        predicates.Add(($"{value}.{method.Name}({operand})", Expression.Call(method, Captured(value, type), Column(operand))));
+            }
+        }
+
+        // The set's own predicates, called on the multirange column and with a column as the operand.
+        foreach (var method in typeof(RangeSet<DateRange, DateOnly>)
+                              .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                              .Where(method => method.ReturnType == typeof(bool) && method.Name != nameof(Equals)
+                                            && method.GetParameters().Length <= 1))
+        {
+            var blocks = Column(nameof(NullablePredicateRow.Blocks));
+            if (method.GetParameters() is not [var parameter])
+            {
+                predicates.Add(($"{method.Name}() on Blocks", Expression.Call(blocks, method)));
+                continue;
+            }
+
+            foreach (var (value, type) in Probes(parameter.ParameterType))
+                predicates.Add(($"{method.Name}({value}) on Blocks", Expression.Call(blocks, method, Captured(value, type))));
+
+            if (ColumnFor(parameter.ParameterType) is { } operand)
+                foreach (var (value, type) in Probes(typeof(RangeSet<DateRange, DateOnly>)))
+                    predicates.Add(($"{value}.{method.Name}({operand})", Expression.Call(Captured(value, type), method, Column(operand))));
+        }
+
+        var failures     = new List<string>();
+        var untranslated = new List<string>();
+
+        foreach (var (name, body) in predicates)
+        {
+            var filter   = Expression.Lambda<Func<NullablePredicateRow, bool>>(body, row);
+            var negated  = Expression.Lambda<Func<NullablePredicateRow, bool>>(Expression.Not(body), row);
+            var compiled = filter.Compile();
+
+            // Memory, with rule (c) where the call throws for a null: then the answer is false.
+            var expected = new List<bool>();
+            foreach (var loaded in rows)
+            {
+                try
+                {
+                    expected.Add(compiled(loaded));
+                }
+                catch (Exception e) when (e is NullReferenceException or ArgumentNullException)
+                {
+                    if (loaded.Id != 1) failures.Add($"{name}: memory threw {e.GetType().Name} on row {loaded.Id}, which holds no NULL");
+                    expected.Add(false);
+                }
+            }
+
+            var ids = rows.Select(r => r.Id).ToList();
+            try
+            {
+                var where     = await context.Rows.Where(filter).OrderBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                var whereNot  = await context.Rows.Where(negated).OrderBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                var projected = await context.Rows.OrderBy(r => r.Id).Select(filter).ToListAsync();
+
+                var wantWhere    = ids.Where((_, index) => expected[index]).ToList();
+                var wantWhereNot = ids.Where((_, index) => !expected[index]).ToList();
+
+                if (!where.SequenceEqual(wantWhere))
+                    failures.Add($"{name}: Where selects rows {{{string.Join(",", where)}}}, memory {{{string.Join(",", wantWhere)}}}");
+                if (!whereNot.SequenceEqual(wantWhereNot))
+                    failures.Add($"!{name}: Where selects rows {{{string.Join(",", whereNot)}}}, memory {{{string.Join(",", wantWhereNot)}}}");
+                if (!projected.SequenceEqual(expected))
+                    failures.Add($"Select({name}): [{string.Join(",", projected)}], memory [{string.Join(",", expected)}]");
+            }
+            catch (InvalidOperationException e) when (e.Message.Contains("could not be translated", StringComparison.Ordinal))
+            {
+                untranslated.Add(name);
+            }
+            catch (Exception e) when (e is InvalidOperationException or DbException)
+            {
+                failures.Add($"{name}: server threw {e.GetType().Name}: {e.Message.Split('\n')[0]}");
+            }
+        }
+
+        // Some 140 predicates translate today; the floor only catches a discovery that stopped matching.
+        Assert.IsGreaterThanOrEqualTo(100, predicates.Count - untranslated.Count,
+                                      $"Only {predicates.Count - untranslated.Count} of {predicates.Count} predicates translated; "
+                                    + $"untranslated: {string.Join("; ", untranslated)}");
+
+        Candidates.Verdict(nameof(ExecutedQueryTests), failures,
+                           "A predicate over a nullable column: PostgreSQL and memory (or rule (c)) select different rows",
+                           method: nameof(EveryPredicate_OverANullableColumn_IsFalseForTheNullRow));
+    }
+
+    public sealed class NullablePredicateRow
+    {
+        public int Id { get; set; }
+
+        public DateRange? Period { get; set; }
+
+        public RangeSet<DateRange, DateOnly>? Blocks { get; set; }
+
+        public StringSet? Tags { get; set; }
+    }
+
+    /// <summary>A database of its own, so that nullable range and set columns do not change the shared schema.</summary>
+    private sealed class NullablePredicateContext(string connectionString) : DbContext
+    {
+        public DbSet<NullablePredicateRow> Rows => Set<NullablePredicateRow>();
+
+        public static async Task<string> CreateDatabase()
+        {
+            var name = $"nullable_predicate_{Guid.NewGuid():N}";
+            await using (var connection = new NpgsqlConnection(ContainerLifecycle.ServerConnectionString))
+            {
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand($"CREATE DATABASE {name}", connection);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            return new NpgsqlConnectionStringBuilder(ContainerLifecycle.ServerConnectionString) { Database = name }.ConnectionString;
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.Entity<NullablePredicateRow>().Property(r => r.Id).ValueGeneratedNever();
+    }
+
     public sealed class NullableRangeRow
     {
         public int Id { get; set; }

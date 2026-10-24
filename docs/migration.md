@@ -854,3 +854,61 @@ ones included. Queries are unchanged, because the database already skipped NULL 
 - **A group of nothing but `null` still differs from the database.** In memory `RangeAgg()` returns
   the empty set, where the query returns `null`, as for zero rows
   ([Read bounds, merge ranges and aggregate](efcore.md#read-bounds-merge-ranges-and-aggregate)).
+
+### Keep `null` out of a range set
+
+Check code that builds a `RangeSet` from ranges that can be `null`: `RangeSet.From`, a collection
+expression such as `[a, b]`, and `RangeSet.Create`.
+
+Before 10.2.0, a `null` range went into the set. `RangeSet<Int32Range, int>.From([null])` had a
+`Count` of 1, `IsEmpty()` returned `false`, and the first `Contains` threw `NullReferenceException`.
+With two or more ranges, `From` threw `InvalidOperationException` while sorting them, and next to
+`(,)` the `null` was ignored. Now each of these throws `ArgumentException`, wherever the `null`
+stands. `Union` and `Except` called on a `null` range threw or built such a set, and they throw now
+too.
+
+- **Filter before you build the set** if `null` means "no range" in your data:
+  `RangeSet<DateRange, DateOnly>.From(periods.OfType<DateRange>())` leaves the `null` ranges out.
+- **Aggregate with `RangeAgg()`** if you collect ranges from a nullable column. It skips `null`, as
+  PostgreSQL's `range_agg` does ([details](#check-rangeagg-and-rangeintersectagg-over-null-ranges)).
+
+### Check predicates over a `null` range or a NULL column
+
+Check code that calls a predicate such as `Contains`, `Overlaps` or `IsEmpty()` on a range or set that
+can be `null`, in memory or in a query over a nullable column.
+
+The rule is the one EF Core uses for its own types. A predicate with a `null` range or set on either
+side is `false`, and its negation `true`. EF Core writes `!b.Name.StartsWith("a")` so that it keeps
+the rows whose `Name` is NULL, and the range predicates now do the same.
+
+In memory, most predicates already returned `false` for a `null` range, but not all. With `nothing`
+as a `null` `DateRange`:
+
+| Call | Before 10.2.0 | Now |
+|---|---|---|
+| `nothing.Contains(DateRange.Empty)` | `true` | `false` |
+| `nothing.IsContainedBy(DateRange.Infinite)` | `true` | `false` |
+| `DateRange.Infinite.Contains(nothing)` | `true` | `false` |
+| `nothing.Contains(day)` | throws `NullReferenceException` | `false` |
+| `range.Overlaps(nullSet)`, `set.Contains(nothing)` | throws `NullReferenceException`, or `true` | `false` |
+
+In a query over a nullable column, a predicate over a NULL value was NULL. A filter dropped the row
+whether the predicate was negated or not, and a projected predicate threw when it read the NULL:
+
+| Query on a nullable `DateRange? Period` | Before 10.2.0 | Now |
+|---|---|---|
+| `Where(b => !b.Period!.Overlaps(p))` | the NULL rows are missing | the NULL rows are included |
+| `Where(b => b.Period!.Overlaps(p))` | no NULL rows | no NULL rows |
+| `Select(b => b.Period!.IsEmpty())` | throws (`InvalidOperationException`) at a NULL row | `false` for it |
+| `Where(b => !b.Tags!.Contains("x"))` on a nullable value set | the NULL rows are missing | the NULL rows are included |
+
+The SQL of a required column doesn't change. A nullable one gets `b."Period" IS NULL OR NOT (…)`
+under a negation.
+
+- **Search for negated predicates over a nullable column.** A `!` that silenced the nullable warning,
+  as in `!b.Period!.Overlaps(p)`, often marks the place.
+- **Say "has a period and doesn't overlap" when that is what you mean.** Write
+  `Where(b => b.Period != null && !b.Period.Overlaps(p))`. It selects the rows the negated predicate
+  selected before.
+- **`CompareTo` and `==` keep their own rules for a NULL column** ([Sort ranges](ranges.md#sort-ranges)).
+- **Value sets still throw in memory for a `null` set.** Only the query changes for them.
