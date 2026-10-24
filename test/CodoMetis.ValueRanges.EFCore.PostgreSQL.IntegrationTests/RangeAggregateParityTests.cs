@@ -237,6 +237,170 @@ public sealed class RangeAggregateParityTests
                       "the intersection aggregate agrees with the server on zero rows");
     }
 
+    /// <summary>
+    /// A nullable column: <c>range_agg</c> and <c>range_intersect_agg</c> skip a NULL row, and
+    /// <c>RangeAgg</c> and <c>RangeIntersectAgg</c> skip a <see langword="null"/> wherever it stands in
+    /// the sequence (#361). Each subset of a four-input universe is one group with one NULL row added,
+    /// over a range, a multirange and a NodaTime range column, and the in-memory fold runs with the null
+    /// at every position. <c>RangeIntersectAgg</c> folded a null after another input in as
+    /// <c>Intersect(null)</c>, which is <c>Empty</c>, and <c>RangeAgg</c> threw.
+    /// </summary>
+    /// <remarks>
+    /// A group of nothing but NULLs is the zero-rows case of
+    /// <see cref="AggregatesOverZeroRows_AreNullOnTheServerAndEmptyInMemory"/>: the server answers NULL
+    /// for both aggregates, and memory the empty set for <c>RangeAgg</c> and <see langword="null"/> for
+    /// <c>RangeIntersectAgg</c>. The columns live in a database of their own, so the shared schema keeps
+    /// its required columns.
+    /// </remarks>
+    [TestMethod]
+    public async Task Aggregates_OverANullableColumn_SkipTheNullRows()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = await NullableAggregateContext.CreateDatabase();
+
+        LocalDate March(int day) => new(2026, 3, day);
+        Int32Range[] seats = [Int32Range.Empty, Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(3, 8), Int32Range.Infinite];
+        RangeSet<Int32Range, int>[] blocks =
+        [
+            RangeSet<Int32Range, int>.Empty,
+            RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 5)]),
+            RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(3, 8), Int32Range.CreateFinite(20, 30)]),
+            RangeSet<Int32Range, int>.Infinite
+        ];
+        LocalDateRange[] days = [LocalDateRange.Empty, LocalDateRange.CreateFinite(March(1), March(5)), LocalDateRange.CreateFinite(March(3), March(8)), LocalDateRange.Infinite];
+        const int size = 4;
+
+        await using (var seed = new NullableAggregateContext(connectionString))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            var id = 1;
+            for (var mask = 0; mask < 1 << size; mask++)
+            {
+                seed.Rows.Add(new NullableAggregateRow { Id = id++, GroupKey = mask });
+                foreach (var index in Indices(mask))
+                    seed.Rows.Add(new NullableAggregateRow { Id = id++, GroupKey = mask, Seats = seats[index], Blocks = blocks[index], Days = days[index] });
+            }
+
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = new NullableAggregateContext(connectionString);
+
+        var query = context.Rows.GroupBy(r => r.GroupKey).Select(g => new
+        {
+            g.Key,
+            SeatsAgg        = g.Select(r => r.Seats!).RangeAgg(),
+            SeatsIntersect  = g.Select(r => r.Seats!).RangeIntersectAgg(),
+            BlocksAgg       = g.Select(r => r.Blocks!).RangeAgg(),
+            BlocksIntersect = g.Select(r => r.Blocks!).RangeIntersectAgg(),
+            DaysAgg         = g.Select(r => r.Days!).RangeAgg(),
+            DaysIntersect   = g.Select(r => r.Days!).RangeIntersectAgg()
+        });
+        var sql = query.ToQueryString();
+        StringAssert.Contains(sql, "range_agg(", $"RangeAgg did not translate:\n{sql}");
+        StringAssert.Contains(sql, "range_intersect_agg(", $"RangeIntersectAgg did not translate:\n{sql}");
+
+        var server   = await query.ToDictionaryAsync(row => row.Key);
+        var failures = new List<string>();
+
+        for (var mask = 0; mask < 1 << size; mask++)
+        {
+            var row     = server[mask];
+            var present = Indices(mask).ToArray();
+            var name    = $"{{null{string.Concat(present.Select(index => $", {seats[index]}"))}}}";
+
+            for (var position = 0; position <= present.Length; position++)
+            {
+                var at = present.Length == 0 ? "" : $" with the null at {position}";
+                Check($"RangeAgg(Seats) over {name}{at}", row.SeatsAgg, () => WithNullAt(present.Select(index => seats[index]), position).RangeAgg(), emptyIsNull: true);
+                Check($"RangeIntersectAgg(Seats) over {name}{at}", row.SeatsIntersect, () => WithNullAt(present.Select(index => seats[index]), position).RangeIntersectAgg());
+                Check($"RangeAgg(Blocks) over {name}{at}", row.BlocksAgg, () => WithNullAt(present.Select(index => blocks[index]), position).RangeAgg(), emptyIsNull: true);
+                Check($"RangeIntersectAgg(Blocks) over {name}{at}", row.BlocksIntersect, () => WithNullAt(present.Select(index => blocks[index]), position).RangeIntersectAgg());
+                Check($"RangeAgg(Days) over {name}{at}", row.DaysAgg, () => WithNullAt(present.Select(index => days[index]), position).RangeAgg(), emptyIsNull: true);
+                Check($"RangeIntersectAgg(Days) over {name}{at}", row.DaysIntersect, () => WithNullAt(present.Select(index => days[index]), position).RangeIntersectAgg());
+            }
+
+            // Only the group of nothing but NULLs reaches the zero-rows divergence.
+            void Check(string what, object? serverValue, Func<object?> memory, bool emptyIsNull = false)
+            {
+                string expected;
+                try
+                {
+                    var value = memory();
+                    expected = emptyIsNull && present.Length == 0 && value is not null && value.Equals(Empty(value)) ? "NULL" : Show(value);
+                }
+                catch (Exception e) when (e is InvalidOperationException or NullReferenceException)
+                {
+                    expected = $"throws {e.GetType().Name}";
+                }
+
+                if (Show(serverValue) != expected)
+                    failures.Add($"  {what}: server {Show(serverValue)}, memory {expected}");
+            }
+        }
+
+        Assert.AreEqual(0, failures.Count,
+                        $"{failures.Count} aggregate results over a nullable column disagree with PostgreSQL:\n"
+                      + string.Join("\n", failures.Take(20))
+                      + (failures.Count > 20 ? $"\n  … and {failures.Count - 20} more" : ""));
+
+        static TItem[] WithNullAt<TItem>(IEnumerable<TItem> items, int position)
+            where TItem : class
+        {
+            var list = items.ToList();
+            list.Insert(position, null!);
+            return [.. list];
+        }
+
+        // The empty set of the same type as a RangeAgg result, for the zero-rows comparison.
+        static object Empty(object set) =>
+            set.GetType().GetProperty(nameof(RangeSet<Int32Range, int>.Empty))!.GetValue(null)!;
+
+        static string Show(object? value) => value?.ToString() ?? "NULL";
+
+        static IEnumerable<int> Indices(int mask) =>
+            Enumerable.Range(0, size).Where(index => (mask & (1 << index)) != 0);
+    }
+
+    public sealed class NullableAggregateRow
+    {
+        public int Id { get; set; }
+
+        public int GroupKey { get; set; }
+
+        public Int32Range? Seats { get; set; }
+
+        public RangeSet<Int32Range, int>? Blocks { get; set; }
+
+        public LocalDateRange? Days { get; set; }
+    }
+
+    /// <summary>A database of its own, so that nullable range columns do not change the shared schema.</summary>
+    private sealed class NullableAggregateContext(string connectionString) : DbContext
+    {
+        public DbSet<NullableAggregateRow> Rows => Set<NullableAggregateRow>();
+
+        public static async Task<string> CreateDatabase()
+        {
+            var name = $"nullable_aggregate_{Guid.NewGuid():N}";
+            await using (var connection = new NpgsqlConnection(ContainerLifecycle.ServerConnectionString))
+            {
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand($"CREATE DATABASE {name}", connection);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            return new NpgsqlConnectionStringBuilder(ContainerLifecycle.ServerConnectionString) { Database = name }.ConnectionString;
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseNpgsql(connectionString, npgsql => npgsql.UseValueRangesNodaTime());
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.Entity<NullableAggregateRow>().Property(r => r.Id).ValueGeneratedNever();
+    }
+
     // -------------------------------------------------------------------------
     // The sweep
     // -------------------------------------------------------------------------

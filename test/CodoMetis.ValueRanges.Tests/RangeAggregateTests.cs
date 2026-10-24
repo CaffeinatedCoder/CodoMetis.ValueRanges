@@ -141,4 +141,33 @@ public class RangeAggregateTests
         Assert.AreEqual(IntSet.Empty, new[] { IntSet.Empty, sets[0] }.RangeIntersectAgg());
         Assert.AreEqual(sets[0], new[] { IntSet.Infinite, sets[0] }.RangeIntersectAgg(), "the infinite set is the identity");
     }
+
+    // -------------------------------------------------------------------------
+    // Null inputs, which range_agg and range_intersect_agg skip
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void EveryRangeOverload_SkipsANullRangeWhereverItStands()
+    {
+        var failures = AggregateNullInputs.Disagreements(typeof(RangeAggregateExtensions), minimumOverloads: 18);
+
+        Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
+    }
+
+    [TestMethod]
+    public void TheSetOverloads_SkipANullSetWhereverItStands()
+    {
+        var first  = IntSet.From([Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(20, 25)]);
+        var second = IntSet.From([Int32Range.CreateFinite(3, 22)]);
+        IntSet nothing = null!;
+
+        foreach (var withNull in new[] { new[] { nothing, first, second }, [first, nothing, second], [first, second, nothing] })
+        {
+            Assert.AreEqual(new[] { first, second }.RangeAgg(), withNull.RangeAgg());
+            Assert.AreEqual(new[] { first, second }.RangeIntersectAgg(), withNull.RangeIntersectAgg());
+        }
+
+        Assert.AreEqual(IntSet.Empty, new[] { nothing }.RangeAgg(), "nothing but nulls is an empty source");
+        Assert.IsNull(new[] { nothing, nothing }.RangeIntersectAgg(), "nothing but nulls is an empty source");
+    }
 }
