@@ -760,6 +760,9 @@ them overlap, and no two are adjacent. To keep those rules, creating a set:
 - **Merges ranges that overlap or are adjacent.**
 - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**
 
+A `null` range is not an empty range, so it isn't dropped. Creating a set from one throws
+`ArgumentException`, wherever it stands among the inputs.
+
 What the example shows:
 
 - **Union, intersection and difference** each take a single range or a whole set. They also have

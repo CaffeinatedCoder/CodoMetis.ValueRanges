@@ -854,3 +854,20 @@ ones included. Queries are unchanged, because the database already skipped NULL 
 - **A group of nothing but `null` still differs from the database.** In memory `RangeAgg()` returns
   the empty set, where the query returns `null`, as for zero rows
   ([Read bounds, merge ranges and aggregate](efcore.md#read-bounds-merge-ranges-and-aggregate)).
+
+### Keep `null` out of a range set
+
+Check code that builds a `RangeSet` from ranges that can be `null`: `RangeSet.From`, a collection
+expression such as `[a, b]`, and `RangeSet.Create`.
+
+Before 10.2.0, a `null` range went into the set. `RangeSet<Int32Range, int>.From([null])` had a
+`Count` of 1, `IsEmpty()` returned `false`, and the first `Contains` threw `NullReferenceException`.
+With two or more ranges, `From` threw `InvalidOperationException` while sorting them, and next to
+`(,)` the `null` was ignored. Now each of these throws `ArgumentException`, wherever the `null`
+stands. `Union` and `Except` called on a `null` range threw or built such a set, and they throw now
+too.
+
+- **Filter before you build the set** if `null` means "no range" in your data:
+  `RangeSet<DateRange, DateOnly>.From(periods.OfType<DateRange>())` leaves the `null` ranges out.
+- **Aggregate with `RangeAgg()`** if you collect ranges from a nullable column. It skips `null`, as
+  PostgreSQL's `range_agg` does ([details](#check-rangeagg-and-rangeintersectagg-over-null-ranges)).

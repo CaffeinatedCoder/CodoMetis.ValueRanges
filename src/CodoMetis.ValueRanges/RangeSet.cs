@@ -37,6 +37,7 @@ public static class RangeSet
     /// <param name="ranges">The ranges to build the set from, in any order.</param>
     /// <typeparam name="TRange">The concrete range type the set is composed of.</typeparam>
     /// <typeparam name="T">The element type of the ranges.</typeparam>
+    /// <exception cref="ArgumentException"><paramref name="ranges"/> holds a <see langword="null"/> range.</exception>
     public static RangeSet<TRange, T> Create<TRange, T>(ReadOnlySpan<TRange> ranges)
         where TRange : IRangeFactory<TRange, T>, IRange<T>
         where T : struct, IComparable<T>, IEquatable<T>
@@ -118,6 +119,7 @@ public sealed class RangeSet<TRange, T>
     /// </summary>
     /// <param name="ranges">The ranges to build the set from, in any order.</param>
     /// <returns>The normalized range set.</returns>
+    /// <exception cref="ArgumentException"><paramref name="ranges"/> holds a <see langword="null"/> range.</exception>
     public static RangeSet<TRange, T> From(IEnumerable<TRange> ranges)
         => CollapseSingletons(Normalize(ranges));
 
@@ -145,15 +147,19 @@ public sealed class RangeSet<TRange, T>
         if (ranges is IReadOnlyCollection<TRange> { Count: 1 } single)
             return NormalizeSingle(single.First());
 
-        var working = new List<TRange>();
+        var working  = new List<TRange>();
+        var infinite = false;
         foreach (var range in ranges)
         {
+            // A null anywhere refuses the whole call, so every input is read, also after an
+            // infinity has decided the result.
+            if (range is null) throw NullRange();
             if (range is IEmptyRange<T>) continue;
-            if (range is IInfinityRange<T>) return [TRange.Infinite];
-            working.Add(range);
+            if (range is IInfinityRange<T>) infinite = true;
+            else if (!infinite) working.Add(range);
         }
 
-        return NormalizeCollected(working);
+        return infinite ? [TRange.Infinite] : NormalizeCollected(working);
     }
 
     // The span counterpart of Normalize(IEnumerable). Shares the single-element fast path and
@@ -163,25 +169,33 @@ public sealed class RangeSet<TRange, T>
         if (ranges.Length == 1)
             return NormalizeSingle(ranges[0]);
 
-        var working = new List<TRange>(ranges.Length);
+        var working  = new List<TRange>(ranges.Length);
+        var infinite = false;
         foreach (var range in ranges)
         {
+            if (range is null) throw NullRange();
             if (range is IEmptyRange<T>) continue;
-            if (range is IInfinityRange<T>) return [TRange.Infinite];
-            working.Add(range);
+            if (range is IInfinityRange<T>) infinite = true;
+            else if (!infinite) working.Add(range);
         }
 
-        return NormalizeCollected(working);
+        return infinite ? [TRange.Infinite] : NormalizeCollected(working);
     }
 
     // A lone range is already normalized once the two singleton inputs are folded away.
     private static ImmutableArray<TRange> NormalizeSingle(TRange only)
         => only switch
            {
+               null              => throw NullRange(),
                IEmptyRange<T>    => [],
                IInfinityRange<T> => [TRange.Infinite],
                _                 => [only]
            };
+
+    // A null range is not an empty one: the set refuses it, as the value sets refuse a null
+    // element, rather than dropping it and reporting fewer ranges than the caller supplied.
+    private static ArgumentException NullRange()
+        => new("A range set cannot contain a null range.", "ranges");
 
     // Sorts and merges the surviving ranges. The caller has already dropped empties and
     // short-circuited on Infinity.

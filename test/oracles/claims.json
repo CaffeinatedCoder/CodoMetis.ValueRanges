@@ -2221,6 +2221,20 @@
     ]
   },
   {
+    "id": "M18-rangeset-refuses-a-null-range",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "A `null` range is not an empty range, so it isn't dropped. Creating a set from one throws `ArgumentException`, wherever it stands among the inputs.",
+    "claim": "For every range type of both libraries, RangeSet.From over an IEnumerable and over a span, and RangeSet.Create (the collection-expression builder), throw ArgumentException for a null range placed first, after a bounded range, after the empty range or after the infinite one; Union and Except called on a null range throw an ArgumentException too, where each built a set holding null.",
+    "oracle": "exception",
+    "surfaces": [
+      "RangeSet.From",
+      "RangeSet.Create"
+    ],
+    "heldBy": [
+      "RangeSetNullContractTests"
+    ]
+  },
+  {
     "id": "R01-createfinite-degenerate-is-empty",
     "source": "docs/ranges.md#create-a-range",
     "quote": "**An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form an empty or inverted interval. Examples are `start > end`, or equal bounds that are both exclusive.",
