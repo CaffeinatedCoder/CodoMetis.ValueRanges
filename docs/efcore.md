@@ -844,3 +844,35 @@ Good to know:
 - **`Count` over a `Union` computed in the database throws.** `array_cat` concatenates without
   deduplicating, so the query throws rather than returning a wrong count. In a projection, EF
   counts the loaded set in memory instead. See [Combine sets with `Union`](#combine-sets-with-union).
+
+### Known differences in 10.2.0
+
+Two queries in 10.2.0 return something other than the same LINQ over the loaded rows, without an
+error. Both are fixed in 11.0.0 first, and each fix comes to 10.x in a later minor.
+
+- **A value set `Union` or `Remove` over NULL, in a projection.** `array_cat` and `array_remove`
+  skip a NULL argument instead of returning NULL. So `b.MaybeTags.Union(more)` loads `more` for a
+  row whose `MaybeTags` is NULL, and `b.Tags.Remove(b.Label)` loads `Tags` unchanged when `Label`
+  is NULL. A filter such as `b.MaybeTags.Union(more) == null` treats both as NULL. The NULL can
+  come from a nullable column or from the missing side of an outer join. Test for null yourself,
+  and the projection loads `null` too:
+
+  ```csharp
+  bookings.Select(b => b.MaybeTags == null ? null : b.MaybeTags.Union(more));
+  bookings.Select(b => b.Label == null ? null : b.Tags.Remove(b.Label));
+  ```
+
+  The fix is [#395](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/395).
+- **`RangeLowerBoundComparer` in a query.** `RangeLowerBoundComparer<TRange, T>.Instance.Compare(a, b)`,
+  and `RangeSet<TRange, T>.LowerBoundComparer`, compare in the [range order](ranges.md#sort-ranges)
+  when they run in the database, not by lower bound. EF Core rewrites every `Compare(a, b)` call
+  this way, whatever the comparer does ([dotnet/efcore#39402](https://github.com/dotnet/efcore/issues/39402)).
+  So `Where(b => comparer.Compare(b.Period, p) == 0)` becomes `WHERE b."Period" = @p`, and it
+  misses the rows whose lower bound is the same as `p`'s but whose upper bound is not. Call the
+  comparer on loaded rows instead:
+
+  ```csharp
+  bookings.AsEnumerable().Where(b => comparer.Compare(b.Period, p) == 0);
+  ```
+
+  The fix is [#396](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/396).

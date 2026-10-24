@@ -26,6 +26,7 @@ Some calls answer differently: [Changed answers in 10.2.0](https://github.com/Ca
 
 ### Fixed
 
+- Docs: two queries in 10.2.0 still return something other than the same LINQ over the loaded rows, without an error: a value set `Union` or `Remove` over NULL in a projection, and `RangeLowerBoundComparer` in a query. Each has a workaround, and its fix comes in a later 10.x minor ([#397](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/397), [EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/release/10.x/docs/efcore.md#known-differences-in-1020)).
 - Docs: an ordering by `LowerBound()` or `UpperBound()` puts the empty rows and those without that bound where PostgreSQL puts NULLs, last ascending and first descending, also on a required column. A `!= null` key in front sorts them as memory does ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - EF Core: on EF Core 10.0.2 and later, an empty captured list of ranges or sets keeps EF Core's ordering column (`_ord`, behind `FirstOrDefault`) an integer, as with elements. It was cast to the range or set type. No answer changed, but comparing it with an integer would have failed for the empty list ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
 
