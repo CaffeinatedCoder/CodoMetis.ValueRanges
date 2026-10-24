@@ -680,6 +680,8 @@ new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
 - **`RangeAgg()`** returns a normalized `RangeSet` with every value of every range.
 - **`RangeIntersectAgg()`** returns the intersection of all the ranges, or `null` when the
   sequence is empty.
+- **A `null` range is skipped**, as PostgreSQL skips a `NULL` row. So a group over a nullable
+  column aggregates the ranges it has, and a sequence of nothing but `null` counts as empty.
 
 Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:
 
@@ -695,8 +697,8 @@ blocked.RangeIntersectAgg();  // { [3, 5], [20, 22] } — the values every set h
 ```
 
 Over sets, `RangeIntersectAgg()` returns a `RangeSet`, again `null` for an empty sequence. An empty
-set among the inputs makes it the empty set. These two are generic, so they work for every range
-type, the NodaTime ones included.
+set among the inputs makes it the empty set. A `null` set is skipped. These two are generic, so they
+work for every range type, the NodaTime ones included.
 
 In an EF Core query, all four run as the SQL aggregates inside a `GroupBy` projection. See
 [Entity Framework Core](efcore.md).

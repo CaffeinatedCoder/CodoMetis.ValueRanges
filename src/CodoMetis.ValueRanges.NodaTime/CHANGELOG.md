@@ -10,6 +10,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. The
 ### Breaking
 
 - Targets `net11.0` and needs the .NET 11 runtime, one target framework per line.
+- Ranges: `RangeAgg()` and `RangeIntersectAgg()` over `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange` skip a `null` range, as `range_agg` and `range_intersect_agg` skip a NULL row. With a `null` after another range, `RangeIntersectAgg()` returned `empty`, or threw after `(,)`, and `RangeAgg()` threw unless an input was `(,)` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-rangeagg-and-rangeintersectagg-over-null-ranges)).
 
 ### Fixed
 
