@@ -1,0 +1,16 @@
+Seed: a value set predicate over a NULL column is NULL in SQL, so its negation drops the row EF Core keeps for string[]
+Oracles: ExecutedQueryTests
+Fails: EveryPredicate_OverANullableColumn_IsFalseForTheNullRow, the negated filter and the projection of every predicate on the NULL row of Tags
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
+@@ -82,7 +82,7 @@
+         var translation = TranslateCall(method, arguments, definition);
+ 
+         return translation is not null && translation.Type == typeof(bool)
+-            ? FalseOverNull(translation, arguments)
++            ? translation
+             : translation;
+     }
+ 

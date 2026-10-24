@@ -79,6 +79,39 @@ internal sealed class ValueSetsMethodCallTranslator(
         if (!TryResolveDefinition(arguments, out var definition))
             return null;
 
+        var translation = TranslateCall(method, arguments, definition);
+
+        return translation is not null && translation.Type == typeof(bool)
+            ? FalseOverNull(translation, arguments)
+            : translation;
+    }
+
+    /// <summary>
+    /// A predicate with a NULL value set on either side is <c>false</c>, as EF Core answers
+    /// <c>!names.Contains(x)</c> over a NULL <c>string[]</c> (#355): each set operand becomes
+    /// <c>x IS NOT NULL AND &lt;predicate&gt;</c>, which EF Core drops for a required column and turns
+    /// into <c>x IS NULL OR NOT (…)</c> under a negation. In memory the set predicates throw for a null
+    /// set, so the database answer is EF Core's convention rather than a copy of a client answer.
+    /// </summary>
+    private SqlExpression FalseOverNull(SqlExpression predicate, IReadOnlyList<SqlExpression> operands)
+    {
+        for (var index = operands.Count - 1; index >= 0; index--)
+        {
+            var operand = Unwrap(operands[index]);
+            if (!SetTypeRegistry.TryGetByClrType(operand.Type, out var definition))
+                continue;
+
+            var mapped = operand.TypeMapping is null
+                ? sqlExpressionFactory.ApplyTypeMapping(operand, definition.SetTypeMapping)
+                : operand;
+            predicate = sqlExpressionFactory.AndAlso(sqlExpressionFactory.IsNotNull(mapped), predicate);
+        }
+
+        return predicate;
+    }
+
+    private SqlExpression? TranslateCall(MethodInfo method, IReadOnlyList<SqlExpression> arguments, ISetTypeDefinition definition)
+    {
         SqlExpression Set(int index)
             => sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), definition.SetTypeMapping);
 

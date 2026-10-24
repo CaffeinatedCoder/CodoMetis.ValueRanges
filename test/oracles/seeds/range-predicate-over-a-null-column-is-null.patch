@@ -1,0 +1,16 @@
+Seed: a range or multirange predicate over a NULL column is NULL in SQL, so its negation drops the row EF Core keeps for its own types
+Oracles: ExecutedQueryTests
+Fails: EveryPredicate_OverANullableColumn_IsFalseForTheNullRow, the negated filter and the projection of every predicate on the NULL row of Period and Blocks
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -106,7 +106,7 @@
+         var translation = TranslateCall(instance, method, arguments);
+ 
+         return translation is not null && translation.Type == typeof(bool)
+-            ? FalseOverNull(translation, instance is null ? arguments : [instance, .. arguments])
++            ? translation
+             : translation;
+     }
+ 

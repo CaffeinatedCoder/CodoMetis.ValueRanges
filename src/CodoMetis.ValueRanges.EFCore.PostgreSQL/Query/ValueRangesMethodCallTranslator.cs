@@ -103,6 +103,43 @@ internal sealed class ValueRangesMethodCallTranslator(
         IDiagnosticsLogger<DbLoggerCategory.Query> logger
     )
     {
+        var translation = TranslateCall(instance, method, arguments);
+
+        return translation is not null && translation.Type == typeof(bool)
+            ? FalseOverNull(translation, instance is null ? arguments : [instance, .. arguments])
+            : translation;
+    }
+
+    /// <summary>
+    /// A predicate with a NULL range or multirange on either side is <c>false</c>: what EF Core answers
+    /// for a predicate over NULL on its own types, and what the in-memory predicates answer for a null
+    /// (#350, #355). Each range or multirange operand becomes <c>x IS NOT NULL AND &lt;predicate&gt;</c>.
+    /// EF Core's nullability processing drops the check for a required column and a non-null parameter,
+    /// and writes <c>x IS NULL OR NOT (…)</c> under a negation, so a negated predicate keeps the NULL row.
+    /// </summary>
+    /// <remarks>
+    /// <c>CompareTo</c> never reaches this: EF Core turns <c>a.CompareTo(b) op k</c> into a comparison,
+    /// which keeps <c>Comparer&lt;T&gt;.Default</c>'s rule for a null (#261). Equality is EF Core's own.
+    /// </remarks>
+    private SqlExpression FalseOverNull(SqlExpression predicate, IReadOnlyList<SqlExpression> operands)
+    {
+        for (var index = operands.Count - 1; index >= 0; index--)
+        {
+            var operand = Unwrap(operands[index]);
+            if (!RangeTypeRegistry.TryGetByClrType(operand.Type, out var definition, out var isSet))
+                continue;
+
+            var mapped = operand.TypeMapping is null
+                ? sqlExpressionFactory.ApplyTypeMapping(operand, isSet ? definition.RangeSetTypeMapping : definition.RangeTypeMapping)
+                : operand;
+            predicate = sqlExpressionFactory.AndAlso(sqlExpressionFactory.IsNotNull(mapped), predicate);
+        }
+
+        return predicate;
+    }
+
+    private SqlExpression? TranslateCall(SqlExpression? instance, MethodInfo method, IReadOnlyList<SqlExpression> arguments)
+    {
         var declaringType = method.DeclaringType;
 
         if (declaringType == typeof(RangeExtensions))

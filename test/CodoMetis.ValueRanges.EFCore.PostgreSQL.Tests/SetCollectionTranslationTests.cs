@@ -69,7 +69,7 @@ public sealed class SetCollectionTranslationTests
         var wanted = new List<StringSet> { StringSet.From("a"), StringSet.From("b") };
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Tags\")",
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Tags\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
     }
 
@@ -86,7 +86,7 @@ public sealed class SetCollectionTranslationTests
         var wanted = new List<StringSet>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" && b.\"Tags\")",
+            "WHERE EXISTS (     SELECT 1     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Tags\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
     }
 
@@ -97,7 +97,7 @@ public sealed class SetCollectionTranslationTests
 
         StringAssert.Contains(
             Where(db => db.Bookings.Where(b => wanted.Count(w => w.IsSubsetOf(b.Tags)) == 0)),
-            "WHERE (     SELECT count(*)::int     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" <@ b.\"Tags\") = 0");
+            "WHERE (     SELECT count(*)::int     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" <@ b.\"Tags\") = 0");
     }
 
     [TestMethod]

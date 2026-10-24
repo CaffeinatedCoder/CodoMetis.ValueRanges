@@ -402,6 +402,10 @@ public sealed class RangeSet<TRange, T>
     /// </returns>
     public bool Contains(IRange<T> range)
     {
+        // A predicate with a null operand is false, as a predicate over a NULL column is in a
+        // query (#350). The same holds for every predicate below.
+        if (range is null) return false;
+
         // ∅ ⊆ S for every S. This has to come before the empty-set guard rather than after it:
         // the two are the same question, since From drops empty elements and so the empty range
         // and the empty set are each other's normalized form. It is also the reading
@@ -445,6 +449,8 @@ public sealed class RangeSet<TRange, T>
     /// </remarks>
     public bool Contains(RangeSet<TRange, T> other)
     {
+        if (other is null) return false;
+
         foreach (var range in other._elements)
         {
             if (!Contains(range)) return false;
@@ -465,7 +471,7 @@ public sealed class RangeSet<TRange, T>
     /// </returns>
     public bool IsContainedBy(IRange<T> other) =>
         // A range has no gaps, so it holds the set exactly when it holds the outermost elements.
-        _elements.IsEmpty || (other.Contains(_elements[0]) && other.Contains(_elements[^1]));
+        other is not null && (_elements.IsEmpty || (other.Contains(_elements[0]) && other.Contains(_elements[^1])));
 
     /// <summary>
     /// Determines whether every value of the set is contained in <paramref name="other"/> — the
@@ -476,7 +482,7 @@ public sealed class RangeSet<TRange, T>
     /// <see langword="true"/> if every element lies inside an element of <paramref name="other"/>;
     /// always <see langword="true"/> for the empty set.
     /// </returns>
-    public bool IsContainedBy(RangeSet<TRange, T> other) => other.Contains(this);
+    public bool IsContainedBy(RangeSet<TRange, T> other) => other is not null && other.Contains(this);
 
     /// <summary>
     /// Determines whether <paramref name="range"/> shares at least one value with the set.
@@ -497,7 +503,7 @@ public sealed class RangeSet<TRange, T>
     /// </remarks>
     public bool Overlaps(IRange<T> range)
     {
-        if (_elements.IsEmpty || range is IEmptyRange<T>) return false;
+        if (range is null || _elements.IsEmpty || range is IEmptyRange<T>) return false;
         if (range is IInfinityRange<T>) return true; // any non-empty element overlaps infinity
 
         // The infinite set overlaps every non-empty range. Also keeps the Infinity element
@@ -531,6 +537,8 @@ public sealed class RangeSet<TRange, T>
     /// </remarks>
     public bool Overlaps(RangeSet<TRange, T> other)
     {
+        if (other is null) return false;
+
         var (probe, target) = other._elements.Length <= _elements.Length ? (other, this) : (this, other);
         foreach (var range in probe._elements)
         {
@@ -566,7 +574,7 @@ public sealed class RangeSet<TRange, T>
     /// </returns>
     public bool IsAdjacentTo(IRange<T> other)
     {
-        if (_elements.IsEmpty || IsInfiniteSet) return false;
+        if (other is null || _elements.IsEmpty || IsInfiniteSet) return false;
         if (other is IEmptyRange<T> or IInfinityRange<T>) return false;
 
         var (otherUpper, otherUpperInc, otherUpperInf) = RangeSetHelpers.RangeUpperBound<T>(other);
@@ -595,7 +603,7 @@ public sealed class RangeSet<TRange, T>
     /// </returns>
     public bool IsAdjacentTo(RangeSet<TRange, T> other)
     {
-        if (_elements.IsEmpty || other._elements.IsEmpty) return false;
+        if (other is null || _elements.IsEmpty || other._elements.IsEmpty) return false;
         if (IsInfiniteSet || other.IsInfiniteSet) return false;
 
         var (thisLower, thisLowerInc, thisLowerInf)   = RangeSetHelpers.RangeLowerBound<T>(_elements[0]);
@@ -625,7 +633,7 @@ public sealed class RangeSet<TRange, T>
 
     /// <inheritdoc cref="IsStrictlyLeftOf(IRange{T})"/>
     public bool IsStrictlyLeftOf(RangeSet<TRange, T> other) =>
-        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[^1].IsStrictlyLeftOf(other._elements[0]);
+        other is not null && !_elements.IsEmpty && !other._elements.IsEmpty && _elements[^1].IsStrictlyLeftOf(other._elements[0]);
 
     /// <summary>
     /// Determines whether the whole set begins strictly after <paramref name="other"/>
@@ -641,7 +649,7 @@ public sealed class RangeSet<TRange, T>
 
     /// <inheritdoc cref="IsStrictlyRightOf(IRange{T})"/>
     public bool IsStrictlyRightOf(RangeSet<TRange, T> other) =>
-        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[0].IsStrictlyRightOf(other._elements[^1]);
+        other is not null && !_elements.IsEmpty && !other._elements.IsEmpty && _elements[0].IsStrictlyRightOf(other._elements[^1]);
 
     /// <summary>
     /// Determines whether the set does not extend to the right of <paramref name="other"/> —
@@ -657,7 +665,7 @@ public sealed class RangeSet<TRange, T>
 
     /// <inheritdoc cref="DoesNotExtendRightOf(IRange{T})"/>
     public bool DoesNotExtendRightOf(RangeSet<TRange, T> other) =>
-        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[^1].DoesNotExtendRightOf(other._elements[^1]);
+        other is not null && !_elements.IsEmpty && !other._elements.IsEmpty && _elements[^1].DoesNotExtendRightOf(other._elements[^1]);
 
     /// <summary>
     /// Determines whether the set does not extend to the left of <paramref name="other"/> —
@@ -673,7 +681,7 @@ public sealed class RangeSet<TRange, T>
 
     /// <inheritdoc cref="DoesNotExtendLeftOf(IRange{T})"/>
     public bool DoesNotExtendLeftOf(RangeSet<TRange, T> other) =>
-        !_elements.IsEmpty && !other._elements.IsEmpty && _elements[0].DoesNotExtendLeftOf(other._elements[0]);
+        other is not null && !_elements.IsEmpty && !other._elements.IsEmpty && _elements[0].DoesNotExtendLeftOf(other._elements[0]);
 
     // -------------------------------------------------------------------------
     // Set operations
