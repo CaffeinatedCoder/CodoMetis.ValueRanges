@@ -1141,7 +1141,7 @@
     "id": "E71-predicate-over-a-null-column-is-false",
     "source": "docs/efcore.md#query-ranges-with-linq",
     "quote": "On a nullable column, a predicate over a NULL value is `false`, and its negation `true`.",
-    "claim": "Over a nullable range, multirange and value set column, every discovered Boolean predicate of RangeExtensions, RangeSet and ValueSetExtensions, with the column on either side, selects in a filter, a negated filter and a projection what the same expression selects over the rows as loaded, with false for a NULL row where memory throws; a required column's SQL carries no null check, and a nullable one reads x IS NULL OR NOT (…) under a negation.",
+    "claim": "Over a nullable range, multirange and value set column, every discovered Boolean predicate of RangeExtensions, RangeSet and ValueSetExtensions, with the column on either side, selects in a filter, a negated filter and a projection what the same expression selects over the rows as loaded, with false for a NULL row where memory throws, and the same for Contains(T) over a NULL element (the optional side of an outer join, or a nullable column read with .Value); a required column's SQL carries no null check, and a nullable one reads x IS NULL OR NOT (…) under a negation.",
     "oracle": "differential",
     "surfaces": [
       "RangeExtensions.Overlaps",
@@ -1151,7 +1151,8 @@
     ],
     "heldBy": [
       "ExecutedQueryTests",
-      "NullOperandTranslationTests"
+      "NullOperandTranslationTests",
+      "NullElementTests"
     ]
   },
   {

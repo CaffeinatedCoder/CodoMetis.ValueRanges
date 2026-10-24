@@ -91,7 +91,9 @@ EF Core does for a `string` or `string[]` column, and what the methods return in
 range. So `!b.Period.Overlaps(other)` keeps the rows whose `Period` is NULL, as
 `!b.Name.StartsWith("a")` keeps the rows whose `Name` is NULL. The SQL adds
 `b."Period" IS NULL OR NOT (…)` for a nullable column and nothing for a required one. Value set
-predicates follow the same rule in a query, though in memory they throw for a `null` set.
+predicates follow the same rule in a query, though in memory they throw for a `null` set. So does
+`Contains(day)` when `day` is NULL, as it is for a column of a missing child in an outer join or a
+nullable column read with `.Value`.
 `CompareTo` keeps its own rule for a NULL column ([Sort ranges](ranges.md#sort-ranges)).
 
 ### Read bounds, merge ranges and aggregate
