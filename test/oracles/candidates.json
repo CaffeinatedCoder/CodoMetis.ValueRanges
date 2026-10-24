@@ -29,69 +29,6 @@
   },
   {
     "oracle": "ExecutedQueryTests",
-    "row": "LowerBound() == null on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "LowerBound() != null on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "LowerBound().HasValue on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "UpperBound() == null on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "UpperBound() != null on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "(UpperBound() ?? max) >= v on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "(LowerBound() ?? min) <= v on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "Select(UpperBound() ?? max) on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
-    "row": "Select(new { Id, To = UpperBound() }).Where(To == null) on ",
-    "family": "lower()/upper() declared NULL only for a NULL argument",
-    "issue": "#349",
-    "method": "BoundsComparedWithNull_SelectTheRowsMemorySelects"
-  },
-  {
-    "oracle": "ExecutedQueryTests",
     "row": "!IsEmpty() on DateRange? null:",
     "family": "a null receiver answers in memory where SQL answers NULL",
     "issue": "#350",

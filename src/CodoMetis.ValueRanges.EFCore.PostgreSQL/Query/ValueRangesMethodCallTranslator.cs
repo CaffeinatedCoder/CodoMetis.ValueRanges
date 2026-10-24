@@ -634,14 +634,17 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// <summary>
     /// A bound-extraction function (<c>lower</c>/<c>upper</c>) on a range or multirange.
     /// PostgreSQL returns NULL for an empty or correspondingly unbounded operand, hence the
-    /// nullable CLR type.
+    /// nullable CLR type. That NULL comes from a non-null argument, so the argument must not be
+    /// declared as propagating nullability: EF Core would then take the bound of a required column
+    /// as never NULL, fold <c>IS NULL</c> to <c>FALSE</c> and drop the <c>COALESCE</c> of a
+    /// <c>??</c>, and test a nullable column's bound with the column's own <c>IS NULL</c>.
     /// </summary>
     private SqlExpression BoundFunction(string name, SqlExpression argument, IRangeTypeDefinition definition)
         => sqlExpressionFactory.Function(
             name,
             [argument],
             nullable: true,
-            argumentsPropagateNullability: [true],
+            argumentsPropagateNullability: [false],
             typeof(Nullable<>).MakeGenericType(definition.ElementClrType),
             ElementMapping(definition));
 
