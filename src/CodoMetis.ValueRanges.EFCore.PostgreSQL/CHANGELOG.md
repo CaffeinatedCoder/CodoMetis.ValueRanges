@@ -16,6 +16,7 @@ Some calls answer differently: [Changed answers in 10.3.0](https://github.com/Ca
 
 - EF Core: `Length` on `Int32Range` and `Int64Range` runs as SQL, so a query can filter and sort by it. It counts the integers as memory does: 0 for the empty range, and `null` for an unbounded side or, on `Int64Range`, a count larger than `long.MaxValue` ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 - EF Core: `Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` runs as SQL, so a query can filter and sort by the clamped value. It answers as memory does: the value inside the range, otherwise the bound it passes, and `null` for the empty range or a `null` range or value ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` run as SQL when they read a column, so `DateRange.Month(b.Day)` works in a `Where` and an `OrderBy`. They build the range memory builds, the extremes included, and an argument memory rejects fails in PostgreSQL too. The NodaTime forms stay in memory ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ### Changed
 

@@ -375,6 +375,15 @@
     ]
   },
   {
+    "class": "CalendarFactoryParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for DateRange.Month, Quarter, Year and IsoWeek over a date column and over integer columns, across every period boundary, a leap day, the ISO weeks of the neighbouring year and the first and last periods of DateOnly (stored as -infinity and infinity), NULL date and year columns and a missing outer-join child, in a filter, its negation, a null test, equality with a stored range, a compound predicate, an ordering and a final projection; and a PostgreSQL error wherever memory throws",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "IntegerLengthParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",

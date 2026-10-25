@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -25,6 +26,8 @@ public class ClientSideOnlyProjectionTests
             Seats      = Int32Range.CreateFinite(3, 7),
             Price      = DecimalRange.CreateFinite(1.5m, 4m),
             Period     = DateRange.CreateFinite(new DateOnly(2026, 6, 3), new DateOnly(2026, 6, 5)),
+            NodaPeriod = LocalDateRange.CreateFinite(new LocalDate(2026, 6, 3), new LocalDate(2026, 6, 5)),
+            BillingPeriod = YearMonthRange.CreateFinite(new YearMonth(2026, 6), new YearMonth(2026, 8)),
             Codes      = Int32Set.From([5, 1, 2, 3]),
             SeatBlocks = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 2), Int32Range.CreateFinite(4, 4)]),
             Tags       = StringSet.From(["b", "a"]),
@@ -50,8 +53,10 @@ public class ClientSideOnlyProjectionTests
                 Expanded = r.Seats.Expand(-1),
                 Stepped  = r.Seats.Values(2).ToList(),
                 Pieces   = r.Seats.Split(2).ToList(),
-                MonthOf  = DateRange.Month(r.Period.LowerBound()!.Value),
-                WeekOf   = DateRange.IsoWeek(r.Period.LowerBound()!.Value),
+                // The calendar factories over a column translate on DateRange (#191); the NodaTime forms stay in memory.
+                MonthOf   = LocalDateRange.Month(r.NodaPeriod.LowerBound()!.Value),
+                WeekOf    = LocalDateRange.IsoWeek(r.NodaPeriod.LowerBound()!.Value),
+                QuarterOf = YearMonthRange.Quarter(r.BillingPeriod.LowerBound()!.Value),
                 RangeSet = r.Codes.ToRangeSet(),
                 Set      = r.SeatBlocks.ToInt32Set(),
                 First    = r.Tags[0],
@@ -65,8 +70,9 @@ public class ClientSideOnlyProjectionTests
         Assert.AreEqual(row.Seats.Expand(-1), server.Expanded, "Expand");
         CollectionAssert.AreEqual(row.Seats.Values(2).ToList(), server.Stepped, "Values(step)");
         CollectionAssert.AreEqual(row.Seats.Split(2).ToList(), server.Pieces, "Split(step)");
-        Assert.AreEqual(DateRange.Month(2026, 6), server.MonthOf, "DateRange.Month(column)");
-        Assert.AreEqual(DateRange.IsoWeek(2026, 23), server.WeekOf, "DateRange.IsoWeek(column)");
+        Assert.AreEqual(LocalDateRange.Month(2026, 6), server.MonthOf, "LocalDateRange.Month(column)");
+        Assert.AreEqual(LocalDateRange.IsoWeek(2026, 23), server.WeekOf, "LocalDateRange.IsoWeek(column)");
+        Assert.AreEqual(YearMonthRange.Quarter(2026, 2), server.QuarterOf, "YearMonthRange.Quarter(column)");
 
         // Built from values the query does not read, a calendar range is one constant and runs as SQL.
         var inJune = await context.Reservations
