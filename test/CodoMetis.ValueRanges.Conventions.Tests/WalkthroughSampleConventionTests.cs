@@ -88,23 +88,28 @@ public sealed class WalkthroughSampleConventionTests
     }
 
     [TestMethod]
-    public void TheSample_TargetsWhatThePackagesShip()
+    public void TheSample_NamesTheNewestReleaseOnNuGet()
     {
-        // The smoke test moves the package reference to the version under test, but a reader copies the
-        // project as it is here: on the 10.x line it has to say net10.0 and a 10.x version.
-        var sample = XDocument.Load(Path.Combine(RepoLayout.Root.FullName, SampleProject));
-        var core   = XDocument.Load(Path.Combine(RepoLayout.Root.FullName, "src", "CodoMetis.ValueRanges", "CodoMetis.ValueRanges.csproj"));
+        // A reader copies the project as it is, and GitHub's dependency submission restores every
+        // project in the repository from nuget.org. Both need a version that is published, so the
+        // sample names the newest release (PackageValidationBaselineVersion, which PackagingConventionTests
+        // keeps equal to it) and the framework that release targets: one per line, net<major>.0. The
+        // smoke test moves both to what this branch ships before it builds the sample. Naming the
+        // unreleased version here failed every restore outside the smoke test (#418).
+        var sample  = XDocument.Load(Path.Combine(RepoLayout.Root.FullName, SampleProject));
+        var release = RepoLayout.LatestRelease;
+        var major   = release.Split('.')[0];
 
-        Assert.AreEqual(Single(core, "TargetFramework"), Single(sample, "TargetFramework"),
-            $"{SampleProject} targets a different framework from the packages.");
+        Assert.AreEqual($"net{major}.0", Single(sample, "TargetFramework"),
+            $"{SampleProject} must target the framework of {release}, the newest release on nuget.org.");
 
         var references = sample.Descendants("PackageReference")
                                .Where(reference => ((string?)reference.Attribute("Include"))?.StartsWith("CodoMetis.", StringComparison.Ordinal) == true)
                                .ToList();
         Assert.AreNotEqual(0, references.Count, $"{SampleProject} references no CodoMetis package.");
         foreach (var reference in references)
-            Assert.AreEqual(RepoLayout.ShippedVersion, (string?)reference.Attribute("Version"),
-                $"{SampleProject} references {(string?)reference.Attribute("Include")} at a version other than the one this branch ships.");
+            Assert.AreEqual(release, (string?)reference.Attribute("Version"),
+                $"{SampleProject} references {(string?)reference.Attribute("Include")} at a version other than {release}, the newest release on nuget.org.");
     }
 
     /// <summary>The lines of <paramref name="block"/>, in order and adjacent, somewhere in <paramref name="file"/>, each indented alike.</summary>

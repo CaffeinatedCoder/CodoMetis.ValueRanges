@@ -19,7 +19,7 @@ happen at a boundary:
 
 ## Run it yourself
 
-You need Docker and the .NET SDK:
+You need Docker, and the .NET SDK for the framework `Bookings.csproj` targets:
 
 ```sh
 docker run -d --name bookings-db -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
@@ -42,10 +42,10 @@ Good to know:
 - **Start again from an empty database.** The bookings stay in the container between runs, so
   booking the same nights a second time returns 409. Remove the container with
   `docker rm -f bookings-db` and run the commands again.
-- **A preview may not be on NuGet yet.** `Bookings.csproj` references the package version these docs
-  describe. If NuGet doesn't have it yet, clone the repository and run
-  `./test/consumer-smoke-test.sh`. It builds the packages and runs the sample against them, with the
-  requests on this page.
+- **The project references the newest release on NuGet.** So it restores and builds wherever you copy
+  it. CI moves it to the version in the repository, and to that version's framework, before it runs
+  the requests on this page. To do the same, clone the repository and run
+  `./test/consumer-smoke-test.sh`.
 
 ## Model rooms and bookings
 
@@ -97,7 +97,7 @@ Two requests can check the same room at the same moment, both find it free, and 
 database constraint closes that gap. The sample adds an exclusion constraint in its migration, with
 explicit SQL, because EF Core has no API for one:
 
-<!-- sample: samples/Bookings/Migrations/20261025104820_InitialCreate.cs -->
+<!-- sample: samples/Bookings/Migrations/20261025111834_InitialCreate.cs -->
 ```csharp
 // Added by hand: EF Core has no API for an exclusion constraint. Two bookings of the same
 // room whose periods share a night now fail with 23P01 (exclusion_violation).

@@ -590,8 +590,8 @@ assert_contains '"Tags" @> ARRAY['"'"'x'"'"']::text[]'  "$work/postgres.out" "va
 # ── The walkthrough: samples/Bookings as a web app against PostgreSQL ────────────────────────────
 #
 # docs/walkthrough.md quotes this sample, and WalkthroughSampleConventionTests holds the quotes to its
-# source. This runs it the way a reader would: copied out of the repository, its package reference
-# moved to the version under test, built against the feed, started against a PostgreSQL container,
+# source. This runs it the way a reader would: copied out of the repository, its package reference and
+# target framework moved to the version under test and this line's, built against the feed, started against a PostgreSQL container,
 # and driven over HTTP. Every response the walkthrough shows is asserted here as
 # a whole line, with the SQL EF Core logs and the rows PostgreSQL stores, so a changed answer fails
 # even when every request still succeeds.
@@ -627,6 +627,11 @@ walkthrough_consumer() {
     rm -rf "${app:?}/bin" "${app:?}/obj"
     cd "$app"
     write_nuget_config
+    # The sample in the repository names the newest release on nuget.org and the framework it targets,
+    # so it restores anywhere. Here it moves to the version under test and this line's framework.
+    sed -i.bak "s|<TargetFramework>[^<]*</TargetFramework>|<TargetFramework>$tfm</TargetFramework>|" Bookings.csproj
+    rm -f Bookings.csproj.bak
+    grep -qF "<TargetFramework>$tfm</TargetFramework>" Bookings.csproj || { echo "  FAIL: walkthrough: could not retarget Bookings.csproj to $tfm"; failed=1; return; }
     run dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL --version "$version"
     run dotnet build
     run dotnet list package --include-transitive

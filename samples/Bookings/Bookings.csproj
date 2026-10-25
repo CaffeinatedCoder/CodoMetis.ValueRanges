@@ -1,13 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
-        <TargetFramework>net11.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
     </PropertyGroup>
 
+    <!--
+        The newest release on nuget.org, and the framework it targets, so this project restores and
+        builds wherever you copy it. test/consumer-smoke-test.sh moves both to what the repository
+        ships before it builds the sample, so CI runs it against the packages from the working tree.
+    -->
     <ItemGroup>
-        <PackageReference Include="CodoMetis.ValueRanges.EFCore.PostgreSQL" Version="11.0.0-preview.1" />
+        <PackageReference Include="CodoMetis.ValueRanges.EFCore.PostgreSQL" Version="10.2.0" />
     </ItemGroup>
 
 </Project>
