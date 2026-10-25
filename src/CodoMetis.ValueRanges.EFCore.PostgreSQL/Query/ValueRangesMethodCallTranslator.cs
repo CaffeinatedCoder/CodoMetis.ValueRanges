@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
+using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -160,12 +161,13 @@ internal sealed class ValueRangesMethodCallTranslator(
             return TranslateRangeExtensionCall(method, arguments);
 
         if (declaringType is { IsGenericType: true } && declaringType.GetGenericTypeDefinition() == typeof(RangeSet<,>))
-            return TranslateRangeSetCall(instance, declaringType, method.Name, arguments);
+            return TranslateRangeSetCall(instance, declaringType, method, method.Name, [.. method.GetParameters().Select(p => p.ParameterType)], arguments);
 
         // The static form of RangeSet.Contains the interceptor substitutes (RangeSetContains): the set
         // is the first argument, and the method translates as the instance call it stands for.
         if (declaringType == typeof(RangeSetContains) && arguments.Count == 2)
-            return TranslateRangeSetCall(arguments[0], method.GetParameters()[0].ParameterType, nameof(RangeSet<,>.Contains), [arguments[1]]);
+            return TranslateRangeSetCall(arguments[0], method.GetParameters()[0].ParameterType, method, nameof(RangeSet<,>.Contains),
+                                         [method.GetParameters()[1].ParameterType], [arguments[1]]);
 
         if (declaringType is not null
             && RangeTypeRegistry.TryGetByClrType(declaringType, out var definition, out var isSet)
@@ -203,7 +205,7 @@ internal sealed class ValueRangesMethodCallTranslator(
                 nameof(RangeExtensions.DoesNotExtendRightOf) => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeDoesNotExtendRightOf, Range(0), set),
                 nameof(RangeExtensions.DoesNotExtendLeftOf)  => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeDoesNotExtendLeftOf, Range(0), set),
                 nameof(RangeExtensions.IsAdjacentTo)         => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeIsAdjacentTo, Range(0), set),
-                _                                            => null
+                _                                            => throw MissingArm.For(method)
             };
         }
 
@@ -352,7 +354,9 @@ internal sealed class ValueRangesMethodCallTranslator(
     private SqlExpression? TranslateRangeSetCall(
         SqlExpression?               instance,
         Type                         declaringType,
+        MethodInfo                   method,
         string                       methodName,
+        IReadOnlyList<Type>          parameterTypes,
         IReadOnlyList<SqlExpression> arguments
     )
     {
@@ -365,49 +369,57 @@ internal sealed class ValueRangesMethodCallTranslator(
         SqlExpression Range(SqlExpression expression)
             => sqlExpressionFactory.ApplyTypeMapping(Unwrap(expression), definition.RangeTypeMapping);
 
+        // An operand is mapped as the type its overload declares for it, never as whatever it is not: an
+        // overload with any other operand type has no arm here and is refused (#295).
+        var rangeInterface = typeof(IRange<>).MakeGenericType(definition.ElementClrType);
+
+        bool IsSet(int index)   => parameterTypes[index] == definition.RangeSetClrType;
+        bool IsRange(int index) => parameterTypes[index] == definition.RangeClrType || parameterTypes[index] == rangeInterface;
+
         // Single-range operands of set operations are lifted to one-element multiranges.
-        SqlExpression AsSet(SqlExpression expression)
-            => Unwrap(expression).Type == definition.RangeSetClrType
-                   ? Set(expression)
-                   : AsMultirange(Range(expression), definition);
+        SqlExpression AsSet(int index)
+            => IsSet(index)   ? Set(arguments[index])
+             : IsRange(index) ? AsMultirange(Range(arguments[index]), definition)
+                              : throw MissingArm.For(method, parameterTypes[index]);
 
         // Boolean comparisons accept element, range, and multirange operands natively —
         // no lifting required, only the matching type mapping.
-        SqlExpression Operand(SqlExpression expression)
-            => Unwrap(expression).Type == definition.RangeSetClrType ? Set(expression)
-             : expression.Type == definition.ElementClrType          ? ApplyElementMapping(expression, definition)
-                                                                     : Range(expression);
+        SqlExpression Operand(int index)
+            => IsSet(index)                                       ? Set(arguments[index])
+             : IsRange(index)                                     ? Range(arguments[index])
+             : parameterTypes[index] == definition.ElementClrType ? ApplyElementMapping(arguments[index], definition)
+                                                                  : throw MissingArm.For(method, parameterTypes[index]);
 
         switch (methodName)
         {
             case nameof(RangeSet<,>.Contains) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.Contains(Set(instance), Operand(arguments[0]));
+                return sqlExpressionFactory.Contains(Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.Overlaps) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.Overlaps(Set(instance), Operand(arguments[0]));
+                return sqlExpressionFactory.Overlaps(Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsContainedBy) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.ContainedBy(Set(instance), Operand(arguments[0]));
+                return sqlExpressionFactory.ContainedBy(Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsAdjacentTo) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeIsAdjacentTo, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeIsAdjacentTo, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsStrictlyLeftOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeIsStrictlyLeftOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeIsStrictlyLeftOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsStrictlyRightOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeIsStrictlyRightOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeIsStrictlyRightOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.DoesNotExtendRightOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeDoesNotExtendRightOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeDoesNotExtendRightOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.DoesNotExtendLeftOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeDoesNotExtendLeftOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeDoesNotExtendLeftOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.Merge) when instance is not null && arguments.Count == 0:
                 return sqlExpressionFactory.Function(
@@ -443,13 +455,13 @@ internal sealed class ValueRangesMethodCallTranslator(
                         sqlExpressionFactory.Not(BoolFunction("isempty", Set(instance)))));
 
             case nameof(RangeSet<,>.Union) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeUnion, Set(instance), AsSet(arguments[0]));
+                return SetBinary(PgExpressionType.RangeUnion, Set(instance), AsSet(0));
 
             case nameof(RangeSet<,>.Intersect) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeIntersect, Set(instance), AsSet(arguments[0]));
+                return SetBinary(PgExpressionType.RangeIntersect, Set(instance), AsSet(0));
 
             case nameof(RangeSet<,>.Except) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeExcept, Set(instance), AsSet(arguments[0]));
+                return SetBinary(PgExpressionType.RangeExcept, Set(instance), AsSet(0));
 
             case nameof(RangeSet<,>.Complement) when instance is not null && arguments.Count == 0:
                 return SetBinary(
@@ -473,7 +485,7 @@ internal sealed class ValueRangesMethodCallTranslator(
                     Set(instance));
 
             case nameof(RangeSet<,>.Gaps) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeExcept, AsSet(arguments[0]), Set(instance));
+                return SetBinary(PgExpressionType.RangeExcept, AsSet(0), Set(instance));
 
             case nameof(RangeSet<,>.LowerBound) when instance is not null && arguments.Count == 0:
                 return BoundFunction("lower", Set(instance), definition);
@@ -489,13 +501,13 @@ internal sealed class ValueRangesMethodCallTranslator(
 
             // User-defined operators arrive as static binary methods.
             case "op_BitwiseOr" when arguments.Count == 2:
-                return SetBinary(PgExpressionType.RangeUnion, AsSet(arguments[0]), AsSet(arguments[1]));
+                return SetBinary(PgExpressionType.RangeUnion, AsSet(0), AsSet(1));
 
             case "op_BitwiseAnd" when arguments.Count == 2:
-                return SetBinary(PgExpressionType.RangeIntersect, AsSet(arguments[0]), AsSet(arguments[1]));
+                return SetBinary(PgExpressionType.RangeIntersect, AsSet(0), AsSet(1));
 
             case "op_Subtraction" when arguments.Count == 2:
-                return SetBinary(PgExpressionType.RangeExcept, AsSet(arguments[0]), AsSet(arguments[1]));
+                return SetBinary(PgExpressionType.RangeExcept, AsSet(0), AsSet(1));
 
             default:
                 return null;
@@ -517,14 +529,20 @@ internal sealed class ValueRangesMethodCallTranslator(
     {
         if (!definition.SupportsSqlConstruction) return null;
 
-        // Bound inclusiveness must be a compile-time constant to pick the bounds literal;
-        // in practice it always is, because the flags default at the call site.
+        var element = definition.ElementClrType;
+
+        // Each factory is recognized by its whole signature, and another overload of the same name is
+        // refused below rather than translated as one of these (#295). Bound inclusiveness must be a
+        // compile-time constant to pick the bounds literal; in practice it always is, because the flags
+        // default at the call site.
         switch (method.Name)
         {
-            case "CreateFinite" when arguments.Count == 4
-                                     && arguments[2] is SqlConstantExpression { Value: bool startInclusive }
-                                     && arguments[3] is SqlConstantExpression { Value: bool endInclusive }:
+            case "CreateFinite" when Takes(method, element, element, typeof(bool), typeof(bool)):
             {
+                if (arguments[2] is not SqlConstantExpression { Value: bool startInclusive }
+                 || arguments[3] is not SqlConstantExpression { Value: bool endInclusive })
+                    return null;
+
                 var lower = ApplyElementMapping(arguments[0], definition);
                 var upper = ApplyElementMapping(arguments[1], definition);
                 return NullOverNullElement(
@@ -533,9 +551,11 @@ internal sealed class ValueRangesMethodCallTranslator(
                     lower, upper);
             }
 
-            case "CreateUnboundedStart" when arguments.Count == 2
-                                             && arguments[1] is SqlConstantExpression { Value: bool endInclusive }:
+            case "CreateUnboundedStart" when Takes(method, element, typeof(bool)):
             {
+                if (arguments[1] is not SqlConstantExpression { Value: bool endInclusive })
+                    return null;
+
                 var upper = ApplyElementMapping(arguments[0], definition);
                 return NullOverNullElement(
                     definition,
@@ -543,9 +563,11 @@ internal sealed class ValueRangesMethodCallTranslator(
                     upper);
             }
 
-            case "CreateUnboundedEnd" when arguments.Count == 2
-                                           && arguments[1] is SqlConstantExpression { Value: bool startInclusive }:
+            case "CreateUnboundedEnd" when Takes(method, element, typeof(bool)):
             {
+                if (arguments[1] is not SqlConstantExpression { Value: bool startInclusive })
+                    return null;
+
                 var lower = ApplyElementMapping(arguments[0], definition);
                 return NullOverNullElement(
                     definition,
@@ -553,10 +575,16 @@ internal sealed class ValueRangesMethodCallTranslator(
                     lower);
             }
 
+            case "CreateFinite" or "CreateUnboundedStart" or "CreateUnboundedEnd":
+                throw MissingArm.For(method);
+
             default:
                 return null;
         }
     }
+
+    private static bool Takes(MethodInfo method, params Type[] parameterTypes)
+        => method.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(parameterTypes);
 
     /// <summary>
     /// A factory over a NULL element is NULL, as EF Core's own value-producing members are over NULL

@@ -66,6 +66,68 @@ internal static class QueryMembers
     }
 
     /// <summary>
+    /// <paramref name="member"/> as it applies to one closed type, or null where it does not: a generic family
+    /// closed over <paramref name="value"/>, a generic method closed over its element (and value) type, and a
+    /// member of another type kept when an operand or its result is <paramref name="value"/>'s.
+    /// <paramref name="rangeSet"/> is the range type's multirange, or null for a value set.
+    /// </summary>
+    internal static MemberInfo? Close(Member member, Type value, Type element, Type? rangeSet)
+    {
+        var declaring = member.Declaring;
+        if (declaring.IsGenericTypeDefinition)
+        {
+            Type closedType;
+            if (declaring == typeof(RangeSet<,>) || declaring == typeof(RangeLowerBoundComparer<,>))
+            {
+                if (rangeSet is null) return null;
+                closedType = declaring.MakeGenericType(value, element);
+            }
+            else
+            {
+                if (!value.IsGenericType || value.GetGenericTypeDefinition() != declaring) return null;
+                closedType = value;
+            }
+
+            return closedType.GetMemberWithSameMetadataDefinitionAs(member.Info);
+        }
+
+        if (IsValue(declaring)) return declaring == value ? member.Info : null;
+
+        if (member.Info is not MethodInfo method) return null;
+        if (method.IsGenericMethodDefinition)
+        {
+            try
+            {
+                method = method.GetGenericArguments().Length switch
+                {
+                    1 => method.MakeGenericMethod(element),
+                    2 => method.MakeGenericMethod(value, element),
+                    _ => throw new ArgumentException("arity")
+                };
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+        }
+
+        // A member whose operands are none of the library's (a conversion from a NodaTime interval) is the
+        // type's by what it returns.
+        return method.GetParameters().Any(p => Mentions(p.ParameterType, value, rangeSet))
+            || (!method.GetParameters().Any(p => IsValue(p.ParameterType)) && method.ReturnType == value)
+                   ? method
+                   : null;
+    }
+
+    /// <summary>Whether a parameter of <paramref name="type"/> takes <paramref name="value"/>, its multirange, a variant of it, or a sequence of one.</summary>
+    internal static bool Mentions(Type type, Type value, Type? rangeSet)
+    {
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>)) type = type.GetGenericArguments()[0];
+        return type == value || type == rangeSet || type.DeclaringType == value
+            || (type != typeof(object) && type.IsInterface && type.IsAssignableFrom(value) && IsValue(type));
+    }
+
+    /// <summary>
     /// Whether C# can write a call of <paramref name="method"/> inside an expression tree: not with a
     /// <c>ref</c>, <c>out</c> or <c>in</c> parameter, nor with a ref struct such as
     /// <see cref="ReadOnlySpan{T}"/> (CS8640, CS8198), so the span and <c>TryParse</c> overloads can never
