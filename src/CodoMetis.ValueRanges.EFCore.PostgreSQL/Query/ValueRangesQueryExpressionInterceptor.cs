@@ -26,6 +26,11 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// read-only collection — see <see cref="RangeSetContainsRewriter"/>.
 /// </para>
 /// <para>
+/// A sixth keeps an <see cref="IComparer{T}"/> over ranges or sets,
+/// <see cref="RangeLowerBoundComparer{TRange,T}"/> among them, out of SQL, where EF Core would read it as the
+/// natural order — see <see cref="RangeComparerRewriter"/>.
+/// </para>
+/// <para>
 /// The value set refusals — a server-computed <c>Union</c> consumed by an order- or
 /// multiplicity-sensitive operation, and <c>ExecuteUpdate</c> writing a value set into a JSON
 /// column — are not made here but on the translated SQL, by <see cref="ValueSetSqlGuard"/>: at the
@@ -40,7 +45,8 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
         => CollectionParameterExpander.Expand(
             RangeVariantConstantRetyper.Instance.Visit(
                 NullOperandCompareToRewriter.Instance.Visit(
-                    RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)))),
+                    RangeComparerRewriter.Instance.Visit(
+                        RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))))),
             DefaultCollectionMode(eventData.Context));
 
     private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)
@@ -352,6 +358,43 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
         protected override Expression VisitMethodCall(MethodCallExpression node)
             => node is { Object: { } set, Arguments: [var operand] } && RangeSetContains.Equivalent(node.Method) is { } equivalent
                    ? Expression.Call(equivalent, Visit(set), Visit(operand))
+                   : base.VisitMethodCall(node);
+    }
+
+    /// <summary>
+    /// Turns <c>comparer.Compare(x, y)</c> over two ranges or two sets into
+    /// <see cref="RangeComparerCall.RunInMemory{TRange}"/>, which EF Core cannot translate: a filter or an
+    /// ordering then fails translation, and a final projection runs the comparer in memory (#385).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EF Core translates any method named <c>Compare</c> with two operands as the natural comparison of
+    /// the operands, whatever the comparer (dotnet/efcore#39402). For a range that is the range order, the
+    /// one <c>CompareTo</c> runs in. <see cref="RangeLowerBoundComparer{TRange,T}"/> orders by the lower
+    /// bound alone, so <c>[2026-03-01,)</c> and <c>[2026-03-01,2026-03-03]</c> compare equal to
+    /// <c>[2026-03-01,2026-03-10]</c> in memory and as 1 and -1 in SQL, and
+    /// <c>Where(… Compare(r.Period, p) == 0)</c> selected one row of the three without an error.
+    /// </para>
+    /// <para>
+    /// By the time a query compiles, the comparer is a query parameter. Typed as
+    /// <see cref="IComparer{T}"/>, as <see cref="RangeSet{TRange,T}.LowerBoundComparer"/> is, its value is
+    /// unknown, and one compiled query serves every comparer the same code passes. So every comparer over a
+    /// range or set type is kept out of SQL, <see cref="Comparer{T}.Default"/> included: <c>CompareTo</c>
+    /// is the call that runs in SQL in the range order.
+    /// </para>
+    /// </remarks>
+    private sealed class RangeComparerRewriter : ExpressionVisitor
+    {
+        public static readonly RangeComparerRewriter Instance = new();
+
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+            => node is { Object: { } comparer, Method: { Name: nameof(IComparer<>.Compare) } method, Arguments: [var x, var y] }
+               && method.ReturnType == typeof(int)
+               && method.GetParameters() is [{ ParameterType: var compared }, { ParameterType: var other }]
+               && compared == other
+               && RangeTypeRegistry.TryGetByClrType(compared, out _, out _)
+               && typeof(IComparer<>).MakeGenericType(compared).IsAssignableFrom(comparer.Type)
+                   ? Expression.Call(RangeComparerCall.RunInMemoryMethod.MakeGenericMethod(compared), Visit(comparer), Visit(x), Visit(y))
                    : base.VisitMethodCall(node);
     }
 
