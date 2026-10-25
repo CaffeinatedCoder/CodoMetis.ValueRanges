@@ -903,10 +903,12 @@ whether the predicate was negated or not, and a projected predicate threw when i
 | `Where(b => !b.Tags!.Contains("x"))` on a nullable value set | the NULL rows are missing | the NULL rows are included |
 | `Where(b => !b.Period.Contains(b.Visit!.On))`, for a booking without a visit | the row is missing | the row is included |
 | `Select(b => b.Period.Contains(b.Day!.Value))` on a nullable `DateOnly? Day` | throws (`InvalidOperationException`) at a NULL `Day` | `false` for it |
+| `Where(b => DateRange.CreateUnboundedEnd(b.Visit!.From).Contains(v))`, for a booking without a visit | the row is included: the range was `(,)` | the row is missing: the range is NULL |
 
 The same goes for the element `Contains(T)` looks for, when it is NULL: a required column of a
 missing child in an outer join, or a nullable column read with `.Value`. The SQL of a required
-column doesn't change. A nullable one gets `b."Period" IS NULL OR NOT (…)` under a negation.
+column doesn't change. A nullable one gets `b."Period" IS NULL OR NOT (…)` under a negation. A
+range factory over a NULL element is NULL, where it built `empty` (`CreateFinite`) or `(,)`.
 
 - **Search for negated predicates over a nullable column.** A `!` that silenced the nullable warning,
   as in `!b.Period!.Overlaps(p)`, often marks the place.

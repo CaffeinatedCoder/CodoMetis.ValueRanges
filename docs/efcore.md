@@ -79,7 +79,9 @@ Each method becomes one PostgreSQL operator or function call:
   matches their `RangeSet` return type. A union of two ranges that don't touch is a real
   two-element multirange, never an error.
 - **`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor
-  calls inside a guard. As in memory, a start after the end gives you an empty range.
+  calls inside a guard. As in memory, a start after the end gives you an empty range. Over a NULL
+  element, such as a column of a missing child in an outer join, the range is NULL, as EF Core's own
+  `AddDays` is.
 
 Since v4 the eight predicates above (`Contains` through `IsAdjacentTo`) also work on a `RangeSet`,
 with either a range or a multirange on the other side. Since 10.0.0 they also work on a range with a
