@@ -27,9 +27,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// read-only collection — see <see cref="RangeSetContainsRewriter"/>.
 /// </para>
 /// <para>
-/// A sixth keeps an <see cref="IComparer{T}"/> over ranges or sets,
-/// <see cref="RangeLowerBoundComparer{TRange,T}"/> among them, out of SQL, where EF Core would read it as the
-/// natural order — see <see cref="RangeComparerRewriter"/>.
+/// A sixth keeps a <c>Compare(x, y)</c> over ranges or sets, an <see cref="IComparer{T}"/>'s and
+/// <see cref="RangeLowerBoundComparer{TRange,T}"/>'s among them, out of SQL, where EF Core would read it as
+/// the natural order — see <see cref="RangeComparerRewriter"/>.
 /// </para>
 /// <para>
 /// The value set refusals — a server-computed <c>Union</c> consumed by an order- or
@@ -365,9 +365,10 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     }
 
     /// <summary>
-    /// Turns <c>comparer.Compare(x, y)</c> over a range, a range set or a value set into
-    /// <see cref="RangeComparerCall.RunInMemory{T}"/>, which EF Core cannot translate: a filter or an
-    /// ordering then fails translation, and a final projection runs the comparer in memory (#385).
+    /// Turns <c>comparer.Compare(x, y)</c> or a static <c>Compare(x, y)</c> over a range, a range set or a
+    /// value set into <see cref="RangeComparerCall.RunInMemory{TComparer,T}"/>, which EF Core cannot
+    /// translate: a filter or an ordering then fails translation, and a final projection runs the call in
+    /// memory (#385).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -393,27 +394,28 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     /// (#452). So a call is rewritten when either operand, under the conversions to the declared type, is a
     /// range, a range set or a value set.
     /// </para>
+    /// <para>
+    /// Nor does the declaring type decide whether a call is rewritten, or which method runs. EF Core
+    /// translates every <c>int Compare(T, T)</c>, static or not, a comparer's or not, and a class may
+    /// implement <see cref="IComparer{T}.Compare"/> explicitly and differently from its public
+    /// <c>Compare</c>. Calling <see cref="IComparer{T}.Compare"/> in place of the method the code called
+    /// answered the explicit implementation's 0 where memory answered 1, and a <c>Compare</c> on a class
+    /// that is no comparer, or a static one, was not rewritten and ran in SQL in the range order (#464). So
+    /// <see cref="RangeComparerCall.Of"/> runs the call as written.
+    /// </para>
     /// </remarks>
     private sealed class RangeComparerRewriter : ExpressionVisitor
     {
         public static readonly RangeComparerRewriter Instance = new();
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
-            => node is { Object: { } comparer, Method: { Name: nameof(IComparer<>.Compare) } method, Arguments: [var x, var y] }
+            => node is { Method: { Name: nameof(IComparer<>.Compare) } method, Arguments: [var x, var y] }
                && method.ReturnType == typeof(int)
                && method.GetParameters() is [{ ParameterType: var compared }, { ParameterType: var other }]
                && compared == other
                && (IsRangeOrSet(x) || IsRangeOrSet(y))
-               && RunInMemory(comparer.Type, compared) is { } runInMemory
-                   ? Expression.Call(runInMemory, Visit(comparer), Visit(x), Visit(y))
+                   ? RangeComparerCall.Of(method, node.Object is { } comparer ? Visit(comparer) : null, Visit(x), Visit(y))
                    : base.VisitMethodCall(node);
-
-        private static MethodInfo? RunInMemory(Type comparerType, Type compared)
-            => typeof(IComparer<>).MakeGenericType(compared).IsAssignableFrom(comparerType)
-                   ? RangeComparerCall.RunInMemoryMethod.MakeGenericMethod(compared)
-                   : compared == typeof(object) && typeof(System.Collections.IComparer).IsAssignableFrom(comparerType)
-                       ? RangeComparerCall.RunInMemoryNonGenericMethod
-                       : null;
 
         // The operand and every conversion it passes through on its way to the declared parameter type:
         // a column converted to IRange<T>, object or IComparable is still a range.
