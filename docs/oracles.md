@@ -62,8 +62,8 @@ One entry per sentence a consumer-facing document states about behaviour, in a f
 - `heldBy` names the test classes that assert the claim. **Empty is allowed and is the worklist.**
 
 The claim sources, in order of authority: `README.md`, `docs/ranges.md`, `docs/value-sets.md`,
-`docs/serialization.md`, `docs/efcore.md`, `docs/getting-started.md`, then the package READMEs for
-anything not already claimed. Every one of the six must carry at least one claim. `architecture.md`,
+`docs/serialization.md`, `docs/efcore.md`, `docs/getting-started.md`, `docs/walkthrough.md`, then the
+package READMEs for anything not already claimed. Every one of the seven must carry at least one claim. `architecture.md`,
 `testing.md`, `why.md`, `migration.md` and the changelog explain and record; they are not promises.
 
 ### The API surface — what the library offers

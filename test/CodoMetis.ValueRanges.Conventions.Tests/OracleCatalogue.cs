@@ -56,7 +56,8 @@ internal static partial class OracleCatalogue
         "docs/value-sets.md",
         "docs/serialization.md",
         "docs/efcore.md",
-        "docs/getting-started.md"
+        "docs/getting-started.md",
+        "docs/walkthrough.md"
     ];
 
     /// <summary>Every <c>[TestClass]</c> name under <c>test/</c>, with the project directory that declares it.</summary>

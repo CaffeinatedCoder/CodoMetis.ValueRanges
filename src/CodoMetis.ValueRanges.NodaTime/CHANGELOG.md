@@ -5,7 +5,9 @@ covers all four packages, which share one version number and release together.
 
 ## [10.3.0]
 
-No change in this package.
+### Changed
+
+- Docs: each package's Project website link on NuGet opens the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/), and its README links the site and the [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md).
 
 ## [10.2.0] — 2026-10-25
 
