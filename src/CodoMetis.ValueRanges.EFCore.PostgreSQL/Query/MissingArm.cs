@@ -4,7 +4,8 @@ using System.Reflection;
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
-/// The refusal a translator throws for an overload it recognizes by name but has no arm for.
+/// The refusal a translator, or the query interceptor's <see cref="RangeSetContains.Equivalent"/>, throws for
+/// an overload it recognizes by name but has no arm for.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,7 +26,7 @@ internal static class MissingArm
 {
     internal static UnreachableException For(MethodInfo method, Type? operand = null) =>
         new($"{Describe(method)} has no translation{(operand is null ? "" : $" for an operand of type {Name(operand)}")}. "
-          + "Give the overload its own arm in the translator, never a fallback to a type it is not.");
+          + "Give the overload its own arm, never a fallback to a type it is not.");
 
     private static string Describe(MethodInfo method) =>
         $"{(method.DeclaringType is { } type ? Name(type) + "." : "")}{method.Name}({string.Join(", ", method.GetParameters().Select(p => Name(p.ParameterType)))})";
