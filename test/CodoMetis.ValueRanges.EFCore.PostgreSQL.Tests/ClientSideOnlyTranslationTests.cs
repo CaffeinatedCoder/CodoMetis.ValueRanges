@@ -43,6 +43,11 @@ public sealed class ClientSideOnlyTranslationTests
         ["OrderBy(IComparer.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = NonGeneric; return db.Bookings.OrderBy(b => comparer.Compare(b.Period, June)); })],
         ["IComparer<StringSet>.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = OverValueSets; return db.Bookings.Where(b => comparer.Compare(b.Tags, OneTag) == 0); })],
         ["OrderBy(IComparer<StringSet>.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = OverValueSets; return db.Bookings.OrderBy(b => comparer.Compare(b.Tags, OneTag)); })],
+        // Nor the declaring type: a Compare on a class that is no comparer, and a static one, ran in SQL in the range order (#464).
+        ["NotAComparer.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => { var helper = new ByLowerBound(); return db.Bookings.Where(b => helper.Compare(b.Period, June) == 0); })],
+        ["OrderBy(NotAComparer.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => { var helper = new ByLowerBound(); return db.Bookings.OrderBy(b => helper.Compare(b.Period, June)); })],
+        ["static Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => LowerBound.Compare(b.Period, June) == 0))],
+        ["OrderBy(static Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.OrderBy(b => LowerBound.Compare(b.Period, June)))],
     ];
 
     private static readonly IComparer<IRange<DateOnly>> OverInterface =
@@ -55,6 +60,17 @@ public sealed class ClientSideOnlyTranslationTests
     private static readonly StringSet OneTag = StringSet.From(["z"]);
 
     private static readonly DateRange June = DateRange.Month(2026, 6);
+
+    // Compare methods EF Core reads by name and signature alone: on a class that implements no IComparer, and static.
+    private sealed class ByLowerBound
+    {
+        public int Compare(DateRange x, DateRange y) => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare(x, y);
+    }
+
+    private static class LowerBound
+    {
+        public static int Compare(DateRange x, DateRange y) => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare(x, y);
+    }
 
     [TestMethod]
     [DynamicData(nameof(Predicates))]
