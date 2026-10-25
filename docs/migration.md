@@ -996,10 +996,13 @@ in SQL in that order. Now it runs in memory only, like the other members under
 `Comparer<DateRange>.Default.Compare` runs in memory too. Once the comparer is a query parameter, a
 query can't tell one comparer from another. So do comparers declared over another type, when what they
 compare is a range or a set: an `IComparer<IRange<DateOnly>>`, a non-generic `IComparer` (such as
-`Comparer<DateRange>.Create(…)` held as one) and an `IComparer<StringSet>`.
+`Comparer<DateRange>.Create(…)` held as one) and an `IComparer<StringSet>`. The same goes for any
+other method named `Compare` that takes two ranges or two sets, such as a static helper or one on a
+class that isn't a comparer. The query runs the method you called, so a class whose public `Compare`
+differs from its `IComparer<T>.Compare` gets the public one, as in memory.
 
-- **Search your queries for `Compare(`.** Each call on a comparer of ranges or sets in a `Where` or
-  an `OrderBy` now throws, so running the query finds it.
+- **Search your queries for `Compare(`.** Each `Compare` over ranges or sets in a `Where` or an
+  `OrderBy` now throws, so running the query finds it.
 - **Filter and sort by the lower bound itself.** `LowerBound()` and `LowerBoundInclusive()` run as
   SQL, so `Where(r => r.Period.LowerBound() == day)` and `OrderBy(r => r.Period.LowerBound())` work.
   An ordering puts the rows without a lower bound where PostgreSQL puts NULL, last ascending
