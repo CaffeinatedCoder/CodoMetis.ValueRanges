@@ -194,10 +194,14 @@ and call `npgsql.UseValueRangesNodaTime()` instead.
 
 ## Documentation
 
+You can read every guide, with an API reference, on the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/).
+
 - **The [EF Core guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md)**
   shows every translation with the SQL it generates.
 - **[Getting started](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/getting-started.md)**
   walks you through a first entity, migration and query.
+- **The [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md)**
+  follows one booking through a minimal API and PostgreSQL, and shows what changes at each step.
 - **The [changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/CHANGELOG.md)**
   lists what changed in each version.
 

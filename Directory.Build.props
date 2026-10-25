@@ -5,7 +5,7 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-        <PackageProjectUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</PackageProjectUrl>
+        <PackageProjectUrl>https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/</PackageProjectUrl>
         <RepositoryUrl>https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <!-- Each package's own changelog, which is short enough to read on the NuGet page's link.
