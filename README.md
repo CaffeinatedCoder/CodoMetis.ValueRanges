@@ -188,6 +188,7 @@ Good to know:
 | Page | Covers |
 |---|---|
 | **[Getting started](docs/getting-started.md)** | Go from an empty project to a first query that runs in PostgreSQL, or stay in memory with no database |
+| **[Walkthrough](docs/walkthrough.md)** | Follow one booking through a minimal API and PostgreSQL, and see what changes at each step |
 | **[Ranges and range sets](docs/ranges.md)** | Create ranges, match on their shape, ask questions about them and combine them, and hold several as one `RangeSet` |
 | **[Value sets](docs/value-sets.md)** | Store sets of tags, codes, IDs or dates in PostgreSQL arrays, use your own element types, and convert sets to ranges |
 | **[Literals, parsing, and JSON](docs/serialization.md)** | Turn ranges and sets into PostgreSQL literals and JSON and back, bind them from configuration, and publish with Native AOT |

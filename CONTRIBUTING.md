@@ -195,8 +195,9 @@ fails outright.
   `## [11.0.0-preview.N]` section, which the release workflow publishes as its notes.
 - **SECURITY.md's supported-versions table** names the latest release of each line on NuGet,
   never the version being prepared, and has no row for a preview. `SecurityPolicyConventionTests`
-  compares this branch's row with `PackageValidationBaselineVersion`, so move the row when you
-  move the baseline, which happens when you open the next version right after a tag; the tagged
+  compares this branch's row with `PackageValidationBaselineVersion`, so move the row (and the
+  walkthrough sample, below) when you move the baseline, which happens when you open the next
+  version right after a tag; the tagged
   commit still names the release before it. The other line's row is compared with
   `CompanionLineRelease` in `Directory.Build.props`, which is empty until 11.0.0 ships. From then
   on, a minor on one line moves its row and `CompanionLineRelease` on the other branch in a PR of
@@ -206,6 +207,14 @@ fails outright.
   cannot pair a `net11.0` asset with a `net10.0` baseline, so until then `Directory.Build.props`
   ignores the baseline's framework and each preview's PR quotes a `dotnet apicompat` run over the
   two assemblies instead; the mechanical gate returns when 11.0.0 is the baseline.
+- **The walkthrough sample** (`samples/Bookings/Bookings.csproj`) names the baseline's version and
+  the framework that release targets, because GitHub's dependency submission and a reader who
+  copies it restore it from nuget.org. The smoke test moves its copy to `Version` and this line's
+  framework. So moving `Version` leaves the sample alone: move it with the baseline, in the same PR
+  (`WalkthroughSampleConventionTests` fails until you do). When the baseline's major changes, at
+  11.0.0 on `main`, regenerate its migration with that major's `dotnet ef` and add the exclusion
+  constraint's SQL back, because a snapshot from one EF Core major doesn't compile against the
+  previous one.
 - **GitHub's Latest release** is the highest stable version. The release workflow decides it
   rather than trusting the API's default, so a 10.x tag pushed after 11.0.0 exists, or any
   preview, can't take Latest from it.

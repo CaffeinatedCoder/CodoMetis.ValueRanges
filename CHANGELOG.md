@@ -32,6 +32,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. Not
 - EF Core: Npgsql 11's own temporal keys accept the range and multirange columns this package maps. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over a `DateRange`, a `TimeRange` or a `RangeSet`, on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
 - EF Core (NodaTime): Npgsql 11's own temporal keys accept `YearMonthRange` and the NodaTime range and multirange columns. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over them on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
 - Docs: the guides, the package READMEs, the changelog and an API reference are published as a [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/) with one set of pages per line. It opens on the stable 10.x line, and the 11.x previews are under `/11.x/`.
+- Docs: a [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md) follows one booking through a minimal API and PostgreSQL, from the request to the stored row and back, and says what changes at each step. CI runs its sample against the packages, so the responses and SQL on the page stay true.
 
 ### Changed
 
