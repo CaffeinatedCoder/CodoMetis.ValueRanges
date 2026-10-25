@@ -854,14 +854,14 @@ translation, and in the final projection EF runs them in memory instead:
 | `Values()` and `Values(step)` on a discrete range, `Split` on any range | Not translated. Each returns a sequence, which in SQL would be `generate_series` wrapped in `ARRAY(SELECT …)`. A long range produces one element per step. |
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | Not translated. An array becomes a multirange through `range_agg` over one-element ranges, which needs care at the element type's extremes: `[2147483647,2147483647]` can't be built as an `int4range`. A multirange becomes an array only by enumerating it, as `Values` does. |
 | `Shift`, `Expand` on any range | Not translated. Rebuilding the range from `lower(x) + d` differs from memory unless each case is handled: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, and a bound moved past the last date .NET holds throws in memory where PostgreSQL returns a later date. A bound at `infinity` stays there in both. |
-| `LocalDateRange.Month`, `Quarter`, `Year` and `IsoWeek`, and `YearMonthRange.Quarter` and `Year`, with an argument read from a column | Not translated. A `LocalDate` column holding `-infinity` stands for -9998-01-01, and neither its month nor any year before 4713 BC has a PostgreSQL date, so the database would fail where memory returns a range. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. On `DateRange` these run as SQL. |
+| `LocalDateRange.Month`, `Quarter`, `Year` and `IsoWeek`, and `YearMonthRange.Quarter` and `Year`, with an argument read from a column | Not translated. PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start, and the database would fail where memory returns a range. That holds with Npgsql's infinity conversions on or off. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. On `DateRange` these run as SQL. |
 | `Clamp(value)` on the other range types | Not translated. The same `LEAST(GREATEST(…))` form would apply, but it has only been checked against memory on `Int32Range`, `Int64Range` and `DecimalRange`, where it runs as SQL. |
 | `Intersect`, `Except` on value sets | Not translated. Filtering the left array with `unnest … WITH ORDINALITY` keeps its order, but the result is canonical only when the stored arrays are, as with `Union`. |
 | `Add` on value sets | Inserting in canonical order means sorting in SQL, where `text` follows the database collation rather than ordinal order. |
 | The value set indexer, `set[0]` | Subscripting reads the stored array, which is canonical only for rows this library wrote ([Rows written by other tools](#rows-written-by-other-tools)). PostgreSQL arrays also start at 1, and an index past the end is `NULL` where memory throws. |
 | `Values` on a value set | It is the loaded array itself. In a query, use the set's own members, such as `Contains` and `Count`. |
 | `Count` and the indexer on a `RangeSet` | Not translated. PostgreSQL has no function for either, and each would be a subquery over `unnest(x)`. |
-| `Compare` on `RangeLowerBoundComparer`, `RangeSet.LowerBoundComparer` and any other `IComparer` of ranges or sets | EF Core reads every `Compare(x, y)` as the natural order of `x` and `y`, whatever the comparer. In SQL the lower-bound comparer would compare in the range order. For the range order in SQL, call `x.CompareTo(y)`. |
+| `Compare` on `RangeLowerBoundComparer`, `RangeSet.LowerBoundComparer` and any other `IComparer` of ranges or sets | EF Core reads every `Compare(x, y)` as the natural order of `x` and `y`, whatever the comparer. In SQL the lower-bound comparer would compare in the range order. What counts is what you compare, not the type the comparer is declared over: an `IComparer<IRange<T>>`, a non-generic `IComparer` and a comparer of value sets run in memory too. For the range order in SQL, call `x.CompareTo(y)`. |
 | `From` and `Parse` on any range or set | They build a value in .NET. Given values your code passes in, EF Core runs them before the query and sends the result as a parameter. |
 | `ToInstantRange`, `ToInterval`, `ToLocalDateRange`, `ToDateInterval` and `ToYearMonthRange` (NodaTime package) | They convert in .NET: between NodaTime's `Interval` or `DateInterval` and a range type, or between `LocalDateRange` and `YearMonthRange`. |
 
@@ -875,12 +875,15 @@ Good to know:
   passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.
 - **`DateRange.Month`, `Quarter`, `Year` and `IsoWeek` over a column build the same range in the
   database as in memory.** `DateRange.Month(b.Day)` gives the month that holds each row's day, so
-  you can filter, join and sort by it. The first and last periods end at `-infinity` and `infinity`,
-  as Npgsql writes `DateOnly.MinValue` and `MaxValue`, so they still equal a stored range.
+  you can filter, join and sort by it. The first period starts at `-infinity` and the last ends at
+  `infinity`, as Npgsql writes `DateOnly.MinValue` and `MaxValue` (the days themselves with
+  `Npgsql.DisableDateTimeInfinityConversions`), so they still equal a stored range.
 - **An argument out of range fails in the database too.** A month outside 1 to 12, a year outside 1
   to 9999, a week its week-year doesn't have, and the ISO week that runs past 9999-12-31 throw
-  `ArgumentOutOfRangeException` in memory. In a query, PostgreSQL raises an error that names the
-  argument (`PostgresException`).
+  `ArgumentOutOfRangeException` in memory. In a query, PostgreSQL raises an error
+  (`PostgresException`). For a week, or a year other than 0, the message names the argument. For a
+  month, a quarter or the year 0, it shows the date PostgreSQL was asked to build: `Quarter(2026, 5)`
+  reports `2026-13-01`.
 - **An in-memory operation inside a `Where` fails loudly.** EF throws rather than silently fetching
   the whole table, and that is the intended behaviour.
 - **In the final `Select` it runs in memory.** EF Core evaluates the outermost projection on the
