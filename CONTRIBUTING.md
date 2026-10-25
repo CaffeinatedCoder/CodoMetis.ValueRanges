@@ -248,6 +248,27 @@ same form, with the entries that affect that package.
 `ChangelogConventionTests` holds the form: known sections in order, one line per change, at most
 60 words a change and 40 for the introduction, absolute links, and the `Changed answers` rules.
 
+## The documentation site
+
+[caffeinatedcoder.github.io/CodoMetis.ValueRanges](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/)
+publishes the README, the guides in `docs/`, the package READMEs, the changelog, the contributor
+pages and an API reference built from the XML docs. `.github/workflows/docs.yml` builds it with
+DocFX from the Markdown files as they are, so you edit `docs/` as usual and nothing else.
+
+- **One config for both lines.** Every run builds `release/10.x` into `/10.x/` and `main` into
+  `/11.x/`, both with `main`'s `site/`. So `site/` and `docs.yml` live on `main` only, and are
+  never cherry-picked. A push to `main` publishes the site. A push to `release/10.x` publishes it
+  when that push's .NET run finishes.
+- **A broken link fails the build.** DocFX runs with warnings as errors. A PR into `main` builds
+  both lines. A PR into `release/10.x` is only checked after it merges, so build that line locally
+  first, from a `main` checkout: `site/build.sh <release/10.x worktree> <output folder> 10.x`.
+- **A new page** goes into `site/toc.yml`. A link to a repository file the site doesn't publish
+  fails the build: add the file to `site/docfx.json` (as a page, or as a resource that's copied
+  as it is), or link its GitHub URL.
+- **At the `v11.0.0` tag, 11.x becomes the default.** Point `site/root/index.html` at `11.x/`, drop
+  "(preview)" from the 11.x label in `docs.yml` and `site/root/versions.html`, and describe 10.x as
+  the LTS line there.
+
 ## Oracle tests
 
 An oracle test checks the library against an independent answer over generated cases instead of a
