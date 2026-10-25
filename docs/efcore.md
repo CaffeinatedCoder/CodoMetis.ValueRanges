@@ -848,6 +848,7 @@ translation, and in the final projection EF runs them in memory instead:
 | The value set indexer, `set[0]` | Subscripting reads the stored array, which is canonical only for rows this library wrote ([Rows written by other tools](#rows-written-by-other-tools)). PostgreSQL arrays also start at 1, and an index past the end is `NULL` where memory throws. |
 | `Values` on a value set | It is the loaded array itself. In a query, use the set's own members, such as `Contains` and `Count`. |
 | `Count` and the indexer on a `RangeSet` | Not translated. PostgreSQL has no function for either, and each would be a subquery over `unnest(x)`. |
+| `Compare` on `RangeLowerBoundComparer`, `RangeSet.LowerBoundComparer` and any other `IComparer` of ranges or sets | EF Core reads every `Compare(x, y)` as the natural order of `x` and `y`, whatever the comparer. In SQL the lower-bound comparer would compare in the range order. For the range order in SQL, call `x.CompareTo(y)`. |
 | `From` and `Parse` on any range or set | They build a value in .NET. Given values your code passes in, EF Core runs them before the query and sends the result as a parameter. |
 | `ToInstantRange`, `ToInterval`, `ToLocalDateRange`, `ToDateInterval` and `ToYearMonthRange` (NodaTime package) | They convert in .NET: between NodaTime's `Interval` or `DateInterval` and a range type, or between `LocalDateRange` and `YearMonthRange`. |
 
@@ -873,21 +874,6 @@ Good to know:
 
 ### Known differences in 10.2.0
 
-One query in 10.2.0 returns something other than the same LINQ over the loaded rows, without an
-error. Its fix lands in 11.0.0 first and comes to 10.x in a later minor. A value set `Union` or
-`Remove` over NULL in a projection was the other one, and 10.3.0 fixes it
-([Changed answers in 10.3.0](migration.md#changed-answers-in-1030)).
-
-- **`RangeLowerBoundComparer` in a query.** `RangeLowerBoundComparer<TRange, T>.Instance.Compare(a, b)`,
-  and `RangeSet<TRange, T>.LowerBoundComparer`, compare in the [range order](ranges.md#sort-ranges)
-  when they run in the database, not by lower bound. EF Core rewrites every `Compare(a, b)` call
-  this way, whatever the comparer does ([dotnet/efcore#39402](https://github.com/dotnet/efcore/issues/39402)).
-  So `Where(b => comparer.Compare(b.Period, p) == 0)` becomes `WHERE b."Period" = @p`, and it
-  misses the rows whose lower bound is the same as `p`'s but whose upper bound is not. Call the
-  comparer on loaded rows instead:
-
-  ```csharp
-  bookings.AsEnumerable().Where(b => comparer.Compare(b.Period, p) == 0);
-  ```
-
-  The fix is [#396](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/396).
+Two queries in 10.2.0 return something other than the same LINQ over the loaded rows, without an
+error: a value set `Union` or `Remove` over NULL in a projection, and `RangeLowerBoundComparer` in a
+query. 10.3.0 fixes both ([Changed answers in 10.3.0](migration.md#changed-answers-in-1030)).

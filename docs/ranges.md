@@ -964,8 +964,8 @@ The order follows two rules:
 The same instance is also available as `RangeLowerBoundComparer<Int32Range, int>.Instance`. Use it
 where you only have the comparer type, not the set type.
 
-The comparer sorts in memory. Inside an EF Core query it compares in the range order instead; see
-[Known differences in 10.2.0](efcore.md#known-differences-in-1020).
+The comparer sorts in memory. Inside an EF Core query it runs in memory only, so a filter or an
+ordering that calls it fails translation; see [What runs where](efcore.md#what-runs-where).
 
 ## Write generic code over any range
 

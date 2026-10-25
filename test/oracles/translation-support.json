@@ -2,7 +2,7 @@
   {
     "members": "RangeLowerBoundComparer<TRange, T>.Compare(*",
     "support": "client",
-    "reason": "an in-memory sorting helper (docs/ranges.md#sort-ranges-the-way-a-set-does); not in docs/efcore.md#what-runs-where, and named under docs/efcore.md#known-differences-in-1020. EF Core reads any Compare(a, b) as the natural order, so in a query it answers the range order rather than the lower-bound order: #396"
+    "reason": "docs/efcore.md#what-runs-where: EF Core reads any Compare(a, b) as the natural order, which for a range is not the lower-bound order, so the query interceptor turns any IComparer over a range or set into a call EF Core cannot translate (#396, port of #385)"
   },
   {
     "members": "YearMonthRange.Create*",

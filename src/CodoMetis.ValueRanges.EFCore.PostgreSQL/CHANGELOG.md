@@ -10,6 +10,7 @@ Some calls answer differently: [Changed answers in 10.3.0](https://github.com/Ca
 ### Changed answers
 
 - EF Core: a value set `Union` with a NULL set, or `Remove` with a NULL set or element, is NULL in a query, as `Where(… == null)` already said. A `Select` loaded the other set instead, for a nullable column, a missing outer-join child or a `null` parameter ([#395](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/395), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030)).
+- EF Core: `RangeLowerBoundComparer.Compare`, and any other `IComparer` of ranges or sets, runs in memory only in a query. A filter or an ordering fails translation. In SQL it compared in the range order, so `Compare(r.Period, p) == 0` missed rows with the same lower bound ([#396](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/396), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030)).
 
 ### Added
 

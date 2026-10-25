@@ -1,0 +1,19 @@
+Seed: the query interceptor no longer rewrites an IComparer's Compare over ranges, so EF Core reads RangeLowerBoundComparer.Compare as the range order in SQL (#385)
+Oracles: TranslationSupportProbeTests
+Fails: RangeLowerBoundComparer<TRange, T>.Compare on every range type: classified client, but runs as SQL now, and Select answers 1 or -1 where memory answers 0 for an equal lower bound
+History: shipped through 10.2.0, fixed in 10.3.0 (#396) and 11.0.0
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
+index 4f0af5e..c0972c5 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
+@@ -42,8 +42,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+         => CollectionParameterExpander.Expand(
+             RangeVariantConstantRetyper.Instance.Visit(
+                 NullOperandCompareToRewriter.Instance.Visit(
+-                    RangeComparerRewriter.Instance.Visit(
+-                        RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))))),
++                    RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)))),
+             DefaultCollectionMode(eventData.Context));
+ 
+     private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)

@@ -229,7 +229,7 @@ overloads an expression tree cannot hold (`ReadOnlySpan<char>`, `out`) are out b
   proves nothing: EF Core evaluates on the client what it cannot translate there. A `server` member that is
   refused or answers differently is a defect; a `client` or `planned` member that now translates is a
   change to classify. The first run found #385: EF Core rewrites any `Compare(a, b)` to the natural order,
-  so `RangeLowerBoundComparer.Compare` runs as SQL in the range order.
+  so `RangeLowerBoundComparer.Compare` ran as SQL in the range order.
 - `TranslatorDispatchSweepTests` (conventions, no database) asks the other question about the same keys:
   not whether a member translates, but whether a translation maps each operand as the type its overload
   declares. Each key over every closed type goes to the translator providers of a real context, with one
