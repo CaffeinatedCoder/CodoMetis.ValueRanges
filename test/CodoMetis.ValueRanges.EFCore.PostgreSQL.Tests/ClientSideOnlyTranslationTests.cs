@@ -14,7 +14,8 @@ public sealed class ClientSideOnlyTranslationTests
 {
     public static IEnumerable<object[]> Predicates =>
     [
-        ["Length", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Length > 3))],
+        // Length on Int32Range and Int64Range translates (#405); on the other range types it stays in memory.
+        ["Length", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Price.Length > 3m))],
         ["Values()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Values().Contains(5)))],
         ["Clamp", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Clamp(5) == 5))],
         ["Shift", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Shift(10).Contains(15)))],

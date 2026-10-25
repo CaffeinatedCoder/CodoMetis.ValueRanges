@@ -5,6 +5,10 @@ covers all four packages, which share one version number and release together.
 
 ## [10.3.0]
 
+### Added
+
+- EF Core: `Length` on `Int32Range` and `Int64Range` runs as SQL, so a query can filter and sort by it. It counts the integers as memory does: 0 for the empty range, and `null` for an unbounded side or, on `Int64Range`, a count larger than `long.MaxValue` ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+
 ### Changed
 
 - Docs: each package's Project website link on NuGet opens the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/), and its README links the site and the [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md).
