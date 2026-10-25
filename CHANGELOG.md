@@ -16,6 +16,7 @@ has the rules.
 ### Added
 
 - EF Core: `Length` on `Int32Range` and `Int64Range` runs as SQL, so a query can filter and sort by it. It counts the integers as memory does: 0 for the empty range, and `null` for an unbounded side or, on `Int64Range`, a count larger than `long.MaxValue` ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` runs as SQL, so a query can filter and sort by the clamped value. It answers as memory does: the value inside the range, otherwise the bound it passes, and `null` for the empty range or a `null` range or value ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 - Docs: the guides, the package READMEs, the changelog and an API reference are published as a [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/) with one set of pages per line. It opens on the stable 10.x line, and the 11.x previews are under `/11.x/`.
 - Docs: a [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md) follows one booking through a minimal API and PostgreSQL, from the request to the stored row and back, and says what changes at each step. CI runs its sample against the packages, so the responses and SQL on the page stay true.
 
