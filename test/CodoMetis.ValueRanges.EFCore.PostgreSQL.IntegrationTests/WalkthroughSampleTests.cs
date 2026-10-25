@@ -77,7 +77,7 @@ public sealed class WalkthroughSampleTests
     }
 
     [TestMethod]
-    public async Task Validation_RejectsAnOpenStay_AStayOutOfSeason_AndALiteralThatDoesNotParse()
+    public async Task Validation_RejectsANullStay_AnOpenStay_AStayOutOfSeason_AndALiteralThatDoesNotParse()
     {
         await using var sample = await SampleHost.StartAsync();
 
@@ -91,6 +91,11 @@ public sealed class WalkthroughSampleTests
             sample.Post("""{"roomId":1,"guest":"Linus","stay":"[2026-08-01,2026-09-01)"}"""));
         await sample.Expect(HttpStatusCode.Created, null,
             sample.Post("""{"roomId":1,"guest":"Linus","stay":"[2026-08-01,2026-08-31)"}"""));
+        // System.Text.Json binds a JSON null, or no stay at all, as null whatever the annotation (#465).
+        await sample.Expect(HttpStatusCode.BadRequest, Problem + """{"stay":["Give the stay."]}}""",
+            sample.Post("""{"roomId":1,"guest":"Linus","stay":null}"""));
+        await sample.Expect(HttpStatusCode.BadRequest, Problem + """{"stay":["Give the stay."]}}""",
+            sample.Post("""{"roomId":1,"guest":"Linus"}"""));
         await sample.Expect(HttpStatusCode.BadRequest, Problem + """{"guest":["Name the guest."]}}""",
             sample.Post("""{"roomId":1,"stay":"[2026-09-01,2026-09-03)"}"""));
         await sample.Expect(HttpStatusCode.BadRequest, Problem + """{"stay":["Garden takes bookings for [2026-05-01,2026-09-30] only."]}}""",
