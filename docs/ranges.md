@@ -86,9 +86,9 @@ Good to know:
 - **A `LocalDate` in another calendar is read as its ISO day.** `LocalDateRange.Month` returns the
   ISO month that holds that day, as every bound of this type is ISO.
 - **In an EF Core query, pass values your code already has.** `b.Period.Overlaps(DateRange.Month(2026, 10))`
-  runs as SQL with the month as one constant. A factory that reads a column, such as
-  `DateRange.Month(b.Day)`, runs in memory only
-  ([What runs where](efcore.md#what-runs-where)).
+  runs as SQL with the month as one constant. On `DateRange`, a factory that reads a column, such as
+  `DateRange.Month(b.Day)`, runs as SQL too. On `LocalDateRange` and `YearMonthRange` it runs in
+  memory only ([What runs where](efcore.md#what-runs-where)).
 
 ## Pattern matching
 

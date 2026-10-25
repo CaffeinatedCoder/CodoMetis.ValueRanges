@@ -89,6 +89,12 @@ internal sealed class ValueRangesMethodCallTranslator(
 
     private static readonly HashSet<Type> ClampsAsSql = [typeof(Int32Range), typeof(Int64Range), typeof(DecimalRange)];
 
+    // -- The calendar factories (Month, Quarter, Year, IsoWeek) over a column, on the types whose every answer
+    //    PostgreSQL can hold (#191) --
+
+    private static readonly HashSet<Type> CalendarFactoriesAsSql = [typeof(DateRange)];
+
+
     private static MethodInfo GetExtensionMethod(string name, Func<MethodInfo, bool>? filter = null)
         => typeof(RangeExtensions)
           .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -537,6 +543,10 @@ internal sealed class ValueRangesMethodCallTranslator(
         IReadOnlyList<SqlExpression> arguments
     )
     {
+        // On every other range type the calendar factories run in memory (docs/efcore.md#what-runs-where).
+        if (method.Name is "Month" or "Quarter" or "Year" or "IsoWeek" && CalendarFactoriesAsSql.Contains(definition.RangeClrType))
+            return CalendarFactory(definition, method, arguments);
+
         if (!definition.SupportsSqlConstruction) return null;
 
         var element = definition.ElementClrType;
@@ -647,6 +657,261 @@ internal sealed class ValueRangesMethodCallTranslator(
             argumentsPropagateNullability: [false, false, false],
             definition.RangeClrType,
             definition.RangeTypeMapping);
+
+    // -------------------------------------------------------------------------
+    // Calendar factories (#191)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// <c>DateRange.Month</c>, <c>Quarter</c>, <c>Year</c> and <c>IsoWeek</c> over a column (#191): the
+    /// period's first and last day, <c>daterange(first, last, '[]')</c>, and NULL over a NULL argument
+    /// (rule (c)).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Measured on PostgreSQL 16 and 18 (#191). The first and the last period of <see cref="DateOnly"/>'s
+    /// days are written as constants, taken from memory's factory: the range PostgreSQL builds holds what
+    /// Npgsql binds for memory's answer, <c>-infinity</c> for <see cref="DateOnly.MinValue"/> and
+    /// <c>infinity</c> for <see cref="DateOnly.MaxValue"/> (or the days themselves, with
+    /// <c>Npgsql.DisableDateTimeInfinityConversions</c> set), and PostgreSQL turns a finite <c>]</c> into
+    /// <c>)</c>. A date argument at or past those periods takes them too, which covers the <c>-infinity</c>
+    /// and <c>infinity</c> a column holds for the extremes: <c>date_trunc</c> keeps an infinity, and the
+    /// <c>[)</c> range between two of them is empty. <c>date_trunc</c> takes an explicit <c>timestamp</c>,
+    /// since a <c>date</c> resolves to its <c>timestamptz</c> overload, which reads the session time zone.
+    /// </para>
+    /// <para>
+    /// An argument memory refuses raises. <c>make_date</c> raises for a month outside 1 to 12 and for the
+    /// year 0. A guard raises for any other year outside 1 to 9999, which <c>make_date</c> accepts, for a week
+    /// the week-year does not have, and for the week that ends after 9999-12-31. It casts its message to the
+    /// type it stands in for, and PostgreSQL drops it unread when the argument is a constant in range.
+    /// <c>to_date(…, 'IYYY-IW')</c> is not used: it rolls week 53 of a 52-week year over to the next year's
+    /// week 1.
+    /// </para>
+    /// </remarks>
+    private SqlExpression CalendarFactory(IRangeTypeDefinition definition, MethodInfo method, IReadOnlyList<SqlExpression> arguments)
+    {
+        var date = definition.ElementClrType;
+        var name = $"{definition.RangeClrType.Name}.{method.Name}";
+
+        var operands = method.GetParameters()
+                             .Select((parameter, index) => parameter.ParameterType == typeof(int) ? sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), IntMapping)
+                                                         : parameter.ParameterType == date        ? ApplyElementMapping(arguments[index], definition)
+                                                                                                  : throw MissingArm.For(method, parameter.ParameterType))
+                             .ToArray();
+
+        SqlExpression Is(int index, int value) => sqlExpressionFactory.Equal(operands[index], Int(value));
+        SqlExpression Both(SqlExpression left, SqlExpression right) => sqlExpressionFactory.AndAlso(left, right);
+
+        var range = method.Name switch
+        {
+            "Month" when Takes(method, date)
+                => OfDate(definition, operands[0], "month", Interval(months: 1), DateRange.Month, name),
+            "Month" when Takes(method, typeof(int), typeof(int))
+                => OfParts(definition, MakeDate(Year(operands[0], name), operands[1], 1), Interval(months: 1),
+                           Both(Is(0, 1), Is(1, 1)), Both(Is(0, 9999), Is(1, 12))),
+            "Quarter" when Takes(method, date)
+                => OfDate(definition, operands[0], "quarter", Interval(months: 3), DateRange.Quarter, name),
+            "Quarter" when Takes(method, typeof(int), typeof(int))
+                => OfParts(definition, MakeDate(Year(operands[0], name), FirstMonthOf(operands[1]), 1), Interval(months: 3),
+                           Both(Is(0, 1), Is(1, 1)), Both(Is(0, 9999), Is(1, 4))),
+            "Year" when Takes(method, date)
+                => OfDate(definition, operands[0], "year", Interval(years: 1), DateRange.Year, name),
+            "Year" when Takes(method, typeof(int))
+                => OfParts(definition, MakeDate(Year(operands[0], name), Int(1), 1), Interval(years: 1), Is(0, 1), Is(0, 9999)),
+            "IsoWeek" when Takes(method, date)
+                => OfDate(definition, operands[0], "week", Interval(weeks: 1), DateRange.IsoWeek, name),
+            "IsoWeek" when Takes(method, typeof(int), typeof(int))
+                => OfParts(definition, MondayOf(operands[0], operands[1], name, definition), Interval(weeks: 1),
+                           Both(Is(0, 1), Is(1, 1)), Both(Is(0, 9999), Is(1, 52)),
+                           Raise([$"{name}: week ", Text(operands[1]), " of ", Text(operands[0]), $" ends after {DateOnly.MaxValue:yyyy-MM-dd}"], date, ElementMapping(definition))),
+            _ => throw MissingArm.For(method)
+        };
+
+        return NullOverNullElement(definition, range, operands);
+    }
+
+    /// <summary>
+    /// The period holding the date <paramref name="value"/>: <c>date_trunc(unit, value::timestamp)</c> and
+    /// that plus <paramref name="length"/> less a day, or memory's first or last period for a date inside or
+    /// before or after it. A last period memory refuses (the ISO week past 9999-12-31) raises instead.
+    /// </summary>
+    private SqlExpression OfDate(
+        IRangeTypeDefinition definition, SqlExpression value, string unit, SqlExpression length, Func<DateOnly, DateRange> factory, string name)
+    {
+        var mapping = ElementMapping(definition);
+        var first   = (DateRange.Finite)factory(DateOnly.MinValue);
+
+        // From here on the date is in the last period, or, where memory refuses that period (only the ISO week
+        // past 9999-12-31 is refused), in the week starting on the Monday of DateOnly.MaxValue's week.
+        var monday =DateOnly.MaxValue.AddDays(-(((int)DateOnly.MaxValue.DayOfWeek + 6) % 7));
+        var last   = Refuses(factory, DateOnly.MaxValue) ? null : (DateRange.Finite)factory(DateOnly.MaxValue);
+        var from   = sqlExpressionFactory.Constant(last?.Start ?? monday, mapping);
+
+        var start = sqlExpressionFactory.Function(
+            "date_trunc", [sqlExpressionFactory.Constant(unit, TextMapping), Timestamp(value)],
+            nullable: true, argumentsPropagateNullability: [false, true], typeof(DateTime), TimestampMapping);
+
+        var inFirst = sqlExpressionFactory.LessThanOrEqual(value, sqlExpressionFactory.Constant(first.End, mapping));
+        var inLast  = sqlExpressionFactory.GreaterThanOrEqual(value, from);
+
+        var lower = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(inFirst, sqlExpressionFactory.Constant(first.Start, mapping)),
+                new CaseWhenClause(inLast, sqlExpressionFactory.Constant(last?.Start ?? monday, mapping))
+            ],
+            sqlExpressionFactory.Convert(start, definition.ElementClrType, mapping));
+
+        var upper = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    inLast,
+                    last is null
+                        ? Raise([$"{name}: the week of ", Text(value), $" ends after {DateOnly.MaxValue:yyyy-MM-dd}"], definition.ElementClrType, mapping)
+                        : sqlExpressionFactory.Constant(last.End, mapping)),
+                new CaseWhenClause(inFirst, sqlExpressionFactory.Constant(first.End, mapping))
+            ],
+            LastDay(start, length, definition));
+
+        return CalendarRange(definition, lower, upper);
+    }
+
+    /// <summary>
+    /// The period starting on <paramref name="first"/>, built from integer arguments, with memory's first
+    /// period's start where <paramref name="isFirst"/> and its last period's end where <paramref name="isLast"/>,
+    /// or <paramref name="refusal"/> where memory refuses the last period.
+    /// </summary>
+    private SqlExpression OfParts(
+        IRangeTypeDefinition definition, SqlExpression first, SqlExpression length, SqlExpression isFirst, SqlExpression isLast,
+        SqlExpression? refusal = null)
+    {
+        var mapping = ElementMapping(definition);
+
+        var lower = sqlExpressionFactory.Case(
+            [new CaseWhenClause(isFirst, sqlExpressionFactory.Constant(DateOnly.MinValue, mapping))],
+            first);
+
+        var upper = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    isLast,
+                    refusal ?? sqlExpressionFactory.Constant(DateOnly.MaxValue, mapping))
+            ],
+            LastDay(Timestamp(first), length, definition));
+
+        return CalendarRange(definition, lower, upper);
+    }
+
+    private static bool Refuses(Func<DateOnly, DateRange> factory, DateOnly value)
+    {
+        try { factory(value); return false; }
+        catch (ArgumentOutOfRangeException) { return true; }
+    }
+
+    /// <summary>
+    /// <c>daterange(first, last, '[]')</c>. Never NULL: PostgreSQL's range constructor reads a NULL bound
+    /// as unbounded, and both bounds here are days.
+    /// </summary>
+    private SqlExpression CalendarRange(IRangeTypeDefinition definition, SqlExpression lower, SqlExpression upper)
+        => sqlExpressionFactory.Function(
+            definition.RangeStoreType,
+            [lower, upper, sqlExpressionFactory.Constant("[]")],
+            nullable: false,
+            argumentsPropagateNullability: [false, false, false],
+            definition.RangeClrType,
+            definition.RangeTypeMapping);
+
+    /// <summary><c>(start + length - 1 day)::date</c>, the period's last day.</summary>
+    private SqlExpression LastDay(SqlExpression start, SqlExpression length, IRangeTypeDefinition definition)
+        => sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Add(start, length, TimestampMapping), definition.ElementClrType, ElementMapping(definition));
+
+    /// <summary>
+    /// The Monday of ISO week <paramref name="week"/> of <paramref name="year"/>: the Monday on or before
+    /// January 4, plus <c>7 * (week - 1)</c> days, raising for a week outside 1 to the year's last,
+    /// <c>date_part('week', make_date(year, 12, 28))</c>.
+    /// </summary>
+    private SqlExpression MondayOf(SqlExpression year, SqlExpression week, string name, IRangeTypeDefinition definition)
+    {
+        var weeks = sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Function(
+                "date_part", [sqlExpressionFactory.Constant("week", TextMapping), MakeDate(year, Int(12), 28)],
+                nullable: true, argumentsPropagateNullability: [false, true], typeof(double)),
+            typeof(int), IntMapping);
+
+        var checkedWeek = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.AndAlso(sqlExpressionFactory.GreaterThanOrEqual(week, Int(1)), sqlExpressionFactory.LessThanOrEqual(week, weeks)),
+                    week)
+            ],
+            Raise([$"{name}: the week-year ", Text(year), " has no week ", Text(week)], typeof(int), IntMapping));
+
+        var firstMonday = sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Function(
+                "date_trunc", [sqlExpressionFactory.Constant("week", TextMapping), Timestamp(MakeDate(Year(year, name), Int(1), 4))],
+                nullable: true, argumentsPropagateNullability: [false, true], typeof(DateTime), TimestampMapping),
+            definition.ElementClrType, ElementMapping(definition));
+
+        return sqlExpressionFactory.Add(
+            firstMonday,
+            sqlExpressionFactory.Multiply(Int(7), sqlExpressionFactory.Subtract(checkedWeek, Int(1))),
+            ElementMapping(definition));
+    }
+
+    /// <summary>The year, raising for one outside 1 to 9999, which <c>make_date</c> would accept, unless it is 0.</summary>
+    private SqlExpression Year(SqlExpression year, string name)
+        => sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.AndAlso(
+                        sqlExpressionFactory.GreaterThanOrEqual(year, Int(DateOnly.MinValue.Year)),
+                        sqlExpressionFactory.LessThanOrEqual(year, Int(DateOnly.MaxValue.Year))),
+                    year)
+            ],
+            Raise([$"{name}: the year ", Text(year), $" is outside {DateOnly.MinValue.Year} to {DateOnly.MaxValue.Year}"], typeof(int), IntMapping));
+
+    /// <summary><c>quarter * 3 - 2</c>, a month outside 1 to 12 for every quarter outside 1 to 4, which <c>make_date</c> refuses.</summary>
+    private SqlExpression FirstMonthOf(SqlExpression quarter)
+        => sqlExpressionFactory.Subtract(sqlExpressionFactory.Multiply(quarter, Int(3)), Int(2));
+
+    private SqlExpression MakeDate(SqlExpression year, SqlExpression month, int day)
+        => sqlExpressionFactory.Function(
+            "make_date", [year, month, Int(day)],
+            nullable: true, argumentsPropagateNullability: [true, true, true], typeof(DateOnly),
+            typeMappingSource.FindMapping(typeof(DateOnly), "date"));
+
+    /// <summary><c>'1 month -1 day'::interval</c> and the like: a period's length less the day that ends it.</summary>
+    private SqlExpression Interval(int years = 0, int months = 0, int weeks = 0)
+    {
+        var length = years > 0 ? $"{years} year" : months > 0 ? $"{months} month" : $"{weeks} week";
+        return sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Constant($"{length} -1 day", TextMapping), typeof(TimeSpan),
+            typeMappingSource.FindMapping(typeof(TimeSpan), "interval"));
+    }
+
+    /// <summary>
+    /// An error raised where the value would be: the message, cast to <paramref name="type"/>, fails as
+    /// <c>invalid input syntax</c> (22P02 for <c>integer</c>, 22007 for <c>date</c>) and carries the message.
+    /// The message must hold an argument: PostgreSQL folds a constant cast while planning, inside a
+    /// <c>CASE</c> branch no row reaches, and raises for every query.
+    /// </summary>
+    private SqlExpression Raise(IReadOnlyList<object> parts, Type type, RelationalTypeMapping? mapping)
+        => sqlExpressionFactory.Convert(
+            parts.Select(part => part as SqlExpression ?? sqlExpressionFactory.Constant((string)part, TextMapping))
+                 .Aggregate((left, right) => sqlExpressionFactory.Add(left, right, TextMapping)),
+            type, mapping);
+
+    private SqlExpression Text(SqlExpression value) => sqlExpressionFactory.Convert(value, typeof(string), TextMapping);
+
+    private SqlExpression Timestamp(SqlExpression value) => sqlExpressionFactory.Convert(value, typeof(DateTime), TimestampMapping);
+
+    private SqlExpression Int(int value) => sqlExpressionFactory.Constant(value, IntMapping);
+
+    private RelationalTypeMapping IntMapping => typeMappingSource.FindMapping(typeof(int))!;
+
+    private RelationalTypeMapping TextMapping => typeMappingSource.FindMapping(typeof(string), "text")!;
+
+    private RelationalTypeMapping TimestampMapping => typeMappingSource.FindMapping(typeof(DateTime), "timestamp without time zone")!;
 
     // -------------------------------------------------------------------------
     // Helpers

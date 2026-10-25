@@ -901,6 +901,7 @@ parameters. A value set `Union` composes only under some operators; see
 | | `Length` on `Int32Range` and `Int64Range` | `upper(x) - lower(x)` after a widening cast, and 0 for the empty range |
 | | `Clamp(value)` on `Int32Range`, `Int64Range` and `DecimalRange` | `LEAST(GREATEST(value, lower(x)), upper(x))`, one step back from a discrete type's exclusive upper bound, and NULL for the empty range |
 | | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
+| | `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column | `daterange(first, last, '[]')`, the days from `date_trunc` or `make_date`, and an error where memory throws |
 | | `RangeAgg`, `RangeIntersectAgg`, over ranges or sets | `range_agg`, `range_intersect_agg` |
 | `RangeSet` | the same operations over multirange columns, plus `Complement` and `IsContainedBy` | the multirange forms, and `'{(,)}' - x` |
 | | `Gaps()`, `Gaps(window)` | `multirange(range_merge(x)) - x`, `multirange(window) - x` |
@@ -918,7 +919,7 @@ translation, and in the final projection EF runs them in memory instead:
 | `Values()` and `Values(step)` on a discrete range, `Split` on any range | Not translated. Each returns a sequence, which in SQL would be `generate_series` wrapped in `ARRAY(SELECT …)`. A long range produces one element per step. |
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | Not translated. An array becomes a multirange through `range_agg` over one-element ranges, which needs care at the element type's extremes: `[2147483647,2147483647]` can't be built as an `int4range`. A multirange becomes an array only by enumerating it, as `Values` does. |
 | `Shift`, `Expand` on any range | Not translated. Rebuilding the range from `lower(x) + d` differs from memory unless each case is handled: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, and a bound moved past the last date .NET holds throws in memory where PostgreSQL returns a later date. A bound at `infinity` stays there in both. |
-| `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column, and the same factories on `LocalDateRange` and `YearMonthRange` | Not translated yet ([#191](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/191)). PostgreSQL has no calendar-range function, and the SQL would combine `date_trunc` with interval arithmetic per factory. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. |
+| `LocalDateRange.Month`, `Quarter`, `Year` and `IsoWeek`, and `YearMonthRange.Quarter` and `Year`, with an argument read from a column | Not translated. A `LocalDate` column holding `-infinity` stands for -9998-01-01, and neither its month nor any year before 4713 BC has a PostgreSQL date, so the database would fail where memory returns a range. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. On `DateRange` these run as SQL. |
 | `Clamp(value)` on the other range types | Not translated. The same `LEAST(GREATEST(…))` form would apply, but it has only been checked against memory on `Int32Range`, `Int64Range` and `DecimalRange`, where it runs as SQL. |
 | `Intersect`, `Except` on value sets | Not translated. Filtering the left array with `unnest … WITH ORDINALITY` keeps its order, but the result is canonical only when the stored arrays are, as with `Union`. |
 | `Add` on value sets | Inserting in canonical order means sorting in SQL, where `text` follows the database collation rather than ordinal order. |
@@ -937,6 +938,14 @@ Good to know:
 - **`Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` clamps in the database as it does in
   memory.** A value inside the range comes back as it is, and one outside comes back as the bound it
   passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.
+- **`DateRange.Month`, `Quarter`, `Year` and `IsoWeek` over a column build the same range in the
+  database as in memory.** `DateRange.Month(b.Day)` gives the month that holds each row's day, so
+  you can filter, join and sort by it. The first and last periods end at `-infinity` and `infinity`,
+  as Npgsql writes `DateOnly.MinValue` and `MaxValue`, so they still equal a stored range.
+- **An argument out of range fails in the database too.** A month outside 1 to 12, a year outside 1
+  to 9999, a week its week-year doesn't have, and the ISO week that runs past 9999-12-31 throw
+  `ArgumentOutOfRangeException` in memory. In a query, PostgreSQL raises an error that names the
+  argument (`PostgresException`).
 - **An in-memory operation inside a `Where` fails loudly.** EF throws rather than silently fetching
   the whole table, and that is the intended behaviour.
 - **In the final `Select` it runs in memory.** EF Core evaluates the outermost projection on the
