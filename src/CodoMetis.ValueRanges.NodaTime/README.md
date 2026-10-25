@@ -210,6 +210,12 @@ Good to know:
 
 - **You can't build a `YearMonthRange` from column values inside a query.** `YearMonthRange.CreateFinite(x.SomeColumn, …)` doesn't run as SQL, because months are coarser than the `date` subtype.
 
+## Documentation
+
+You can read every guide, with an API reference for all four packages, on the
+[documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/). The [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md)
+follows one booking through a minimal API and PostgreSQL, and shows what changes at each step.
+
 ## License
 
 MIT — see [LICENSE](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/LICENSE).

@@ -14,6 +14,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. The
 - Ranges: `RangeSet.From`, a collection expression and `RangeSet.Create` throw `ArgumentException` for a `null` range, where they built a set holding `null`, whose `IsEmpty()` was `false`. `Union` and `Except` called on a `null` range throw too ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#keep-null-out-of-a-range-set)).
 - Ranges: a predicate called on a `null` range, or given a `null` range or set, returns `false`, as a query does over a NULL column. `Contains(Empty)`, `IsContainedBy((,))` and `(,).Contains(null)` returned `true`, and `Contains(T)` and a `null` set operand threw ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
 
+### Changed
+
+- Docs: each package's Project website link on NuGet opens the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/), and its README links the site and the [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md).
+
 ### Fixed
 
 - Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.

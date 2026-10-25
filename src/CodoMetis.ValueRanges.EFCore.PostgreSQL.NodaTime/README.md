@@ -178,7 +178,10 @@ describes. In a query, they also reach a value you pass on its own, such as the 
 ## Documentation
 
 The [EF Core guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md)
-covers both packages, with every translation and the SQL it generates.
+covers both packages, with every translation and the SQL it generates. You can read every guide,
+with an API reference, on the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/). The
+[walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md) follows one
+booking through a minimal API and PostgreSQL, and shows what changes at each step.
 
 ## License
 
