@@ -177,7 +177,7 @@ table. In the final `Select`, EF Core computes them in memory after it loads the
 | `Length` on any range | not translated: the integer types need a widening cast and a branch for the empty range, and a temporal range open to `infinity` fails in PostgreSQL |
 | `Values()` and `Values(step)` on a discrete range, `Split` on any range | not translated: each would be `generate_series` collected into an array |
 | `Shift`, `Expand` on any range | not translated: rebuilding the range from `lower(x) + d` answers differently for the empty range, `time` past midnight and a bound moved past the last date .NET holds |
-| `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column | not translated: PostgreSQL has no calendar-range function. Built from values your code passes in, the range is sent as one constant, so comparing a column against a month runs as SQL |
+| `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column | not translated yet ([#191](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/191)): PostgreSQL has no calendar-range function. Built from values your code passes in, the range is sent as one constant, so comparing a column against a month runs as SQL |
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | not translated: an array becomes a multirange by aggregating one-element ranges, and the reverse is enumeration |
 | `Clamp(value)` on any range | not translated: it would be `LEAST`/`GREATEST` over the bounds, with branches for the empty range and a discrete upper bound |
 | the value set indexer, `set[0]` | a row another tool wrote may not be canonical, arrays start at 1, and an index past the end is `NULL` where memory throws |
