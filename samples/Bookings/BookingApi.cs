@@ -108,8 +108,9 @@ public static class BookingApi
         return TypedResults.Ok(new Availability(id, window, booked, free));
     }
 
-    static string? CheckStay(DateRange stay) => stay switch
+    static string? CheckStay(DateRange? stay) => stay switch
     {
+        null => "Give the stay.",
         DateRange.Finite { Length: > 30 } => "A stay is at most 30 nights.",
         DateRange.Finite => null,
         DateRange.EmptyRange => "The stay has no nights.",
