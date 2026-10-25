@@ -583,7 +583,7 @@
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
     "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in the final projection EF runs them in memory instead:",
-    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp (on every range type but Int32Range, Int64Range and DecimalRange), Shift, Expand, ToRangeSet()/ToInt32Set(), the set indexer and Compare on RangeLowerBoundComparer, RangeSet.LowerBoundComparer and any IComparer of ranges or sets (decided by the operands, so also a comparer declared over IRange<T>, the non-generic IComparer and a comparer of value sets) each throw an EF translation exception inside a Where (an OrderBy for the comparer) and evaluate on the client with the in-memory answer inside a Select.",
+    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp (on every range type but Int32Range, Int64Range and DecimalRange), Shift, Expand, ToRangeSet()/ToInt32Set(), the set indexer and Compare on RangeLowerBoundComparer, RangeSet.LowerBoundComparer and any IComparer of ranges or sets (decided by the operands, so also a comparer declared over IRange<T>, the non-generic IComparer and a comparer of value sets), and any other Compare(x, y) over ranges or sets (a static one, or one on a class that is no comparer, running the method called rather than IComparer<T>.Compare) each throw an EF translation exception inside a Where (an OrderBy for the comparer) and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Length",
