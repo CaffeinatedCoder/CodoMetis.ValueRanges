@@ -3,7 +3,7 @@
 The changes that affect the core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
-## [10.2.0]
+## [10.2.0] — 2026-10-25
 
 ### Changed answers
 
