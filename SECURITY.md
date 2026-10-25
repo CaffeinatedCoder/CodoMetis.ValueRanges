@@ -53,8 +53,8 @@ maintained.
 
 | Version | Supported |
 |---|---|
-| 10.1.x | ✅ |
-| < 10.1 | ❌ |
+| 10.2.x | ✅ |
+| < 10.2 | ❌ |
 
 Previews (`11.0.0-preview.N`) are not supported versions and have no row: a fix reaches a preview
 in the next preview.
