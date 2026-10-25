@@ -332,8 +332,8 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// <remarks>
     /// The pieces are adjacent and hold exactly the values of the range, so
     /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound.
-    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
-    /// <c>generate_series</c> returns rows, not a value.
+    /// The empty range yields nothing. This runs in memory only; an EF Core
+    /// query doesn't translate it.
     /// </remarks>
     /// <param name="months">The length of each piece, in months; it must be positive.</param>
     /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
@@ -465,7 +465,7 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// <remarks>
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="months"/> moves the range down.
-    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// This runs in memory only; an EF Core query doesn't translate it.
     /// The first and last month of the ISO calendar stand for PostgreSQL's <c>-infinity</c> and
     /// <c>infinity</c>, as their first and last day do, and they stay where they are, as
     /// <c>infinity ± d</c> does in PostgreSQL. A finite bound moved past either one still throws.
@@ -482,7 +482,7 @@ public abstract partial record YearMonthRange : IRange<YearMonth>, IRangeFactory
     /// <remarks>
     /// A negative <paramref name="months"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
-    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// unbounded side stays unbounded. This runs in memory only; an EF Core query doesn't translate it.
     /// The first and last month of the ISO calendar stand for PostgreSQL's <c>-infinity</c> and
     /// <c>infinity</c>, as their first and last day do, and they stay where they are, as
     /// <c>infinity ± d</c> does in PostgreSQL. A finite bound moved past either one still throws.

@@ -9,8 +9,9 @@ namespace CodoMetis.ValueRanges.Internals;
 /// membership; which one to store is a question of density.
 /// </summary>
 /// <remarks>
-/// Both directions are client-side. PostgreSQL can convert neither an array to a multirange nor
-/// the reverse without <c>unnest</c> and a custom aggregate, and doing it in SQL would move a
+/// Both directions are client-side. PostgreSQL turns an array into a multirange only by
+/// aggregating one-element ranges (<c>range_agg</c>), and the reverse only by enumerating each
+/// range, and doing it in SQL would move a
 /// row's whole contents through the server to answer a question the client already has the data
 /// for.
 /// </remarks>

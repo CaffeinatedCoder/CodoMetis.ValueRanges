@@ -275,9 +275,8 @@ an EF "not mine" — never the answer to a shape nobody thought about.
 
 `SmallModelSetOracleTests` (in the conventions project, which references all four shipping
 assemblies) does the same for the value set families — and there it is the *only* oracle. `Intersect`,
-`Except` and `Add` are deliberately client-side only, because a PostgreSQL array has no
-intersection, no difference and no sorted insert, so no amount of integration testing can
-cross-check them.
+`Except` and `Add` are deliberately client-side only (`docs/efcore.md#what-runs-where` says why
+for each), so no amount of integration testing can cross-check them.
 
 For each of the 30 set types it builds **every subset** of that family's probe universe — 2^n, so
 exhaustive over the whole value space rather than a sample — and checks:

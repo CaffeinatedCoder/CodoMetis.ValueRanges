@@ -213,7 +213,8 @@ shows how to declare either on a column this package maps.
 ## What runs in memory only
 
 Most operations run in the database. A few run in memory only, such as `Intersect`, `Except` and
-`Add` on *value sets*. PostgreSQL's array type has no intersection, difference or sorted insert.
+`Add` on *value sets*. [What runs where](efcore.md#what-runs-where) lists them all and says why
+for each.
 
 Some queries over a `Union` of sets that the database computes throw instead of running as SQL,
 because the database would return a wrong result. An equality check on such a union is one.
