@@ -38,6 +38,18 @@ Good to know:
 - **Scaffolding gives you `NpgsqlRange<T>`.** `dotnet ef dbcontext scaffold` maps range columns to
   `NpgsqlRange<T>`, not to these types, because the package provides no design-time services.
   Change the property types by hand after scaffolding.
+- **A property's type picks its mapping, before any column type.** `HasColumnType("int4range")` on
+  an `NpgsqlRange<int>` property keeps Npgsql's own mapping. On an `Int32Range` property, the column
+  type of another range, such as `int8range`, fails when EF Core builds the model
+  (`InvalidOperationException`).
+- **A range or multirange column type on its own maps to these types.** Ask EF Core's
+  `IRelationalTypeMappingSource` for `FindMapping("int4range")` with no property type, and you get
+  the `Int32Range` mapping, or `RangeSet<Int32Range, int>` for `int4multirange`. With
+  `UseValueRangesNodaTime`, which turns on Npgsql's NodaTime plugin, that plugin takes `daterange`,
+  `tsrange` and `tstzrange` first (`DateInterval`, `NpgsqlRange<LocalDateTime>`, `Interval`). The
+  multiranges still map to the core types.
+- **An array column type on its own stays Npgsql's.** `text[]` is also the column type of every
+  `string[]` and `List<string>` property, so a value set maps only from a property typed as one.
 
 ## Query ranges with LINQ
 

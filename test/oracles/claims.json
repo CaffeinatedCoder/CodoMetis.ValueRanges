@@ -1245,6 +1245,21 @@
     ]
   },
   {
+    "id": "E77-store-type-names-resolve-to-range-types",
+    "source": "docs/efcore.md#map-ranges-to-postgresql-columns",
+    "quote": "**A range or multirange column type on its own maps to these types.**",
+    "claim": "With UseValueRanges, FindMapping on a range or multirange store type name with no CLR type returns this package's range or RangeSet type for every core range type; with UseValueRangesNodaTime, Npgsql's NodaTime plugin answers daterange, tsrange and tstzrange first (DateInterval, NpgsqlRange<LocalDateTime>, Interval) and the multiranges still resolve to the core RangeSet types; an array store type name never resolves to a value set; an NpgsqlRange<int> property with HasColumnType(\"int4range\") keeps Npgsql's mapping, and an Int32Range property with HasColumnType(\"int8range\") throws InvalidOperationException at model building.",
+    "oracle": "claim",
+    "surfaces": [
+      "ValueRangesTypeMappingSourcePlugin.FindMapping",
+      "ValueSetsTypeMappingSourcePlugin.FindMapping"
+    ],
+    "heldBy": [
+      "StoreTypeNameResolutionTests",
+      "NodaStoreTypeNameResolutionTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
