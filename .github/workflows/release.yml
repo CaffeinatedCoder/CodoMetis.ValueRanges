@@ -82,10 +82,12 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      # An exact version, not global.json: resolving "latest 10.0" goes through an aka.ms link that
+      # redirects to a host answering 409, while an exact version downloads from builds.dotnet (#461).
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.402
 
       # MSBuild evaluation rather than parsing the XML, so the value is exactly what the build
       # will stamp onto the packages.
@@ -196,11 +198,12 @@ jobs:
 
     steps:
       # No checkout here, so no global.json to read: this job only pushes the verified packages
-      # and any SDK of the line can do that. Bump it with global.json when the line moves.
+      # and any SDK of the line can do that. Bump it with global.json when the line moves. Exact,
+      # as in the build job (#461).
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.402
 
       # Publishes exactly what was verified — the packages are not rebuilt here.
       - name: Download packages
