@@ -410,6 +410,9 @@ Good to know:
   as `text`, and loading a row runs the element's validation again.
 - **An empty set and `NULL` stay different.** They are `{}` and `NULL` in the column. Whether the
   column allows `NULL` is up to the property.
+- **A NULL set or element gives NULL.** In a query, `Union` gives NULL when either set is NULL, and
+  `Remove` gives NULL when the set or the element is. A `Select` loads `null` for those rows, and
+  `Where(… == null)` selects them. In memory, both throw for a `null`.
 - **Plain arrays keep their own mapping.** `T[]` and `List<T>` properties keep their native Npgsql
   mapping, and both can sit next to value sets in one model. Scaffolding a database gives you plain
   arrays, because choosing a set type is a decision you make in your model.
@@ -870,22 +873,11 @@ Good to know:
 
 ### Known differences in 10.2.0
 
-Two queries in 10.2.0 return something other than the same LINQ over the loaded rows, without an
-error. Both are fixed in 11.0.0 first, and each fix comes to 10.x in a later minor.
+One query in 10.2.0 returns something other than the same LINQ over the loaded rows, without an
+error. Its fix lands in 11.0.0 first and comes to 10.x in a later minor. A value set `Union` or
+`Remove` over NULL in a projection was the other one, and 10.3.0 fixes it
+([Changed answers in 10.3.0](migration.md#changed-answers-in-1030)).
 
-- **A value set `Union` or `Remove` over NULL, in a projection.** `array_cat` and `array_remove`
-  skip a NULL argument instead of returning NULL. So `b.MaybeTags.Union(more)` loads `more` for a
-  row whose `MaybeTags` is NULL, and `b.Tags.Remove(b.Label)` loads `Tags` unchanged when `Label`
-  is NULL. A filter such as `b.MaybeTags.Union(more) == null` treats both as NULL. The NULL can
-  come from a nullable column or from the missing side of an outer join. Test for null yourself,
-  and the projection loads `null` too:
-
-  ```csharp
-  bookings.Select(b => b.MaybeTags == null ? null : b.MaybeTags.Union(more));
-  bookings.Select(b => b.Label == null ? null : b.Tags.Remove(b.Label));
-  ```
-
-  The fix is [#395](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/395).
 - **`RangeLowerBoundComparer` in a query.** `RangeLowerBoundComparer<TRange, T>.Instance.Compare(a, b)`,
   and `RangeSet<TRange, T>.LowerBoundComparer`, compare in the [range order](ranges.md#sort-ranges)
   when they run in the database, not by lower bound. EF Core rewrites every `Compare(a, b)` call

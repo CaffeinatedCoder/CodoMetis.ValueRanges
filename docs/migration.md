@@ -917,3 +917,35 @@ range factory over a NULL element is NULL, where it built `empty` (`CreateFinite
   selected before.
 - **`CompareTo` and `==` keep their own rules for a NULL column** ([Sort ranges](ranges.md#sort-ranges)).
 - **Value sets still throw in memory for a `null` set.** Only the query changes for them.
+
+## Changed answers in 10.3.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+Each section below says how to find the calls whose answer changed. 11.0.0 makes the same changes.
+
+### Check value set `Union` and `Remove` over NULL in queries
+
+Check EF Core queries that load a value set `Union` or `Remove` where a set or an element can be NULL:
+a nullable column, a column of a missing child in an outer join, or a `null` parameter.
+
+PostgreSQL's `array_cat` and `array_remove` skip a NULL: `array_cat(NULL, '{z}')` is `{z}`, and
+`array_remove('{a}', NULL)` is `{a}`. Before 10.3.0, the EF Core package called them as they are,
+while a filter treated the result as NULL. So the same expression was NULL in a `Where` and a set in a
+`Select`. Now it is NULL in both. With `more` as `{z}`:
+
+| Query | Before 10.3.0 | Now |
+|---|---|---|
+| `Select(b => b.MaybeTags!.Union(more))`, for a NULL `MaybeTags` | `{z}` | `null` |
+| `Select(b => b.Tags.Remove(b.Label!))`, for a NULL `Label` | `Tags` as stored | `null` |
+| `Select(b => b.Tags.Union(b.Visit!.Tags))`, for a booking without a visit | `Tags` as stored | `null` |
+| `Where(b => b.Tags.Remove(b.Label!).IsEmpty)`, for a NULL `Label` | the rows whose `Tags` is empty | none of them |
+| `Where(b => b.MaybeTags!.Union(more) == null)` | the NULL rows | the NULL rows |
+
+The SQL of a required column, a non-null parameter and a constant doesn't change. A set or element
+that can be NULL gets `CASE WHEN … IS NULL THEN NULL ELSE array_cat(…) END`.
+
+- **Search for `Union` and `Remove` in a `Select`.** A `!` on a nullable set or element, as in
+  `b.MaybeTags!.Union(more)`, often marks the place.
+- **Say which set you want for a NULL one.** `(b.MaybeTags ?? StringSet.Empty).Union(more)` loads
+  `more` for the NULL rows, as the query did before.
+- **In memory, both still throw for a `null`.** Only the query changes.

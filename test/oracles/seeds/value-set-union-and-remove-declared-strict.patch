@@ -1,0 +1,36 @@
+Seed: value set Union and Remove are the bare array_cat and array_remove again, declared NULL exactly when an operand is, though neither is strict (#395, port of #360)
+Oracles: ValueSetNullOperandParityTests
+Fails: Union with a NULL set and Remove with a NULL element, over a nullable column, a captured null and a missing outer-join child: Where(== null) selects the row, Select loads the other operand; and the SQL of a nullable operand is the bare call
+History: shipped through 10.2.0, fixed in 10.3.0 (#395) and 11.0.0 (#360)
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
+index 315fbad..e4bca57 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetsMethodCallTranslator.cs
+@@ -196,19 +196,13 @@ internal sealed class ValueSetsMethodCallTranslator(
+     /// this fixes. <see cref="ValueSetSqlGuard"/> follows a union through the <c>CASE</c>.
+     /// </remarks>
+     private SqlExpression NullOverNullOperand(ISetTypeDefinition definition, string function, SqlExpression left, SqlExpression right)
+-        => sqlExpressionFactory.Case(
+-            [
+-                new CaseWhenClause(
+-                    sqlExpressionFactory.OrElse(sqlExpressionFactory.IsNull(left), sqlExpressionFactory.IsNull(right)),
+-                    sqlExpressionFactory.Constant(null, definition.SetClrType, definition.SetTypeMapping))
+-            ],
+-            sqlExpressionFactory.Function(
+-                function,
+-                [left, right],
+-                nullable: false,
+-                argumentsPropagateNullability: [false, false],
+-                definition.SetClrType,
+-                definition.SetTypeMapping));
++        => sqlExpressionFactory.Function(
++            function,
++            [left, right],
++            nullable: true,
++            argumentsPropagateNullability: [true, true],
++            definition.SetClrType,
++            definition.SetTypeMapping);
+ 
+     /// <summary>
+     /// Resolves the set type definition from the operands, by concrete set CLR type only.

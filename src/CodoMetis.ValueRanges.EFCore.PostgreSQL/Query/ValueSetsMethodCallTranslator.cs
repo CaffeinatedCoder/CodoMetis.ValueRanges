@@ -165,31 +165,50 @@ internal sealed class ValueSetsMethodCallTranslator(
             // and deduplicated once an element is dropped — so unlike Union this composes
             // safely with Count and equality.
             case nameof(ValueSetExtensions.Remove) when arguments.Count == 2:
-                return sqlExpressionFactory.Function(
-                    "array_remove",
-                    [Set(0), ApplyElementMapping(Element(1), definition)],
-                    nullable: true,
-                    argumentsPropagateNullability: [true, true],
-                    definition.SetClrType,
-                    definition.SetTypeMapping);
+                return NullOverNullOperand(definition, "array_remove", Set(0), ApplyElementMapping(Element(1), definition));
 
+            // The server-side result is unsorted and undeduplicated — fine inside predicates (the
+            // operators above ignore both), and a materialized result re-canonicalizes on read.
+            // Emitted under a placeholder name that only ValueSetSqlGuard renames to array_cat, so
+            // the guard cannot be skipped silently.
             case nameof(ValueSetExtensions.Union) when arguments.Count == 2:
-                // The server-side result is unsorted and undeduplicated — fine inside
-                // predicates (the operators above ignore both), and a materialized result
-                // re-canonicalizes on read. Emitted under a placeholder name that only
-                // ValueSetSqlGuard renames to array_cat, so the guard cannot be skipped silently.
-                return sqlExpressionFactory.Function(
-                    ValueSetSqlGuard.UnguardedUnion,
-                    [Set(0), Set(1)],
-                    nullable: true,
-                    argumentsPropagateNullability: [true, true],
-                    definition.SetClrType,
-                    definition.SetTypeMapping);
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedUnion, Set(0), Set(1));
 
             default:
                 return null;
         }
     }
+
+    /// <summary>
+    /// <c>Union</c> and <c>Remove</c> over a NULL operand are NULL, as EF Core's own value-producing
+    /// members are over NULL (#360): <c>CASE WHEN a IS NULL OR b IS NULL THEN NULL ELSE f(a, b) END</c>.
+    /// Neither function is strict, so the bare call answered with the other operand —
+    /// <c>array_cat(NULL, '{a}')</c> and <c>array_remove('{a}', NULL)</c> are both <c>{a}</c> — in a
+    /// projection, while a filter's <c>== null</c>, following the declaration, selected the row. An
+    /// operand is NULL in a nullable column, on the optional side of an outer join, or as a
+    /// <see langword="null"/> parameter. EF Core's nullability processing folds the test away for a
+    /// required column, a non-null parameter and a constant, so their SQL is the bare call.
+    /// </summary>
+    /// <remarks>
+    /// The function is reached only with both operands non-NULL, so it is declared as never NULL
+    /// and as propagating nothing: a non-strict function declared as propagating would let EF Core
+    /// rewrite <c>f(a, b) IS NULL</c> to <c>a IS NULL OR b IS NULL</c>, which is the disagreement
+    /// this fixes. <see cref="ValueSetSqlGuard"/> follows a union through the <c>CASE</c>.
+    /// </remarks>
+    private SqlExpression NullOverNullOperand(ISetTypeDefinition definition, string function, SqlExpression left, SqlExpression right)
+        => sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.OrElse(sqlExpressionFactory.IsNull(left), sqlExpressionFactory.IsNull(right)),
+                    sqlExpressionFactory.Constant(null, definition.SetClrType, definition.SetTypeMapping))
+            ],
+            sqlExpressionFactory.Function(
+                function,
+                [left, right],
+                nullable: false,
+                argumentsPropagateNullability: [false, false],
+                definition.SetClrType,
+                definition.SetTypeMapping));
 
     /// <summary>
     /// Resolves the set type definition from the operands, by concrete set CLR type only.

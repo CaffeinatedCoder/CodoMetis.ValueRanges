@@ -366,6 +366,15 @@
     ]
   },
   {
+    "class": "ValueSetNullOperandParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), and each call's filters against its projection, for value set Union and Remove over a NULL set or element column, a captured null and a missing outer-join child on either side, in a null test, its negation, a final projection and the predicates built on them",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "IntegerLengthParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",

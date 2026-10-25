@@ -5,6 +5,12 @@ covers all four packages, which share one version number and release together.
 
 ## [10.3.0]
 
+Some calls answer differently: [Changed answers in 10.3.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030).
+
+### Changed answers
+
+- EF Core: a value set `Union` with a NULL set, or `Remove` with a NULL set or element, is NULL in a query, as `Where(… == null)` already said. A `Select` loaded the other set instead, for a nullable column, a missing outer-join child or a `null` parameter ([#395](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/395), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030)).
+
 ### Added
 
 - EF Core: `Length` on `Int32Range` and `Int64Range` runs as SQL, so a query can filter and sort by it. It counts the integers as memory does: 0 for the empty range, and `null` for an unbounded side or, on `Int64Range`, a count larger than `long.MaxValue` ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
