@@ -1,6 +1,8 @@
 # Contributing
 
-Issues and pull requests are welcome. For a security report, follow [SECURITY.md](SECURITY.md)
+Issues and pull requests are welcome. Questions and ideas go to
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions)
+([below](#questions-and-ideas)). For a security report, follow [SECURITY.md](SECURITY.md)
 instead — please don't open a public issue for those.
 
 ## Getting set up
@@ -77,6 +79,29 @@ is deliberately refused for exactly this reason.
 re-reads. `test/CodoMetis.ValueRanges.Conventions.Tests` exists because the alternative was
 remembering — and the value set rules in AGENTS.md are asserted there behaviourally, not merely
 written down.
+
+## Questions and ideas
+
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions) has two
+categories:
+
+- **Q&A** is for how-to questions. Mark the reply that answered yours.
+- **Ideas** is for feedback, adoption blockers and possible directions. A small LINQ query you
+  can't express today, with the result you expected and why it should run in PostgreSQL, says more
+  than a vote for "more translations".
+
+Each place holds one kind of thing:
+
+| Where | What it holds |
+|---|---|
+| Discussions | Questions, experiences and directions still being explored |
+| Issues | Confirmed bugs and accepted, scoped work |
+| `epic` issues and milestones | What each release commits to, and its status |
+| `docs/` | Supported behaviour and the decisions behind it |
+
+A discussion never tracks state. Once an idea is accepted, it becomes an issue (under its release
+epic when it has one), the discussion links that issue, and the issue carries the status from then
+on. You don't need a discussion first: file a reproducible bug directly.
 
 ## Issues
 
