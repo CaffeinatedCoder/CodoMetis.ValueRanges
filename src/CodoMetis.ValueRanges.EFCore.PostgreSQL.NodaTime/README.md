@@ -117,10 +117,9 @@ reservations.Where(r => r.Holidays.Remove(day).IsEmpty);     // cardinality(arra
 
 Good to know:
 
-- **`Intersect`, `Except` and `Add` run in memory only.** PostgreSQL's array type has no
-  intersection, difference or sorted insert. In a `Where` they fail to translate, by design. In a
-  `Select`, EF Core computes them in memory after it loads the rows. The
-  EF Core guide lists everything that runs in memory in
+- **`Intersect`, `Except` and `Add` run in memory only.** In a `Where` they fail to translate, by
+  design. In the final `Select`, EF Core computes them in memory after it loads the rows. The
+  EF Core guide lists everything that runs in memory, and why, in
   [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where).
 - **`Union` is the one set operation whose SQL result isn't deduplicated and sorted.** It runs as
   `array_cat`, which joins two arrays. That is harmless inside `@>`, `<@` and `&&`, which ignore

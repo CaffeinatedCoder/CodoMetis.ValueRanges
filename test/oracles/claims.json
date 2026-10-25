@@ -578,7 +578,7 @@
   {
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
-    "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in a projection EF runs them in memory instead:",
+    "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in the final projection EF runs them in memory instead:",
     "claim": "Length, Values(), Values(step), Split, Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [

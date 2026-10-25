@@ -11,6 +11,10 @@ covers all four packages, which share one version number and release together.
 - Ranges: `RangeSet.From`, a collection expression and `RangeSet.Create` throw `ArgumentException` for a `null` range, where they built a set holding `null`, whose `IsEmpty()` was `false`. `Union` and `Except` called on a `null` range throw too ([#357](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/357), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
 - Ranges: a predicate called on a `null` range, or given a `null` range or set, returns `false`, as a query does over a NULL column. `Contains(Empty)`, `IsContainedBy((,))` and `(,).Contains(null)` returned `true`, and `Contains(T)` and a `null` set operand threw ([#357](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/357), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
 
+### Fixed
+
+- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
+
 ## [10.1.0] — 2026-10-19
 
 One call answers differently, on the .NET 11 runtime only: [Changed answers in 10.1.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1010).

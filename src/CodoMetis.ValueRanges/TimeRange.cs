@@ -203,8 +203,8 @@ public abstract partial record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeR
     /// <remarks>
     /// The pieces are adjacent and hold exactly the values of the range, so
     /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. On a continuous type each piece but the last is half-open, so a closed range ends in a closed piece rather than a single point.
-    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
-    /// <c>generate_series</c> returns rows, not a value.
+    /// The empty range yields nothing. This runs in memory only; an EF Core
+    /// query doesn't translate it.
     /// </remarks>
     /// <param name="step">The length of each piece; it must be positive.</param>
     /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
@@ -299,7 +299,7 @@ public abstract partial record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeR
     /// <remarks>
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="delta"/> moves the range down.
-    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// This runs in memory only; an EF Core query doesn't translate it.
     /// </remarks>
     /// <param name="delta">How far to move the range.</param>
     /// <returns>The moved range.</returns>
@@ -313,7 +313,7 @@ public abstract partial record TimeRange : IRange<TimeOnly>, IRangeFactory<TimeR
     /// <remarks>
     /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
-    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// unbounded side stays unbounded. This runs in memory only; an EF Core query doesn't translate it.
     /// </remarks>
     /// <param name="amount">How far to move each bound outward.</param>
     /// <returns>The grown, or shrunk, range.</returns>

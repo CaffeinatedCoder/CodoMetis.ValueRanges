@@ -13,6 +13,7 @@ covers all four packages, which share one version number and release together.
 
 ### Fixed
 
+- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
 - Docs: the [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where) tables list every public member a query can call. `Equals` runs as `=`. `Values` on a value set, `Count` and the indexer on a `RangeSet`, `From`, `Parse`, the NodaTime conversions, `ToString`, `GetHashCode` and `GetEnumerator` run in memory. The calendar factories over a column no longer read as a planned translation.
 
 ## [10.1.0] — 2026-10-19
