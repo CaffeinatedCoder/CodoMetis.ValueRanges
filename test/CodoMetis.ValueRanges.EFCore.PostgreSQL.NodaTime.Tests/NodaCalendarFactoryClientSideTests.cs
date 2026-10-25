@@ -7,9 +7,9 @@ using CodoMetis.ValueRanges;
 
 /// <summary>
 /// The calendar factories of <see cref="LocalDateRange"/> and <see cref="YearMonthRange"/> over a column stay in
-/// memory, where <c>DateRange</c>'s run as SQL (#191): a column holding <c>-infinity</c> stands for
-/// <see cref="LocalDate.MinIsoValue"/>, -9998-01-01, and neither its month nor any year before 4713 BC has a
-/// PostgreSQL date, so the server would raise where memory answers. Inside a <c>Where</c> they fail
+/// memory, where <c>DateRange</c>'s run as SQL (#191): PostgreSQL has no dates before 4714-11-24 BC, so the
+/// month and the year that hold its first day have no start, and the server would raise where memory answers.
+/// That holds with Npgsql's infinity conversions on or off (#450). Inside a <c>Where</c> they fail
 /// translation; built from values the query does not read, they are one constant and run as SQL.
 /// </summary>
 [TestClass]
