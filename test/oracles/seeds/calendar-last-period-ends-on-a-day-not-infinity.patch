@@ -1,0 +1,17 @@
+Seed: the calendar factories write the last period's end as the day 9999-12-31 rather than the infinity Npgsql binds for DateOnly.MaxValue
+Oracles: CalendarFactoryParityTests
+Fails: Month(r.Day) == r.Period and Month(r.Day).Contains(DateOnly.MaxValue) on the rows in 9999-12: server drops them, rule (c) selects them; Month(r.Day) in a Select does not load ([9999-12-01,10000-01-01))
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index a9a151d..317b133 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -767,7 +767,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+                     inLast,
+                     last is null
+                         ? Raise([$"{name}: the week of ", Text(value), $" ends after {DateOnly.MaxValue:yyyy-MM-dd}"], definition.ElementClrType, mapping)
+-                        : sqlExpressionFactory.Constant(last.End, mapping)),
++                        : sqlExpressionFactory.Convert(sqlExpressionFactory.Constant($"{last.End:yyyy-MM-dd}", TextMapping), definition.ElementClrType, mapping)),
+                 new CaseWhenClause(inFirst, sqlExpressionFactory.Constant(first.End, mapping))
+             ],
+             LastDay(start, length, definition));
