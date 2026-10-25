@@ -77,10 +77,12 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      # An exact version, not global.json: resolving "latest 10.0" goes through an aka.ms link that
+      # redirects to a host answering 409, while an exact version downloads from builds.dotnet (#461).
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.402
 
       - name: Restore dependencies
         run: dotnet restore
@@ -149,10 +151,12 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      # An exact version, not global.json: resolving "latest 10.0" goes through an aka.ms link that
+      # redirects to a host answering 409, while an exact version downloads from builds.dotnet (#461).
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.402
 
       # EF_FLOAT is empty on the floor legs, and must reach restore and build alike on the others:
       # restore picks the packages, build copies them next to the test assemblies.
@@ -240,10 +244,12 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      # An exact version, not global.json: resolving "latest 10.0" goes through an aka.ms link that
+      # redirects to a host answering 409, while an exact version downloads from builds.dotnet (#461).
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.402
 
       - name: Restore the packages into a throwaway consumer project
         run: ./test/consumer-smoke-test.sh
@@ -261,10 +267,12 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      # An exact version, not global.json: resolving "latest 10.0" goes through an aka.ms link that
+      # redirects to a host answering 409, while an exact version downloads from builds.dotnet (#461).
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.402
 
       # Packing is itself a check: a package that declares PackageReadmeFile without packing the
       # file fails here with NU5019.
