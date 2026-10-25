@@ -1,0 +1,18 @@
+Seed: RangeSet gains a Contains overload over a value set, and no translator has an arm for its operand type
+Oracles: TranslatorDispatchSweepTests
+Fails: RangeSet<TRange, T>.Contains(StringSet) on every range type, refused by the range translator with the overload named; mapped as a range before #295
+
+diff --git a/src/CodoMetis.ValueRanges/RangeSet.cs b/src/CodoMetis.ValueRanges/RangeSet.cs
+index 673f186..f7781d7 100644
+--- a/src/CodoMetis.ValueRanges/RangeSet.cs
++++ b/src/CodoMetis.ValueRanges/RangeSet.cs
+@@ -433,6 +433,9 @@ public sealed class RangeSet<TRange, T>
+         return idx >= 0 && _elements[idx].Contains(range);
+     }
+ 
++    /// <summary>Whether the set holds every element of a value set.</summary>
++    public bool Contains(StringSet other) => false;
++
+     /// <summary>
+     /// Determines whether every value of <paramref name="other"/> is contained in this
+     /// set — the multirange <c>@&gt;</c> operator.
