@@ -83,6 +83,12 @@ internal sealed class ValueRangesMethodCallTranslator(
     private static readonly MethodInfo LowerBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.LowerBoundInclusive));
     private static readonly MethodInfo UpperBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.UpperBoundInclusive));
 
+    // -- RangeExtensions.Clamp: extension<T>(IRange<T>), on the types whose bounds read as memory's (#406) --
+
+    private static readonly MethodInfo ClampMethod = GetExtensionMethod(nameof(RangeExtensions.Clamp));
+
+    private static readonly HashSet<Type> ClampsAsSql = [typeof(Int32Range), typeof(Int64Range), typeof(DecimalRange)];
+
     private static MethodInfo GetExtensionMethod(string name, Func<MethodInfo, bool>? filter = null)
         => typeof(RangeExtensions)
           .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -326,6 +332,10 @@ internal sealed class ValueRangesMethodCallTranslator(
 
         if (generic == UpperBoundInclusiveMethod)
             return UpperInclusiveFunction(Range(0), definition);
+
+        // On every other range type Clamp runs in memory (docs/efcore.md#what-runs-where).
+        if (generic == ClampMethod)
+            return ClampsAsSql.Contains(definition.RangeClrType) ? ClampFunction(Range(0), ApplyElementMapping(arguments[1], definition), definition) : null;
 
         return null;
     }
@@ -771,6 +781,46 @@ internal sealed class ValueRangesMethodCallTranslator(
         // in PostgreSQL, and applying the element mapping to the 1 would render it as a date.
         var one = sqlExpressionFactory.Constant(1, typeMappingSource.FindMapping(typeof(int)));
         return sqlExpressionFactory.Subtract(upper, one, ElementMapping(definition));
+    }
+
+    /// <summary>
+    /// <c>Clamp(value)</c> on <see cref="Int32Range"/>, <see cref="Int64Range"/> and <see cref="DecimalRange"/>
+    /// (#406): <c>CASE WHEN x IS NULL OR v IS NULL OR isempty(x) THEN NULL ELSE LEAST(GREATEST(v, lower(x)),
+    /// &lt;upper&gt;) END</c>, where <c>&lt;upper&gt;</c> is the bound <see cref="UpperBoundFunction"/> reads:
+    /// <c>upper(x) - 1</c> on the discrete types, <c>upper(x)</c> on <c>numrange</c>.
+    /// </summary>
+    /// <remarks>
+    /// Memory's rule: <see langword="null"/> for the empty range, the value itself inside the range, and
+    /// otherwise the finite bound it falls outside of, whatever that bound's inclusiveness. An unbounded
+    /// side never constrains, and <c>GREATEST</c> and <c>LEAST</c> skip the NULL <c>lower</c> or
+    /// <c>upper</c> returns there. They skip a NULL range or value too, so both are tested first, which
+    /// makes a NULL operand NULL (rule (c)) rather than the other one. Measured on PostgreSQL 16, the domain
+    /// extremes included: <c>upper(x) - 1</c> cannot overflow, since a stored upper bound is at least one
+    /// above a value.
+    /// </remarks>
+    private SqlExpression ClampFunction(SqlExpression range, SqlExpression value, IRangeTypeDefinition definition)
+    {
+        var type    = typeof(Nullable<>).MakeGenericType(definition.ElementClrType);
+        var mapping = ElementMapping(definition);
+
+        SqlExpression Skipping(string name, SqlExpression left, SqlExpression right)
+            => sqlExpressionFactory.Function(
+                name,
+                [left, right],
+                nullable: true,
+                argumentsPropagateNullability: [false, false],
+                type,
+                mapping);
+
+        return sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.OrElse(
+                        sqlExpressionFactory.OrElse(sqlExpressionFactory.IsNull(range), sqlExpressionFactory.IsNull(value)),
+                        BoolFunction("isempty", range)),
+                    sqlExpressionFactory.Constant(null, type, mapping))
+            ],
+            Skipping("LEAST", Skipping("GREATEST", value, BoundFunction("lower", range, definition)), UpperBoundFunction(range, definition)));
     }
 
     /// <summary>
