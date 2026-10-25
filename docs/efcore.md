@@ -487,6 +487,9 @@ Good to know:
   as `text`, and loading a row runs the element's validation again.
 - **An empty set and `NULL` stay different.** They are `{}` and `NULL` in the column. Whether the
   column allows `NULL` is up to the property.
+- **A NULL set or element gives NULL.** In a query, `Union` gives NULL when either set is NULL, and
+  `Remove` gives NULL when the set or the element is. A `Select` loads `null` for those rows, and
+  `Where(… == null)` selects them. In memory, both throw for a `null`.
 - **Plain arrays keep their own mapping.** `T[]` and `List<T>` properties keep their native Npgsql
   mapping, and both can sit next to value sets in one model. Scaffolding a database gives you plain
   arrays, because choosing a set type is a decision you make in your model.
