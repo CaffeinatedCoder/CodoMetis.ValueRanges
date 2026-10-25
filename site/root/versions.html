@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- Linked from every page's "Versions" menu entry (site/toc.yml). One row per supported line, the
+     same lines as SECURITY.md. At v11.0.0, 11.x becomes the default and loses "preview". -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Versions · CodoMetis.ValueRanges</title>
+    <style>
+      :root { color-scheme: light dark; --fg: #1f2328; --muted: #59636e; --bg: #ffffff; --line: #d1d9e0; --link: #0969da; }
+      @media (prefers-color-scheme: dark) {
+        :root { --fg: #f0f6fc; --muted: #9198a1; --bg: #0d1117; --line: #3d444d; --link: #4493f8; }
+      }
+      body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+      main { max-width: 40rem; margin: 3rem auto; padding: 0 16px; }
+      h1 { font-size: 1.5rem; margin: 0 0 1.5rem; }
+      ul { list-style: none; padding: 0; margin: 0; }
+      li { border-top: 1px solid var(--line); padding: 1rem 0; }
+      li:last-child { border-bottom: 1px solid var(--line); }
+      a { color: var(--link); font-weight: 600; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      p { margin: 0.25rem 0 0; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CodoMetis.ValueRanges documentation</h1>
+      <ul>
+        <li>
+          <a href="10.x/">10.x</a>
+          <p>The current stable line, for .NET 10 (LTS). This is what <code>dotnet add package</code> installs.</p>
+        </li>
+        <li>
+          <a href="11.x/">11.x (preview)</a>
+          <p>The next line, for .NET 11. Its packages are previews and need <code>--prerelease</code>.</p>
+        </li>
+      </ul>
+    </main>
+  </body>
+</html>

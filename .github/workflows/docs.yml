@@ -1,0 +1,176 @@
+# Builds the documentation site for both supported lines and publishes it to GitHub Pages (#417):
+#
+#   https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/        redirects to the default line
+#   https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/10.x/   release/10.x, the default until v11.0.0
+#   https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/11.x/   main
+#
+# This file and site/ live on main only. Every run builds both lines with main's configuration
+# (site/build.sh says why one config serves both), so a run started by either branch publishes the
+# whole site, and release/10.x needs no copy of this workflow:
+#
+#   - a push to main runs it directly;
+#   - a push to release/10.x can't, because GitHub only runs a push-triggered workflow that exists
+#     on the pushed branch. It runs when the .NET workflow (dotnet.yml, which release/10.x has)
+#     finishes a push run there instead, because `workflow_run` always runs this file as it is on
+#     main.
+#
+# `workflow_run` runs with this repository's permissions even when the triggering run came from a
+# fork's PR whose branch happens to be named release/10.x. So the build job requires a push in this
+# repository, and checks release/10.x out by name, never the triggering run's head SHA.
+#
+# A pull request into main builds both lines with the PR's configuration and docs and publishes
+# nothing. Broken links fail it, because site/build.sh runs DocFX with warnings as errors. A pull
+# request into release/10.x isn't checked here: its docs are checked by the first run after it merges.
+#
+# Actions are pinned to commit SHAs, as in dotnet.yml.
+
+name: Docs
+
+# The paths are everything a page is built from: the Markdown, the XML docs in src/, the config, and
+# the SDK and tool pins. Keep the two lists the same.
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "*.md"
+      - "LICENSE"
+      - "docs/**"
+      - "src/**"
+      - "site/**"
+      - ".claude/skills/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".config/dotnet-tools.json"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "*.md"
+      - "LICENSE"
+      - "docs/**"
+      - "src/**"
+      - "site/**"
+      - ".claude/skills/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".config/dotnet-tools.json"
+      - ".github/workflows/docs.yml"
+  workflow_run:
+    workflows: [ ".NET" ]
+    types: [ completed ]
+    branches: [ "release/10.x" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+# A PR's run is superseded by its next push. Publishing runs queue instead, so a deployment is never
+# cancelled halfway and the last run to finish publishes both lines' latest docs.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('docs-{0}', github.ref) || 'docs-publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: "10.x"
+            folder: "10.x"
+            branch: "release/10.x"
+          - label: "11.x (preview)"
+            folder: "11.x"
+            branch: ""
+
+    steps:
+      # The commit this run is for: main, or the PR's merge commit. It holds site/, and is the 11.x
+      # line's checkout.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          path: self
+          persist-credentials: false
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        if: matrix.branch != ''
+        with:
+          ref: ${{ matrix.branch }}
+          path: line
+          persist-credentials: false
+
+      # DocFX runs on main's SDK; a release branch's packages are published with its own.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          global-json-file: self/global.json
+
+      - name: Setup .NET (${{ matrix.branch }})
+        if: matrix.branch != ''
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          global-json-file: line/global.json
+
+      - name: Build the site
+        run: self/site/build.sh "${{ matrix.branch != '' && 'line' || 'self' }}" "out/${{ matrix.folder }}" "${{ matrix.label }}"
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: site-${{ matrix.folder }}
+          path: out/${{ matrix.folder }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          sparse-checkout: site/root
+          persist-credentials: false
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: site-*
+          path: artifacts
+
+      - name: Assemble both lines
+        run: |
+          mkdir -p public
+          cp site/root/index.html site/root/versions.html public/
+          for line in 10.x 11.x; do
+            cp -R "artifacts/site-$line" "public/$line"
+          done
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: public
+
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
