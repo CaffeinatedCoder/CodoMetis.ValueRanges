@@ -1,10 +1,9 @@
 # CodoMetis.ValueRanges
 
+[![Docs](https://img.shields.io/badge/docs-site-3B82F6)](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/)
 [![NuGet](https://img.shields.io/nuget/v/CodoMetis.ValueRanges)](https://www.nuget.org/packages/CodoMetis.ValueRanges)
 [![Build & Tests](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/actions/workflows/dotnet.yml/badge.svg)](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/actions/workflows/dotnet.yml)
 [![Context7](https://img.shields.io/badge/Context7-Indexed-3B82F6)](https://context7.com/caffeinatedcoder/codometis.valueranges)
-[![dev.to](https://img.shields.io/badge/dev.to-Article-3B82F6)](https://dev.to/caffeinatedcoder/the-interval-is-the-thing-modelling-range-types-as-first-class-domain-objects-in-net-3jha)
-[![hashnode](https://img.shields.io/badge/hashnode.dev-Article-3B82F6)](https://codometis.hashnode.dev/stop-modeling-time-with-two-columns-codometis-valueranges-brings-interval-logic-to-your-net-domain?utm_source=hashnode&utm_medium=feed)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 11](https://img.shields.io/badge/.NET-11-512BD4)](https://dotnet.microsoft.com)
 [![Native AOT: core + NodaTime](https://img.shields.io/badge/Native%20AOT-core%20%2B%20NodaTime-3B82F6)](docs/serialization.md#native-aot)
@@ -79,6 +78,9 @@ bookings.OrderBy(b => b.Period.LowerBound());     // ORDER BY lower(b."Period");
 **→ [Getting started](docs/getting-started.md)** takes you from an empty project to a first query
 that runs as SQL, in about five minutes. It covers the entity, the `DbContext`, the migration, and
 the SQL that comes out.
+
+**→ [Walkthrough](docs/walkthrough.md)** follows one booking through a minimal API and PostgreSQL,
+and shows what changes at each step.
 
 ## The five shapes of a range
 
@@ -188,6 +190,7 @@ Good to know:
 | Page | Covers |
 |---|---|
 | **[Getting started](docs/getting-started.md)** | Go from an empty project to a first query that runs in PostgreSQL, or stay in memory with no database |
+| **[Walkthrough](docs/walkthrough.md)** | Follow one booking through a minimal API and PostgreSQL, and see what changes at each step |
 | **[Ranges and range sets](docs/ranges.md)** | Create ranges, match on their shape, ask questions about them and combine them, and hold several as one `RangeSet` |
 | **[Value sets](docs/value-sets.md)** | Store sets of tags, codes, IDs or dates in PostgreSQL arrays, use your own element types, and convert sets to ranges |
 | **[Literals, parsing, and JSON](docs/serialization.md)** | Turn ranges and sets into PostgreSQL literals and JSON and back, bind them from configuration, and publish with Native AOT |
@@ -195,6 +198,19 @@ Good to know:
 | **[Migration guide](docs/migration.md)** | The changes your code needs for each new major version |
 | **[Why this exists](docs/why.md)** | Why the library is shaped this way, what else exists, and why some element types are left out |
 | **[Changelog](CHANGELOG.md)** | Every release in full, including what changed in behaviour |
+
+You can also read these pages, with an API reference for all four packages, on the
+[documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/). It opens on the
+stable 10.x line, and the 11.x previews have pages of their own.
+
+Two articles from June 2026 tell the story behind the library, on
+[dev.to](https://dev.to/caffeinatedcoder/the-interval-is-the-thing-modelling-range-types-as-first-class-domain-objects-in-net-3jha)
+and on
+[Hashnode](https://codometis.hashnode.dev/stop-modeling-time-with-two-columns-codometis-valueranges-brings-interval-logic-to-your-net-domain).
+They describe an earlier version, so use the guides for how it works today.
+
+Have a question, or a range or set query you can't write in LINQ yet? Ask in
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions).
 
 If you're working on the package itself, see [architecture](docs/architecture.md),
 [testing](docs/testing.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -240,8 +256,9 @@ package is installed:
 
 ## Contributing and project practices
 
-Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup and
-the quality bar this package holds itself to. Please send security reports privately, through
+Bug reports and pull requests are welcome. For a question or an idea, start a thread in
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions).
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the setup and the quality bar this package holds itself to. Please send security reports privately, through
 [SECURITY.md](SECURITY.md).
 
 Packages are published through GitHub Actions Trusted Publishing. They carry Source Link metadata

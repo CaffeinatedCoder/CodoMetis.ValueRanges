@@ -379,8 +379,9 @@ Good to know:
 - **Only the discrete families convert.** That is `Int32Set`, `Int64Set` and `DateSet`, and
   `LocalDateSet` and `YearMonthSet` in the NodaTime package. Continuous types have no step, so a
   range of them has no list of values to expand to.
-- **Both directions run in memory only.** PostgreSQL converts between arrays and multiranges only
-  through `unnest` and a custom aggregate, so neither conversion runs as SQL.
+- **Both directions run in memory only.** An EF Core query translates neither. In SQL, an array
+  becomes a multirange only by aggregating one-element ranges, and a multirange becomes an array
+  only by enumerating it ([What runs where](efcore.md#what-runs-where)).
 - **An unbounded range set throws instead of hanging.** Expanding one would never finish.
 
 ## When to use something else

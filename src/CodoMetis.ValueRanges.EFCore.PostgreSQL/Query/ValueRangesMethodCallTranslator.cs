@@ -113,9 +113,11 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// <summary>
     /// A predicate with a NULL range or multirange on either side is <c>false</c>: what EF Core answers
     /// for a predicate over NULL on its own types, and what the in-memory predicates answer for a null
-    /// (#350, #355). Each range or multirange operand becomes <c>x IS NOT NULL AND &lt;predicate&gt;</c>.
-    /// EF Core's nullability processing drops the check for a required column and a non-null parameter,
-    /// and writes <c>x IS NULL OR NOT (…)</c> under a negation, so a negated predicate keeps the NULL row.
+    /// (#350, #355), and so is one with a NULL element: <c>Contains(T)</c> over the optional side of an
+    /// outer join or a nullable column read with <c>.Value</c> (#381). Each range, multirange or element
+    /// operand becomes <c>x IS NOT NULL AND &lt;predicate&gt;</c>. EF Core's nullability processing drops
+    /// the check for a required column and a non-null parameter, and writes <c>x IS NULL OR NOT (…)</c>
+    /// under a negation, so a negated predicate keeps the NULL row.
     /// </summary>
     /// <remarks>
     /// <c>CompareTo</c> never reaches this: EF Core turns <c>a.CompareTo(b) op k</c> into a comparison,
@@ -123,15 +125,27 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// </remarks>
     private SqlExpression FalseOverNull(SqlExpression predicate, IReadOnlyList<SqlExpression> operands)
     {
-        for (var index = operands.Count - 1; index >= 0; index--)
+        var unwrapped = operands.Select(Unwrap).ToList();
+
+        // The element type is the one of the range or multirange the predicate is over.
+        IRangeTypeDefinition? ranges = null;
+        foreach (var operand in unwrapped)
+            if (RangeTypeRegistry.TryGetByClrType(operand.Type, out ranges, out _)) break;
+
+        for (var index = unwrapped.Count - 1; index >= 0; index--)
         {
-            var operand = Unwrap(operands[index]);
-            if (!RangeTypeRegistry.TryGetByClrType(operand.Type, out var definition, out var isSet))
+            var operand = unwrapped[index];
+
+            SqlExpression mapped;
+            if (RangeTypeRegistry.TryGetByClrType(operand.Type, out var definition, out var isSet))
+                mapped = operand.TypeMapping is null
+                    ? sqlExpressionFactory.ApplyTypeMapping(operand, isSet ? definition.RangeSetTypeMapping : definition.RangeTypeMapping)
+                    : operand;
+            else if (ranges is not null && (Nullable.GetUnderlyingType(operand.Type) ?? operand.Type) == ranges.ElementClrType)
+                mapped = operand.TypeMapping is null ? ApplyElementMapping(operand, ranges) : operand;
+            else
                 continue;
 
-            var mapped = operand.TypeMapping is null
-                ? sqlExpressionFactory.ApplyTypeMapping(operand, isSet ? definition.RangeSetTypeMapping : definition.RangeTypeMapping)
-                : operand;
             predicate = sqlExpressionFactory.AndAlso(sqlExpressionFactory.IsNotNull(mapped), predicate);
         }
 
@@ -510,28 +524,56 @@ internal sealed class ValueRangesMethodCallTranslator(
             case "CreateFinite" when arguments.Count == 4
                                      && arguments[2] is SqlConstantExpression { Value: bool startInclusive }
                                      && arguments[3] is SqlConstantExpression { Value: bool endInclusive }:
-                return GuardedFiniteRangeConstructor(
+            {
+                var lower = ApplyElementMapping(arguments[0], definition);
+                var upper = ApplyElementMapping(arguments[1], definition);
+                return NullOverNullElement(
                     definition,
-                    ApplyElementMapping(arguments[0], definition),
-                    ApplyElementMapping(arguments[1], definition),
-                    $"{(startInclusive ? '[' : '(')}{(endInclusive ? ']' : ')')}");
+                    GuardedFiniteRangeConstructor(definition, lower, upper, $"{(startInclusive ? '[' : '(')}{(endInclusive ? ']' : ')')}"),
+                    lower, upper);
+            }
 
             case "CreateUnboundedStart" when arguments.Count == 2
                                              && arguments[1] is SqlConstantExpression { Value: bool endInclusive }:
-                return RangeConstructor(
-                    definition, NullConstant(definition.ElementClrType), arguments[0],
-                    $"({(endInclusive ? ']' : ')')}");
+            {
+                var upper = ApplyElementMapping(arguments[0], definition);
+                return NullOverNullElement(
+                    definition,
+                    RangeConstructor(definition, NullConstant(definition.ElementClrType), upper, $"({(endInclusive ? ']' : ')')}"),
+                    upper);
+            }
 
             case "CreateUnboundedEnd" when arguments.Count == 2
                                            && arguments[1] is SqlConstantExpression { Value: bool startInclusive }:
-                return RangeConstructor(
-                    definition, arguments[0], NullConstant(definition.ElementClrType),
-                    $"{(startInclusive ? '[' : '(')})");
+            {
+                var lower = ApplyElementMapping(arguments[0], definition);
+                return NullOverNullElement(
+                    definition,
+                    RangeConstructor(definition, lower, NullConstant(definition.ElementClrType), $"{(startInclusive ? '[' : '(')})"),
+                    lower);
+            }
 
             default:
                 return null;
         }
     }
+
+    /// <summary>
+    /// A factory over a NULL element is NULL, as EF Core's own value-producing members are over NULL
+    /// (#382). Without this, <c>CreateFinite</c> fell into its inverted-bounds guard and gave
+    /// <c>empty</c>, and the unbounded factories gave <c>(,)</c>, since PostgreSQL's range constructor
+    /// reads a NULL bound as unbounded. An element is NULL on the optional side of an outer join or in
+    /// a nullable column read with <c>.Value</c>. EF Core's nullability processing folds the test away
+    /// for a required column, a non-null parameter and a constant, so their SQL is unchanged.
+    /// </summary>
+    private SqlExpression NullOverNullElement(IRangeTypeDefinition definition, SqlExpression range, params SqlExpression[] elements)
+        => sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    elements.Select(element => sqlExpressionFactory.IsNull(element)).Aggregate(sqlExpressionFactory.OrElse),
+                    sqlExpressionFactory.Constant(null, definition.RangeClrType, definition.RangeTypeMapping))
+            ],
+            range);
 
     /// <summary>
     /// A range constructor call guarded against inverted bounds: <c>CreateFinite</c> returns

@@ -12,10 +12,35 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 - Targets `net11.0` and references `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime` 11 (a release candidate while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
 - EF Core: `LowerBound()` and `UpperBound()` of a NodaTime range or multirange column, `YearMonthRange` included, are `NULL` in a query for an empty value and on an unbounded side, as in memory. So `== null` selects those rows, where it selected none on a required column, and `?? fallback` returns the fallback, where the row was missing ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-bound-comparisons-with-null-in-queries)).
 - EF Core: a range, multirange or value set predicate over a NULL column is `false`, so its negation keeps the row, as EF Core does for `string` and `string[]`. `!b.Period.Overlaps(p)` dropped the NULL rows, and a projected predicate threw ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
+- EF Core: `Contains(T)` on a range or multirange is `false` in a query when the element is NULL: a column of a missing child in an outer join, or a nullable column read with `.Value`. Its negation dropped the row, and a projection threw ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
+- EF Core: `CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd` over a NULL element are NULL in a query, as EF Core's own `AddDays` is. They built `empty` or `(,)`, so `Contains(v)` selected a row without the element ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
 
 ### Added
 
 - EF Core: Npgsql 11's own temporal keys accept `YearMonthRange` and the NodaTime range and multirange columns. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over them on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
+
+### Changed
+
+- Docs: each package's Project website link on NuGet opens the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/), and its README links the site and the [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md).
+
+### Fixed
+
+- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
+- Docs: the [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where) tables list every public member a query can call. `Equals` runs as `=`. `Values` on a value set, `Count` and the indexer on a `RangeSet`, `From`, `Parse`, the NodaTime conversions, `ToString`, `GetHashCode` and `GetEnumerator` run in memory.
+
+## [10.2.0] — 2026-10-25
+
+### Changed answers
+
+- EF Core: `LowerBound()` and `UpperBound()` of a NodaTime range or multirange column, `YearMonthRange` included, are `NULL` in a query for an empty value and on an unbounded side, as in memory. So `== null` selects those rows, where it selected none on a required column, and `?? fallback` returns the fallback, where the row was missing ([#354](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/354), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+- EF Core: a range, multirange or value set predicate over a NULL column is `false`, so its negation keeps the row, as EF Core does for `string` and `string[]`. `!b.Period.Overlaps(p)` dropped the NULL rows, and a projected predicate threw ([#357](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/357), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+- EF Core: `Contains(T)` on a range or multirange is `false` in a query when the element is NULL: a column of a missing child in an outer join, or a nullable column read with `.Value`. Its negation dropped the row, and a projection threw ([#387](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/387), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+- EF Core: `CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd` over a NULL element are NULL in a query, as EF Core's own `AddDays` is. They built `empty` or `(,)`, so `Contains(v)` selected a row without the element ([#388](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/388), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+
+### Fixed
+
+- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
+- Docs: the [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where) tables list every public member a query can call. `Equals` runs as `=`. `Values` on a value set, `Count` and the indexer on a `RangeSet`, `From`, `Parse`, the NodaTime conversions, `ToString`, `GetHashCode` and `GetEnumerator` run in memory.
 
 ## [10.1.0] — 2026-10-19
 

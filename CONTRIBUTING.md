@@ -1,6 +1,8 @@
 # Contributing
 
-Issues and pull requests are welcome. For a security report, follow [SECURITY.md](SECURITY.md)
+Issues and pull requests are welcome. Questions and ideas go to
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions)
+([below](#questions-and-ideas)). For a security report, follow [SECURITY.md](SECURITY.md)
 instead — please don't open a public issue for those.
 
 ## Getting set up
@@ -77,6 +79,29 @@ is deliberately refused for exactly this reason.
 re-reads. `test/CodoMetis.ValueRanges.Conventions.Tests` exists because the alternative was
 remembering — and the value set rules in AGENTS.md are asserted there behaviourally, not merely
 written down.
+
+## Questions and ideas
+
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions) has two
+categories:
+
+- **Q&A** is for how-to questions. Mark the reply that answered yours.
+- **Ideas** is for feedback, adoption blockers and possible directions. A small LINQ query you
+  can't express today, with the result you expected and why it should run in PostgreSQL, says more
+  than a vote for "more translations".
+
+Each place holds one kind of thing:
+
+| Where | What it holds |
+|---|---|
+| Discussions | Questions, experiences and directions still being explored |
+| Issues | Confirmed bugs and accepted, scoped work |
+| `epic` issues and milestones | What each release commits to, and its status |
+| `docs/` | Supported behaviour and the decisions behind it |
+
+A discussion never tracks state. Once an idea is accepted, it becomes an issue (under its release
+epic when it has one), the discussion links that issue, and the issue carries the status from then
+on. You don't need a discussion first: file a reproducible bug directly.
 
 ## Issues
 
@@ -170,8 +195,9 @@ fails outright.
   `## [11.0.0-preview.N]` section, which the release workflow publishes as its notes.
 - **SECURITY.md's supported-versions table** names the latest release of each line on NuGet,
   never the version being prepared, and has no row for a preview. `SecurityPolicyConventionTests`
-  compares this branch's row with `PackageValidationBaselineVersion`, so move the row when you
-  move the baseline, which happens when you open the next version right after a tag; the tagged
+  compares this branch's row with `PackageValidationBaselineVersion`, so move the row (and the
+  walkthrough sample, below) when you move the baseline, which happens when you open the next
+  version right after a tag; the tagged
   commit still names the release before it. The other line's row is compared with
   `CompanionLineRelease` in `Directory.Build.props`, which is empty until 11.0.0 ships. From then
   on, a minor on one line moves its row and `CompanionLineRelease` on the other branch in a PR of
@@ -181,6 +207,14 @@ fails outright.
   cannot pair a `net11.0` asset with a `net10.0` baseline, so until then `Directory.Build.props`
   ignores the baseline's framework and each preview's PR quotes a `dotnet apicompat` run over the
   two assemblies instead; the mechanical gate returns when 11.0.0 is the baseline.
+- **The walkthrough sample** (`samples/Bookings/Bookings.csproj`) names the baseline's version and
+  the framework that release targets, because GitHub's dependency submission and a reader who
+  copies it restore it from nuget.org. The smoke test moves its copy to `Version` and this line's
+  framework. So moving `Version` leaves the sample alone: move it with the baseline, in the same PR
+  (`WalkthroughSampleConventionTests` fails until you do). When the baseline's major changes, at
+  11.0.0 on `main`, regenerate its migration with that major's `dotnet ef` and add the exclusion
+  constraint's SQL back, because a snapshot from one EF Core major doesn't compile against the
+  previous one.
 - **GitHub's Latest release** is the highest stable version. The release workflow decides it
   rather than trusting the API's default, so a 10.x tag pushed after 11.0.0 exists, or any
   preview, can't take Latest from it.
@@ -222,6 +256,28 @@ same form, with the entries that affect that package.
 
 `ChangelogConventionTests` holds the form: known sections in order, one line per change, at most
 60 words a change and 40 for the introduction, absolute links, and the `Changed answers` rules.
+
+## The documentation site
+
+[caffeinatedcoder.github.io/CodoMetis.ValueRanges](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/)
+publishes the README, the guides in `docs/`, the package READMEs, the changelog, the contributor
+pages and an API reference built from the XML docs. `.github/workflows/docs.yml` builds it with
+DocFX from the Markdown files as they are, so you edit `docs/` as usual and nothing else.
+
+- **One config for both lines.** Every run builds `release/10.x` into `/10.x/` and `main` into
+  `/11.x/`, both with `main`'s `site/`. So `site/` and `docs.yml` live on `main` only, and are
+  never cherry-picked. A push to `main` publishes the site. A push to `release/10.x` publishes it
+  when that push's .NET run finishes.
+- **A broken link fails the build.** DocFX runs with warnings as errors. A PR into `main` builds
+  both lines. A PR into `release/10.x` is only checked after it merges, so build that line locally
+  first, from a `main` checkout: `site/build.sh <release/10.x worktree> <output folder> 10.x`.
+- **A new page** goes into `site/toc.yml`. Until the page is cherry-picked into `release/10.x`,
+  the 10.x build leaves it out of that line's menu and logs it. A link to a repository file the
+  site doesn't publish fails the build: add the file to `site/docfx.json` (as a page, or as a
+  resource that's copied as it is), or link its GitHub URL.
+- **At the `v11.0.0` tag, 11.x becomes the default.** Point `site/root/index.html` at `11.x/`, drop
+  "(preview)" from the 11.x label in `docs.yml` and `site/root/versions.html`, and describe 10.x as
+  the LTS line there.
 
 ## Oracle tests
 

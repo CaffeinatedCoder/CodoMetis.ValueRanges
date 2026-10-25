@@ -268,8 +268,8 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     /// <remarks>
     /// The pieces are adjacent and hold exactly the values of the range, so
     /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. On a continuous type each piece but the last is half-open, so a closed range ends in a closed piece rather than a single point.
-    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
-    /// <c>generate_series</c> returns rows, not a value.
+    /// The empty range yields nothing. This runs in memory only; an EF Core
+    /// query doesn't translate it.
     /// <para>
     /// The <c>n</c>th boundary is <c>Start + n × step</c>, each rounded to the nearest double, so the error
     /// does not accumulate from piece to piece. Where <c>n × step</c> alone would overflow while the
@@ -384,7 +384,7 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     /// unbounded. A negative <paramref name="delta"/> moves the range down.
     /// Each moved bound is rounded to the nearest double, as any addition is, so a range narrower than
     /// that rounding at its new magnitude can come back <see cref="Empty"/>.
-    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// This runs in memory only; an EF Core query doesn't translate it.
     /// </remarks>
     /// <param name="delta">How far to move the range; it must be finite.</param>
     /// <returns>The moved range.</returns>
@@ -404,7 +404,7 @@ public abstract partial record Float64Range : IRange<double>, IRangeFactory<Floa
     /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
     /// unbounded side stays unbounded. Each moved bound is rounded to the nearest double.
-    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// This runs in memory only; an EF Core query doesn't translate it.
     /// </remarks>
     /// <param name="amount">How far to move each bound outward; it must be finite.</param>
     /// <returns>The grown, or shrunk, range.</returns>

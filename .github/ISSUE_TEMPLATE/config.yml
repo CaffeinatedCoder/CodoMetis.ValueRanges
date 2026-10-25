@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Question or idea
+    url: https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions
+    about: Ask how to do something, or share an idea or a query you can't express yet, in Discussions. A reproducible bug can go straight to the Bug form.
   - name: Security report
     url: https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/security/advisories/new
     about: Report a vulnerability privately, as SECURITY.md describes. Please don't open a public issue for it.
