@@ -4,7 +4,7 @@ This page follows one hotel booking from the HTTP request to the database and ba
 bind a stay from a query string and from a JSON body, validate it, store it under a constraint that
 rejects double bookings, filter rooms by their features, and work out which nights are still free.
 
-The code is a small ASP.NET Core minimal API in [`samples/Bookings`](../samples/Bookings). CI builds
+The code is a small ASP.NET Core minimal API in [`samples/Bookings`](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/tree/main/samples/Bookings). CI builds
 it against the packages on every pull request, runs it against PostgreSQL, and checks every response,
 SQL statement and stored value on this page. The code blocks are quoted from the sample's source, and
 a test fails when the two differ.

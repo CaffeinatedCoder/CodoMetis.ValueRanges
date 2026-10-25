@@ -4,6 +4,8 @@
   items:
     - name: Getting started
       href: ../docs/getting-started.md
+    - name: Walkthrough
+      href: ../docs/walkthrough.md
     - name: Why ranges and sets
       href: ../docs/why.md
     - name: Ranges
