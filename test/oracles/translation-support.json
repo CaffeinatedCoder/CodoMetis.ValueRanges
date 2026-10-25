@@ -71,27 +71,35 @@
   },
   {
     "members": "*Range.Month(*",
-    "support": "planned",
-    "issue": "#191",
-    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic. Over values the code passes in, the range is computed in memory and sent as a constant"
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "except": {
+      "DateRange": "server"
+    }
   },
   {
     "members": "*Range.Quarter(*",
-    "support": "planned",
-    "issue": "#191",
-    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic"
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "except": {
+      "DateRange": "server"
+    }
   },
   {
     "members": "*Range.Year(*",
-    "support": "planned",
-    "issue": "#191",
-    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic"
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "except": {
+      "DateRange": "server"
+    }
   },
   {
     "members": "*Range.IsoWeek(*",
-    "support": "planned",
-    "issue": "#191",
-    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic"
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "except": {
+      "DateRange": "server"
+    }
   },
   {
     "members": "*ValueSetRangeExtensions.*",

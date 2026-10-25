@@ -835,15 +835,17 @@
     "id": "E46-calendar-range-inlined-as-constant",
     "source": "docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week",
     "quote": "`b.Period.Overlaps(DateRange.Month(2026, 10))` runs as SQL with the month as one constant.",
-    "claim": "A calendar factory called with values the query does not read is evaluated in memory and inlined as one daterange constant, and the query runs and returns the in-memory answer; one that reads a column fails translation in a Where and runs in memory in a Select.",
+    "claim": "A calendar factory called with values the query does not read is evaluated in memory and inlined as one daterange constant, and the query runs and returns the in-memory answer; on LocalDateRange and YearMonthRange one that reads a column fails translation in a Where and runs in memory in a Select.",
     "oracle": "differential",
     "surfaces": [
       "DateRange.Month",
-      "DateRange.IsoWeek"
+      "DateRange.IsoWeek",
+      "LocalDateRange.Month",
+      "YearMonthRange.Quarter"
     ],
     "heldBy": [
       "InlineRangeConstantTests",
-      "ClientSideOnlyTranslationTests",
+      "NodaCalendarFactoryClientSideTests",
       "ClientSideOnlyProjectionTests"
     ]
   },
@@ -1314,6 +1316,26 @@
     ],
     "heldBy": [
       "ValueSetNullOperandParityTests"
+    ]
+  },
+  {
+    "id": "E76-calendar-factories-over-a-column-run-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`DateRange.Month`, `Quarter`, `Year` and `IsoWeek` over a column build the same range in the database as in memory.** `DateRange.Month(b.Day)` gives the month that holds each row's day, so you can filter, join and sort by it. The first and last periods end at `-infinity` and `infinity`, as Npgsql writes `DateOnly.MinValue` and `MaxValue`, so they still equal a stored range.",
+    "claim": "DateRange.Month, Quarter, Year and IsoWeek over a date column or integer columns run as SQL (daterange(first, last, '[]') with memory's first and last periods as constants, -infinity/infinity under Npgsql's conversions and the days themselves without them) and match memory over every period boundary, the ISO weeks of the neighbouring year and the extremes, NULL arguments (rule (c)) and a missing outer-join child, in a filter, its negation, a null test, equality with a stored range, a compound predicate, an ordering and a final projection; an argument memory rejects raises a PostgreSQL error, never a rolled-over week.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateRange.Month",
+      "DateRange.Quarter",
+      "DateRange.Year",
+      "DateRange.IsoWeek"
+    ],
+    "heldBy": [
+      "CalendarFactoryTranslationTests",
+      "CalendarFactoryParityTests",
+      "CalendarFactoryExtremesTests",
+      "DeclaredNullabilityTests",
+      "TranslationSupportProbeTests"
     ]
   },
   {

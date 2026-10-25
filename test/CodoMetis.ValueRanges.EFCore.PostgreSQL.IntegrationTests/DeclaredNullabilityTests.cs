@@ -55,6 +55,7 @@ public sealed class DeclaredNullabilityTests
         ["daterange"]      = ["'[2026-03-01,2026-03-10]'::daterange", "'empty'::daterange", "'(,)'::daterange", "'[2026-03-20,)'::daterange", "'(,2026-03-10]'::daterange"],
         ["datemultirange"] = ["'{}'::datemultirange", "'{[2026-03-01,2026-03-10]}'::datemultirange", "'{(,)}'::datemultirange", "'{[2026-03-20,2026-03-25],[2026-03-27,)}'::datemultirange"],
         ["date"]           = ["DATE '2026-03-07'"],
+        ["timestamp without time zone"] = ["TIMESTAMP '2026-03-07 00:00'"],
         ["text[]"]         = ["'{}'::text[]", "'{a}'::text[]", "'{a,b}'::text[]"],
         ["text"]           = ["'a'::text"],
         ["integer"]        = ["1"]
@@ -105,7 +106,10 @@ public sealed class DeclaredNullabilityTests
         _         => []
     };
 
-    /// <summary>Every discovered call, the range factories over the nullable element column, and the two aggregates.</summary>
+    /// <summary>
+    /// Every discovered call, the range and calendar factories over the nullable element column, the
+    /// calendar factories' integer forms, and the two aggregates.
+    /// </summary>
     private static List<Call> Discovered()
     {
         var calls = Calls(Slot, _ => true);
@@ -116,6 +120,17 @@ public sealed class DeclaredNullabilityTests
                            Expression.Call(typeof(DateRange), nameof(DateRange.CreateUnboundedStart), null, day, Expression.Constant(true))));
         calls.Add(new Call("DateRange.CreateUnboundedEnd(r.Day.Value)",
                            Expression.Call(typeof(DateRange), nameof(DateRange.CreateUnboundedEnd), null, day, Expression.Constant(true))));
+
+        // The calendar factories over the nullable element column, and the integer forms over the id (#191).
+        var id = Column(nameof(DeclaredRow.Id));
+        foreach (var name in new[] { nameof(DateRange.Month), nameof(DateRange.Quarter), nameof(DateRange.Year), nameof(DateRange.IsoWeek) })
+        {
+            calls.Add(new Call($"DateRange.{name}(r.Day.Value)", Expression.Call(typeof(DateRange), name, null, day)));
+            calls.Add(name == nameof(DateRange.Year)
+                          ? new Call("DateRange.Year(r.Id)", Expression.Call(typeof(DateRange), name, null, id))
+                          : new Call($"DateRange.{name}(r.Id, 1)", Expression.Call(typeof(DateRange), name, null, id, Expression.Constant(1))));
+        }
+
         return calls;
     }
 
@@ -181,9 +196,10 @@ public sealed class DeclaredNullabilityTests
             }
         }
 
-        // Fourteen today: isempty, lower_inf, upper_inf, lower_inc, lower, upper, range_merge, cardinality,
-        // array_remove, array_cat, the range and multirange constructors and the two aggregates.
-        Assert.IsGreaterThanOrEqualTo(12, functions.Select(f => f.Value.Name).Distinct().Count(),
+        // Seventeen today: isempty, lower_inf, upper_inf, lower_inc, lower, upper, range_merge, cardinality,
+        // array_remove, array_cat, the range and multirange constructors, the two aggregates, and the
+        // calendar factories' date_trunc, make_date and date_part (#191).
+        Assert.IsGreaterThanOrEqualTo(15, functions.Select(f => f.Value.Name).Distinct().Count(),
                                       $"Only {string.Join(", ", functions.Values.Select(f => f.Name).Distinct())} were recorded");
 
         Candidates.Verdict(nameof(DeclaredNullabilityTests), failures,
