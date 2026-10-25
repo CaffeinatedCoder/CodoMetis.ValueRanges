@@ -87,6 +87,9 @@ the work, and close it from the PR (`Closes #n`).
   is attached as native sub-issues and carries the same milestone. A theme that spans releases is
   an `epic` without a milestone; a finding it produces belongs to the release epic it ships in
 - **Roadmap:** the pinned `roadmap` issue (#34) holds every epic as a sub-issue
+- **Discussions** (Q&A and Ideas) explore questions and directions and never hold state. An
+  accepted idea becomes an issue, the discussion links it, and status lives on the issue and its
+  epic only (CONTRIBUTING.md#questions-and-ideas)
 - **Branches:** up to two lines are supported at once, 10.x (LTS, .NET 10) and 11.x (.NET 11).
   Until the `v10.0.0` tag: `main` is 10.0.0, and `release/9.x` holds 9.x patches and then takes no
   changes. There is no preview branch. At the tag, `release/10.x` is cut from it, and `main` is

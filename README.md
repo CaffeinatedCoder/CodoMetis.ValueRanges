@@ -196,6 +196,9 @@ Good to know:
 | **[Why this exists](docs/why.md)** | Why the library is shaped this way, what else exists, and why some element types are left out |
 | **[Changelog](CHANGELOG.md)** | Every release in full, including what changed in behaviour |
 
+Have a question, or a range or set query you can't write in LINQ yet? Ask in
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions).
+
 If you're working on the package itself, see [architecture](docs/architecture.md),
 [testing](docs/testing.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -240,8 +243,9 @@ package is installed:
 
 ## Contributing and project practices
 
-Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup and
-the quality bar this package holds itself to. Please send security reports privately, through
+Bug reports and pull requests are welcome. For a question or an idea, start a thread in
+[Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions).
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the setup and the quality bar this package holds itself to. Please send security reports privately, through
 [SECURITY.md](SECURITY.md).
 
 Packages are published through GitHub Actions Trusted Publishing. They carry Source Link metadata
