@@ -14,6 +14,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. The
 - Ranges: `RangeSet.From`, a collection expression and `RangeSet.Create` throw `ArgumentException` for a `null` range, where they built a set holding `null`, whose `IsEmpty()` was `false`. `Union` and `Except` called on a `null` range throw too ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#keep-null-out-of-a-range-set)).
 - Ranges: a predicate called on a `null` range, or given a `null` range or set, returns `false`, as a query does over a NULL column. `Contains(Empty)`, `IsContainedBy((,))` and `(,).Contains(null)` returned `true`, and `Contains(T)` and a `null` set operand threw ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
 
+### Changed
+
+- Packaging: a package's release notes on nuget.org and in Visual Studio are its version's section of its changelog, in plain text, ending with a link to the changelog at the version's tag, where they were a link to the latest changelog ([Changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)).
+
 ### Fixed
 
 - Value sets: every set type implements `IFormattable` itself, so `ToString()` and formatting no longer run the interface's default, whose shared-generic stub traps under Native AOT with ILCompiler 11 RC2 ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).

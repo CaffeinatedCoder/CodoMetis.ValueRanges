@@ -12,6 +12,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. The
 - Targets `net11.0` and needs the .NET 11 runtime, one target framework per line.
 - Ranges: `RangeAgg()` and `RangeIntersectAgg()` over `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange` skip a `null` range, as `range_agg` and `range_intersect_agg` skip a NULL row. With a `null` after another range, `RangeIntersectAgg()` returned `empty`, or threw after `(,)`, and `RangeAgg()` threw unless an input was `(,)` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-rangeagg-and-rangeintersectagg-over-null-ranges)).
 
+### Changed
+
+- Packaging: a package's release notes on nuget.org and in Visual Studio are its version's section of its changelog, in plain text, ending with a link to the changelog at the version's tag, where they were a link to the latest changelog ([Changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)).
+
 ### Fixed
 
 - Value sets: every set type implements `IFormattable` itself, so `ToString()` and formatting no longer run the interface's default, whose shared-generic stub traps under Native AOT with ILCompiler 11 RC2 ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).

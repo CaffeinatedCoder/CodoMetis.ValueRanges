@@ -189,7 +189,9 @@ fails outright.
 
 A version's section of the root `CHANGELOG.md` is the GitHub release's notes, word for word, so it
 is written for someone deciding what to change before they upgrade. The package changelogs use the
-same form, with the entries that affect that package.
+same form, with the entries that affect that package, and a package's section is its release notes
+on nuget.org and in Visual Studio: pack writes it into the nuspec in plain text, because nuget.org
+shows no Markdown, and fails when the section is missing or empty (`Directory.Build.targets`).
 
 - **The heading** is `## [x.y.z] — yyyy-mm-dd`. Write entries under the version being prepared,
   never under `Unreleased`. The date is the tag's: set it in all five changelogs in the commit that
@@ -208,7 +210,7 @@ same form, with the entries that affect that package.
   where it helps a reader skim (`JSON:`, `Literals:`, `EF Core:`, `NodaTime:`). In `Added`, lead
   with the new member in bold.
 - **Keep each section in area order:** `Ranges`, `Value sets`, `Literals`, `JSON`, `ASP.NET Core`,
-  `EF Core`, `NodaTime`, `Docs`, so a reader finds an area's lines together. In `Added`, the core
+  `EF Core`, `NodaTime`, `Docs`, `Packaging`, so a reader finds an area's lines together. In `Added`, the core
   members come first, then `EF Core:`, then `Docs:`. Use no headings below the three sections.
 - **End with a link** to the guide that explains it. Links are absolute
   (`https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/…`), because the
