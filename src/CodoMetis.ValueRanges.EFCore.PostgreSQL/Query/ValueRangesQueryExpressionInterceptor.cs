@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -362,8 +363,8 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     }
 
     /// <summary>
-    /// Turns <c>comparer.Compare(x, y)</c> over two ranges or two sets into
-    /// <see cref="RangeComparerCall.RunInMemory{TRange}"/>, which EF Core cannot translate: a filter or an
+    /// Turns <c>comparer.Compare(x, y)</c> over a range, a range set or a value set into
+    /// <see cref="RangeComparerCall.RunInMemory{T}"/>, which EF Core cannot translate: a filter or an
     /// ordering then fails translation, and a final projection runs the comparer in memory (#385).
     /// </summary>
     /// <remarks>
@@ -382,6 +383,14 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
     /// range or set type is kept out of SQL, <see cref="Comparer{T}.Default"/> included: <c>CompareTo</c>
     /// is the call that runs in SQL in the range order.
     /// </para>
+    /// <para>
+    /// The operands decide, not the type <c>Compare</c> declares. A comparer declared over
+    /// <see cref="Core.IRange{T}"/>, the non-generic <see cref="System.Collections.IComparer"/> (which
+    /// <see cref="Comparer{T}.Create"/> is, held as one) and a comparer of value sets each declare a type
+    /// <see cref="RangeTypeRegistry"/> does not hold, and each still compared in the range order in SQL
+    /// (#452). So a call is rewritten when either operand, under the conversions to the declared type, is a
+    /// range, a range set or a value set.
+    /// </para>
     /// </remarks>
     private sealed class RangeComparerRewriter : ExpressionVisitor
     {
@@ -392,10 +401,42 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
                && method.ReturnType == typeof(int)
                && method.GetParameters() is [{ ParameterType: var compared }, { ParameterType: var other }]
                && compared == other
-               && RangeTypeRegistry.TryGetByClrType(compared, out _, out _)
-               && typeof(IComparer<>).MakeGenericType(compared).IsAssignableFrom(comparer.Type)
-                   ? Expression.Call(RangeComparerCall.RunInMemoryMethod.MakeGenericMethod(compared), Visit(comparer), Visit(x), Visit(y))
+               && (IsRangeOrSet(x) || IsRangeOrSet(y))
+               && RunInMemory(comparer.Type, compared) is { } runInMemory
+                   ? Expression.Call(runInMemory, Visit(comparer), Visit(x), Visit(y))
                    : base.VisitMethodCall(node);
+
+        private static MethodInfo? RunInMemory(Type comparerType, Type compared)
+            => typeof(IComparer<>).MakeGenericType(compared).IsAssignableFrom(comparerType)
+                   ? RangeComparerCall.RunInMemoryMethod.MakeGenericMethod(compared)
+                   : compared == typeof(object) && typeof(System.Collections.IComparer).IsAssignableFrom(comparerType)
+                       ? RangeComparerCall.RunInMemoryNonGenericMethod
+                       : null;
+
+        // The operand and every conversion it passes through on its way to the declared parameter type:
+        // a column converted to IRange<T>, object or IComparable is still a range.
+        private static bool IsRangeOrSet(Expression operand)
+        {
+            while (!IsRangeOrSetType(operand.Type))
+            {
+                if (operand is not UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs } conversion)
+                    return false;
+
+                operand = conversion.Operand;
+            }
+
+            return true;
+        }
+
+        // A sealed variant is a range through its union.
+        private static bool IsRangeOrSetType(Type type)
+        {
+            for (var current = Nullable.GetUnderlyingType(type) ?? type; current is not null; current = current.BaseType)
+                if (RangeTypeRegistry.TryGetByClrType(current, out _, out _) || SetTypeRegistry.TryGetByClrType(current, out _))
+                    return true;
+
+            return false;
+        }
     }
 
     private sealed class RangeSetOperatorRewriter : ExpressionVisitor
