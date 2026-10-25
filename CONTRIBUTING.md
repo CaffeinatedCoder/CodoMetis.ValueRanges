@@ -271,9 +271,10 @@ DocFX from the Markdown files as they are, so you edit `docs/` as usual and noth
 - **A broken link fails the build.** DocFX runs with warnings as errors. A PR into `main` builds
   both lines. A PR into `release/10.x` is only checked after it merges, so build that line locally
   first, from a `main` checkout: `site/build.sh <release/10.x worktree> <output folder> 10.x`.
-- **A new page** goes into `site/toc.yml`. A link to a repository file the site doesn't publish
-  fails the build: add the file to `site/docfx.json` (as a page, or as a resource that's copied
-  as it is), or link its GitHub URL.
+- **A new page** goes into `site/toc.yml`. Until the page is cherry-picked into `release/10.x`,
+  the 10.x build leaves it out of that line's menu and logs it. A link to a repository file the
+  site doesn't publish fails the build: add the file to `site/docfx.json` (as a page, or as a
+  resource that's copied as it is), or link its GitHub URL.
 - **At the `v11.0.0` tag, 11.x becomes the default.** Point `site/root/index.html` at `11.x/`, drop
   "(preview)" from the 11.x label in `docs.yml` and `site/root/versions.html`, and describe 10.x as
   the LTS line there.
