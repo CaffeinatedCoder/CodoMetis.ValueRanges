@@ -96,6 +96,12 @@
     "against": "the NormalizeElement, CanonicalOrder and ElementJsonConverter rules, behaviourally, for every discovered set type"
   },
   {
+    "class": "TranslatorDispatchSweepTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "silent-default",
+    "against": "each operand's declared type, for every public query member (QueryMembers) over every discovered range and value set type, handed to the translator providers of a real context: a translation maps each operand as that type and answers the member's own type"
+  },
+  {
     "class": "ValueSetNullContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "exception",

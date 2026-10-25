@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
+using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -112,13 +113,31 @@ internal sealed class ValueSetsMethodCallTranslator(
 
     private SqlExpression? TranslateCall(MethodInfo method, IReadOnlyList<SqlExpression> arguments, ISetTypeDefinition definition)
     {
+        // An operand is mapped as the type its overload declares for it: the set (as itself, or as the
+        // IValueSet<T> or IValueSetFactory<TSet, T> an extension block receives) or the element. An overload
+        // with any other operand type has no arm here and is refused (#295).
+        var parameters = method.GetParameters();
+        Type[] setTypes =
+        [
+            definition.SetClrType,
+            typeof(IValueSet<>).MakeGenericType(definition.ElementClrType),
+            typeof(IValueSetFactory<,>).MakeGenericType(definition.SetClrType, definition.ElementClrType)
+        ];
+
         SqlExpression Set(int index)
-            => sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), definition.SetTypeMapping);
+            => setTypes.Contains(parameters[index].ParameterType)
+                   ? sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), definition.SetTypeMapping)
+                   : throw MissingArm.For(method, parameters[index].ParameterType);
+
+        SqlExpression Element(int index)
+            => parameters[index].ParameterType == definition.ElementClrType
+                   ? arguments[index]
+                   : throw MissingArm.For(method, parameters[index].ParameterType);
 
         switch (method.Name)
         {
             case nameof(ValueSetExtensions.Contains) when arguments.Count == 2:
-                return sqlExpressionFactory.Contains(Set(0), SingletonArray(arguments[1], definition));
+                return sqlExpressionFactory.Contains(Set(0), SingletonArray(Element(1), definition));
 
             case nameof(ValueSetExtensions.Overlaps) when arguments.Count == 2:
                 return sqlExpressionFactory.Overlaps(Set(0), Set(1));
@@ -148,7 +167,7 @@ internal sealed class ValueSetsMethodCallTranslator(
             case nameof(ValueSetExtensions.Remove) when arguments.Count == 2:
                 return sqlExpressionFactory.Function(
                     "array_remove",
-                    [Set(0), ApplyElementMapping(arguments[1], definition)],
+                    [Set(0), ApplyElementMapping(Element(1), definition)],
                     nullable: true,
                     argumentsPropagateNullability: [true, true],
                     definition.SetClrType,

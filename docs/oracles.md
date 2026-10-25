@@ -230,6 +230,14 @@ overloads an expression tree cannot hold (`ReadOnlySpan<char>`, `out`) are out b
   refused or answers differently is a defect; a `client` or `planned` member that now translates is a
   change to classify. The first run found #385: EF Core rewrites any `Compare(a, b)` to the natural order,
   so `RangeLowerBoundComparer.Compare` runs as SQL in the range order.
+- `TranslatorDispatchSweepTests` (conventions, no database) asks the other question about the same keys:
+  not whether a member translates, but whether a translation maps each operand as the type its overload
+  declares. Each key over every closed type goes to the translator providers of a real context, with one
+  operand per declared parameter type. A translation that maps one as anything else, or answers another type
+  than the member, fails, and so does a translator that throws. The translators recognize an overload by its
+  name, and used to map an operand from what it was not, so an overload added later with another operand
+  type would have been translated as a range (#295). Each arm now names its operand types, and any other is
+  refused (`MissingArm`).
 
 ### `axes.md` — what a consumer varies
 
