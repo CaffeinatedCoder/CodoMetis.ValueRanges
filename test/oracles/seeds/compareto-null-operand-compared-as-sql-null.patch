@@ -3,16 +3,18 @@ Oracles: RangeOrderParityTests
 Fails: every CompareTo comparison with a null operand that memory answers true (> 0, >= 0, != 0), which returns no rows
 History: found by the pre-tag analysis (#179), fixed before 10.0.0 shipped (#220)
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
-index 9fc15ab..992c5df 100644
+index d8a20c2..de88f0f 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesQueryExpressionInterceptor.cs
-@@ -39,8 +39,7 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
+@@ -44,9 +44,8 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
      public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
          => CollectionParameterExpander.Expand(
              RangeVariantConstantRetyper.Instance.Visit(
 -                NullOperandCompareToRewriter.Instance.Visit(
--                    RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)))),
-+                RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))),
+-                    RangeComparerRewriter.Instance.Visit(
+-                        RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))))),
++                RangeComparerRewriter.Instance.Visit(
++                    RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)))),
              DefaultCollectionMode(eventData.Context));
  
      private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)

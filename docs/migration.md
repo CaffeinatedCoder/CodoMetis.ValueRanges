@@ -816,6 +816,9 @@ where, so check these:
 - **EF Core: a value set `Union` or `Remove` over NULL is NULL in a query.** A `Select` loaded the
   other set, where `Where(… == null)` selected the row
   ([details](#check-value-set-union-and-remove-over-null-in-queries)).
+- **EF Core: `RangeLowerBoundComparer.Compare` runs in memory only in a query.** In a filter or an
+  ordering it fails translation. In SQL it compared in the range order, so it selected other rows
+  ([details](#move-rangelowerboundcomparer-out-of-queries)).
 
 The first four also shipped in 10.2.0. If you upgrade from 10.2.0 or later, you've already met them.
 
@@ -972,3 +975,32 @@ that can be NULL gets `CASE WHEN … IS NULL THEN NULL ELSE array_cat(…) END`.
 - **Say which set you want for a NULL one.** `(b.MaybeTags ?? StringSet.Empty).Union(more)` loads
   `more` for the NULL rows, as the query did before.
 - **In memory, both still throw for a `null`.** Only the query changes.
+
+### Move `RangeLowerBoundComparer` out of queries
+
+Check EF Core queries that call `Compare` on `RangeLowerBoundComparer`, on
+`RangeSet.LowerBoundComparer`, or on another `IComparer` of ranges or sets.
+
+EF Core reads every `Compare(x, y)` as the natural order of `x` and `y`, whatever the comparer. For a
+range, that is the range order `CompareTo` uses, not the lower bound. Before 11.0.0 the comparer ran
+in SQL in that order. Now it runs in memory only, like the other members under
+[What runs where](efcore.md#what-runs-where). With `p` as `[2026-03-01,2026-03-10]`:
+
+| Query | Before 11.0.0 | Now |
+|---|---|---|
+| `Where(r => comparer.Compare(r.Period, p) == 0)` | only the rows equal to `p` | throws (`InvalidOperationException`): could not be translated |
+| `OrderBy(r => comparer.Compare(r.Period, p))` | sorted in the range order | throws, as above |
+| `Select(r => comparer.Compare(r.Period, p))`, for `[2026-03-01,)` | `1` | `0`, computed in memory |
+| `Select(r => comparer.Compare(r.Period, p))`, for a NULL `Period` | throws (`InvalidOperationException`) | `-1`, computed in memory |
+
+`Comparer<DateRange>.Default.Compare` runs in memory too. Once the comparer is a query parameter, a
+query can't tell one comparer from another.
+
+- **Search your queries for `Compare(`.** Each call on a comparer of ranges or sets in a `Where` or
+  an `OrderBy` now throws, so running the query finds it.
+- **Filter and sort by the lower bound itself.** `LowerBound()` and `LowerBoundInclusive()` run as
+  SQL, so `Where(r => r.Period.LowerBound() == day)` and `OrderBy(r => r.Period.LowerBound())` work.
+  An ordering puts the rows without a lower bound where PostgreSQL puts NULL, last ascending
+  ([details](efcore.md#read-bounds-merge-ranges-and-aggregate)).
+- **Use `CompareTo` for the range order.** `r.Period.CompareTo(p)` runs as SQL in the order
+  `Comparer<DateRange>.Default` uses.
