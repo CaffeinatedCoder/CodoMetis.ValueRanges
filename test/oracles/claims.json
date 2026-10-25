@@ -583,7 +583,7 @@
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
     "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in the final projection EF runs them in memory instead:",
-    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
+    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp (on every range type but Int32Range, Int64Range and DecimalRange), Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Length",
@@ -1282,6 +1282,21 @@
     "heldBy": [
       "IntegerLengthTranslationTests",
       "IntegerLengthParityTests",
+      "TranslationSupportProbeTests"
+    ]
+  },
+  {
+    "id": "E74-clamp-runs-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` clamps in the database as it does in memory.** A value inside the range comes back as it is, and one outside comes back as the bound it passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.",
+    "claim": "RangeExtensions.Clamp on Int32Range, Int64Range and DecimalRange runs as SQL (NULL for a NULL range or value and for isempty, else LEAST(GREATEST(v, lower(x)), upper(x), less one on the discrete types)) and matches memory over every shape, exclusive numrange bounds, the element types' extremes, NULL range and value columns and a missing outer-join child on either side, in a filter, its negation, a null test, a compound predicate, a coalesce, an ordering and a final projection.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Clamp"
+    ],
+    "heldBy": [
+      "ClampTranslationTests",
+      "ClampParityTests",
       "TranslationSupportProbeTests"
     ]
   },

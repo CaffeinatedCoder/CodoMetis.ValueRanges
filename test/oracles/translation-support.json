@@ -17,7 +17,12 @@
   {
     "members": "RangeExtensions.Clamp(*",
     "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: not translated. LEAST(GREATEST(value, lower(x)), upper(x)) leaves an unbounded side alone, but needs a branch for the empty range, which clamps to null, and a step back from a discrete type's exclusive upper bound"
+    "reason": "docs/efcore.md#what-runs-where: LEAST(GREATEST(value, lower(x)), upper(x)) on Int32Range, Int64Range and DecimalRange, with one step back from a discrete type's exclusive upper bound and NULL for the empty range; not translated on the other range types, where the form has not been checked against memory",
+    "except": {
+      "Int32Range": "server",
+      "Int64Range": "server",
+      "DecimalRange": "server"
+    }
   },
   {
     "members": "RangeExtensions.*",

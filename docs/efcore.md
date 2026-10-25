@@ -896,6 +896,7 @@ parameters. A value set `Union` composes only under some operators; see
 | | `IsEmpty`, `IsUnboundedStart`/`End`, `IsInfinity`, `IsFinite` | `isempty`, `lower_inf`, `upper_inf`, and combinations |
 | | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |
 | | `Length` on `Int32Range` and `Int64Range` | `upper(x) - lower(x)` after a widening cast, and 0 for the empty range |
+| | `Clamp(value)` on `Int32Range`, `Int64Range` and `DecimalRange` | `LEAST(GREATEST(value, lower(x)), upper(x))`, one step back from a discrete type's exclusive upper bound, and NULL for the empty range |
 | | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
 | | `RangeAgg`, `RangeIntersectAgg`, over ranges or sets | `range_agg`, `range_intersect_agg` |
 | `RangeSet` | the same operations over multirange columns, plus `Complement` and `IsContainedBy` | the multirange forms, and `'{(,)}' - x` |
@@ -915,7 +916,7 @@ translation, and in the final projection EF runs them in memory instead:
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | Not translated. An array becomes a multirange through `range_agg` over one-element ranges, which needs care at the element type's extremes: `[2147483647,2147483647]` can't be built as an `int4range`. A multirange becomes an array only by enumerating it, as `Values` does. |
 | `Shift`, `Expand` on any range | Not translated. Rebuilding the range from `lower(x) + d` differs from memory unless each case is handled: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, and a bound moved past the last date .NET holds throws in memory where PostgreSQL returns a later date. A bound at `infinity` stays there in both. |
 | `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column, and the same factories on `LocalDateRange` and `YearMonthRange` | Not translated yet ([#191](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/191)). PostgreSQL has no calendar-range function, and the SQL would combine `date_trunc` with interval arithmetic per factory. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. |
-| `Clamp(value)` on any range | Not translated. It would be `LEAST(GREATEST(value, lower(x)), upper(x))`, which leaves an unbounded side alone because both functions skip `NULL`. It needs a branch for the empty range, which clamps to `null`, and a step back from a discrete type's exclusive upper bound. |
+| `Clamp(value)` on the other range types | Not translated. The same `LEAST(GREATEST(…))` form would apply, but it has only been checked against memory on `Int32Range`, `Int64Range` and `DecimalRange`, where it runs as SQL. |
 | `Intersect`, `Except` on value sets | Not translated. Filtering the left array with `unnest … WITH ORDINALITY` keeps its order, but the result is canonical only when the stored arrays are, as with `Union`. |
 | `Add` on value sets | Inserting in canonical order means sorting in SQL, where `text` follows the database collation rather than ordinal order. |
 | The value set indexer, `set[0]` | Subscripting reads the stored array, which is canonical only for rows this library wrote ([Rows written by other tools](#rows-written-by-other-tools)). PostgreSQL arrays also start at 1, and an index past the end is `NULL` where memory throws. |
@@ -929,6 +930,9 @@ Good to know:
 - **`Length` on `Int32Range` and `Int64Range` counts in the database as it does in memory.** `[1,10]`
   measures 10, the empty range 0, and a range unbounded on either side `null`. An `Int64Range` whose
   count is larger than `long.MaxValue` measures `null` too, so you can filter and sort by `Length`.
+- **`Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` clamps in the database as it does in
+  memory.** A value inside the range comes back as it is, and one outside comes back as the bound it
+  passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.
 - **An in-memory operation inside a `Where` fails loudly.** EF throws rather than silently fetching
   the whole table, and that is the intended behaviour.
 - **In the final `Select` it runs in memory.** EF Core evaluates the outermost projection on the
