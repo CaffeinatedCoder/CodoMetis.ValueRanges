@@ -38,6 +38,25 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 - Docs: an ordering by `LowerBound()` or `UpperBound()` puts the empty rows and those without that bound where PostgreSQL puts NULLs, last ascending and first descending, also on a required column. A `!= null` key in front sorts them as memory does ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - EF Core: an empty captured list of ranges or sets keeps EF Core's ordering column (`_ord`, behind `FirstOrDefault` over the list) an integer, as it is when the list has elements. It was cast to the range or set type. No answer changed, but comparing that column with an integer would have failed for the empty list ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
 
+## [10.3.0] — 2026-10-25
+
+Some calls answer differently: [Changed answers in 10.3.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030).
+
+### Changed answers
+
+- EF Core: a value set `Union` with a NULL set, or `Remove` with a NULL set or element, is NULL in a query, as `Where(… == null)` already said. A `Select` loaded the other set instead, for a nullable column, a missing outer-join child or a `null` parameter ([#395](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/395), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030)).
+- EF Core: any `Compare(x, y)` over ranges or sets, `RangeLowerBoundComparer.Compare` and every other `IComparer` included, runs in memory only in a query, as the method called. A filter or an ordering fails translation. In SQL it compared in the range order, so `Compare(r.Period, p) == 0` missed rows with the same lower bound ([#396](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/396), [#452](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/452), [#464](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/464), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030)).
+
+### Added
+
+- EF Core: `Length` on `Int32Range` and `Int64Range` runs as SQL, so a query can filter and sort by it. It counts the integers as memory does: 0 for the empty range, and `null` for an unbounded side or, on `Int64Range`, a count larger than `long.MaxValue` ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` runs as SQL, so a query can filter and sort by the clamped value. It answers as memory does: the value inside the range, otherwise the bound it passes, and `null` for the empty range or a `null` range or value ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` run as SQL when they read a column, so `DateRange.Month(b.Day)` works in a `Where` and an `OrderBy`. They build the range memory builds, the extremes included, and an argument memory rejects fails in PostgreSQL too. The NodaTime forms stay in memory ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+
+### Changed
+
+- Docs: each package's Project website link on NuGet opens the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/), and its README links the site and the [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md).
+
 ## [10.2.0] — 2026-10-25
 
 ### Changed answers
