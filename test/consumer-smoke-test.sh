@@ -14,13 +14,15 @@
 # a consumer builds — compiles real code against them, runs it, and asserts on what it prints and on
 # the SQL the EF plugin translates. Never on the exit code alone.
 #
-# Four consumers: one installs only the core package, the most common shape; one installs the
+# Five consumers: one installs only the core package, the most common shape; one installs the
 # NodaTime EF satellite, which pulls in all four through the nuspec dependency chain — the chain is
 # what that consumer is testing; one publishes with Native AOT and runs the native binary,
 # because whether a generic instantiation exists under AOT depends on the whole program, and a
-# probe inside the repository can turn green by accident; and one installs the EF package next to
-# EFCore.ComplexIndexes.PostgreSQL from nuget.org, the pairing docs/efcore.md recommends for
-# exclusion and temporal constraints, which neither package references.
+# probe inside the repository can turn green by accident; one is the booking service of
+# docs/walkthrough.md (samples/Bookings), copied out of the repository and run as a web app against
+# a PostgreSQL container, asserting on its HTTP responses, its SQL and the rows it stores; and one
+# installs the EF package next to EFCore.ComplexIndexes.PostgreSQL from nuget.org, the pairing
+# docs/efcore.md recommends for exclusion and temporal constraints, which neither package references.
 #
 # Usage: consumer-smoke-test.sh [feed-directory]
 #   With no argument the packages are packed fresh. Pass a directory of existing .nupkg files
@@ -29,12 +31,24 @@
 #   SMOKE_AOT_LINKER_ARGS — extra native linker arguments for the AOT consumer, space-separated,
 #   for SDK builds whose link line needs library paths the toolchain does not find by itself
 #   (Homebrew's dotnet on macOS: "-L/opt/homebrew/opt/openssl@3/lib -L/opt/homebrew/opt/brotli/lib").
+#
+#   VALUERANGES_POSTGRES_IMAGE — the PostgreSQL image the walkthrough consumer runs against, as in the
+#   integration tests (default postgres:16-alpine, the 10.x floor). Without Docker that consumer is
+#   skipped with a message, except under CI=true, where it fails.
 
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# The walkthrough consumer starts a container and a web app; both go when the script does, however it ends.
+postgres_container=""
+app_pid=""
+cleanup() {
+    [[ -n "$app_pid" ]] && kill "$app_pid" 2>/dev/null
+    [[ -n "$postgres_container" ]] && docker rm -f "$postgres_container" >/dev/null 2>&1
+    rm -rf "$work"
+}
+trap cleanup EXIT
 
 feed="${1:-}"
 failed=0
@@ -87,6 +101,16 @@ assert_contains() {
     fi
 }
 
+# A whole line, so an answer that gains a field or a range fails as surely as one that loses it.
+assert_line() {
+    if grep -qxF -- "$1" "$2"; then
+        echo "  ok: $3"
+    else
+        echo "  FAIL: $3 (expected the line '$1' in $(basename "$2"))"
+        failed=1
+    fi
+}
+
 # The one verdict and exit, so a consumer skipped on a line ends the script the same way as the last one.
 finish() {
     [[ $failed -eq 0 ]] || { echo; echo "consumer smoke test FAILED"; exit 1; }
@@ -95,10 +119,7 @@ finish() {
     exit 0
 }
 
-# Creates a consumer project outside the repository and installs one package of this repository, plus
-# any further packages from nuget.org given as id@version. Program.cs is written by the caller
-# beforehand, at $work/<name>.cs. Restores, builds, runs, and leaves the program's
-# output at $work/<name>.out and the resolved package graph at $work/<name>.packages.
+# Writes the consumer's nuget.config into the current directory.
 #
 # Source mapping, not just source ordering: this repository's own ids must come from the local feed
 # and nowhere else, because these versions also exist on nuget.org and a published one satisfying
@@ -106,15 +127,7 @@ finish() {
 # Npgsql, NodaTime) has to come from nuget.org, so restricting the whole restore to the local feed
 # is not an option either — that fails with NU1101 on the transitive dependencies. <clear/> drops
 # any machine-level sources.
-scaffold_consumer() {
-    local name="$1" package="$2" app="$work/$1"
-    shift 2
-
-    echo "==> $name: consumer project, $package"
-    mkdir -p "$app"
-    cd "$app"
-    run dotnet new console --framework "$tfm" --output .
-
+write_nuget_config() {
     cat > nuget.config <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -133,6 +146,21 @@ scaffold_consumer() {
   </packageSourceMapping>
 </configuration>
 XML
+}
+
+# Creates a consumer project outside the repository and installs one package of this repository, plus
+# any further packages from nuget.org given as id@version. Program.cs is written by the caller
+# beforehand, at $work/<name>.cs. Restores, builds, runs, and leaves the program's
+# output at $work/<name>.out and the resolved package graph at $work/<name>.packages.
+scaffold_consumer() {
+    local name="$1" package="$2" app="$work/$1"
+    shift 2
+
+    echo "==> $name: consumer project, $package"
+    mkdir -p "$app"
+    cd "$app"
+    run dotnet new console --framework "$tfm" --output .
+    write_nuget_config
 
     cp "$work/$name.cs" Program.cs
 
@@ -558,6 +586,179 @@ done
 assert_contains '"Period" @> DATE '"'"'2024-06-15'"'"'' "$work/postgres.out" "BCL range predicate translates to @> (core plugin)"
 assert_contains '"Stay" @> DATE '"'"'2024-06-15'"'"''   "$work/postgres.out" "NodaTime range predicate translates to @> (NodaTime satellite)"
 assert_contains '"Tags" @> ARRAY['"'"'x'"'"']::text[]'  "$work/postgres.out" "value set membership translates to array containment"
+
+# ── The walkthrough: samples/Bookings as a web app against PostgreSQL ────────────────────────────
+#
+# docs/walkthrough.md quotes this sample, and WalkthroughSampleConventionTests holds the quotes to its
+# source. This runs it the way a reader would: copied out of the repository, its package reference
+# moved to the version under test, built against the feed, started against a PostgreSQL container,
+# and driven over HTTP. Every response the walkthrough shows is asserted here as
+# a whole line, with the SQL EF Core logs and the rows PostgreSQL stores, so a changed answer fails
+# even when every request still succeeds.
+# Stops the walkthrough's app and container. The EXIT trap would too, but not before the remaining consumers ran.
+stop_walkthrough() {
+    if [[ -n "$app_pid" ]]; then
+        kill "$app_pid" 2>/dev/null || true
+        wait "$app_pid" 2>/dev/null || true
+        app_pid=""
+    fi
+    if [[ -n "$postgres_container" ]]; then
+        docker rm -f "$postgres_container" >/dev/null 2>&1 || true
+        postgres_container=""
+    fi
+}
+
+walkthrough_consumer() {
+    local app="$work/walkthrough" out="$work/walkthrough.out" log="$work/walkthrough.log" stored="$work/walkthrough.stored"
+    local image="${VALUERANGES_POSTGRES_IMAGE:-postgres:16-alpine}"
+
+    if ! docker info >/dev/null 2>&1; then
+        if [[ "${CI:-}" == "true" ]]; then
+            echo "  FAIL: walkthrough: Docker is unavailable, and CI=true makes the live consumer mandatory"
+            failed=1
+        else
+            echo "==> walkthrough: skipped, Docker is unavailable (CI=true makes this a failure)"
+        fi
+        return
+    fi
+
+    echo "==> walkthrough: samples/Bookings, CodoMetis.ValueRanges.EFCore.PostgreSQL, $image"
+    cp -R "$repo_root/samples/Bookings" "$app"
+    rm -rf "${app:?}/bin" "${app:?}/obj"
+    cd "$app"
+    write_nuget_config
+    run dotnet add package CodoMetis.ValueRanges.EFCore.PostgreSQL --version "$version"
+    run dotnet build
+    run dotnet list package --include-transitive
+    echo "$output" > "$work/walkthrough.packages"
+
+    # Published on a free loopback port. The wait is for a TCP connection, not the socket: the image's
+    # entrypoint runs initdb behind a temporary server that listens on the socket only, then restarts.
+    postgres_container="$(docker run -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=bookings -p 127.0.0.1::5432 "$image")"
+    local port="" i
+    for i in $(seq 1 60); do
+        if docker exec "$postgres_container" pg_isready -h 127.0.0.1 -U postgres -q 2>/dev/null; then
+            port="$(docker port "$postgres_container" 5432/tcp | head -1 | sed 's/.*://')"
+            break
+        fi
+        sleep 1
+    done
+    if [[ -z "$port" ]]; then
+        echo "  FAIL: walkthrough: PostgreSQL ($image) did not accept connections within 60 seconds"
+        docker logs "$postgres_container" 2>&1 | tail -20 | sed 's/^/      /'
+        stop_walkthrough
+        failed=1
+        return
+    fi
+
+    # Port 0: Kestrel picks a free one and logs it. The app migrates and seeds on startup. The built
+    # assembly rather than `dotnet run`, so the process stopped below is the app itself.
+    ConnectionStrings__Bookings="Host=127.0.0.1;Port=$port;Database=bookings;Username=postgres;Password=postgres" \
+    ASPNETCORE_URLS="http://127.0.0.1:0" \
+        dotnet "bin/Debug/$tfm/Bookings.dll" > "$log" 2>&1 &
+    app_pid=$!
+    local base=""
+    for i in $(seq 1 120); do
+        base="$(sed -n 's/.*Now listening on: \(http:[^ ]*\).*/\1/p' "$log" | head -1)"
+        [[ -n "$base" ]] && break
+        kill -0 "$app_pid" 2>/dev/null || break
+        sleep 0.5
+    done
+    if [[ -z "$base" ]]; then
+        echo "  FAIL: walkthrough: the app did not start"
+        tail -40 "$log" | sed 's/^/      /'
+        stop_walkthrough
+        failed=1
+        return
+    fi
+
+    # One line per request: its name, the status code, the body.
+    call() {
+        local name="$1" status
+        shift
+        : > "$work/walkthrough.body"
+        status="$(curl -s --max-time 30 -o "$work/walkthrough.body" -w '%{http_code}' "$@" || true)"
+        echo "$name $status $(cat "$work/walkthrough.body")" >> "$out"
+    }
+    local json=(-H 'Content-Type: application/json')
+    call search            -G "$base/rooms" --data-urlencode 'stay=[2026-07-01,2026-07-05)' --data-urlencode 'features={sea-view,balcony}'
+    call book              -X POST "$base/bookings" "${json[@]}" -d '{"roomId":1,"guest":"Ada","stay":"[2026-07-01,2026-07-05)","arrival":"[2026-07-01T15:00:00.1234567+02:00,2026-07-01T18:00:00+02:00)"}'
+    call read              "$base/bookings/1"
+    call overlap           -X POST "$base/bookings" "${json[@]}" -d '{"roomId":1,"guest":"Grace","stay":"[2026-07-04,2026-07-06)"}'
+    call adjacent          -X POST "$base/bookings" "${json[@]}" -d '{"roomId":1,"guest":"Grace","stay":"[2026-07-05,2026-07-08)"}'
+    call open-ended        -X POST "$base/bookings" "${json[@]}" -d '{"roomId":1,"guest":"Linus","stay":"[2026-08-01,)"}'
+    call no-guest          -X POST "$base/bookings" "${json[@]}" -d '{"roomId":1,"stay":"[2026-08-01,2026-08-03)"}'
+    call out-of-season     -X POST "$base/bookings" "${json[@]}" -d '{"roomId":2,"guest":"Linus","stay":"[2026-10-01,2026-10-03)"}'
+    call reversed-body     -X POST "$base/bookings" "${json[@]}" -d '{"roomId":1,"guest":"Linus","stay":"[2026-07-10,2026-07-01)"}'
+    call reversed-query    -G "$base/rooms" --data-urlencode 'stay=[2026-07-10,2026-07-01)'
+    call search-again      -G "$base/rooms" --data-urlencode 'stay=[2026-07-01,2026-07-05)' --data-urlencode 'features={sea-view,balcony}'
+    call availability      -G "$base/rooms/1/availability" --data-urlencode 'window=[2026-07-01,2026-07-31]'
+    call availability-open -G "$base/rooms/1/availability" --data-urlencode 'window=[2026-06-28,)'
+    call availability-free -G "$base/rooms/3/availability" --data-urlencode 'window=[2026-07-01,2026-07-31]'
+    sed 's/^/      /' "$out"
+
+    # The same two queries docs/walkthrough.md shows, and the constraint the migration added.
+    docker exec "$postgres_container" psql -U postgres -d bookings -At \
+        -c 'SELECT "Id", "Period", "Arrival" FROM "Bookings" ORDER BY "Id"' \
+        -c 'SELECT "Id", "Features", "Bookable" FROM "Rooms" ORDER BY "Id"' \
+        -c "SELECT conname || ' ' || pg_get_constraintdef(oid) FROM pg_constraint WHERE contype = 'x'" > "$stored"
+    sed 's/^/      /' "$stored"
+
+    # The app's own log, when it stopped answering: a crash shows here, not in the responses.
+    kill -0 "$app_pid" 2>/dev/null || { echo "  the app exited early:"; tail -40 "$log" | sed 's/^/      /'; }
+    stop_walkthrough
+
+    echo "==> walkthrough: asserting"
+    assert_contains "> CodoMetis.ValueRanges.EFCore.PostgreSQL " "$work/walkthrough.packages" "the EF Core package resolved from the feed"
+    if grep -E "> CodoMetis\.ValueRanges(\.EFCore\.PostgreSQL)? " "$work/walkthrough.packages" | grep -qvF " $version"; then
+        echo "  FAIL: a CodoMetis package resolved at a version other than $version"
+        failed=1
+    fi
+
+    # Binding: the literal from the query string, canonical on the way in; the set sorted.
+    assert_line 'search 200 {"stay":"[2026-07-01,2026-07-04]","features":["balcony","sea-view"],"rooms":[{"id":1,"name":"Harbour","features":["balcony","sea-view"]},{"id":3,"name":"Lighthouse","features":["balcony","bathtub","sea-view"]}]}' "$out" "query string: the stay binds and comes back closed, the features sorted"
+    # The JSON body: the POST echoes what was sent; reading it back shows what PostgreSQL kept.
+    assert_line 'book 201 {"id":1,"roomId":1,"guest":"Ada","stay":"[2026-07-01,2026-07-04]","arrival":"[2026-07-01T15:00:00.1234567+02:00,2026-07-01T18:00:00.0000000+02:00)"}' "$out" "JSON body: the booking is created and echoed as sent"
+    assert_line 'read 200 {"id":1,"roomId":1,"guest":"Ada","stay":"[2026-07-01,2026-07-04]","arrival":"[2026-07-01T13:00:00.1234560+00:00,2026-07-01T16:00:00.0000000+00:00)"}' "$out" "read back: the arrival is UTC and truncated to the microsecond"
+    # The exclusion constraint, and the adjacent stay it lets through. The failed insert used id 2.
+    assert_line 'overlap 409 {"error":"Harbour is already booked for some of those nights."}' "$out" "an overlapping stay of the same room is a 409 from 23P01"
+    assert_line 'adjacent 201 {"id":3,"roomId":1,"guest":"Grace","stay":"[2026-07-05,2026-07-07]","arrival":null}' "$out" "an adjacent stay of the same room is accepted"
+    # Validation.
+    assert_line 'open-ended 400 {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"stay":["The stay needs a first and a last night."]}}' "$out" "an open-ended stay is a validation problem"
+    assert_line 'no-guest 400 {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"guest":["Name the guest."]}}' "$out" "a booking with no guest is a validation problem"
+    assert_line 'out-of-season 400 {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"stay":["Garden takes bookings for [2026-05-01,2026-09-30] only."]}}' "$out" "a stay outside the room's bookable period is a validation problem"
+    assert_line 'reversed-body 400 ' "$out" "a literal that does not parse fails the JSON body with 400"
+    assert_line 'reversed-query 400 ' "$out" "a literal that does not parse fails the query string with 400"
+    assert_line 'search-again 200 {"stay":"[2026-07-01,2026-07-04]","features":["balcony","sea-view"],"rooms":[{"id":3,"name":"Lighthouse","features":["balcony","bathtub","sea-view"]}]}' "$out" "the booked room drops out of the search"
+    # Availability: range_agg merges the adjacent bookings, Except leaves the gaps; an open end stays open.
+    assert_line 'availability 200 {"roomId":1,"window":"[2026-07-01,2026-07-31]","booked":"{[2026-07-01,2026-07-07]}","free":"{[2026-07-08,2026-07-31]}"}' "$out" "availability: the bookings merge into one range and the rest is free"
+    assert_line 'availability-open 200 {"roomId":1,"window":"[2026-06-28,)","booked":"{[2026-07-01,2026-07-07]}","free":"{[2026-06-28,2026-06-30],[2026-07-08,)}"}' "$out" "availability over an open-ended window ends open"
+    assert_line 'availability-free 200 {"roomId":3,"window":"[2026-07-01,2026-07-31]","booked":"{}","free":"{[2026-07-01,2026-07-31]}"}' "$out" "availability of a room with no bookings is the whole window"
+
+    # The SQL EF Core ran, from its own log: every line of the two statements docs/walkthrough.md shows.
+    assert_contains 'SELECT r."Id", r."Name", r."Features"' "$log" "search: the projection"
+    assert_contains 'FROM "Rooms" AS r' "$log" "search: the table"
+    assert_contains 'WHERE r."Features" @> @required AND r."Bookable" @> @stay AND NOT EXISTS (' "$log" "search: @> on text[] and on daterange"
+    assert_contains 'SELECT 1' "$log" "search: the correlated subquery"
+    assert_contains 'FROM "Bookings" AS b' "$log" "search: the subquery's table"
+    assert_contains 'WHERE b."RoomId" = r."Id" AND b."Period" && @stay)' "$log" "search: the overlap check runs as &&"
+    assert_contains 'ORDER BY r."Id"' "$log" "search: the order"
+    assert_contains 'SELECT range_agg(b."Period")' "$log" "availability: the bookings' RangeSet is computed by range_agg"
+    assert_contains 'WHERE b."RoomId" = @id AND b."Period" && @window' "$log" "availability: the room's bookings in the window"
+    assert_contains 'GROUP BY b."RoomId"' "$log" "availability: one group per room"
+    assert_contains 'LIMIT 2' "$log" "availability: SingleOrDefault"
+    assert_contains 'EXCLUDE USING gist ("RoomId" WITH =, "Period" WITH &&);' "$log" "the migration adds the exclusion constraint"
+
+    # What PostgreSQL stores: its own half-open daterange text, UTC with six fraction digits, an open end.
+    assert_line '1|[2026-07-01,2026-07-05)|["2026-07-01 13:00:00.123456+00","2026-07-01 16:00:00+00")' "$stored" "stored: PostgreSQL's daterange text, the arrival in UTC to the microsecond"
+    assert_line '3|[2026-07-05,2026-07-08)|' "$stored" "stored: no arrival is NULL"
+    assert_line '1|{balcony,sea-view}|[2026-01-01,)' "$stored" "stored: the features sorted, the open end unbounded and not infinity"
+    assert_line '2|{garden,step-free}|[2026-05-01,2026-10-01)' "$stored" "stored: a finite bookable period"
+    assert_line '3|{balcony,bathtub,sea-view}|[2026-01-01,)' "$stored" "stored: the third room"
+    assert_line 'ex_bookings_room_period EXCLUDE USING gist ("RoomId" WITH =, "Period" WITH &&)' "$stored" "the exclusion constraint exists"
+}
+
+walkthrough_consumer
 
 # ── EF Core + EFCore.ComplexIndexes.PostgreSQL: a joint consumer ─────────────────────────────────
 #

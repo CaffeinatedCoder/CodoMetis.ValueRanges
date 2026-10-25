@@ -229,6 +229,7 @@ fetch the whole table. This is intended, because a loud failure is the right out
 
 | If you want | Read |
 |---|---|
+| One application that uses all of it, from request to response | [Walkthrough: a booking service](walkthrough.md) |
 | The complete in-memory algebra | [Ranges and range sets](ranges.md) |
 | Canonical scalar sets and validated wrapper elements | [Value sets](value-sets.md) |
 | Every translation, and what runs where | [Entity Framework Core](efcore.md) |
