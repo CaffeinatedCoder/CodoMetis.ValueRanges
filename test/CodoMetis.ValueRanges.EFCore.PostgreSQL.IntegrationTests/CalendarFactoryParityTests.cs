@@ -121,6 +121,36 @@ public sealed class CalendarFactoryParityTests
         await Agree("OrderBy(IsoWeek(WeekYear, Week))", r => DateRange.IsoWeek(r.WeekYear, r.Week), descending: false);
     }
 
+    /// <summary>
+    /// "Filter, join and sort by it" (#451): a join on a period pairs the rows memory pairs, the first and last
+    /// periods included, where a date form meets an integer form.
+    /// </summary>
+    [TestMethod]
+    public async Task CalendarFactories_AsAJoinKey_PairTheRowsMemoryPairs()
+    {
+        ContainerLifecycle.RequireServer();
+        var connectionString = await Seed();
+
+        await using var context = new CalendarContext(connectionString);
+        var loaded = await context.Rows.AsNoTracking().ToListAsync();
+        var (minimum, maximum) = (loaded.Single(r => r.Day == DateOnly.MinValue).Id, loaded.Single(r => r.Day == DateOnly.MaxValue).Id);
+
+        async Task Agree(string label, Expression<Func<CalendarRow, DateRange>> outer, Expression<Func<CalendarRow, DateRange>> inner)
+        {
+            var server = (await context.Rows.Join(context.Rows, outer, inner, (x, y) => new { X = x.Id, Y = y.Id }).ToListAsync())
+                         .Select(pair => (pair.X, pair.Y)).Order().ToList();
+            var memory = loaded.Join(loaded, outer.Compile(), inner.Compile(), (x, y) => (x.Id, y.Id)).Order().ToList();
+
+            CollectionAssert.AreEqual(memory, server, $"{label}: server {server.Count} pairs, memory {memory.Count}");
+            Assert.IsTrue(memory.Any(pair => pair.Item1 == minimum) && memory.Any(pair => pair.Item1 == maximum),
+                          $"{label}: the first and last periods must find a partner, or the extremes are never joined.");
+        }
+
+        await Agree("Month(x.Day) == Month(y.Year, y.Month)", x => DateRange.Month(x.Day), y => DateRange.Month(y.Year, y.Month));
+        await Agree("Quarter(x.Day) == Quarter(y.Year, y.Quarter)", x => DateRange.Quarter(x.Day), y => DateRange.Quarter(y.Year, y.Quarter));
+        await Agree("Year(x.Day) == Year(y.Year)", x => DateRange.Year(x.Day), y => DateRange.Year(y.Year));
+    }
+
     [TestMethod]
     public async Task CalendarFactories_OverAnArgumentMemoryRefuses_RaiseInPostgres()
     {
