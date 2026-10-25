@@ -189,8 +189,9 @@ and a switch over them says what is wrong:
 
 <!-- sample: samples/Bookings/BookingApi.cs -->
 ```csharp
-static string? CheckStay(DateRange stay) => stay switch
+static string? CheckStay(DateRange? stay) => stay switch
 {
+    null => "Give the stay.",
     DateRange.Finite { Length: > 30 } => "A stay is at most 30 nights.",
     DateRange.Finite => null,
     DateRange.EmptyRange => "The stay has no nights.",
@@ -211,6 +212,9 @@ JSON body, the converter throws. Either way the response is a 400 with an empty 
 
 Good to know:
 
+- **A JSON `null` reaches the handler.** System.Text.Json doesn't check nullable annotations unless
+  you turn on `RespectNullableAnnotations`. So `"stay":null`, or a body with no `stay`, binds as
+  `null` although `Stay` isn't nullable, and the `null` arm turns it into a 400.
 - **The discard arm is there for the compiler.** The five shapes are the only ones that can exist,
   but C# can't prove it. [Pattern matching](ranges.md#pattern-matching) explains why the discard
   should throw.
