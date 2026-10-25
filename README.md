@@ -197,6 +197,10 @@ Good to know:
 | **[Why this exists](docs/why.md)** | Why the library is shaped this way, what else exists, and why some element types are left out |
 | **[Changelog](CHANGELOG.md)** | Every release in full, including what changed in behaviour |
 
+You can also read these pages, with an API reference for all four packages, on the
+[documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/). It opens on the
+stable 10.x line, and the 11.x previews have pages of their own.
+
 Have a question, or a range or set query you can't write in LINQ yet? Ask in
 [Discussions](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/discussions).
 
