@@ -785,3 +785,135 @@ runtimes. Look at the text instead:
 - **Say "the end of the day" another way.** Use an unbounded end, `[22:00,)`, or an inclusive
   `23:59:59.9999999` bound
   ([TimeRange and the custom timerange type](efcore.md#timerange-and-the-custom-timerange-type)).
+
+## Changed answers in 10.2.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+Each section below says how to find the calls whose answer changed.
+
+### Check bound comparisons with `null` in queries
+
+Check EF Core queries that call `LowerBound()` or `UpperBound()` on a range or `RangeSet` column and
+then test the result for `null`. That covers `== null`, `!= null`, `HasValue` and `??` with a
+fallback, in a filter or a projection. It also covers a filter on a bound you projected first, which
+is what a data grid sends for a "blank" filter.
+
+PostgreSQL's `lower` and `upper` return `NULL` for an empty range and for an unbounded side. The
+in-memory methods return `null` for the same values. Before 10.2.0, the EF Core package declared
+that a bound is `NULL` only when the column is, and EF Core simplified the query on that basis. On a
+required column:
+
+| Query | Before 10.2.0 | Now |
+|---|---|---|
+| `Where(r => r.Period.LowerBound() == null)` | no rows | the empty rows and the rows with no lower bound |
+| `Where(r => r.Period.UpperBound() != null)`, or `HasValue` | every row | the rows with an upper bound |
+| `Where(r => (r.Period.UpperBound() ?? DateOnly.MaxValue) >= day)` | the empty rows and the rows with no upper bound are missing | those rows match through the fallback |
+| `Select(r => r.Period.UpperBound() ?? DateOnly.MaxValue)` | throws (`InvalidOperationException`) at an empty row or a row with no upper bound | returns the fallback for it |
+| `Select(r => new { To = r.Period.UpperBound() }).Where(x => x.To == null)` | no rows | the empty rows and the rows with no upper bound |
+
+On a nullable column, `LowerBound() == null` ran as the column's own `IS NULL`. It found the `NULL`
+rows and missed the empty and unbounded ones.
+
+This holds for every range type and for `RangeSet`: the .NET and NodaTime ranges, `TimeRange`, the
+float ranges and `YearMonthRange`. Code that runs in memory is unchanged.
+
+- **Search your queries for `LowerBound()` and `UpperBound()`.** Each one followed by `== null`,
+  `!= null`, `HasValue` or `??` now returns the rows the same code returns in memory.
+- **Keep or drop the workarounds you wrote for it.** A query that adds `IsEmpty()`,
+  `IsUnboundedStart()` or `IsUnboundedEnd()` beside the `null` test returns the same rows as before,
+  so the extra test is now optional.
+- **Check reports built on the old rows.** On a required column, a count of rows with no end date
+  was 0, and a filter on a date with a `??` fallback left out every open-ended row.
+
+### Check `RangeAgg` and `RangeIntersectAgg` over `null` ranges
+
+Check code that aggregates ranges in memory from a source that can hold `null`: the values of a
+nullable property, or query results you load first and aggregate afterwards.
+
+PostgreSQL's `range_agg` and `range_intersect_agg` skip a `NULL` row, so a `GroupBy` over a
+nullable column aggregates the ranges it has. Before 10.2.0 the in-memory versions didn't. With `a`
+as `[1,10]` and `b` as `[5,25]`:
+
+| Sequence | Before 10.2.0 | Now |
+|---|---|---|
+| `[a, b, null].RangeIntersectAgg()` | `empty` | `[5,10]` |
+| `[null, a, b].RangeIntersectAgg()` | `[5,10]` | `[5,10]` |
+| `[(,), null].RangeIntersectAgg()` | throws `NullReferenceException` | `(,)` |
+| `[a, null].RangeAgg()` | throws `InvalidOperationException` | `{[1,10]}` |
+| `[null].RangeAgg()` | a set holding `null`: `Count` is 1, `IsEmpty()` is `false` | `{}` |
+
+Over sets, a `null` set made `RangeAgg()` throw `NullReferenceException`, and `RangeIntersectAgg()`
+too when it came after another set. Now it is skipped. This holds for every range type, the NodaTime
+ones included. Queries are unchanged, because the database already skipped NULL rows.
+
+- **Search for `RangeIntersectAgg()` over a sequence that can hold `null`.** A `!` in
+  `rows.Select(r => r.Period!).RangeIntersectAgg()` often marks the place: it silenced the nullable
+  warning for a property that can be `null`.
+- **Remove a `Where(r => r.Period != null)` you added before aggregating, if you like.** The answer is
+  the same with or without it.
+- **A group of nothing but `null` still differs from the database.** In memory `RangeAgg()` returns
+  the empty set, where the query returns `null`, as for zero rows
+  ([Read bounds, merge ranges and aggregate](efcore.md#read-bounds-merge-ranges-and-aggregate)).
+
+### Keep `null` out of a range set
+
+Check code that builds a `RangeSet` from ranges that can be `null`: `RangeSet.From`, a collection
+expression such as `[a, b]`, and `RangeSet.Create`.
+
+Before 10.2.0, a `null` range went into the set. `RangeSet<Int32Range, int>.From([null])` had a
+`Count` of 1, `IsEmpty()` returned `false`, and the first `Contains` threw `NullReferenceException`.
+With two or more ranges, `From` threw `InvalidOperationException` while sorting them, and next to
+`(,)` the `null` was ignored. Now each of these throws `ArgumentException`, wherever the `null`
+stands. `Union` and `Except` called on a `null` range threw or built such a set, and they throw now
+too.
+
+- **Filter before you build the set** if `null` means "no range" in your data:
+  `RangeSet<DateRange, DateOnly>.From(periods.OfType<DateRange>())` leaves the `null` ranges out.
+- **Aggregate with `RangeAgg()`** if you collect ranges from a nullable column. It skips `null`, as
+  PostgreSQL's `range_agg` does ([details](#check-rangeagg-and-rangeintersectagg-over-null-ranges)).
+
+### Check predicates over a `null` range or a NULL column
+
+Check code that calls a predicate such as `Contains`, `Overlaps` or `IsEmpty()` on a range or set that
+can be `null`, in memory or in a query over a nullable column.
+
+The rule is the one EF Core uses for its own types. A predicate with a `null` range or set on either
+side is `false`, and its negation `true`. EF Core writes `!b.Name.StartsWith("a")` so that it keeps
+the rows whose `Name` is NULL, and the range predicates now do the same.
+
+In memory, most predicates already returned `false` for a `null` range, but not all. With `nothing`
+as a `null` `DateRange`:
+
+| Call | Before 10.2.0 | Now |
+|---|---|---|
+| `nothing.Contains(DateRange.Empty)` | `true` | `false` |
+| `nothing.IsContainedBy(DateRange.Infinite)` | `true` | `false` |
+| `DateRange.Infinite.Contains(nothing)` | `true` | `false` |
+| `nothing.Contains(day)` | throws `NullReferenceException` | `false` |
+| `range.Overlaps(nullSet)`, `set.Contains(nothing)` | throws `NullReferenceException`, or `true` | `false` |
+
+In a query over a nullable column, a predicate over a NULL value was NULL. A filter dropped the row
+whether the predicate was negated or not, and a projected predicate threw when it read the NULL:
+
+| Query on a nullable `DateRange? Period` | Before 10.2.0 | Now |
+|---|---|---|
+| `Where(b => !b.Period!.Overlaps(p))` | the NULL rows are missing | the NULL rows are included |
+| `Where(b => b.Period!.Overlaps(p))` | no NULL rows | no NULL rows |
+| `Select(b => b.Period!.IsEmpty())` | throws (`InvalidOperationException`) at a NULL row | `false` for it |
+| `Where(b => !b.Tags!.Contains("x"))` on a nullable value set | the NULL rows are missing | the NULL rows are included |
+| `Where(b => !b.Period.Contains(b.Visit!.On))`, for a booking without a visit | the row is missing | the row is included |
+| `Select(b => b.Period.Contains(b.Day!.Value))` on a nullable `DateOnly? Day` | throws (`InvalidOperationException`) at a NULL `Day` | `false` for it |
+| `Where(b => DateRange.CreateUnboundedEnd(b.Visit!.From).Contains(v))`, for a booking without a visit | the row is included: the range was `(,)` | the row is missing: the range is NULL |
+
+The same goes for the element `Contains(T)` looks for, when it is NULL: a required column of a
+missing child in an outer join, or a nullable column read with `.Value`. The SQL of a required
+column doesn't change. A nullable one gets `b."Period" IS NULL OR NOT (…)` under a negation. A
+range factory over a NULL element is NULL, where it built `empty` (`CreateFinite`) or `(,)`.
+
+- **Search for negated predicates over a nullable column.** A `!` that silenced the nullable warning,
+  as in `!b.Period!.Overlaps(p)`, often marks the place.
+- **Say "has a period and doesn't overlap" when that is what you mean.** Write
+  `Where(b => b.Period != null && !b.Period.Overlaps(p))`. It selects the rows the negated predicate
+  selected before.
+- **`CompareTo` and `==` keep their own rules for a NULL column** ([Sort ranges](ranges.md#sort-ranges)).
+- **Value sets still throw in memory for a `null` set.** Only the query changes for them.

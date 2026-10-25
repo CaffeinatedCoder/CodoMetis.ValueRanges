@@ -37,7 +37,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// type, PostgreSQL types a bare <c>NULL</c> as <c>text</c>, and <c>w."Value" &amp;&amp; b."Seats"</c>
 /// then fails on the server with <c>42883</c>, "operator does not exist: text &amp;&amp; int4range"
 /// (#302; the same on the 11 line, #290). So the constants are cast: <c>NULL::int4range</c>, the type
-/// EF Core already attached to them from the parameter's element mapping.
+/// EF Core already attached to them from the parameter's element mapping. EF Core types its <c>_ord</c>
+/// ordering column the same way, so that one becomes <c>0</c> instead, the integer it is when the list
+/// has elements and on 10.0.0 and 10.0.1 (#319).
 /// </para>
 /// <para>
 /// Either way every consumer of the subquery then answers for an empty table: <c>EXISTS</c> is
@@ -92,7 +94,10 @@ internal static class EmptyCollectionRewriter
         {
             var projections = select.Projection.Select(projection =>
                 projection.Expression is SqlConstantExpression { Value: null, TypeMapping: { } mapping } constant && HoldsAPluginType(constant)
-                    ? projection.Update(factory.Convert(constant, constant.Type, mapping))
+                    // EF Core types its ordering column like the elements; it is an integer when the list has any (#319).
+                    ? projection.Update(projection.Alias == "_ord"
+                        ? factory.ApplyDefaultTypeMapping(factory.Constant(0))
+                        : factory.Convert(constant, constant.Type, mapping))
                     : projection).ToList();
 
             return projections.SequenceEqual(select.Projection)

@@ -112,8 +112,8 @@
   {
     "id": "E04-factories-translate-guarded",
     "source": "docs/efcore.md#query-ranges-with-linq",
-    "quote": "**`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor calls inside a guard. As in memory, a start after the end gives you an empty range.",
-    "claim": "When a factory is called on column values inside a query, it translates to a CASE-guarded range constructor and the server-built range equals what the in-memory factory builds, including Empty for inverted bounds.",
+    "quote": "**`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor calls inside a guard. As in memory, a start after the end gives you an empty range. Over a NULL element, such as a column of a missing child in an outer join, the range is NULL, as EF Core's own `AddDays` is.",
+    "claim": "When a factory is called on column values inside a query, it translates to a CASE-guarded range constructor and the server-built range equals what the in-memory factory builds, including Empty for inverted bounds; over a NULL element (the optional side of an outer join, or a nullable column read with .Value) it is NULL, and the SQL over required elements carries no null test.",
     "oracle": "differential",
     "surfaces": [
       "*Range.CreateFinite",
@@ -124,7 +124,9 @@
     "heldBy": [
       "QueryTranslationTests",
       "MultirangeCoverageTests",
-      "NodaQueryTranslationTests"
+      "NodaQueryTranslationTests",
+      "NullOperandTranslationTests",
+      "NullElementTests"
     ]
   },
   {
@@ -1119,6 +1121,56 @@
     ],
     "heldBy": [
       "TimeAndYearMonthIntegrationTests"
+    ]
+  },
+  {
+    "id": "E70-bounds-null-for-unbounded-or-empty-in-sql",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL` for an unbounded or empty range, and the in-memory methods match that. So `== null`, `HasValue` and `??` on a bound select the same rows in a query as in memory, on a range or a `RangeSet` column.",
+    "claim": "In a query over a range or multirange column of any family, LowerBound() and UpperBound() are NULL exactly for the empty range or set and for the unbounded side, as in memory: compared with null, read through HasValue, coalesced with ?? in a filter or a projection, or compared with null after being projected, they select and return what the same expression gives over the rows as loaded.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests"
+    ]
+  },
+  {
+    "id": "E71-predicate-over-a-null-column-is-false",
+    "source": "docs/efcore.md#query-ranges-with-linq",
+    "quote": "On a nullable column, a predicate over a NULL value is `false`, and its negation `true`.",
+    "claim": "Over a nullable range, multirange and value set column, every discovered Boolean predicate of RangeExtensions, RangeSet and ValueSetExtensions, with the column on either side, selects in a filter, a negated filter and a projection what the same expression selects over the rows as loaded, with false for a NULL row where memory throws, and the same for Contains(T) over a NULL element (the optional side of an outer join, or a nullable column read with .Value); a required column's SQL carries no null check, and a nullable one reads x IS NULL OR NOT (…) under a negation.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsEmpty",
+      "RangeSet.Overlaps",
+      "ValueSetExtensions.Contains"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests",
+      "NullOperandTranslationTests",
+      "NullElementTests"
+    ]
+  },
+  {
+    "id": "E72-ordering-by-a-bound-puts-nulls-where-postgres-does",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**Ordering by a bound puts the rows without it where PostgreSQL puts NULLs.** `OrderBy(b => b.Period.LowerBound())` sorts the empty rows and the rows with no lower bound last, and `OrderByDescending(b => b.Period.UpperBound())` sorts those with no upper bound first. That holds on a required column too, because the bound is NULL there.",
+    "claim": "Over a required range column and a required multirange column holding every shape, ordering by LowerBound() or UpperBound(), ascending or descending, gives the in-memory order with the rows whose bound is null moved to the end ascending and to the front descending; with a Bound() != null key in front (OrderBy/ThenBy, or OrderByDescending/ThenByDescending), it gives the in-memory order exactly.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests"
     ]
   },
   {
@@ -2205,6 +2257,20 @@
     ]
   },
   {
+    "id": "M18-rangeset-refuses-a-null-range",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "A `null` range is not an empty range, so it isn't dropped. Creating a set from one throws `ArgumentException`, wherever it stands among the inputs.",
+    "claim": "For every range type of both libraries, RangeSet.From over an IEnumerable and over a span, and RangeSet.Create (the collection-expression builder), throw ArgumentException for a null range placed first, after a bounded range, after the empty range or after the infinite one; Union and Except called on a null range throw an ArgumentException too, where each built a set holding null.",
+    "oracle": "exception",
+    "surfaces": [
+      "RangeSet.From",
+      "RangeSet.Create"
+    ],
+    "heldBy": [
+      "RangeSetNullContractTests"
+    ]
+  },
+  {
     "id": "R01-createfinite-degenerate-is-empty",
     "source": "docs/ranges.md#create-a-range",
     "quote": "**An impossible range comes back empty.** `CreateFinite()` returns `Empty` when the bounds form an empty or inverted interval. Examples are `start > end`, or equal bounds that are both exclusive.",
@@ -3187,6 +3253,44 @@
     "heldBy": [
       "RangeOrderParityTests",
       "QueryTranslationTests"
+    ]
+  },
+  {
+    "id": "R48-aggregates-skip-null-inputs",
+    "source": "docs/ranges.md#aggregate-a-sequence-of-ranges",
+    "quote": "**A `null` range is skipped**, as PostgreSQL skips a `NULL` row. So a group over a nullable column aggregates the ranges it has, and a sequence of nothing but `null` counts as empty.",
+    "claim": "RangeAgg and RangeIntersectAgg over ranges of every type (every per-type overload, core and NodaTime) and over sets skip a null element wherever it stands, answering what the same sequence without it answers; a sequence of only nulls answers as an empty one. Over a nullable range, multirange and NodaTime range column, range_agg and range_intersect_agg agree with them for every subset of inputs with a NULL row at every position, except that a group of only NULLs is NULL for range_agg where RangeAgg answers the empty set (the zero-rows case of E07).",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg",
+      "RangeAggregateExtensions.RangeIntersectAgg",
+      "NodaTimeRangeAggregateExtensions.RangeAgg",
+      "NodaTimeRangeAggregateExtensions.RangeIntersectAgg"
+    ],
+    "heldBy": [
+      "RangeAggregateTests",
+      "NodaTimeRangeAggregateTests",
+      "RangeAggregateParityTests"
+    ]
+  },
+  {
+    "id": "R49-predicates-false-for-a-null",
+    "source": "docs/ranges.md#ask-questions-about-a-range",
+    "quote": "If the range you call it on, or the range or set you pass, is `null`, a query method returns `false`. That is what the same query returns for a NULL column in the database. The `RangeSet` methods return `false` for a `null` range or set you pass, too.",
+    "claim": "For every range type of both libraries, every public bool member of RangeExtensions answers false, without throwing, with null as the range it is called on, as the operand, or both, against every shape and set probe; and every Boolean instance member of RangeSet taking a range or a set answers false for a null operand.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.Contains",
+      "RangeSet.IsContainedBy",
+      "RangeSet.Overlaps",
+      "RangeSet.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeNullPredicateContractTests"
     ]
   },
   {

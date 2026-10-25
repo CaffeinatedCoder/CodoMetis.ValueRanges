@@ -79,12 +79,24 @@ Each method becomes one PostgreSQL operator or function call:
   matches their `RangeSet` return type. A union of two ranges that don't touch is a real
   two-element multirange, never an error.
 - **`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor
-  calls inside a guard. As in memory, a start after the end gives you an empty range.
+  calls inside a guard. As in memory, a start after the end gives you an empty range. Over a NULL
+  element, such as a column of a missing child in an outer join, the range is NULL, as EF Core's own
+  `AddDays` is.
 
 Since v4 the eight predicates above (`Contains` through `IsAdjacentTo`) also work on a `RangeSet`,
 with either a range or a multirange on the other side. Since 10.0.0 they also work on a range with a
 multirange on the other side, as the operator with the range on the left
 (`b."Period" &< b."Blocked"`), and `RangeSet.IsContainedBy` runs as `<@`.
+
+On a nullable column, a predicate over a NULL value is `false`, and its negation `true`. That is what
+EF Core does for a `string` or `string[]` column, and what the methods return in memory for a `null`
+range. So `!b.Period.Overlaps(other)` keeps the rows whose `Period` is NULL, as
+`!b.Name.StartsWith("a")` keeps the rows whose `Name` is NULL. The SQL adds
+`b."Period" IS NULL OR NOT (…)` for a nullable column and nothing for a required one. Value set
+predicates follow the same rule in a query, though in memory they throw for a `null` set. So does
+`Contains(day)` when `day` is NULL, as it is for a column of a missing child in an outer join or a
+nullable column read with `.Value`.
+`CompareTo` keeps its own rule for a NULL column ([Sort ranges](ranges.md#sort-ranges)).
 
 ### Read bounds, merge ranges and aggregate
 
@@ -92,6 +104,7 @@ Since v4 you can also read bounds, merge ranges, aggregate per group and compare
 
 ```csharp
 // ORDER BY lower(b."Period") — bound accessors: lower / upper / lower_inc / upper_inc
+// A row with no lower bound, or an empty one, sorts last (see "Good to know" below)
 bookings.OrderBy(b => b.Period.LowerBound());
 
 // range_merge(b."Period", @other) and range_merge(b."BlockedDays")
@@ -147,7 +160,18 @@ Good to know:
   have a gap. PostgreSQL normalizes multiranges the same way this library does, so the equality is
   exact ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
 - **`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL`
-  for an unbounded or empty range, and the in-memory methods match that.
+  for an unbounded or empty range, and the in-memory methods match that. So `== null`, `HasValue`
+  and `??` on a bound select the same rows in a query as in memory, on a range or a `RangeSet`
+  column.
+- **Ordering by a bound puts the rows without it where PostgreSQL puts NULLs.**
+  `OrderBy(b => b.Period.LowerBound())` sorts the empty rows and the rows with no lower bound last,
+  and `OrderByDescending(b => b.Period.UpperBound())` sorts those with no upper bound first. That
+  holds on a required column too, because the bound is NULL there. In memory, `null` sorts first
+  ascending and last descending. To sort as memory does, put a `!= null` key in front:
+  `OrderBy(b => b.Period.LowerBound() != null).ThenBy(b => b.Period.LowerBound())`, or
+  `OrderByDescending` and `ThenByDescending` for the other direction. To sort open starts first, as a
+  range's own order does, order by the range: `OrderBy(b => b.Period)`
+  ([Sort ranges](ranges.md#sort-ranges)).
 - **Discrete upper bounds are adjusted for you.** For `int4range`, `int8range` and `daterange`,
   PostgreSQL normalizes to the half-open form `[lower, upper)`. This library normalizes to the
   closed form `[lower, upper]`. So `UpperBound()` becomes `upper(x) - 1`, and
@@ -822,3 +846,35 @@ Good to know:
 - **`Count` over a `Union` computed in the database throws.** `array_cat` concatenates without
   deduplicating, so the query throws rather than returning a wrong count. In a projection, EF
   counts the loaded set in memory instead. See [Combine sets with `Union`](#combine-sets-with-union).
+
+### Known differences in 10.2.0
+
+Two queries in 10.2.0 return something other than the same LINQ over the loaded rows, without an
+error. Both are fixed in 11.0.0 first, and each fix comes to 10.x in a later minor.
+
+- **A value set `Union` or `Remove` over NULL, in a projection.** `array_cat` and `array_remove`
+  skip a NULL argument instead of returning NULL. So `b.MaybeTags.Union(more)` loads `more` for a
+  row whose `MaybeTags` is NULL, and `b.Tags.Remove(b.Label)` loads `Tags` unchanged when `Label`
+  is NULL. A filter such as `b.MaybeTags.Union(more) == null` treats both as NULL. The NULL can
+  come from a nullable column or from the missing side of an outer join. Test for null yourself,
+  and the projection loads `null` too:
+
+  ```csharp
+  bookings.Select(b => b.MaybeTags == null ? null : b.MaybeTags.Union(more));
+  bookings.Select(b => b.Label == null ? null : b.Tags.Remove(b.Label));
+  ```
+
+  The fix is [#395](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/395).
+- **`RangeLowerBoundComparer` in a query.** `RangeLowerBoundComparer<TRange, T>.Instance.Compare(a, b)`,
+  and `RangeSet<TRange, T>.LowerBoundComparer`, compare in the [range order](ranges.md#sort-ranges)
+  when they run in the database, not by lower bound. EF Core rewrites every `Compare(a, b)` call
+  this way, whatever the comparer does ([dotnet/efcore#39402](https://github.com/dotnet/efcore/issues/39402)).
+  So `Where(b => comparer.Compare(b.Period, p) == 0)` becomes `WHERE b."Period" = @p`, and it
+  misses the rows whose lower bound is the same as `p`'s but whose upper bound is not. Call the
+  comparer on loaded rows instead:
+
+  ```csharp
+  bookings.AsEnumerable().Where(b => comparer.Compare(b.Period, p) == 0);
+  ```
+
+  The fix is [#396](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/396).

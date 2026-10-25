@@ -71,7 +71,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(10, 20) };
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\")",
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -82,7 +82,7 @@ public sealed class RangeCollectionTranslationTests
 
         StringAssert.Contains(
             Where(db => db.Bookings.Where(b => wanted.Count(w => w.Overlaps(b.Seats)) == 2)),
-            "FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\") = 2");
+            "FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\") = 2");
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" && b.\"Seats\"")})",
+            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\"")})",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -111,7 +111,7 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range> { Int32Range.CreateFinite(1, 5), Int32Range.CreateFinite(10, 20) };
 
         Assert.AreEqual(
-            "WHERE b.\"Seats\" IN (@wanted1, @wanted2) OR EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Seats\")",
+            "WHERE b.\"Seats\" IN (@wanted1, @wanted2) OR EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\")",
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
     }
 
@@ -125,8 +125,31 @@ public sealed class RangeCollectionTranslationTests
         var wanted = new List<Int32Range>();
 
         Assert.AreEqual(
-            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" && b.\"Seats\"")})",
+            $"WHERE EXISTS (     SELECT 1     {EmptyCollectionSql.FromNoRows("int4range", "w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Seats\"")})",
             Where(db => db.Bookings.Where(b => wanted.Contains(b.Seats) || wanted.Any(w => w.Overlaps(b.Seats)))));
+    }
+
+    /// <summary>
+    /// EF Core gives the empty root its <c>_ord</c> ordering column too, typed like the elements, and
+    /// the plugin cast it to <c>int4range</c> with them (#319). It is an integer when the list has
+    /// elements, so a shape comparing it with one would have failed on the server for the empty list
+    /// only. Only the element column is cast; <c>_ord</c> is <c>0</c>, as on the EF Core 10.0.0 path.
+    /// That path is pinned too, so the test holds on whichever EF Core the host resolved; it reaches the
+    /// fix only on 10.0.2 and later (#325).
+    /// </summary>
+    [TestMethod]
+    public void FirstOrDefault_OverAnEmptyCapturedList_KeepsTheOrderingColumnAnInteger()
+    {
+        var       empty   = new List<Int32Range>();
+        using var context = new TestDbContext();
+
+        var sql = context.Bookings.Select(b => empty.Where(w => w.Overlaps(b.Seats)).FirstOrDefault()).ToQueryString().ReplaceLineEndings(" ");
+
+        var from = EmptyCollectionSql.EfCoreReplacesTheEmptyValues
+            ? "FROM (         SELECT 0 AS _ord, NULL::int4range AS \"Value\"         WHERE FALSE     ) AS e     WHERE e.\"Value\" IS NOT NULL AND e.\"Value\" && b.\"Seats\""
+            : "FROM (VALUES (0, NULL::int4range)) AS e(_ord, \"Value\")     WHERE FALSE";
+
+        Assert.AreEqual($"SELECT (     SELECT e.\"Value\"     {from}     ORDER BY e._ord     LIMIT 1) FROM \"Bookings\" AS b", sql);
     }
 
     [TestMethod]

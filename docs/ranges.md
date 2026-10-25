@@ -148,6 +148,14 @@ Good to know:
 Every query method is an extension method on `IRange<T>`. Each one works for any combination of
 shapes.
 
+If the range you call it on, or the range or set you pass, is `null`, a query method returns
+`false`. That is what the same query returns for a NULL column in the database. The `RangeSet`
+methods return `false` for a `null` range or set you pass, too.
+
+The methods that build a range or a set have no answer for a `null` range. `Union` and `Except`
+throw `ArgumentException`. `Intersect`, `Gap` and `Merge` return a value or throw, depending on the
+range you pass, so check for `null` before you call them.
+
 ### Check containment
 
 ```csharp
@@ -440,7 +448,9 @@ Good to know:
   `<= 0`, and with a non-null operand it compares lower, so it matches `< 0`, `<= 0` and `!= 0`. In
   memory, calling `CompareTo` on a null throws.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
-  nullable column, the two orders differ only in where the nulls go.
+  nullable column, the two orders differ only in where the nulls go. An ordering by `LowerBound()` or
+  `UpperBound()` meets the same difference on any column, because the bound of an empty or unbounded
+  range is NULL ([Read bounds](efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
   the lower bound, so it ties `[1,5]` with `[1,9]` ([Sort ranges the way a set does](#sort-ranges-the-way-a-set-does)).
 
@@ -680,6 +690,8 @@ new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
 - **`RangeAgg()`** returns a normalized `RangeSet` with every value of every range.
 - **`RangeIntersectAgg()`** returns the intersection of all the ranges, or `null` when the
   sequence is empty.
+- **A `null` range is skipped**, as PostgreSQL skips a `NULL` row. So a group over a nullable
+  column aggregates the ranges it has, and a sequence of nothing but `null` counts as empty.
 
 Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:
 
@@ -695,8 +707,8 @@ blocked.RangeIntersectAgg();  // { [3, 5], [20, 22] } — the values every set h
 ```
 
 Over sets, `RangeIntersectAgg()` returns a `RangeSet`, again `null` for an empty sequence. An empty
-set among the inputs makes it the empty set. These two are generic, so they work for every range
-type, the NodaTime ones included.
+set among the inputs makes it the empty set. A `null` set is skipped. These two are generic, so they
+work for every range type, the NodaTime ones included.
 
 In an EF Core query, all four run as the SQL aggregates inside a `GroupBy` projection. See
 [Entity Framework Core](efcore.md).
@@ -757,6 +769,9 @@ them overlap, and no two are adjacent. To keep those rules, creating a set:
 - **Drops empty ranges.**
 - **Merges ranges that overlap or are adjacent.**
 - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**
+
+A `null` range is not an empty range, so it isn't dropped. Creating a set from one throws
+`ArgumentException`, wherever it stands among the inputs.
 
 What the example shows:
 
@@ -944,6 +959,9 @@ The order follows two rules:
 
 The same instance is also available as `RangeLowerBoundComparer<Int32Range, int>.Instance`. Use it
 where you only have the comparer type, not the set type.
+
+The comparer sorts in memory. Inside an EF Core query it compares in the range order instead; see
+[Known differences in 10.2.0](efcore.md#known-differences-in-1020).
 
 ## Write generic code over any range
 

@@ -1,4 +1,13 @@
+using System.Data.Common;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using CodoMetis.ValueRanges.Core;
+using CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.Fuzzing;
+using CodoMetis.ValueRanges.Oracles;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
+using Npgsql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -6,6 +15,7 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 /// Executes the translated SQL against live PostgreSQL and asserts that the server's
 /// answers agree with the in-memory implementations — the core promise of the library.
 /// Each test seeds its own rows (unique Ids / GroupKeys) so tests can run in parallel.
+/// The two sweeps at the end collect their disagreements and end in <see cref="Candidates.Verdict"/>.
 /// </summary>
 [TestClass]
 public class ExecutedQueryTests
@@ -621,5 +631,622 @@ public class ExecutedQueryTests
             .Select(g => g.Select(r => r.Period).RangeIntersectAgg())
             .SingleAsync();
         Assert.AreEqual(periods.Take(2).RangeIntersectAgg(), serverIntersectAgg);
+    }
+
+    /// <summary>
+    /// An ordering by <c>LowerBound()</c> or <c>UpperBound()</c> puts the empty rows and the rows without
+    /// that bound where PostgreSQL puts NULLs, last ascending and first descending, also on a required
+    /// column; memory puts a <see langword="null"/> first ascending and last descending (#359,
+    /// <c>docs/efcore.md#read-bounds-merge-ranges-and-aggregate</c>). With a <c>Bound() != null</c> key in
+    /// front, the database orders as memory does, in both directions. Over a range and a multirange
+    /// column. Ids 2700 to 2708.
+    /// </summary>
+    [TestMethod]
+    public async Task OrderingByABound_PutsTheRowsWithoutItWherePostgresPutsNulls()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        Int32Range[] shapes =
+        [
+            Int32Range.CreateFinite(1, 20, true, true), Int32Range.CreateFinite(1, 1, true, true), Int32Range.CreateFinite(20, 20, true, true),
+            Int32Range.CreateUnboundedStart(1, true), Int32Range.CreateUnboundedStart(20, true),
+            Int32Range.CreateUnboundedEnd(1, true), Int32Range.CreateUnboundedEnd(20, true),
+            Int32Range.Infinite, Int32Range.Empty
+        ];
+        await Seed([.. shapes.Select((shape, index) => new Reservation
+        {
+            Id = 2700 + index, Seats = shape, SeatBlocks = RangeSet<Int32Range, int>.From(shape)
+        })]);
+
+        await using var context = new IntegrationDbContext();
+        var mine     = context.Reservations.Where(r => r.Id >= 2700 && r.Id <= 2708);
+        var loaded   = await mine.AsNoTracking().ToListAsync();
+        var failures = new List<string>();
+
+        foreach (var (name, key) in new (string, Expression<Func<Reservation, int?>>)[]
+                 {
+                     ("Seats.LowerBound()", r => r.Seats.LowerBound()),
+                     ("Seats.UpperBound()", r => r.Seats.UpperBound()),
+                     ("SeatBlocks.LowerBound()", r => r.SeatBlocks.LowerBound()),
+                     ("SeatBlocks.UpperBound()", r => r.SeatBlocks.UpperBound())
+                 })
+        {
+            var compiled = key.Compile();
+            var present  = Expression.Lambda<Func<Reservation, bool>>(
+                Expression.NotEqual(key.Body, Expression.Constant(null, typeof(int?))), key.Parameters);
+
+            foreach (var descending in new[] { false, true })
+            {
+                var order = descending ? $"OrderByDescending({name})" : $"OrderBy({name})";
+
+                var memory = (descending ? loaded.OrderByDescending(compiled) : loaded.OrderBy(compiled))
+                            .ThenBy(r => r.Id).Select(r => r.Id).ToList();
+
+                // The documented placement: the same order, with the rows whose bound is null moved to
+                // the end ascending and to the front descending.
+                var withoutBound = memory.Where(id => compiled(loaded.Single(r => r.Id == id)) is null).ToList();
+                var withBound    = memory.Except(withoutBound).ToList();
+                List<int> documented = descending ? [.. withoutBound, .. withBound] : [.. withBound, .. withoutBound];
+
+                var plain = await (descending ? mine.OrderByDescending(key) : mine.OrderBy(key))
+                                 .ThenBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                if (!plain.SequenceEqual(documented))
+                    failures.Add($"{order}: [{string.Join(",", plain)}], documented [{string.Join(",", documented)}]");
+
+                var keyed = await (descending ? mine.OrderByDescending(present).ThenByDescending(key) : mine.OrderBy(present).ThenBy(key))
+                                 .ThenBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                if (!keyed.SequenceEqual(memory))
+                    failures.Add($"{order} after a Bound() != null key: [{string.Join(",", keyed)}], memory [{string.Join(",", memory)}]");
+            }
+        }
+
+        Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>
+    /// <c>LowerBound()</c> and <c>UpperBound()</c> compared with <see langword="null"/>, read through
+    /// <c>HasValue</c>, coalesced with <c>??</c> in a filter and a projection, and filtered after being
+    /// projected, for a range column and a multirange column of every family, against the same
+    /// expression over the rows as loaded. The bounds are NULL for the empty range and for the unbounded
+    /// side of a non-null one, so these forms only agree while EF Core knows <c>lower</c> and
+    /// <c>upper</c> can be NULL for a non-null argument (#349). Each failure line starts with the
+    /// operation, then the column. Ids run from 2400 to 2659, twenty per family.
+    /// </summary>
+    [TestMethod]
+    public async Task BoundsComparedWithNull_SelectTheRowsMemorySelects()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        var at = new DateTime(2026, 3, 1, 8, 0, 0);
+        var utc = new DateTimeOffset(at, TimeSpan.Zero);
+        LocalDate Day(int day) => new(2026, 3, day);
+
+        var failures = new List<string>();
+        failures.AddRange(await BoundNullSweep(2400, r => r.Seats, r => r.SeatBlocks, 1, 10, 20, int.MinValue, int.MaxValue));
+        failures.AddRange(await BoundNullSweep(2420, r => r.Tickets, r => r.TicketBlocks, 1L, 10L, 20L, long.MinValue, long.MaxValue));
+        failures.AddRange(await BoundNullSweep(2440, r => r.Price, r => r.PriceBands, 1.5m, 10m, 20.25m, decimal.MinValue, decimal.MaxValue));
+        failures.AddRange(await BoundNullSweep(2460, r => r.Period, r => r.BlockedDays, new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 15),
+                                               new DateOnly(2026, 3, 31), DateOnly.MinValue, DateOnly.MaxValue));
+        failures.AddRange(await BoundNullSweep(2480, r => r.LocalTime, r => r.WallClockWindows, at, at.AddDays(1), at.AddDays(2),
+                                               DateTime.MinValue, DateTime.MaxValue));
+        failures.AddRange(await BoundNullSweep(2500, r => r.InstantTime, r => r.InstantWindows, utc, utc.AddDays(1), utc.AddDays(2),
+                                               DateTimeOffset.MinValue, DateTimeOffset.MaxValue));
+        failures.AddRange(await BoundNullSweep(2520, r => r.NodaPeriod, r => r.NodaBlockedDays, Day(1), Day(15), Day(31),
+                                               LocalDate.MinIsoValue, LocalDate.MaxIsoValue));
+        failures.AddRange(await BoundNullSweep(2540, r => r.NodaWallClock, r => r.NodaWallClocks, LocalDateTime.FromDateTime(at),
+                                               LocalDateTime.FromDateTime(at.AddDays(1)), LocalDateTime.FromDateTime(at.AddDays(2)),
+                                               LocalDateTime.MinIsoValue, LocalDateTime.MaxIsoValue));
+        failures.AddRange(await BoundNullSweep(2560, r => r.NodaWindow, r => r.NodaWindows, Instant.FromDateTimeOffset(utc),
+                                               Instant.FromDateTimeOffset(utc.AddDays(1)), Instant.FromDateTimeOffset(utc.AddDays(2)),
+                                               Instant.MinValue, Instant.MaxValue));
+        // time is microsecond-precise, so TimeOnly.MaxValue would round to 24:00; any fallback the column holds will do.
+        failures.AddRange(await BoundNullSweep(2580, r => r.OpeningHours, r => r.OpeningWindows, new TimeOnly(9, 0), new TimeOnly(12, 0),
+                                               new TimeOnly(17, 0), TimeOnly.MinValue, new TimeOnly(23, 59, 59)));
+        failures.AddRange(await BoundNullSweep(2600, r => r.Score, r => r.ScoreBands, 1.5, 10.0, 20.25, double.MinValue, double.MaxValue));
+        failures.AddRange(await BoundNullSweep(2620, r => r.Load, r => r.LoadBands, 1.5f, 10f, 20.25f, float.MinValue, float.MaxValue));
+        failures.AddRange(await BoundNullSweep(2640, r => r.BillingPeriod, r => r.BillingPeriods, new YearMonth(2026, 1), new YearMonth(2026, 6),
+                                               new YearMonth(2026, 12), new YearMonth(1, 1), new YearMonth(9999, 12)));
+
+        Candidates.Verdict(nameof(ExecutedQueryTests), failures,
+                           "LowerBound()/UpperBound() against null in a query: PostgreSQL and memory select different rows",
+                           method: nameof(BoundsComparedWithNull_SelectTheRowsMemorySelects));
+    }
+
+    /// <summary>
+    /// Seeds one row per shape into <paramref name="column"/>, and the same shape as a one-element
+    /// multirange into <paramref name="set"/> — finite across, below and above <paramref name="v"/>,
+    /// unbounded on either side of it, infinite and empty — and runs every bound operation on both
+    /// columns, on the server and over the rows as loaded. <paramref name="min"/> and
+    /// <paramref name="max"/> are the <c>??</c> fallbacks; they must round-trip through the column's
+    /// element type, or the projection disagrees for that reason alone.
+    /// </summary>
+    private static async Task<List<string>> BoundNullSweep<TRange, T>(
+        int firstId, Expression<Func<Reservation, TRange>> column, Expression<Func<Reservation, RangeSet<TRange, T>>> set,
+        T a, T v, T b, T min, T max)
+        where TRange : class, IRangeFactory<TRange, T>, IRange<T>
+        where T : struct, IComparable<T>, IEquatable<T>
+    {
+        (string Name, TRange Range)[] shapes =
+        [
+            ("[a,b]", TRange.CreateFinite(a, b, true, true)),
+            ("[a,a]", TRange.CreateFinite(a, a, true, true)),
+            ("[b,b]", TRange.CreateFinite(b, b, true, true)),
+            ("(,a]",  TRange.CreateUnboundedStart(a, true)),
+            ("(,b]",  TRange.CreateUnboundedStart(b, true)),
+            ("[a,)",  TRange.CreateUnboundedEnd(a, true)),
+            ("[b,)",  TRange.CreateUnboundedEnd(b, true)),
+            ("(,)",   TRange.Infinite),
+            ("empty", TRange.Empty)
+        ];
+
+        var property    = (PropertyInfo)((MemberExpression)column.Body).Member;
+        var setProperty = (PropertyInfo)((MemberExpression)set.Body).Member;
+        var names       = new Dictionary<int, string>();
+        var rows        = new List<Reservation>();
+        foreach (var (shape, index) in shapes.Select((shape, index) => (shape, index)))
+        {
+            var row = new Reservation { Id = firstId + index };
+            property.SetValue(row, shape.Range);
+            setProperty.SetValue(row, RangeSet<TRange, T>.From(shape.Range));
+            rows.Add(row);
+            names[row.Id] = shape.Name;
+        }
+
+        await Seed([.. rows]);
+
+        var row0      = column.Parameters[0];
+        var setColumn = Expression.Property(row0, setProperty);
+        var lastId    = firstId + shapes.Length - 1;
+
+        await using var context = new IntegrationDbContext();
+        var mine     = context.Reservations.Where(r => r.Id >= firstId && r.Id <= lastId);
+        var loaded   = await mine.AsNoTracking().OrderBy(r => r.Id).ToListAsync();
+        var failures = new List<string>();
+
+        // The range's bounds are the IRange<T> extensions and the set's its own methods, each spliced
+        // onto its column, so the call is the one a consumer's r.Column.LowerBound() makes.
+        await Sweep($"{property.Name} ({typeof(TRange).Name})",
+                    Bound<IRange<T>>(column.Body, (_, x) => x.LowerBound()), Bound<IRange<T>>(column.Body, (_, x) => x.UpperBound()));
+        await Sweep($"{setProperty.Name} (RangeSet<{typeof(TRange).Name}>)",
+                    Bound<RangeSet<TRange, T>>(setColumn, (_, x) => x.LowerBound()), Bound<RangeSet<TRange, T>>(setColumn, (_, x) => x.UpperBound()));
+
+        return failures;
+
+        Expression<Func<Reservation, T?>> Bound<TColumn>(Expression on, Expression<Func<Reservation, TColumn, T?>> bound) =>
+            Expression.Lambda<Func<Reservation, T?>>(FuzzEngine.Splice(bound, row0, on), row0);
+
+        // The operation written over the bound, spliced onto it.
+        Expression<Func<Reservation, TOut>> Over<TOut>(Expression<Func<Reservation, T?>> bound, Expression<Func<Reservation, T?, TOut>> operation) =>
+            Expression.Lambda<Func<Reservation, TOut>>(FuzzEngine.Splice(operation, row0, bound.Body), row0);
+
+        // (bound ?? fallback) op v, with both values captured, so EF Core sends them as parameters.
+        Expression<Func<Reservation, bool>> Coalesced(ExpressionType comparison, Expression<Func<Reservation, T?>> bound, T fallback) =>
+            Expression.Lambda<Func<Reservation, bool>>(
+                Expression.MakeBinary(comparison, Expression.Coalesce(bound.Body, Captured(fallback)), Captured(v)), row0);
+
+        async Task Sweep(string label, Expression<Func<Reservation, T?>> lower, Expression<Func<Reservation, T?>> upper)
+        {
+            (string Name, Expression<Func<Reservation, bool>> Filter)[] filters =
+            [
+                ("LowerBound() == null",       Over(lower, (_, x) => x == null)),
+                ("LowerBound() != null",       Over(lower, (_, x) => x != null)),
+                ("LowerBound().HasValue",      Over(lower, (_, x) => x.HasValue)),
+                ("UpperBound() == null",       Over(upper, (_, x) => x == null)),
+                ("UpperBound() != null",       Over(upper, (_, x) => x != null)),
+                ("(UpperBound() ?? max) >= v", Coalesced(ExpressionType.GreaterThanOrEqual, upper, max)),
+                ("(LowerBound() ?? min) <= v", Coalesced(ExpressionType.LessThanOrEqual, lower, min))
+            ];
+
+            foreach (var (name, filter) in filters)
+            {
+                var memory = loaded.Where(filter.Compile()).Select(r => r.Id).ToList();
+                await Agree(label, name, () => mine.Where(filter).Select(r => r.Id).OrderBy(id => id).ToListAsync(), memory);
+            }
+
+            var projection = Expression.Lambda<Func<Reservation, T>>(Expression.Coalesce(upper.Body, Captured(max)), row0);
+            var projected  = loaded.Select(projection.Compile()).ToList();
+            try
+            {
+                var server = await mine.OrderBy(r => r.Id).Select(projection).ToListAsync();
+                if (!server.SequenceEqual(projected))
+                    failures.Add($"Select(UpperBound() ?? max) on {label}: server [{string.Join(", ", server)}], memory [{string.Join(", ", projected)}]");
+            }
+            catch (Exception e) when (e is InvalidOperationException or DbException)
+            {
+                failures.Add($"Select(UpperBound() ?? max) on {label}: server threw {e.GetType().Name}: {e.Message}");
+            }
+
+            // The filter a grid's "blank" header filter sends: the bound projected first, compared after.
+            var withUpper = Over(upper, (r, x) => new { r.Id, To = x });
+            await Agree(label, "Select(new { Id, To = UpperBound() }).Where(To == null)",
+                        () => mine.Select(withUpper).Where(t => t.To == null).Select(t => t.Id).OrderBy(id => id).ToListAsync(),
+                        [.. loaded.Select(withUpper.Compile()).Where(t => t.To == null).Select(t => t.Id)]);
+        }
+
+        async Task Agree(string label, string operation, Func<Task<List<int>>> server, List<int> memory)
+        {
+            try
+            {
+                var rowsServer = await server();
+                if (!rowsServer.SequenceEqual(memory))
+                    failures.Add($"{operation} on {label}: server rows {Named(rowsServer)}, memory rows {Named(memory)}");
+            }
+            catch (Exception e) when (e is InvalidOperationException or DbException)
+            {
+                failures.Add($"{operation} on {label}: server threw {e.GetType().Name}: {e.Message}");
+            }
+        }
+
+        string Named(IEnumerable<int> ids) => $"{{{string.Join(" ", ids.Select(id => names[id]))}}}";
+    }
+
+    /// <summary>
+    /// Range predicates over a nullable column holding NULL and every shape, against the same
+    /// expression over the rows as loaded. On a NULL column every call is NULL in SQL; in memory some
+    /// extensions answer a value on a null receiver, so their negated and vacuous forms keep or drop the
+    /// NULL row where SQL does the opposite (#350). A row whose in-memory evaluation throws has no answer
+    /// to compare and is left out on both sides. The column lives in a database of its own, so the
+    /// shared schema keeps its required columns.
+    /// </summary>
+    [TestMethod]
+    public async Task PredicatesOverANullableColumn_SelectTheRowsMemorySelects()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = await NullableRangeContext.CreateDatabase();
+
+        DateOnly March(int day) => new(2026, 3, day);
+        (string Name, DateRange? Range)[] shapes =
+        [
+            ("null",    null),
+            ("empty",   DateRange.Empty),
+            ("(,)",     DateRange.Infinite),
+            ("[1,10]",  DateRange.CreateFinite(March(1), March(10), true, true)),
+            ("[20,25]", DateRange.CreateFinite(March(20), March(25), true, true)),
+            ("(,10]",   DateRange.CreateUnboundedStart(March(10), true)),
+            ("[20,)",   DateRange.CreateUnboundedEnd(March(20), true))
+        ];
+        var names = shapes.Select((shape, index) => (Id: index + 1, shape.Name)).ToDictionary(s => s.Id, s => s.Name);
+
+        await using (var seed = new NullableRangeContext(connectionString))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            seed.Rows.AddRange(shapes.Select((shape, index) => new NullableRangeRow { Id = index + 1, Period = shape.Range }));
+            await seed.SaveChangesAsync();
+        }
+
+        var p = DateRange.CreateFinite(March(5), March(22), true, true);
+        var v = March(7);
+
+        (string Name, Expression<Func<NullableRangeRow, bool>> Filter)[] filters =
+        [
+            ("!IsEmpty()",                  r => !r.Period!.IsEmpty()),
+            ("!IsFinite()",                 r => !r.Period!.IsFinite()),
+            ("!IsUnboundedEnd()",           r => !r.Period!.IsUnboundedEnd()),
+            ("!UpperBoundInclusive()",      r => !r.Period!.UpperBoundInclusive()),
+            ("!Overlaps(p)",                r => !r.Period!.Overlaps(p)),
+            ("Contains(Empty)",             r => r.Period!.Contains(DateRange.Empty)),
+            ("IsContainedBy(Infinite)",     r => r.Period!.IsContainedBy(DateRange.Infinite)),
+            ("Intersect(p) != null",        r => r.Period!.Intersect(p) != null),
+            ("Intersect(p) == Empty",       r => r.Period!.Intersect(p) == DateRange.Empty),
+            ("Gap(Empty).IsEmpty()",        r => r.Period!.Gap(DateRange.Empty).IsEmpty()),
+            ("Union(Infinite).Contains(v)", r => r.Period!.Union(DateRange.Infinite).Contains(v)),
+            ("Merge(Infinite) == x",        r => r.Period!.Merge(DateRange.Infinite) == r.Period)
+        ];
+
+        await using var context = new NullableRangeContext(connectionString);
+        var loaded   = await context.Rows.AsNoTracking().OrderBy(r => r.Id).ToListAsync();
+        var failures = new List<string>();
+
+        foreach (var (name, filter) in filters)
+        {
+            var test   = filter.Compile();
+            var judged = new HashSet<int>();
+            var memory = new List<int>();
+            foreach (var row in loaded)
+            {
+                bool holds;
+                try { holds = test(row); }
+                catch (Exception e) when (e is NullReferenceException or InvalidOperationException or ArgumentException) { continue; }
+
+                judged.Add(row.Id);
+                if (holds) memory.Add(row.Id);
+            }
+
+            // One line per row, so a candidate names the row it quarantines and every other row stays judged.
+            try
+            {
+                var server = (await context.Rows.Where(filter).Select(r => r.Id).ToListAsync()).ToHashSet();
+                foreach (var id in judged.Order().Where(id => server.Contains(id) != memory.Contains(id)))
+                    failures.Add($"{name} on DateRange? {names[id]}: server {Selects(server.Contains(id))} the row, memory {Selects(memory.Contains(id))} it");
+            }
+            catch (Exception e) when (e is InvalidOperationException or DbException)
+            {
+                failures.Add($"{name} on DateRange?: server threw {e.GetType().Name}: {e.Message}");
+            }
+        }
+
+        Candidates.Verdict(nameof(ExecutedQueryTests), failures,
+                           "Range predicates over a nullable column: PostgreSQL and memory select different rows",
+                           method: nameof(PredicatesOverANullableColumn_SelectTheRowsMemorySelects));
+
+        static string Selects(bool selected) => selected ? "selects" : "drops";
+    }
+
+    /// <summary>A captured variable, which EF Core sends as a parameter.</summary>
+    private static MemberExpression Captured<T>(T value) =>
+        Expression.Field(Expression.Constant(new StrongBox<T>(value)), nameof(StrongBox<>.Value));
+
+    /// <summary>A captured variable of a type known only at run time, which EF Core sends as a parameter.</summary>
+    private static MemberExpression Captured(object value, Type type) =>
+        Expression.Field(Expression.Constant(Activator.CreateInstance(typeof(StrongBox<>).MakeGenericType(type), value)),
+                         nameof(StrongBox<>.Value));
+
+    /// <summary>
+    /// Every Boolean predicate over a nullable range, multirange and value set column, with the column
+    /// on either side, in a filter, a negated filter and a projection, against the same expression over
+    /// the rows as loaded (#355). The predicates are discovered (every public <c>bool</c> member of
+    /// <see cref="RangeExtensions"/>, of <see cref="RangeSet{TRange,T}"/> and of
+    /// <see cref="ValueSetExtensions"/>), so one added later is swept with no edit here.
+    /// </summary>
+    /// <remarks>
+    /// A predicate with a NULL range, multirange or value set on either side is <c>false</c>, and its
+    /// negation <c>true</c>: what EF Core answers for its own types, and what the range predicates answer
+    /// in memory for a null (#350). Where memory throws for a null instead (a <see cref="RangeSet{TRange,T}"/>
+    /// member called on a null set, or a value set predicate, which refuses a null set), the expected
+    /// answer is that rule rather than the exception. A predicate EF Core cannot translate is counted and
+    /// left out. The columns live in a database of their own, so the shared schema keeps its required
+    /// columns.
+    /// </remarks>
+    [TestMethod]
+    public async Task EveryPredicate_OverANullableColumn_IsFalseForTheNullRow()
+    {
+        ContainerLifecycle.RequireServer();
+
+        var connectionString = await NullablePredicateContext.CreateDatabase();
+
+        DateOnly March(int day) => new(2026, 3, day);
+        DateRange Days(int from, int to) => DateRange.CreateFinite(March(from), March(to), true, true);
+        (DateRange? Period, RangeSet<DateRange, DateOnly>? Blocks, StringSet? Tags)[] values =
+        [
+            (null, null, null),
+            (Days(1, 10), RangeSet<DateRange, DateOnly>.From(Days(1, 10)), StringSet.From(["a"])),
+            (DateRange.Empty, RangeSet<DateRange, DateOnly>.Empty, StringSet.Empty),
+            (DateRange.Infinite, RangeSet<DateRange, DateOnly>.Infinite, StringSet.From(["a", "b"])),
+            (DateRange.CreateUnboundedEnd(March(20), true),
+             RangeSet<DateRange, DateOnly>.From(Days(20, 25), DateRange.CreateUnboundedEnd(March(27), true)),
+             StringSet.From(["b"]))
+        ];
+
+        await using (var seed = new NullablePredicateContext(connectionString))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            seed.Rows.AddRange(values.Select((value, index) => new NullablePredicateRow
+            {
+                Id = index + 1, Period = value.Period, Blocks = value.Blocks, Tags = value.Tags
+            }));
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = new NullablePredicateContext(connectionString);
+        var rows = await context.Rows.AsNoTracking().OrderBy(r => r.Id).ToListAsync();
+        var row  = Expression.Parameter(typeof(NullablePredicateRow), "r");
+
+        // What each parameter can be given besides a column, as (value, declared type) so a captured
+        // range is typed as its union, not as the shape it happens to be.
+        (object Value, Type Type)[] Probes(Type parameter) =>
+            parameter == typeof(DateOnly)                      ? [(March(3), typeof(DateOnly))]
+          : parameter == typeof(string)                        ? [("a", typeof(string))]
+          : parameter.IsAssignableFrom(typeof(StringSet))      ? [(StringSet.From(["a"]), typeof(StringSet)), (StringSet.Empty, typeof(StringSet))]
+          : parameter == typeof(RangeSet<DateRange, DateOnly>) ? [(RangeSet<DateRange, DateOnly>.From(Days(3, 8)), parameter), (RangeSet<DateRange, DateOnly>.Empty, parameter)]
+          :                                                      [(Days(1, 5), typeof(DateRange)), (DateRange.Empty, typeof(DateRange)), (DateRange.Infinite, typeof(DateRange))];
+
+        // The nullable column a parameter can take, if any.
+        string? ColumnFor(Type parameter) =>
+            parameter.IsAssignableFrom(typeof(DateRange))      ? nameof(NullablePredicateRow.Period)
+          : parameter == typeof(RangeSet<DateRange, DateOnly>) ? nameof(NullablePredicateRow.Blocks)
+          : parameter.IsAssignableFrom(typeof(StringSet))      ? nameof(NullablePredicateRow.Tags)
+          :                                                      null;
+
+        Expression Column(string name) => Expression.Property(row, name);
+
+        static MethodInfo? Close(MethodInfo method, Type[] one, Type[] two)
+        {
+            try
+            {
+                return method.GetGenericArguments().Length switch
+                {
+                    0 => method,
+                    1 => method.MakeGenericMethod(one),
+                    2 => method.MakeGenericMethod(two),
+                    _ => null
+                };
+            }
+            catch (ArgumentException)
+            {
+                return null; // a constraint the probe types do not meet
+            }
+        }
+
+        var predicates = new List<(string Name, Expression Body)>();
+
+        // The extensions, ranges and value sets: the column as the value called on, and as the operand.
+        foreach (var (declaring, one, two) in new[]
+                 {
+                     (typeof(RangeExtensions), new[] { typeof(DateOnly) }, new[] { typeof(DateRange), typeof(DateOnly) }),
+                     (typeof(ValueSetExtensions), new[] { typeof(string) }, new[] { typeof(StringSet), typeof(string) })
+                 })
+        {
+            foreach (var method in declaring.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                                            .Where(method => method.ReturnType == typeof(bool))
+                                            .Select(method => Close(method, one, two))
+                                            .OfType<MethodInfo>())
+            {
+                var parameters = method.GetParameters();
+                if (ColumnFor(parameters[0].ParameterType) is not { } receiver) continue;
+
+                if (parameters.Length == 1)
+                {
+                    predicates.Add(($"{method.Name}() on {receiver}", Expression.Call(method, Column(receiver))));
+                    continue;
+                }
+
+                foreach (var (value, type) in Probes(parameters[1].ParameterType))
+                    predicates.Add(($"{method.Name}({value}) on {receiver}", Expression.Call(method, Column(receiver), Captured(value, type))));
+
+                if (ColumnFor(parameters[1].ParameterType) is { } operand)
+                    foreach (var (value, type) in Probes(parameters[0].ParameterType))
+                        predicates.Add(($"{value}.{method.Name}({operand})", Expression.Call(method, Captured(value, type), Column(operand))));
+            }
+        }
+
+        // The set's own predicates, called on the multirange column and with a column as the operand.
+        foreach (var method in typeof(RangeSet<DateRange, DateOnly>)
+                              .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                              .Where(method => method.ReturnType == typeof(bool) && method.Name != nameof(Equals)
+                                            && method.GetParameters().Length <= 1))
+        {
+            var blocks = Column(nameof(NullablePredicateRow.Blocks));
+            if (method.GetParameters() is not [var parameter])
+            {
+                predicates.Add(($"{method.Name}() on Blocks", Expression.Call(blocks, method)));
+                continue;
+            }
+
+            foreach (var (value, type) in Probes(parameter.ParameterType))
+                predicates.Add(($"{method.Name}({value}) on Blocks", Expression.Call(blocks, method, Captured(value, type))));
+
+            if (ColumnFor(parameter.ParameterType) is { } operand)
+                foreach (var (value, type) in Probes(typeof(RangeSet<DateRange, DateOnly>)))
+                    predicates.Add(($"{value}.{method.Name}({operand})", Expression.Call(Captured(value, type), method, Column(operand))));
+        }
+
+        var failures     = new List<string>();
+        var untranslated = new List<string>();
+
+        foreach (var (name, body) in predicates)
+        {
+            var filter   = Expression.Lambda<Func<NullablePredicateRow, bool>>(body, row);
+            var negated  = Expression.Lambda<Func<NullablePredicateRow, bool>>(Expression.Not(body), row);
+            var compiled = filter.Compile();
+
+            // Memory, with rule (c) where the call throws for a null: then the answer is false.
+            var expected = new List<bool>();
+            foreach (var loaded in rows)
+            {
+                try
+                {
+                    expected.Add(compiled(loaded));
+                }
+                catch (Exception e) when (e is NullReferenceException or ArgumentNullException)
+                {
+                    if (loaded.Id != 1) failures.Add($"{name}: memory threw {e.GetType().Name} on row {loaded.Id}, which holds no NULL");
+                    expected.Add(false);
+                }
+            }
+
+            var ids = rows.Select(r => r.Id).ToList();
+            try
+            {
+                var where     = await context.Rows.Where(filter).OrderBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                var whereNot  = await context.Rows.Where(negated).OrderBy(r => r.Id).Select(r => r.Id).ToListAsync();
+                var projected = await context.Rows.OrderBy(r => r.Id).Select(filter).ToListAsync();
+
+                var wantWhere    = ids.Where((_, index) => expected[index]).ToList();
+                var wantWhereNot = ids.Where((_, index) => !expected[index]).ToList();
+
+                if (!where.SequenceEqual(wantWhere))
+                    failures.Add($"{name}: Where selects rows {{{string.Join(",", where)}}}, memory {{{string.Join(",", wantWhere)}}}");
+                if (!whereNot.SequenceEqual(wantWhereNot))
+                    failures.Add($"!{name}: Where selects rows {{{string.Join(",", whereNot)}}}, memory {{{string.Join(",", wantWhereNot)}}}");
+                if (!projected.SequenceEqual(expected))
+                    failures.Add($"Select({name}): [{string.Join(",", projected)}], memory [{string.Join(",", expected)}]");
+            }
+            catch (InvalidOperationException e) when (e.Message.Contains("could not be translated", StringComparison.Ordinal))
+            {
+                untranslated.Add(name);
+            }
+            catch (Exception e) when (e is InvalidOperationException or DbException)
+            {
+                failures.Add($"{name}: server threw {e.GetType().Name}: {e.Message.Split('\n')[0]}");
+            }
+        }
+
+        // Some 140 predicates translate today; the floor only catches a discovery that stopped matching.
+        Assert.IsGreaterThanOrEqualTo(100, predicates.Count - untranslated.Count,
+                                      $"Only {predicates.Count - untranslated.Count} of {predicates.Count} predicates translated; "
+                                    + $"untranslated: {string.Join("; ", untranslated)}");
+
+        Candidates.Verdict(nameof(ExecutedQueryTests), failures,
+                           "A predicate over a nullable column: PostgreSQL and memory (or rule (c)) select different rows",
+                           method: nameof(EveryPredicate_OverANullableColumn_IsFalseForTheNullRow));
+    }
+
+    public sealed class NullablePredicateRow
+    {
+        public int Id { get; set; }
+
+        public DateRange? Period { get; set; }
+
+        public RangeSet<DateRange, DateOnly>? Blocks { get; set; }
+
+        public StringSet? Tags { get; set; }
+    }
+
+    /// <summary>A database of its own, so that nullable range and set columns do not change the shared schema.</summary>
+    private sealed class NullablePredicateContext(string connectionString) : DbContext
+    {
+        public DbSet<NullablePredicateRow> Rows => Set<NullablePredicateRow>();
+
+        public static async Task<string> CreateDatabase()
+        {
+            var name = $"nullable_predicate_{Guid.NewGuid():N}";
+            await using (var connection = new NpgsqlConnection(ContainerLifecycle.ServerConnectionString))
+            {
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand($"CREATE DATABASE {name}", connection);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            return new NpgsqlConnectionStringBuilder(ContainerLifecycle.ServerConnectionString) { Database = name }.ConnectionString;
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.Entity<NullablePredicateRow>().Property(r => r.Id).ValueGeneratedNever();
+    }
+
+    public sealed class NullableRangeRow
+    {
+        public int Id { get; set; }
+
+        public DateRange? Period { get; set; }
+    }
+
+    /// <summary>A database of its own, so that a nullable range column does not change the shared schema.</summary>
+    private sealed class NullableRangeContext(string connectionString) : DbContext
+    {
+        public DbSet<NullableRangeRow> Rows => Set<NullableRangeRow>();
+
+        public static async Task<string> CreateDatabase()
+        {
+            var name = $"nullable_range_{Guid.NewGuid():N}";
+            await using (var connection = new NpgsqlConnection(ContainerLifecycle.ServerConnectionString))
+            {
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand($"CREATE DATABASE {name}", connection);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            return new NpgsqlConnectionStringBuilder(ContainerLifecycle.ServerConnectionString) { Database = name }.ConnectionString;
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseNpgsql(connectionString, npgsql => npgsql.UseValueRanges());
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.Entity<NullableRangeRow>().Property(r => r.Id).ValueGeneratedNever();
     }
 }
