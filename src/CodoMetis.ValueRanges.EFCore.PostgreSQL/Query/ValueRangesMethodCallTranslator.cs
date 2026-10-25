@@ -524,28 +524,56 @@ internal sealed class ValueRangesMethodCallTranslator(
             case "CreateFinite" when arguments.Count == 4
                                      && arguments[2] is SqlConstantExpression { Value: bool startInclusive }
                                      && arguments[3] is SqlConstantExpression { Value: bool endInclusive }:
-                return GuardedFiniteRangeConstructor(
+            {
+                var lower = ApplyElementMapping(arguments[0], definition);
+                var upper = ApplyElementMapping(arguments[1], definition);
+                return NullOverNullElement(
                     definition,
-                    ApplyElementMapping(arguments[0], definition),
-                    ApplyElementMapping(arguments[1], definition),
-                    $"{(startInclusive ? '[' : '(')}{(endInclusive ? ']' : ')')}");
+                    GuardedFiniteRangeConstructor(definition, lower, upper, $"{(startInclusive ? '[' : '(')}{(endInclusive ? ']' : ')')}"),
+                    lower, upper);
+            }
 
             case "CreateUnboundedStart" when arguments.Count == 2
                                              && arguments[1] is SqlConstantExpression { Value: bool endInclusive }:
-                return RangeConstructor(
-                    definition, NullConstant(definition.ElementClrType), arguments[0],
-                    $"({(endInclusive ? ']' : ')')}");
+            {
+                var upper = ApplyElementMapping(arguments[0], definition);
+                return NullOverNullElement(
+                    definition,
+                    RangeConstructor(definition, NullConstant(definition.ElementClrType), upper, $"({(endInclusive ? ']' : ')')}"),
+                    upper);
+            }
 
             case "CreateUnboundedEnd" when arguments.Count == 2
                                            && arguments[1] is SqlConstantExpression { Value: bool startInclusive }:
-                return RangeConstructor(
-                    definition, arguments[0], NullConstant(definition.ElementClrType),
-                    $"{(startInclusive ? '[' : '(')})");
+            {
+                var lower = ApplyElementMapping(arguments[0], definition);
+                return NullOverNullElement(
+                    definition,
+                    RangeConstructor(definition, lower, NullConstant(definition.ElementClrType), $"{(startInclusive ? '[' : '(')})"),
+                    lower);
+            }
 
             default:
                 return null;
         }
     }
+
+    /// <summary>
+    /// A factory over a NULL element is NULL, as EF Core's own value-producing members are over NULL
+    /// (#382). Without this, <c>CreateFinite</c> fell into its inverted-bounds guard and gave
+    /// <c>empty</c>, and the unbounded factories gave <c>(,)</c>, since PostgreSQL's range constructor
+    /// reads a NULL bound as unbounded. An element is NULL on the optional side of an outer join or in
+    /// a nullable column read with <c>.Value</c>. EF Core's nullability processing folds the test away
+    /// for a required column, a non-null parameter and a constant, so their SQL is unchanged.
+    /// </summary>
+    private SqlExpression NullOverNullElement(IRangeTypeDefinition definition, SqlExpression range, params SqlExpression[] elements)
+        => sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    elements.Select(element => sqlExpressionFactory.IsNull(element)).Aggregate(sqlExpressionFactory.OrElse),
+                    sqlExpressionFactory.Constant(null, definition.RangeClrType, definition.RangeTypeMapping))
+            ],
+            range);
 
     /// <summary>
     /// A range constructor call guarded against inverted bounds: <c>CreateFinite</c> returns
