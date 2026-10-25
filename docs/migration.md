@@ -968,7 +968,9 @@ in SQL in that order. Now it runs in memory only, like the other members under
 | `Select(r => comparer.Compare(r.Period, p))`, for a NULL `Period` | throws (`InvalidOperationException`) | `-1`, computed in memory |
 
 `Comparer<DateRange>.Default.Compare` runs in memory too. Once the comparer is a query parameter, a
-query can't tell one comparer from another.
+query can't tell one comparer from another. So do comparers declared over another type, when what they
+compare is a range or a set: an `IComparer<IRange<DateOnly>>`, a non-generic `IComparer` (such as
+`Comparer<DateRange>.Create(…)` held as one) and an `IComparer<StringSet>`.
 
 - **Search your queries for `Compare(`.** Each call on a comparer of ranges or sets in a `Where` or
   an `OrderBy` now throws, so running the query finds it.
