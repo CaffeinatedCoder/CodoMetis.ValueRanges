@@ -19,6 +19,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 ### Added
 
 - EF Core: Npgsql 11's own temporal keys accept the range and multirange columns this package maps. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over a `DateRange`, a `TimeRange` or a `RangeSet`, on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
+- EF Core: `Length` on `Int32Range` and `Int64Range` runs as SQL, so a query can filter and sort by it. It counts the integers as memory does: 0 for the empty range, and `null` for an unbounded side or, on `Int64Range`, a count larger than `long.MaxValue` ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ### Changed
 

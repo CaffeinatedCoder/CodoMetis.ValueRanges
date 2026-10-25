@@ -289,7 +289,8 @@ way with `float`.
 
 Good to know:
 
-- **`Length` runs in memory only.** It does not translate to SQL.
+- **`Length` runs as SQL on `Int32Range` and `Int64Range`.** On the other range types it runs in
+  memory ([What runs where](efcore.md#what-runs-where)).
 
 ### List the values of a discrete range
 

@@ -1,0 +1,17 @@
+Seed: Length on Int32Range and Int64Range measures the empty range as NULL in a query, where memory measures 0
+Oracles: IntegerLengthParityTests
+Fails: every Seats.Length and Tickets.Length call on the empty rows: server NULL, rule (c) 0
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs
+index 56d00b9..ff6a852 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs
+@@ -65,7 +65,7 @@ internal sealed class ValueRangesMemberTranslator(
+             nullable: true,
+             argumentsPropagateNullability: [true],
+             typeof(bool));
+-        var zero = sqlExpressionFactory.Constant(0L, typeof(long?), bigint);
++        var zero = sqlExpressionFactory.Constant(null, typeof(long?), bigint);
+ 
+         if (!overInt64)
+         {
