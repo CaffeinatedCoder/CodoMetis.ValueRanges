@@ -385,8 +385,8 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// <remarks>
     /// The pieces are adjacent and hold exactly the values of the range, so
     /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. Each boundary is counted from the range's start, so a split by months keeps the start's day where the calendar has it: from January 31, the pieces start on February 28, March 31 and April 30.
-    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
-    /// <c>generate_series</c> returns rows, not a value.
+    /// The empty range yields nothing. This runs in memory only; an EF Core
+    /// query doesn't translate it.
     /// </remarks>
     /// <param name="step">The length of each piece; it must be positive.</param>
     /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
@@ -525,7 +525,7 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// and as <c>LocalDateTimeRange</c> moves. A start on the 31st still clips: <c>2026-01-31</c> plus
     /// one month is <c>2026-02-28</c>. A period with a time part throws <see cref="ArgumentException"/>,
     /// as <see cref="LocalDate.Plus(Period)"/> does.
-    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// This runs in memory only; an EF Core query doesn't translate it.
     /// A bound at <see cref="LocalDate.MinIsoValue"/> or <see cref="LocalDate.MaxIsoValue"/> stands for PostgreSQL's <c>-infinity</c> or
     /// <c>infinity</c>, and it stays where it is, and so does a closed end the day before the maximum, whose exclusive end it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
     /// bound moved past either one still throws.
@@ -544,7 +544,7 @@ public abstract partial record LocalDateRange : IRange<LocalDate>, IRangeFactory
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
     /// unbounded side stays unbounded. The upper bound moves as its exclusive end, as in
     /// <see cref="Shift(Period)"/>: <c>Month(2026, 2).Expand(Period.FromMonths(1))</c> is
-    /// <c>[2026-01-01,2026-03-31]</c>. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// <c>[2026-01-01,2026-03-31]</c>. This runs in memory only; an EF Core query doesn't translate it.
     /// A bound at <see cref="LocalDate.MinIsoValue"/> or <see cref="LocalDate.MaxIsoValue"/> stands for PostgreSQL's <c>-infinity</c> or
     /// <c>infinity</c>, and it stays where it is, and so does a closed end the day before the maximum, whose exclusive end it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
     /// bound moved past either one still throws.

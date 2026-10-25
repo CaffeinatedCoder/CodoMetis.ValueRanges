@@ -786,6 +786,17 @@ runtimes. Look at the text instead:
   `23:59:59.9999999` bound
   ([TimeRange and the custom timerange type](efcore.md#timerange-and-the-custom-timerange-type)).
 
+## Changed answers in 10.2.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+11.0.0 makes the same changes, so each one is described under
+[Migration from v10.x](#migration-from-v10x):
+
+- [Check bound comparisons with `null` in queries](#check-bound-comparisons-with-null-in-queries)
+- [Check `RangeAgg` and `RangeIntersectAgg` over `null` ranges](#check-rangeagg-and-rangeintersectagg-over-null-ranges)
+- [Keep `null` out of a range set](#keep-null-out-of-a-range-set)
+- [Check predicates over a `null` range or a NULL column](#check-predicates-over-a-null-range-or-a-null-column)
+
 ## Migration from v10.x
 
 Nothing was removed or renamed. Some queries return different rows, and the compiler can't show you
@@ -803,6 +814,8 @@ where, so check these:
   `true` or threw. In a query, a negated predicate dropped the NULL rows and a projected one threw
   ([details](#check-predicates-over-a-null-range-or-a-null-column)).
 
+All four also shipped in 10.2.0. If you upgrade from 10.2.0 or later, you've already met them.
+
 ### Check bound comparisons with `null` in queries
 
 Check EF Core queries that call `LowerBound()` or `UpperBound()` on a range or `RangeSet` column and
@@ -811,11 +824,11 @@ fallback, in a filter or a projection. It also covers a filter on a bound you pr
 is what a data grid sends for a "blank" filter.
 
 PostgreSQL's `lower` and `upper` return `NULL` for an empty range and for an unbounded side. The
-in-memory methods return `null` for the same values. Before 11.0.0, the EF Core package declared
+in-memory methods return `null` for the same values. Before 10.2.0, the EF Core package declared
 that a bound is `NULL` only when the column is, and EF Core simplified the query on that basis. On a
 required column:
 
-| Query | Before 11.0.0 | Now |
+| Query | Before 10.2.0 | Now |
 |---|---|---|
 | `Where(r => r.Period.LowerBound() == null)` | no rows | the empty rows and the rows with no lower bound |
 | `Where(r => r.Period.UpperBound() != null)`, or `HasValue` | every row | the rows with an upper bound |
@@ -843,10 +856,10 @@ Check code that aggregates ranges in memory from a source that can hold `null`: 
 nullable property, or query results you load first and aggregate afterwards.
 
 PostgreSQL's `range_agg` and `range_intersect_agg` skip a `NULL` row, so a `GroupBy` over a
-nullable column aggregates the ranges it has. Before 11.0.0 the in-memory versions didn't. With `a`
+nullable column aggregates the ranges it has. Before 10.2.0 the in-memory versions didn't. With `a`
 as `[1,10]` and `b` as `[5,25]`:
 
-| Sequence | Before 11.0.0 | Now |
+| Sequence | Before 10.2.0 | Now |
 |---|---|---|
 | `[a, b, null].RangeIntersectAgg()` | `empty` | `[5,10]` |
 | `[null, a, b].RangeIntersectAgg()` | `[5,10]` | `[5,10]` |
@@ -872,7 +885,7 @@ ones included. Queries are unchanged, because the database already skipped NULL 
 Check code that builds a `RangeSet` from ranges that can be `null`: `RangeSet.From`, a collection
 expression such as `[a, b]`, and `RangeSet.Create`.
 
-Before 11.0.0, a `null` range went into the set. `RangeSet<Int32Range, int>.From([null])` had a
+Before 10.2.0, a `null` range went into the set. `RangeSet<Int32Range, int>.From([null])` had a
 `Count` of 1, `IsEmpty()` returned `false`, and the first `Contains` threw `NullReferenceException`.
 With two or more ranges, `From` threw `InvalidOperationException` while sorting them, and next to
 `(,)` the `null` was ignored. Now each of these throws `ArgumentException`, wherever the `null`
@@ -896,7 +909,7 @@ the rows whose `Name` is NULL, and the range predicates now do the same.
 In memory, most predicates already returned `false` for a `null` range, but not all. With `nothing`
 as a `null` `DateRange`:
 
-| Call | Before 11.0.0 | Now |
+| Call | Before 10.2.0 | Now |
 |---|---|---|
 | `nothing.Contains(DateRange.Empty)` | `true` | `false` |
 | `nothing.IsContainedBy(DateRange.Infinite)` | `true` | `false` |
@@ -907,7 +920,7 @@ as a `null` `DateRange`:
 In a query over a nullable column, a predicate over a NULL value was NULL. A filter dropped the row
 whether the predicate was negated or not, and a projected predicate threw when it read the NULL:
 
-| Query on a nullable `DateRange? Period` | Before 11.0.0 | Now |
+| Query on a nullable `DateRange? Period` | Before 10.2.0 | Now |
 |---|---|---|
 | `Where(b => !b.Period!.Overlaps(p))` | the NULL rows are missing | the NULL rows are included |
 | `Where(b => b.Period!.Overlaps(p))` | no NULL rows | no NULL rows |
