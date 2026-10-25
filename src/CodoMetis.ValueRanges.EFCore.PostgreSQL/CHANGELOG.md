@@ -3,6 +3,10 @@
 The changes that affect the EF Core (Npgsql) package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
+## [10.4.0]
+
+No change in this package.
+
 ## [10.3.0] — 2026-10-25
 
 Some calls answer differently: [Changed answers in 10.3.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030).
