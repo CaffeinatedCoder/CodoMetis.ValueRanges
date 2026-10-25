@@ -72,7 +72,7 @@
   {
     "members": "*Range.Month(*",
     "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start (with Npgsql's infinity conversions on or off), and the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
     "except": {
       "DateRange": "server"
     }
@@ -80,7 +80,7 @@
   {
     "members": "*Range.Quarter(*",
     "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start (with Npgsql's infinity conversions on or off), and the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
     "except": {
       "DateRange": "server"
     }
@@ -88,7 +88,7 @@
   {
     "members": "*Range.Year(*",
     "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start (with Npgsql's infinity conversions on or off), and the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
     "except": {
       "DateRange": "server"
     }
@@ -96,7 +96,7 @@
   {
     "members": "*Range.IsoWeek(*",
     "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange a LocalDate at -infinity (-9998-01-01) and the years before 4713 BC have no PostgreSQL date, so the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
+    "reason": "docs/efcore.md#what-runs-where: with an argument read from a column, daterange(first, last, '[]') on DateRange, with memory's first and last periods as constants and an error where memory throws; on LocalDateRange and YearMonthRange PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start (with Npgsql's infinity conversions on or off), and the database would fail where memory returns a range. Over values the code passes in, the range is computed in memory and sent as a constant",
     "except": {
       "DateRange": "server"
     }
