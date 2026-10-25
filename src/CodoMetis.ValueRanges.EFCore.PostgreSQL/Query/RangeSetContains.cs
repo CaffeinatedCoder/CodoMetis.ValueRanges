@@ -52,6 +52,12 @@ internal static class RangeSetContains
     /// The static form of a <c>RangeSet&lt;TRange, T&gt;.Contains</c> instance method, closed over the
     /// set's type arguments, or <see langword="null"/> for any other method.
     /// </summary>
+    /// <remarks>
+    /// Each overload is matched by its operand type: the set, <c>IRange&lt;T&gt;</c> or <c>T</c>. Any other
+    /// one-argument <c>Contains</c> has no static form here and is refused with <see cref="MissingArm"/>,
+    /// naming it. Handed to the value form, as it was before #320, it failed in <c>Expression.Call</c> with an
+    /// <see cref="ArgumentException"/> that named neither the overload nor the missing arm.
+    /// </remarks>
     public static MethodInfo? Equivalent(MethodInfo instanceMethod)
     {
         if (instanceMethod is not { Name: nameof(RangeSet<,>.Contains), IsStatic: false, DeclaringType: { IsGenericType: true } declaringType }
@@ -59,10 +65,14 @@ internal static class RangeSetContains
          || instanceMethod.GetParameters() is not [{ ParameterType: var operand }])
             return null;
 
-        var open = operand == declaringType                                                             ? SetMethod
-                 : operand is { IsGenericType: true } && operand.GetGenericTypeDefinition() == typeof(IRange<>) ? RangeMethod
-                                                                                                                : ValueMethod;
+        var arguments = declaringType.GetGenericArguments();
+        var element   = arguments[1];
 
-        return open.MakeGenericMethod(declaringType.GetGenericArguments());
+        var open = operand == declaringType                               ? SetMethod
+                 : operand == typeof(IRange<>).MakeGenericType(element) ? RangeMethod
+                 : operand == element                                   ? ValueMethod
+                                                                        : throw MissingArm.For(instanceMethod, operand);
+
+        return open.MakeGenericMethod(arguments);
     }
 }
