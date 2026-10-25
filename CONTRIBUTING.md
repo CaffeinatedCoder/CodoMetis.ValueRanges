@@ -183,14 +183,20 @@ fails outright.
   `## [11.0.0-preview.N]` section, which the release workflow publishes as its notes.
 - **SECURITY.md's supported-versions table** names the latest release of each line on NuGet,
   never the version being prepared, and has no row for a preview. `SecurityPolicyConventionTests`
-  compares this branch's row with `PackageValidationBaselineVersion`, so move the row when you
-  move the baseline, which happens when you open the next version right after a tag; the tagged
+  compares this branch's row with `PackageValidationBaselineVersion`, so move the row (and the
+  walkthrough sample, below) when you move the baseline, which happens when you open the next
+  version right after a tag; the tagged
   commit still names the release before it. The other line's row is compared with
   `CompanionLineRelease` in `Directory.Build.props`, which is empty until 11.0.0 ships. From then
   on, a minor on one line moves its row and `CompanionLineRelease` on the other branch in a PR of
   its own. The table gets its second row in the PR that opens the first version after `v11.0.0`.
 - **The ApiCompat baseline** is the latest stable release before the version being prepared,
   never a preview: the 11 line validates against 10.0.0 until 11.0.0 ships.
+- **The walkthrough sample** (`samples/Bookings/Bookings.csproj`) names the baseline's version and
+  the framework that release targets, because GitHub's dependency submission and a reader who
+  copies it restore it from nuget.org. The smoke test moves its copy to `Version` and this line's
+  framework. So moving `Version` leaves the sample alone: move it with the baseline, in the same PR
+  (`WalkthroughSampleConventionTests` fails until you do).
 - **GitHub's Latest release** is the highest stable version. The release workflow decides it
   rather than trusting the API's default, so a 10.x tag pushed after 11.0.0 exists, or any
   preview, can't take Latest from it.

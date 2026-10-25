@@ -59,4 +59,18 @@
         <Compile Include="..\oracles\StringOverloads.cs" Link="StringOverloads.cs" />
     </ItemGroup>
 
+    <!--
+        The booking service docs/walkthrough.md walks through (samples/Bookings), hosted in-process by
+        WalkthroughSampleTests against the shared server, so the page's claims have a holder this suite
+        runs. Linked, not copied: the test exercises the sample's own endpoints, entities and migration.
+        Program.cs stays out, because the test host composes the same three calls itself.
+        test/consumer-smoke-test.sh runs the sample as a reader would, against the packed packages.
+    -->
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
+        <Compile Include="..\..\samples\Bookings\**\*.cs" Exclude="..\..\samples\Bookings\Program.cs;..\..\samples\Bookings\obj\**;..\..\samples\Bookings\bin\**"
+                 Link="Walkthrough\%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+
 </Project>

@@ -13,6 +13,11 @@ has the rules.
 
 ## [10.3.0]
 
+### Added
+
+- Docs: the guides, the package READMEs, the changelog and an API reference are published as a [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/) with one set of pages per line. It opens on the stable 10.x line, and the 11.x previews are under `/11.x/`.
+- Docs: a [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md) follows one booking through a minimal API and PostgreSQL, from the request to the stored row and back, and says what changes at each step. CI runs its sample against the packages, so the responses and SQL on the page stay true.
+
 ## [10.2.0] — 2026-10-25
 
 Some calls answer differently: [Changed answers in 10.2.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020).
