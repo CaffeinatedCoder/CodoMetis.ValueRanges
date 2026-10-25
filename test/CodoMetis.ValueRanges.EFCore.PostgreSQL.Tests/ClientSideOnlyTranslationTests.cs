@@ -29,7 +29,14 @@ public sealed class ClientSideOnlyTranslationTests
         ["ToRangeSet()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Codes.ToRangeSet().Contains(5)))],
         ["ToInt32Set()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.SeatBlocks.ToInt32Set().Contains(5)))],
         ["set[0]", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Tags[0] == "a"))],
+        // EF Core reads any Compare(x, y) as the natural order, which for a range is not the lower-bound order (#385).
+        ["RangeLowerBoundComparer.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare(b.Period, June) == 0))],
+        ["RangeSet.LowerBoundComparer.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => RangeSet<DateRange, DateOnly>.LowerBoundComparer.Compare(b.Period, June) > 0))],
+        ["IComparer<RangeSet>.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => Comparer<RangeSet<DateRange, DateOnly>>.Default.Compare(b.BlockedDays, RangeSet<DateRange, DateOnly>.Empty) == 0))],
+        ["OrderBy(RangeLowerBoundComparer.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.OrderBy(b => RangeLowerBoundComparer<Int32Range, int>.Instance.Compare(b.Seats, Int32Range.Infinite)))],
     ];
+
+    private static readonly DateRange June = DateRange.Month(2026, 6);
 
     [TestMethod]
     [DynamicData(nameof(Predicates))]
