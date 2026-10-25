@@ -877,11 +877,14 @@ a `daterange` in SQL is fully supported there.
 
 Most of the API runs as SQL and gives the same answers in the database as in memory. That is the
 point of the library, and the [live-PostgreSQL suite](../README.md#verified-against-postgresql)
-checks it. A few operations run in memory only, almost always because PostgreSQL has no operator for them,
-not because nobody wrote the translation. These two tables are the whole picture.
+checks it. The rest runs in memory. For some of it, composed SQL or a subquery could give the same
+answers, and the table says what it would take; `Gap` and `Gaps` show that a missing operator alone
+doesn't stop a translation. For the rest, SQL would answer differently from memory in cases the
+library can't rule out. These two tables are the whole picture.
 
 **Runs as SQL.** You can use these in `Where`, `OrderBy` and `Select`, on columns and on
-parameters:
+parameters. A value set `Union` composes only under some operators; see
+[Combine sets with `Union`](#combine-sets-with-union).
 
 | Surface | Operations | PostgreSQL |
 |---|---|---|
@@ -899,27 +902,37 @@ parameters:
 | Value sets | `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, and the proper variants | `@>`, `&&`, `<@` |
 | | `Count`, `IsEmpty` | `cardinality` |
 | | `Union`, `Remove` | `array_cat`, `array_remove` |
-| Both families | `==`/`!=` on a column | `=`, `<>` |
+| Both families | `==`/`!=` and `Equals` on a column | `=`, `<>` |
 
 **Runs in memory only.** These compute the right answer in memory. In a predicate they fail
-translation, and in a projection EF runs them in memory instead:
+translation, and in the final projection EF runs them in memory instead:
 
-| Operation | Why it does not translate |
+| Operation | Why it runs in memory |
 |---|---|
-| `Length` on any range | The finite case would be `upper(x) - lower(x)`, but the empty range measures 0 where PostgreSQL's subtraction yields `NULL`, and `int4range` overflows `int4` before a cast can widen it. |
-| `Values()` and `Values(step)` on a discrete range, `Split` on any range | Enumeration is `generate_series`, whose result is a set of rows rather than a value — it cannot appear where a scalar is expected. |
-| `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | PostgreSQL converts between arrays and multiranges only through `unnest` and a custom aggregate. |
-| `Shift`, `Expand` on any range | PostgreSQL has no range arithmetic, and rebuilding the range from `lower(x) + d` gives answers that differ from memory: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, `timestamptz + interval '1 day'` follows the session time zone across a daylight-saving change, and an `infinity` date absorbs the step where `DateOnly.MaxValue` overflows. |
-| `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column, and the same factories on `LocalDateRange` and `YearMonthRange` | Not translated yet. PostgreSQL has no calendar-range function, and the SQL would combine `date_trunc` with interval arithmetic per factory. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. |
-| `Clamp(value)` on any range | Expressible as `GREATEST`/`LEAST` over `lower`/`upper`, but the empty and unbounded cases have no bound to clamp to and would need a `CASE` per shape. |
-| `Intersect`, `Except`, `Add` on value sets | PostgreSQL's array type has no intersection, difference, or sorted insert. |
-| The value set indexer, `set[0]` | Array subscripting exists, but the canonical order is the CLR comparer's, not the server's. |
+| `Length` on any range | Not translated. For the integer types it would be `upper(x)::bigint - lower(x)::bigint`, with a branch for the empty range, which measures 0. A temporal range open to `infinity` differs: PostgreSQL fails (`cannot subtract infinite dates`) where memory returns a finite length. |
+| `Values()` and `Values(step)` on a discrete range, `Split` on any range | Not translated. Each returns a sequence, which in SQL would be `generate_series` wrapped in `ARRAY(SELECT …)`. A long range produces one element per step. |
+| `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | Not translated. An array becomes a multirange through `range_agg` over one-element ranges, which needs care at the element type's extremes: `[2147483647,2147483647]` can't be built as an `int4range`. A multirange becomes an array only by enumerating it, as `Values` does. |
+| `Shift`, `Expand` on any range | Not translated. Rebuilding the range from `lower(x) + d` differs from memory unless each case is handled: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, and a bound moved past the last date .NET holds throws in memory where PostgreSQL returns a later date. A bound at `infinity` stays there in both. |
+| `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column, and the same factories on `LocalDateRange` and `YearMonthRange` | Not translated yet ([#191](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/191)). PostgreSQL has no calendar-range function, and the SQL would combine `date_trunc` with interval arithmetic per factory. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. |
+| `Clamp(value)` on any range | Not translated. It would be `LEAST(GREATEST(value, lower(x)), upper(x))`, which leaves an unbounded side alone because both functions skip `NULL`. It needs a branch for the empty range, which clamps to `null`, and a step back from a discrete type's exclusive upper bound. |
+| `Intersect`, `Except` on value sets | Not translated. Filtering the left array with `unnest … WITH ORDINALITY` keeps its order, but the result is canonical only when the stored arrays are, as with `Union`. |
+| `Add` on value sets | Inserting in canonical order means sorting in SQL, where `text` follows the database collation rather than ordinal order. |
+| The value set indexer, `set[0]` | Subscripting reads the stored array, which is canonical only for rows this library wrote ([Rows written by other tools](#rows-written-by-other-tools)). PostgreSQL arrays also start at 1, and an index past the end is `NULL` where memory throws. |
+| `Values` on a value set | It is the loaded array itself. In a query, use the set's own members, such as `Contains` and `Count`. |
+| `Count` and the indexer on a `RangeSet` | Not translated. PostgreSQL has no function for either, and each would be a subquery over `unnest(x)`. |
+| `From` and `Parse` on any range or set | They build a value in .NET. Given values your code passes in, EF Core runs them before the query and sends the result as a parameter. |
+| `ToInstantRange`, `ToInterval`, `ToLocalDateRange`, `ToDateInterval` and `ToYearMonthRange` (NodaTime package) | They convert in .NET: between NodaTime's `Interval` or `DateInterval` and a range type, or between `LocalDateRange` and `YearMonthRange`. |
 
 Good to know:
 
 - **An in-memory operation inside a `Where` fails loudly.** EF throws rather than silently fetching
   the whole table, and that is the intended behaviour.
-- **Inside a `Select` it is safe.** It runs on the rows that are already being returned.
+- **In the final `Select` it runs in memory.** EF Core evaluates the outermost projection on the
+  rows it is already returning. A `Select` that a later `Where` or `OrderBy` reads from has to
+  translate, so it fails there too. Each loaded row pays for the computation.
+- **`ToString`, `GetHashCode` and `GetEnumerator` run in memory too.** They are for loaded values:
+  the literal, hashing and `foreach`. The literal is formatted in .NET, so `ToString` gives the
+  library's literal rather than PostgreSQL's text output.
 - **`Count` over a `Union` computed in the database throws.** `array_cat` concatenates without
   deduplicating, so the query throws rather than returning a wrong count. In a projection, EF
   counts the loaded set in memory instead. See [Combine sets with `Union`](#combine-sets-with-union).
