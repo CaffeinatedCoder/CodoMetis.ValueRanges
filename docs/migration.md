@@ -797,6 +797,15 @@ Some calls return a different value. Your code stays the same, so the compiler c
 - [Keep `null` out of a range set](#keep-null-out-of-a-range-set)
 - [Check predicates over a `null` range or a NULL column](#check-predicates-over-a-null-range-or-a-null-column)
 
+## Changed answers in 10.3.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+11.0.0 makes the same changes, so each one is described under
+[Migration from v10.x](#migration-from-v10x):
+
+- [Check value set `Union` and `Remove` over NULL in queries](#check-value-set-union-and-remove-over-null-in-queries)
+- [Move `RangeLowerBoundComparer` out of queries](#move-rangelowerboundcomparer-out-of-queries)
+
 ## Migration from v10.x
 
 Nothing was removed or renamed. Some queries return different rows, and the compiler can't show you
@@ -820,7 +829,8 @@ where, so check these:
   ordering it fails translation. In SQL it compared in the range order, so it selected other rows
   ([details](#move-rangelowerboundcomparer-out-of-queries)).
 
-The first four also shipped in 10.2.0. If you upgrade from 10.2.0 or later, you've already met them.
+The first four also shipped in 10.2.0, and the last two in 10.3.0. If you upgrade from 10.2.0 or later,
+you've already met the first four, and from 10.3.0 or later, all six.
 
 ### Check bound comparisons with `null` in queries
 
@@ -955,11 +965,11 @@ Check EF Core queries that load a value set `Union` or `Remove` where a set or a
 a nullable column, a column of a missing child in an outer join, or a `null` parameter.
 
 PostgreSQL's `array_cat` and `array_remove` skip a NULL: `array_cat(NULL, '{z}')` is `{z}`, and
-`array_remove('{a}', NULL)` is `{a}`. Before 11.0.0, the EF Core package called them as they are,
+`array_remove('{a}', NULL)` is `{a}`. Before 10.3.0, the EF Core package called them as they are,
 while a filter treated the result as NULL. So the same expression was NULL in a `Where` and a set in a
 `Select`. Now it is NULL in both. With `more` as `{z}`:
 
-| Query | Before 11.0.0 | Now |
+| Query | Before 10.3.0 | Now |
 |---|---|---|
 | `Select(b => b.MaybeTags!.Union(more))`, for a NULL `MaybeTags` | `{z}` | `null` |
 | `Select(b => b.Tags.Remove(b.Label!))`, for a NULL `Label` | `Tags` as stored | `null` |
@@ -982,11 +992,11 @@ Check EF Core queries that call `Compare` on `RangeLowerBoundComparer`, on
 `RangeSet.LowerBoundComparer`, or on another `IComparer` of ranges or sets.
 
 EF Core reads every `Compare(x, y)` as the natural order of `x` and `y`, whatever the comparer. For a
-range, that is the range order `CompareTo` uses, not the lower bound. Before 11.0.0 the comparer ran
+range, that is the range order `CompareTo` uses, not the lower bound. Before 10.3.0 the comparer ran
 in SQL in that order. Now it runs in memory only, like the other members under
 [What runs where](efcore.md#what-runs-where). With `p` as `[2026-03-01,2026-03-10]`:
 
-| Query | Before 11.0.0 | Now |
+| Query | Before 10.3.0 | Now |
 |---|---|---|
 | `Where(r => comparer.Compare(r.Period, p) == 0)` | only the rows equal to `p` | throws (`InvalidOperationException`): could not be translated |
 | `OrderBy(r => comparer.Compare(r.Period, p))` | sorted in the range order | throws, as above |
