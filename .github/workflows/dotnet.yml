@@ -248,10 +248,15 @@ jobs:
       - name: Restore the packages into a throwaway consumer project
         run: ./test/consumer-smoke-test.sh
 
+  # No `needs`, deliberately (#409). This job uses no output of `test` or `integration`: it builds
+  # the solution itself and its checks are its own. Waiting for them only made it start after the
+  # slowest integration leg, which added about 90 seconds to every run. A failing test still blocks
+  # the PR through its own required check. Nothing publishes from this job's
+  # artifact either: release.yml's `Verify and pack` builds the tag again, runs the whole suite with
+  # CI=true, packs and smoke-tests `dist` before Publish can start.
   pack:
     name: Pack
     runs-on: ubuntu-latest
-    needs: [ test, integration ]
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
