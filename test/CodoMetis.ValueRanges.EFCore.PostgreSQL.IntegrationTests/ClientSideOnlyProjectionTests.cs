@@ -23,6 +23,7 @@ public class ClientSideOnlyProjectionTests
         {
             Id         = Id,
             Seats      = Int32Range.CreateFinite(3, 7),
+            Price      = DecimalRange.CreateFinite(1.5m, 4m),
             Period     = DateRange.CreateFinite(new DateOnly(2026, 6, 3), new DateOnly(2026, 6, 5)),
             Codes      = Int32Set.From([5, 1, 2, 3]),
             SeatBlocks = RangeSet<Int32Range, int>.From([Int32Range.CreateFinite(1, 2), Int32Range.CreateFinite(4, 4)]),
@@ -40,7 +41,8 @@ public class ClientSideOnlyProjectionTests
             .Where(r => r.Id == Id)
             .Select(r => new
             {
-                r.Seats.Length,
+                // Length on Int32Range and Int64Range translates (#405); on the other range types it stays in memory.
+                r.Price.Length,
                 Values   = r.Seats.Values().ToList(),
                 Clamp    = r.Seats.Clamp(50),
                 Shifted  = r.Seats.Shift(10),
@@ -55,7 +57,7 @@ public class ClientSideOnlyProjectionTests
             })
             .SingleAsync();
 
-        Assert.AreEqual(row.Seats.Length, server.Length, "Length");
+        Assert.AreEqual(row.Price.Length, server.Length, "Length");
         CollectionAssert.AreEqual(row.Seats.Values().ToList(), server.Values, "Values()");
         Assert.AreEqual(row.Seats.Clamp(50), server.Clamp, "Clamp");
         Assert.AreEqual(row.Seats.Shift(10), server.Shifted, "Shift");

@@ -174,7 +174,7 @@ table. In the final `Select`, EF Core computes them in memory after it loads the
 |---|---|
 | `Intersect`, `Except` on value sets | not translated: filtering the left array keeps its order, but is canonical only over canonical rows, as `Union` is |
 | `Add` on value sets | inserting in order means sorting in SQL, by the database collation rather than ordinal |
-| `Length` on any range | not translated: the integer types need a widening cast and a branch for the empty range, and a temporal range open to `infinity` fails in PostgreSQL |
+| `Length` on the range types other than `Int32Range` and `Int64Range` | not translated: a temporal range open to `infinity` fails in PostgreSQL |
 | `Values()` and `Values(step)` on a discrete range, `Split` on any range | not translated: each would be `generate_series` collected into an array |
 | `Shift`, `Expand` on any range | not translated: rebuilding the range from `lower(x) + d` answers differently for the empty range, `time` past midnight and a bound moved past the last date .NET holds |
 | `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column | not translated yet ([#191](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/191)): PostgreSQL has no calendar-range function. Built from values your code passes in, the range is sent as one constant, so comparing a column against a month runs as SQL |

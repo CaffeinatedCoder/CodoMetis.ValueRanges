@@ -818,6 +818,7 @@ parameters. A value set `Union` composes only under some operators; see
 | | `Gap` | `range_merge` over the multirange difference of the hull and both ranges |
 | | `IsEmpty`, `IsUnboundedStart`/`End`, `IsInfinity`, `IsFinite` | `isempty`, `lower_inf`, `upper_inf`, and combinations |
 | | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |
+| | `Length` on `Int32Range` and `Int64Range` | `upper(x) - lower(x)` after a widening cast, and 0 for the empty range |
 | | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
 | | `RangeAgg`, `RangeIntersectAgg`, over ranges or sets | `range_agg`, `range_intersect_agg` |
 | `RangeSet` | the same operations over multirange columns, plus `Complement` and `IsContainedBy` | the multirange forms, and `'{(,)}' - x` |
@@ -832,7 +833,7 @@ translation, and in the final projection EF runs them in memory instead:
 
 | Operation | Why it runs in memory |
 |---|---|
-| `Length` on any range | Not translated. For the integer types it would be `upper(x)::bigint - lower(x)::bigint`, with a branch for the empty range, which measures 0. A temporal range open to `infinity` differs: PostgreSQL fails (`cannot subtract infinite dates`) where memory returns a finite length. |
+| `Length` on the other range types | Not translated. A temporal range open to `infinity` differs: PostgreSQL fails (`cannot subtract infinite dates`) where memory returns a finite length. On `Int32Range` and `Int64Range` it runs as SQL. |
 | `Values()` and `Values(step)` on a discrete range, `Split` on any range | Not translated. Each returns a sequence, which in SQL would be `generate_series` wrapped in `ARRAY(SELECT …)`. A long range produces one element per step. |
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | Not translated. An array becomes a multirange through `range_agg` over one-element ranges, which needs care at the element type's extremes: `[2147483647,2147483647]` can't be built as an `int4range`. A multirange becomes an array only by enumerating it, as `Values` does. |
 | `Shift`, `Expand` on any range | Not translated. Rebuilding the range from `lower(x) + d` differs from memory unless each case is handled: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, and a bound moved past the last date .NET holds throws in memory where PostgreSQL returns a later date. A bound at `infinity` stays there in both. |
@@ -848,6 +849,9 @@ translation, and in the final projection EF runs them in memory instead:
 
 Good to know:
 
+- **`Length` on `Int32Range` and `Int64Range` counts in the database as it does in memory.** `[1,10]`
+  measures 10, the empty range 0, and a range unbounded on either side `null`. An `Int64Range` whose
+  count is larger than `long.MaxValue` measures `null` too, so you can filter and sort by `Length`.
 - **An in-memory operation inside a `Where` fails loudly.** EF throws rather than silently fetching
   the whole table, and that is the intended behaviour.
 - **In the final `Select` it runs in memory.** EF Core evaluates the outermost projection on the
