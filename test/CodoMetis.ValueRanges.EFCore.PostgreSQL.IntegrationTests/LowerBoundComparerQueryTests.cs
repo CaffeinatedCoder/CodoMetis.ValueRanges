@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.Composition;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +16,10 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 /// <c>Where(… == 0)</c> selected one row of the three. The comparer is reached directly, through
 /// <see cref="IComparer{T}"/>, and through <see cref="RangeSet{TRange,T}.LowerBoundComparer"/>, which a query
 /// cannot tell apart once it is a parameter; <see cref="Comparer{T}.Default"/> goes the same way. A NULL
-/// column sorts first, as the comparer says.
+/// column sorts first, as the comparer says. The operands decide, not the type <c>Compare</c> declares: a
+/// comparer over <see cref="IRange{T}"/>, the non-generic <see cref="System.Collections.IComparer"/> and a
+/// comparer of value sets each still compared in the range order (#452). By count, <c>{z}</c> is equal to
+/// rows 1 and 2, where SQL's <c>=</c> selected none.
 /// </remarks>
 [TestClass]
 public sealed class LowerBoundComparerQueryTests
@@ -32,6 +36,19 @@ public sealed class LowerBoundComparerQueryTests
         DateRange.CreateFinite(March(5), March(6), true, true),
         null
     ];
+
+    private static readonly StringSet?[] Tags = [StringSet.From(["a"]), StringSet.From(["b"]), StringSet.From(["a", "b"]), StringSet.Empty, null];
+
+    private static readonly IComparer<IRange<DateOnly>> OverInterface =
+        Comparer<IRange<DateOnly>>.Create((x, y) => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare((DateRange?)x, (DateRange?)y));
+
+    private static readonly System.Collections.IComparer Created = Comparer<DateRange>.Create(RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare);
+
+    private static readonly System.Collections.IComparer OwnNonGeneric = new LowerBoundObjectComparer();
+
+    private static readonly IComparer<StringSet> ByCount = Comparer<StringSet>.Create((x, y) => (x?.Count ?? -1).CompareTo(y?.Count ?? -1));
+
+    private static readonly StringSet OneTag = StringSet.From(["z"]);
 
     [TestMethod]
     public async Task Compare_InAProjection_AnswersAsTheComparerDoes()
@@ -60,6 +77,13 @@ public sealed class LowerBoundComparerQueryTests
         await Agree("IComparer<DateRange>.Compare", r => viaInterface.Compare(r.Period, p));
         await Agree("RangeSet.LowerBoundComparer.Compare", r => RangeSet<DateRange, DateOnly>.LowerBoundComparer.Compare(p, r.Period));
         await Agree("Comparer<DateRange>.Default.Compare", r => Comparer<DateRange>.Default.Compare(r.Period, p));
+
+        // As locals, so each comparer is a query parameter, as in the filter test.
+        var (overInterface, created, ownNonGeneric, byCount, oneTag) = (OverInterface, Created, OwnNonGeneric, ByCount, OneTag);
+        await Agree("IComparer<IRange<DateOnly>>.Compare", r => overInterface.Compare(r.Period, p));
+        await Agree("Comparer<DateRange>.Create as IComparer", r => created.Compare(r.Period, p));
+        await Agree("own IComparer", r => ownNonGeneric.Compare(r.Period, p));
+        await Agree("IComparer<StringSet>.Compare", r => byCount.Compare(r.Tags, oneTag));
     }
 
     [TestMethod]
@@ -71,12 +95,24 @@ public sealed class LowerBoundComparerQueryTests
         IComparer<DateRange> viaInterface = RangeLowerBoundComparer<DateRange, DateOnly>.Instance;
         var p = P;
 
+        // As locals, so each comparer is a query parameter. EF Core leaves a Compare on a constant comparer
+        // (a static field) untranslated in any case, and the range order needs a parameter (#452).
+        var (overInterface, created, ownNonGeneric, byCount, oneTag) = (OverInterface, Created, OwnNonGeneric, ByCount, OneTag);
+
         IQueryable<ComparerRow>[] queries =
         [
             context.Rows.Where(r => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare(r.Period, p) == 0),
             context.Rows.Where(r => viaInterface.Compare(r.Period, p) == 0),
             context.Rows.Where(r => RangeSet<DateRange, DateOnly>.LowerBoundComparer.Compare(r.Period, p) <= 0),
             context.Rows.OrderBy(r => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare(r.Period, p)),
+            context.Rows.Where(r => overInterface.Compare(r.Period, p) == 0),
+            context.Rows.OrderBy(r => overInterface.Compare(r.Period, p)),
+            context.Rows.Where(r => created.Compare(r.Period, p) == 0),
+            context.Rows.OrderBy(r => created.Compare(r.Period, p)),
+            context.Rows.Where(r => ownNonGeneric.Compare(r.Period, p) == 0),
+            context.Rows.OrderBy(r => ownNonGeneric.Compare(r.Period, p)),
+            context.Rows.Where(r => byCount.Compare(r.Tags, oneTag) == 0),
+            context.Rows.OrderBy(r => byCount.Compare(r.Tags, oneTag)),
         ];
 
         foreach (var query in queries)
@@ -92,7 +128,7 @@ public sealed class LowerBoundComparerQueryTests
         var connectionString = await CompositionDatabase.Create("lower_bound_comparer");
         await using var seed = new ComparerContext(connectionString);
         await seed.Database.EnsureCreatedAsync();
-        seed.Rows.AddRange(Periods.Select((period, index) => new ComparerRow { Id = index + 1, Period = period }));
+        seed.Rows.AddRange(Periods.Select((period, index) => new ComparerRow { Id = index + 1, Period = period, Tags = Tags[index] }));
         await seed.SaveChangesAsync();
         return connectionString;
     }
@@ -102,6 +138,13 @@ public sealed class LowerBoundComparerQueryTests
         public int Id { get; set; }
 
         public DateRange? Period { get; set; }
+
+        public StringSet? Tags { get; set; }
+    }
+
+    private sealed class LowerBoundObjectComparer : System.Collections.IComparer
+    {
+        public int Compare(object? x, object? y) => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare((DateRange?)x, (DateRange?)y);
     }
 
     private sealed class ComparerContext(string connectionString) : DbContext

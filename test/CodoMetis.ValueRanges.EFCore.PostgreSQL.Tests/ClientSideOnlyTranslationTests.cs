@@ -1,3 +1,4 @@
+using CodoMetis.ValueRanges.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests;
@@ -34,7 +35,24 @@ public sealed class ClientSideOnlyTranslationTests
         ["RangeSet.LowerBoundComparer.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => RangeSet<DateRange, DateOnly>.LowerBoundComparer.Compare(b.Period, June) > 0))],
         ["IComparer<RangeSet>.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => Comparer<RangeSet<DateRange, DateOnly>>.Default.Compare(b.BlockedDays, RangeSet<DateRange, DateOnly>.Empty) == 0))],
         ["OrderBy(RangeLowerBoundComparer.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.OrderBy(b => RangeLowerBoundComparer<Int32Range, int>.Instance.Compare(b.Seats, Int32Range.Infinite)))],
+        // The operands decide, not the type Compare declares (#452). Each comparer is a captured local, so a
+        // query parameter: EF Core leaves Compare on a constant comparer untranslated in any case.
+        ["IComparer<IRange<T>>.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = OverInterface; return db.Bookings.Where(b => comparer.Compare(b.Period, June) == 0); })],
+        ["OrderBy(IComparer<IRange<T>>.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = OverInterface; return db.Bookings.OrderBy(b => comparer.Compare(b.Period, June)); })],
+        ["IComparer.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = NonGeneric; return db.Bookings.Where(b => comparer.Compare(b.Period, June) == 0); })],
+        ["OrderBy(IComparer.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = NonGeneric; return db.Bookings.OrderBy(b => comparer.Compare(b.Period, June)); })],
+        ["IComparer<StringSet>.Compare", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = OverValueSets; return db.Bookings.Where(b => comparer.Compare(b.Tags, OneTag) == 0); })],
+        ["OrderBy(IComparer<StringSet>.Compare)", (Func<TestDbContext, IQueryable<Booking>>)(db => { var comparer = OverValueSets; return db.Bookings.OrderBy(b => comparer.Compare(b.Tags, OneTag)); })],
     ];
+
+    private static readonly IComparer<IRange<DateOnly>> OverInterface =
+        Comparer<IRange<DateOnly>>.Create((x, y) => RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare((DateRange)x, (DateRange)y));
+
+    private static readonly System.Collections.IComparer NonGeneric = Comparer<DateRange>.Create(RangeLowerBoundComparer<DateRange, DateOnly>.Instance.Compare);
+
+    private static readonly IComparer<StringSet> OverValueSets = Comparer<StringSet>.Create((x, y) => x.Count.CompareTo(y.Count));
+
+    private static readonly StringSet OneTag = StringSet.From(["z"]);
 
     private static readonly DateRange June = DateRange.Month(2026, 6);
 
