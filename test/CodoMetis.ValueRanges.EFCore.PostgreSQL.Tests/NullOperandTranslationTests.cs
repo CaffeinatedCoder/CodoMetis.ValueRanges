@@ -47,6 +47,9 @@ public class NullOperandTranslationTests
         return query(context.Rows).ToQueryString().Split("WHERE")[1].Trim();
     }
 
+    /// <summary><see cref="Where"/> with line breaks as one space, for a <c>CASE</c> the SQL spreads over lines.</summary>
+    private static string Flat(Func<IQueryable<Row>, IQueryable<Row>> query) => Where(query).ReplaceLineEndings(" ");
+
     [TestMethod]
     public void ARequiredColumn_KeepsItsSql()
     {
@@ -103,5 +106,22 @@ public class NullOperandTranslationTests
 
         // A required element keeps its SQL.
         Assert.AreEqual("NOT (r.\"Period\" @> r.\"Start\")", Where(rows => rows.Where(r => !r.Period.Contains(r.Start))));
+    }
+    /// <summary>
+    /// A range factory over a NULL element is NULL (#382). <c>CreateFinite</c> gave <c>empty</c> through
+    /// its inverted-bounds guard, and the unbounded factories gave <c>(,)</c>, because PostgreSQL's
+    /// constructor reads a NULL bound as unbounded, so <c>Contains(v)</c> was <c>true</c> for a row with
+    /// no element. Over required elements the test folds away and the SQL is what it was.
+    /// </summary>
+    [TestMethod]
+    public void ARangeFactoryOverANullableElement_IsNull()
+    {
+        Assert.AreEqual("CASE     WHEN r.\"Day\" IS NULL THEN NULL     ELSE daterange(r.\"Day\", NULL, '[)') END IS NOT NULL AND CASE     WHEN r.\"Day\" IS NULL THEN NULL     ELSE daterange(r.\"Day\", NULL, '[)') END @> r.\"Start\"", Flat(rows => rows.Where(r => DateRange.CreateUnboundedEnd(r.Day!.Value, true).Contains(r.Start))));
+        Assert.AreEqual("CASE     WHEN r.\"Day\" IS NULL THEN NULL     ELSE daterange(NULL, r.\"Day\", '(]') END IS NULL", Flat(rows => rows.Where(r => DateRange.CreateUnboundedStart(r.Day!.Value, true) == null)));
+        Assert.AreEqual("CASE     WHEN r.\"Day\" IS NULL THEN NULL     WHEN r.\"Start\" <= r.\"Day\" THEN daterange(r.\"Start\", r.\"Day\", '[]')     ELSE 'empty'::daterange END IS NOT NULL AND isempty(CASE     WHEN r.\"Day\" IS NULL THEN NULL     WHEN r.\"Start\" <= r.\"Day\" THEN daterange(r.\"Start\", r.\"Day\", '[]')     ELSE 'empty'::daterange END)", Flat(rows => rows.Where(r => DateRange.CreateFinite(r.Start, r.Day!.Value, true, true).IsEmpty())));
+
+        // Required elements keep their SQL.
+        Assert.AreEqual("daterange(r.\"Start\", NULL, '[)') IS NOT NULL AND daterange(r.\"Start\", NULL, '[)') && r.\"Period\"", Flat(rows => rows.Where(r => DateRange.CreateUnboundedEnd(r.Start, true).Overlaps(r.Period))));
+        Assert.AreEqual("CASE     WHEN r.\"Start\" <= r.\"Start\" THEN daterange(r.\"Start\", r.\"Start\", '[]')     ELSE 'empty'::daterange END IS NOT NULL AND isempty(CASE     WHEN r.\"Start\" <= r.\"Start\" THEN daterange(r.\"Start\", r.\"Start\", '[]')     ELSE 'empty'::daterange END)", Flat(rows => rows.Where(r => DateRange.CreateFinite(r.Start, r.Start, true, true).IsEmpty())));
     }
 }
