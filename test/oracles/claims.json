@@ -1208,6 +1208,20 @@
     ]
   },
   {
+    "id": "E75-set-union-and-remove-null-over-a-null-operand",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "**A NULL set or element gives NULL.** In a query, `Union` gives NULL when either set is NULL, and `Remove` gives NULL when the set or the element is. A `Select` loads `null` for those rows, and `Where(… == null)` selects them.",
+    "claim": "A value set Union with a NULL set on either side, and Remove with a NULL set or a NULL element, are NULL in a query: a nullable set or element column, a captured null and the child of an outer join on either side, in Where(== null), Where(!= null) and a final Select, and the predicates built on them agree with rule (c).",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "ValueSetNullOperandParityTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
