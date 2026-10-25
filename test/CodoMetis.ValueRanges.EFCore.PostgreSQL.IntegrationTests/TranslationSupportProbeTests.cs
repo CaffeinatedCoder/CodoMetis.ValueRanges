@@ -171,61 +171,7 @@ public sealed class TranslationSupportProbeTests
     // =========================================================================
 
     /// <summary>The member as it applies to <paramref name="table"/>'s type, or null where it does not.</summary>
-    private static MemberInfo? Close(QueryMembers.Member member, Table table)
-    {
-        var declaring = member.Declaring;
-        if (declaring.IsGenericTypeDefinition)
-        {
-            Type closedType;
-            if (declaring == typeof(RangeSet<,>) || declaring == typeof(RangeLowerBoundComparer<,>))
-            {
-                if (!table.IsRange) return null;
-                closedType = declaring.MakeGenericType(table.Value, table.Element);
-            }
-            else
-            {
-                if (!table.Value.IsGenericType || table.Value.GetGenericTypeDefinition() != declaring) return null;
-                closedType = table.Value;
-            }
-
-            return closedType.GetMemberWithSameMetadataDefinitionAs(member.Info);
-        }
-
-        if (QueryMembers.IsValue(declaring)) return declaring == table.Value ? member.Info : null;
-
-        if (member.Info is not MethodInfo method) return null;
-        if (method.IsGenericMethodDefinition)
-        {
-            try
-            {
-                method = method.GetGenericArguments().Length switch
-                {
-                    1 => method.MakeGenericMethod(table.Element),
-                    2 => method.MakeGenericMethod(table.Value, table.Element),
-                    _ => throw new ArgumentException("arity")
-                };
-            }
-            catch (ArgumentException)
-            {
-                return null;
-            }
-        }
-
-        // A member whose operands are none of the library's (a conversion from a NodaTime interval) is the
-        // table's by what it returns.
-        return method.GetParameters().Any(p => Mentions(p.ParameterType, table))
-            || (!method.GetParameters().Any(p => QueryMembers.IsValue(p.ParameterType)) && method.ReturnType == table.Value)
-                   ? method
-                   : null;
-    }
-
-    /// <summary>Whether a parameter of <paramref name="type"/> takes <paramref name="table"/>'s value, its multirange, a variant of it, or a sequence of one.</summary>
-    private static bool Mentions(Type type, Table table)
-    {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>)) type = type.GetGenericArguments()[0];
-        return type == table.Value || type == table.RangeSet || type.DeclaringType == table.Value
-            || (type != typeof(object) && type.IsInterface && type.IsAssignableFrom(table.Value) && QueryMembers.IsValue(type));
-    }
+    private static MemberInfo? Close(QueryMembers.Member member, Table table) => QueryMembers.Close(member, table.Value, table.Element, table.RangeSet);
 
     // =========================================================================
     // Observing one member on one table
@@ -239,7 +185,7 @@ public sealed class TranslationSupportProbeTests
     {
         var row = Expression.Parameter(table.Row, "r");
         var aggregate = closed is MethodInfo { IsStatic: true } m && m.GetParameters() is [{ ParameterType: { IsGenericType: true } input }]
-                     && input.GetGenericTypeDefinition() == typeof(IEnumerable<>) && Mentions(input, table) && m.Name.Contains("Agg");
+                     && input.GetGenericTypeDefinition() == typeof(IEnumerable<>) && QueryMembers.Mentions(input, table.Value, table.RangeSet) && m.Name.Contains("Agg");
         if (aggregate) return await ObserveAggregate(member, (MethodInfo)closed, table, failures);
 
         if (Call(closed, table, row) is not { } body) return $"unprobed: no operand for {Unprobed(closed, table)}";

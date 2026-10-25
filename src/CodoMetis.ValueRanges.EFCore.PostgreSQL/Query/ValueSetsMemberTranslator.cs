@@ -43,11 +43,13 @@ internal sealed class ValueSetsMemberTranslator(ISqlExpressionFactory sqlExpress
 
         var set = sqlExpressionFactory.ApplyTypeMapping(instance, definition.SetTypeMapping);
 
-        return member.Name switch
+        // Recognized by name and type, so a member of the same name answering another type is not taken
+        // for one of these (#295).
+        return member switch
                {
-                   nameof(StringSet.Count)   => Cardinality(set),
-                   nameof(StringSet.IsEmpty) => sqlExpressionFactory.Equal(Cardinality(set), sqlExpressionFactory.Constant(0)),
-                   _                         => null
+                   PropertyInfo { Name: nameof(StringSet.Count), PropertyType: var type } when type == typeof(int)    => Cardinality(set),
+                   PropertyInfo { Name: nameof(StringSet.IsEmpty), PropertyType: var type } when type == typeof(bool) => sqlExpressionFactory.Equal(Cardinality(set), sqlExpressionFactory.Constant(0)),
+                   _                                                                                              => null
                };
     }
 
