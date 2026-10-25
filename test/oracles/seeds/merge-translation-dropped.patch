@@ -1,0 +1,18 @@
+Seed: the range translator no longer translates Merge, so a documented server member is refused in a filter and runs in memory in a projection
+Oracles: TranslationSupportProbeTests
+Fails: RangeExtensions.Merge(TRange, IRange<T>) on every range type, classified server but refused
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index d2d2da2..58200b9 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -220,6 +220,9 @@ internal sealed class ValueRangesMethodCallTranslator(
+         if (generic == IsAdjacentToMethod)
+             return sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeIsAdjacentTo, Range(0), Range(1));
+ 
++        if (generic == MergeMethod)
++            return null;
++
+         if (generic == MergeMethod)
+             return sqlExpressionFactory.Function(
+                 "range_merge",

@@ -204,6 +204,39 @@ issue outlives its member, and a waiver that points at a `docs/*.md#heading` poi
 exists. Refreshing the listing against a new major therefore turns its new rows into failures naming
 them, each a decision: a member, a waiver, or an issue.
 
+### `translation-support.json` — what EF Core does with each query member
+
+`postgres-surface.json` starts from PostgreSQL. This file starts from the C# side: every public member a
+query can call on a range, a `RangeSet` or a value set, and whether it runs as SQL. The members are
+discovered from the public API (`QueryMembers`, conventions project), not from the registered translators,
+because the members no translator knows are the ones worth finding: every public method and instance
+property of a public, non-nested type of the two libraries whose receiver, a parameter or the result is a
+range, a multirange or a value set, one key per overload, a generic family kept generic
+(`RangeSet<TRange, T>.Union(TRange)`, `StringSet<TElement>.Count`). Converters, static constants and the
+overloads an expression tree cannot hold (`ReadOnlySpan<char>`, `out`) are out by rule.
+
+```json
+{ "members": "RangeExtensions.Clamp(*", "support": "client", "reason": "docs/efcore.md#what-runs-where: …" }
+```
+
+- The first entry whose `members` pattern matches a key classifies it: `server` (translates, and answers in
+  the database what it answers in memory), `client` (refused where the server must evaluate it, correct in
+  a final projection; `reason` says why, and says so when the docs do not mention the member) or `planned`
+  (as `client`, with the `issue` that adds the translation). `except` maps a closed type a generic member
+  behaves differently for to its own support.
+- `TranslationSupportInventoryTests` holds it without a database: every key classified, every entry still
+  classifying one, every entry with what its support needs. A new public member therefore fails CI until
+  someone says how a query treats it.
+- `TranslationSupportProbeTests` (integration) holds it true: each key over every closed type it applies to,
+  with a column as an operand so EF Core cannot evaluate the whole call before the query, first where the
+  server must evaluate it (a filter for a predicate, a null test for a value that can be NULL, an ordering
+  for one that cannot, since EF Core folds `(int?)x == null` away untranslated, `HAVING` for an aggregate),
+  then in a final projection, both against memory over the rows as loaded. A successful `Select` alone
+  proves nothing: EF Core evaluates on the client what it cannot translate there. A `server` member that is
+  refused or answers differently is a defect; a `client` or `planned` member that now translates is a
+  change to classify. The first run found #385: EF Core rewrites any `Compare(a, b)` to the natural order,
+  so `RangeLowerBoundComparer.Compare` runs as SQL in the range order.
+
 ### `axes.md` — what a consumer varies
 
 The claims say what is promised and the surface says what is offered. Neither says which *settings* a

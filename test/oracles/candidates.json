@@ -222,5 +222,12 @@
     "family": "value set Union or Remove is declared NULL for a NULL argument, but array_cat and array_remove are not strict",
     "issue": "#360",
     "method": "EveryEmittedFunction_IsDeclaredAsPostgresEvaluatesIt"
+  },
+  {
+    "oracle": "TranslationSupportProbeTests",
+    "row": "RangeLowerBoundComparer<TRange, T>.Compare(TRange, TRange) on ",
+    "family": "EF Core rewrites any Compare(a, b) to the natural order, so the lower-bound comparer runs as SQL in the range order",
+    "issue": "#385",
+    "method": "EveryQueryMember_RunsWhereTheInventorySays"
   }
 ]

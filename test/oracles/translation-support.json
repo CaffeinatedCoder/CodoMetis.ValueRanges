@@ -1,0 +1,186 @@
+[
+  {
+    "members": "RangeLowerBoundComparer<TRange, T>.Compare(*",
+    "support": "client",
+    "reason": "an in-memory sorting helper (docs/ranges.md#sort-ranges-the-way-a-set-does); not in docs/efcore.md#what-runs-where. EF Core reads any Compare(a, b) as the natural order, so in a query it answers the range order rather than the lower-bound order: #385"
+  },
+  {
+    "members": "YearMonthRange.Create*",
+    "support": "client",
+    "reason": "docs/efcore.md#store-a-yearmonthrange: months are coarser than the date underneath, so the factories cannot build a range in SQL from a column"
+  },
+  {
+    "members": "*Range.Create*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: range constructor functions"
+  },
+  {
+    "members": "RangeExtensions.Clamp(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. LEAST(GREATEST(value, lower(x)), upper(x)) leaves an unbounded side alone, but needs a branch for the empty range, which clamps to null, and a step back from a discrete type's exclusive upper bound"
+  },
+  {
+    "members": "RangeExtensions.*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: the range operators, set operations, state checks and bound accessors"
+  },
+  {
+    "members": "*RangeAggregateExtensions.*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: range_agg, range_intersect_agg"
+  },
+  {
+    "members": "*Range.Length",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. Over the integer types it would be upper(x)::bigint - lower(x)::bigint with a branch for the empty range, which measures 0; a temporal range open to infinity fails in PostgreSQL (cannot subtract infinite dates) where memory returns a finite length"
+  },
+  {
+    "members": "*Range.Values(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. A sequence, which in SQL would be generate_series wrapped in ARRAY(SELECT …), with one element per step"
+  },
+  {
+    "members": "*Range.Split(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. A sequence, which in SQL would be generate_series wrapped in ARRAY(SELECT …), with one element per step"
+  },
+  {
+    "members": "*Range.Shift(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. Rebuilding the range from lower(x) + d differs from memory unless each case is handled: the empty range becomes (,), time wraps at midnight where TimeRange throws, and a bound moved past .NET's last date throws in memory where PostgreSQL returns a later date"
+  },
+  {
+    "members": "*Range.Expand(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. Rebuilding the range from lower(x) + d differs from memory unless each case is handled: the empty range becomes (,), time wraps at midnight where TimeRange throws, and a bound moved past .NET's last date throws in memory where PostgreSQL returns a later date"
+  },
+  {
+    "members": "*Range.Month(*",
+    "support": "planned",
+    "issue": "#191",
+    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic. Over values the code passes in, the range is computed in memory and sent as a constant"
+  },
+  {
+    "members": "*Range.Quarter(*",
+    "support": "planned",
+    "issue": "#191",
+    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic"
+  },
+  {
+    "members": "*Range.Year(*",
+    "support": "planned",
+    "issue": "#191",
+    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic"
+  },
+  {
+    "members": "*Range.IsoWeek(*",
+    "support": "planned",
+    "issue": "#191",
+    "reason": "docs/efcore.md#what-runs-where: not translated yet with an argument read from a column; the SQL would combine date_trunc with interval arithmetic"
+  },
+  {
+    "members": "*ValueSetRangeExtensions.*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. An array becomes a multirange through range_agg over one-element ranges, which needs care at the element type's extremes ([2147483647,2147483647] can't be built as an int4range); a multirange becomes an array only by enumerating it, as Values does"
+  },
+  {
+    "members": "NodaTimeInteropExtensions.*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: they convert in .NET, between NodaTime's Interval or DateInterval and a range type, or between LocalDateRange and YearMonthRange"
+  },
+  {
+    "members": "*.CompareTo(*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: CompareTo against 0 and OrderBy, in the range order"
+  },
+  {
+    "members": "*.op_Equality(*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: ==/!= on a column"
+  },
+  {
+    "members": "*.op_Inequality(*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: ==/!= on a column"
+  },
+  {
+    "members": "*.Equals(*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: ==/!= and Equals on a column"
+  },
+  {
+    "members": "ValueSetExtensions.Intersect(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. Filtering the left array with unnest … WITH ORDINALITY keeps its order, but the result is canonical only when the stored arrays are, as with Union"
+  },
+  {
+    "members": "ValueSetExtensions.Except(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. Filtering the left array with unnest … WITH ORDINALITY keeps its order, but the result is canonical only when the stored arrays are, as with Union"
+  },
+  {
+    "members": "ValueSetExtensions.Add(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: inserting in canonical order means sorting in SQL, where text follows the database collation rather than ordinal order"
+  },
+  {
+    "members": "ValueSetExtensions.*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: @>, &&, <@, array_cat, array_remove"
+  },
+  {
+    "members": "RangeSet<TRange, T>.Count",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: not translated. PostgreSQL has no function for the number of disjoint ranges, and it would be a subquery over unnest(x)"
+  },
+  {
+    "members": "*.Count",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: cardinality"
+  },
+  {
+    "members": "*.IsEmpty",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: cardinality"
+  },
+  {
+    "members": "*.Item[*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: a value set's subscript reads the stored array, which is canonical only for rows this library wrote, starts at 1 and is NULL past the end where memory throws; a RangeSet's indexer would be a subquery over unnest(x)"
+  },
+  {
+    "members": "*.Values",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: a value set's Values is the loaded array itself; in a query, the set's own members (Contains, Count) run as SQL"
+  },
+  {
+    "members": "*.GetEnumerator(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: for foreach over a loaded value"
+  },
+  {
+    "members": "*.From(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: builds a value in .NET; over values the code passes in, EF Core runs it before the query and sends the result as a parameter"
+  },
+  {
+    "members": "*.Parse(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: builds a value in .NET; over values the code passes in, EF Core runs it before the query and sends the result as a parameter"
+  },
+  {
+    "members": "*.ToString(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: the library's literal, formatted in .NET rather than PostgreSQL's text output"
+  },
+  {
+    "members": "*.GetHashCode(*",
+    "support": "client",
+    "reason": "docs/efcore.md#what-runs-where: hashing a loaded value"
+  },
+  {
+    "members": "RangeSet<TRange, T>.*",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: the range operations over multirange columns, Complement, IsContainedBy, Gaps, and the |, & and - operators"
+  }
+]
