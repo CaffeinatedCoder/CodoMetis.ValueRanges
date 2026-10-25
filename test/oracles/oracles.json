@@ -420,6 +420,15 @@
     ]
   },
   {
+    "class": "IntegerLengthParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for Length on Int32Range and Int64Range over every shape and the widest storable ranges, a NULL column and a missing outer-join child, in a filter, its negation, a null test, a compound predicate, an ordering and a final projection",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "TranslationSupportProbeTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",

@@ -30,9 +30,19 @@
     "reason": "docs/efcore.md#what-runs-where: range_agg, range_intersect_agg"
   },
   {
+    "members": "Int32Range.Length",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: upper(x) - lower(x) after a widening cast to bigint, and 0 for the empty range"
+  },
+  {
+    "members": "Int64Range.Length",
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: upper(x) - lower(x) in numeric, 0 for the empty range and NULL above long.MaxValue, as in memory"
+  },
+  {
     "members": "*Range.Length",
     "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: not translated. Over the integer types it would be upper(x)::bigint - lower(x)::bigint with a branch for the empty range, which measures 0; a temporal range open to infinity fails in PostgreSQL (cannot subtract infinite dates) where memory returns a finite length"
+    "reason": "docs/efcore.md#what-runs-where: not translated on the other range types. A temporal range open to infinity fails in PostgreSQL (cannot subtract infinite dates) where memory returns a finite length"
   },
   {
     "members": "*Range.Values(*",

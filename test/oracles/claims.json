@@ -583,7 +583,7 @@
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
     "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in the final projection EF runs them in memory instead:",
-    "claim": "Length, Values(), Values(step), Split, Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
+    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Length",
@@ -1266,6 +1266,23 @@
     "heldBy": [
       "ExecutedQueryTests",
       "FilteredAggregateProbeTests"
+    ]
+  },
+  {
+    "id": "E73-integer-length-runs-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`Length` on `Int32Range` and `Int64Range` counts in the database as it does in memory.** `[1,10]` measures 10, the empty range 0, and a range unbounded on either side `null`. An `Int64Range` whose count is larger than `long.MaxValue` measures `null` too, so you can filter and sort by `Length`.",
+    "claim": "Int32Range.Length and Int64Range.Length run as SQL (0 for isempty, else upper - lower widened to bigint, or to numeric with NULL above long.MaxValue) and match memory over every shape, the widest storable ranges, a NULL column and a missing outer-join child, in a filter, its negation, a null test, a compound predicate, an ordering and a final projection.",
+    "oracle": "differential",
+    "surfaces": [
+      "Int32Range.Length",
+      "Int64Range.Length",
+      "ValueRangesMemberTranslatorPlugin.Translators"
+    ],
+    "heldBy": [
+      "IntegerLengthTranslationTests",
+      "IntegerLengthParityTests",
+      "TranslationSupportProbeTests"
     ]
   },
   {
