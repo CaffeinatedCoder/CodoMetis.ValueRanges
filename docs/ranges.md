@@ -364,8 +364,8 @@ Good to know:
   so the error doesn't build up from piece to piece. Near the top of the domain, where `n × step`
   alone is too large for the type, a boundary is the one before it plus the step. A step too small to move the start at its
   magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.
-- **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
-  a value ([What runs where](efcore.md#what-runs-where)).
+- **`Split` and `Values(step)` run in memory only.** An EF Core query doesn't translate them. In
+  SQL, each would be `generate_series` collected into an array ([What runs where](efcore.md#what-runs-where)).
 
 ### Clamp a value into a range
 
@@ -547,7 +547,8 @@ Good to know:
   2025-02-28 and would end the day before, so it is `Empty`. PostgreSQL gives the same answer for
   that `daterange`, and so does `LocalDateTimeRange` for `[2024-02-28,2024-02-29)`. It happens only
   for a range ending on the 28th to the 31st, a few days long at most. A whole month never empties.
-- **They run in memory only.** PostgreSQL has no range arithmetic. See
+- **They run in memory only.** Rebuilding the range in SQL answers differently for the empty range,
+  for `time` past midnight and for a bound moved past the last date .NET holds. See
   [What runs where](efcore.md#what-runs-where).
 
 ## Combine two ranges

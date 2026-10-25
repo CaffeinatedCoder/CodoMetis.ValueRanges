@@ -201,8 +201,8 @@ The sort order is chosen on purpose:
 
 Good to know:
 
-- **`Intersect`, `Except` and `Add` run in memory only.** PostgreSQL's array type has no
-  intersection, no difference and no sorted insert.
+- **`Intersect`, `Except` and `Add` run in memory only.** An EF Core query doesn't translate them.
+  The EF Core guide says why in [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where).
 
 ## Literals, parsing and JSON
 

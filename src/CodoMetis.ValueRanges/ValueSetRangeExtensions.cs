@@ -20,8 +20,9 @@ namespace CodoMetis.ValueRanges;
 /// each cost more than the values.
 /// </para>
 /// <para>
-/// Both directions run client-side and neither is translatable — PostgreSQL converts between
-/// arrays and multiranges only through <c>unnest</c> and a custom aggregate.
+/// Both directions run client-side; an EF Core query translates neither. PostgreSQL turns an
+/// array into a multirange only by aggregating one-element ranges (<c>range_agg</c>), and the
+/// reverse only by enumerating each range.
 /// </para>
 /// </remarks>
 public static class ValueSetRangeExtensions
