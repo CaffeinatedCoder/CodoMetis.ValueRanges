@@ -983,3 +983,38 @@ differs from its `IComparer<T>.Compare` gets the public one, as in memory.
   ([details](efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - **Use `CompareTo` for the range order.** `r.Period.CompareTo(p)` runs as SQL in the order
   `Comparer<DateRange>.Default` uses.
+
+## Changed answers in 10.4.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+Each section below says how to find the calls whose answer changed. 11.0.0 makes the same changes.
+
+### Check string set columns with a collation
+
+Check `StringSet` and `StringSet<TElement>` properties configured with `UseCollation`, and queries
+that call `EF.Functions.Collate` on one.
+
+PostgreSQL compares the elements of a `text[]` column with the column's collation, and memory compares
+them ordinally. A deterministic collation breaks every tie by the bytes, so the two agree. A
+nondeterministic one, such as a case-insensitive ICU collation, treats `A` and `a` as equal. Before
+10.4.0 the EF Core package translated the set operators as they are, so with `Tags` holding `{A}`:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(p => p.Tags.Contains("a"))` | no match | matched |
+| `Where(p => p.Tags.IsSubsetOf(StringSet.From("a")))` | no match | matched |
+| `Where(p => p.Tags == StringSet.From("a"))` | no match | matched |
+| `Select(p => p.Tags.Remove("a"))` | `{A}` | `{}` |
+| `ExecuteUpdate(… p => p.Tags.Remove("a"))` | — | stored `{}` |
+
+Now building the model throws `InvalidOperationException` and names the property. The collations that
+compare bytes are allowed: `"C"`, `"POSIX"`, `ucs_basic`, `pg_c_utf8` and `default`. A query over
+`EF.Functions.Collate(p.Tags, …)` with any other collation throws too.
+
+- **Search for `UseCollation` on string set properties.** The exception names each one.
+- **If you wanted case-insensitive matching, store the elements folded.** Lower-case them before you
+  build the set, in your code or in a wrapper element type, so memory and the database compare the
+  same text.
+- **Otherwise remove the collation, or use `"C"`.** A deterministic collation other than those five
+  answers as memory does, but the model can't tell it from a nondeterministic one by its name.
+- **A collation given to the column outside your model isn't seen.** Keep it deterministic.

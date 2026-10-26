@@ -13,6 +13,12 @@ has the rules.
 
 ## [10.4.0]
 
+Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
+
+### Changed answers
+
+- EF Core: a `StringSet` or `StringSet<TElement>` property with a collation that may not compare bytes throws when the model is built, and so does `EF.Functions.Collate` over one in a query. Under a case-insensitive collation, `Contains("a")` matched `{A}` and `Remove("a")` deleted `A`, unlike in memory ([#496](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/496), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+
 ### Added
 
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
