@@ -536,6 +536,14 @@ Good to know:
   either set is NULL, and `Add` and `Remove` give NULL when the set or the element is. A `Select`
   loads `null` for those rows, and `Where(… == null)` selects them. In memory, they throw for a
   `null`.
+- **A string set column compares its elements by the column's collation.** Memory compares them
+  ordinally. A case- or accent-insensitive collation would make `Contains`, the subset operators,
+  `==` and `Remove` answer differently in the database, and `Remove` in `ExecuteUpdate` would delete
+  elements memory keeps. So building the model throws for a collation on a `StringSet` or
+  `StringSet<TElement>` property unless it compares bytes: `"C"`, `"POSIX"`, `ucs_basic`,
+  `pg_c_utf8` or `default`. `EF.Functions.Collate` over a string set throws the same way. A column
+  that something outside your model gave a collation can't be checked, so keep that collation
+  deterministic.
 - **Plain arrays keep their own mapping.** `T[]` and `List<T>` properties keep their native Npgsql
   mapping, and both can sit next to value sets in one model. Scaffolding a database gives you plain
   arrays, because choosing a set type is a decision you make in your model.
