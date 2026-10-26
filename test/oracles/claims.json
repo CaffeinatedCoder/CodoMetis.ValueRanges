@@ -585,7 +585,7 @@
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
     "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in the final projection EF runs them in memory instead:",
-    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp (on every range type but Int32Range, Int64Range and DecimalRange), Shift, Expand, ToRangeSet()/ToInt32Set(), the set indexer and Compare on RangeLowerBoundComparer, RangeSet.LowerBoundComparer and any IComparer of ranges or sets (decided by the operands, so also a comparer declared over IRange<T>, the non-generic IComparer and a comparer of value sets), and any other Compare(x, y) over ranges or sets (a static one, or one on a class that is no comparer, running the method called rather than IComparer<T>.Compare) each throw an EF translation exception inside a Where (an OrderBy for the comparer) and evaluate on the client with the in-memory answer inside a Select.",
+    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp (on a DateTimeRange with a DateTime stored as timestamp with time zone, which GREATEST and LEAST would compare through the session's time zone), Shift, Expand, ToRangeSet()/ToInt32Set(), the set indexer and Compare on RangeLowerBoundComparer, RangeSet.LowerBoundComparer and any IComparer of ranges or sets (decided by the operands, so also a comparer declared over IRange<T>, the non-generic IComparer and a comparer of value sets), and any other Compare(x, y) over ranges or sets (a static one, or one on a class that is no comparer, running the method called rather than IComparer<T>.Compare) each throw an EF translation exception inside a Where (an OrderBy for the comparer) and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Length",
@@ -1295,8 +1295,8 @@
   {
     "id": "E74-clamp-runs-as-sql",
     "source": "docs/efcore.md#what-runs-where",
-    "quote": "**`Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` clamps in the database as it does in memory.** A value inside the range comes back as it is, and one outside comes back as the bound it passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.",
-    "claim": "RangeExtensions.Clamp on Int32Range, Int64Range and DecimalRange runs as SQL (NULL for a NULL range or value and for isempty, else LEAST(GREATEST(v, lower(x)), upper(x), less one on the discrete types)) and matches memory over every shape, exclusive numrange bounds, the element types' extremes, NULL range and value columns and a missing outer-join child on either side, in a filter, its negation, a null test, a compound predicate, a coalesce, an ordering and a final projection.",
+    "quote": "**`Clamp` clamps in the database as it does in memory, on every range type.** A value inside the range comes back as it is, and one outside comes back as the bound it passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.",
+    "claim": "RangeExtensions.Clamp on every range type runs as SQL (NULL for a NULL range or value and for isempty, else LEAST(GREATEST(v, lower(x)), upper(x), less one on the discrete types)) and matches memory: on Int32Range, Int64Range and DecimalRange over every shape, exclusive numrange bounds, the element types' extremes, NULL range and value columns and a missing outer-join child on either side, in a filter, its negation, a null test, a compound predicate, a coalesce, an ordering and a final projection; on the other ten types over every range their factories build from points that include the element type's extremes (an infinity on the server for the temporal ones), every inclusiveness, a value column, a parameter, an inlined constant and NULL range and value columns, exactly (the sign of a zero, a DateTimeOffset's offset) and in both orderings. A DateTime stored as timestamp with time zone against a DateTimeRange is declined: a filter fails translation and a final projection runs in memory, whatever the session's time zone.",
     "oracle": "differential",
     "surfaces": [
       "RangeExtensions.Clamp"
@@ -1304,6 +1304,7 @@
     "heldBy": [
       "ClampTranslationTests",
       "ClampParityTests",
+      "ClampDomainParityTests",
       "TranslationSupportProbeTests"
     ]
   },
@@ -1440,6 +1441,19 @@
     ],
     "heldBy": [
       "CanonicalSetOperationParityTests"
+    ]
+  },
+  {
+    "id": "E83-clamp-returns-the-operand-at-the-columns-precision",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**A value you pass to `Clamp` comes back at the column's precision.** PostgreSQL keeps a microsecond, so `TimeOnly.MaxValue` comes back as `23:59:59.999999`, as any value sent to the database does. A bound at a date extreme, which the database holds as an infinity, clamps to the extreme as in memory.",
+    "claim": "Clamp over a range that contains the value returns, in SQL, the value as Npgsql bound it, truncated to the store's microsecond (TimeOnly.MaxValue as 23:59:59.999999), where memory returns every tick; a range bound at a temporal extreme, stored as an infinity, clamps to the extreme memory reads back.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Clamp"
+    ],
+    "heldBy": [
+      "ClampDomainParityTests"
     ]
   },
   {
