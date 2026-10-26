@@ -240,6 +240,10 @@ public sealed class DeclaredNullabilityTests
 
     private static async Task<(bool Strict, bool Aggregate)?> Strictness(NpgsqlConnection connection, Declared function)
     {
+        // GREATEST and LEAST are conditional expressions, not pg_proc functions: they skip a NULL argument and
+        // are NULL only when every argument is (PostgreSQL's "Conditional Expressions"). Clamp emits them (#486).
+        if (function.Name is "GREATEST" or "LEAST") return (Strict: false, Aggregate: false);
+
         // The overloads of that name and arity, an exact argument type preferred over a polymorphic one.
         await using var command = new NpgsqlCommand(
             """

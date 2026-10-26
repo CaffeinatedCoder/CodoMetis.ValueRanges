@@ -18,8 +18,9 @@ public sealed class ClientSideOnlyTranslationTests
         // Length on Int32Range and Int64Range translates (#405); on the other range types it stays in memory.
         ["Length", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Price.Length > 3m))],
         ["Values()", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Values().Contains(5)))],
-        // Clamp on Int32Range, Int64Range and DecimalRange translates (#406); on the other range types it stays in memory.
-        ["Clamp", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Period.Clamp(new DateOnly(2026, 6, 1)) == new DateOnly(2026, 6, 1)))],
+        // Clamp translates on every range type (#406, #486), but not with a value whose time zone differs from the
+        // range's elements: a timestamptz column against a tsrange.
+        ["Clamp", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.LocalTime.Clamp(b.CreatedAt) == b.CreatedAt))],
         ["Shift", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Shift(10).Contains(15)))],
         ["Expand", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Period.Expand(1).Contains(new DateOnly(2026, 6, 1))))],
         ["Values(step)", (Func<TestDbContext, IQueryable<Booking>>)(db => db.Bookings.Where(b => b.Seats.Values(2).Contains(5)))],
