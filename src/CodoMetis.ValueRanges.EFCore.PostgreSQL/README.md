@@ -152,15 +152,27 @@ users.Where(u => u.Roles.Remove("admin").IsEmpty);  // cardinality(array_remove(
 
 `Contains` always runs as `@>`, never as `= ANY`, so a plain GIN index on the column serves it.
 
+`Union`, `Add`, `Intersect` and `Except` run as SQL too, on every set type except the two text
+ones, and give the deduplicated, sorted set memory gives:
+
+```csharp
+orders.Where(o => o.Codes.Union(more) == expected);  // ARRAY((SELECT DISTINCT ON (vr0.x) vr0.x FROM unnest(…) …)) = @expected
+orders.Where(o => o.Codes.Intersect(wanted).Count > 1);
+```
+
 Good to know:
 
-- **`Union` is the one set operation whose SQL result isn't deduplicated and sorted.** It runs as
-  `array_cat`, which joins two arrays without removing duplicates.
+- **On text, `Union` is the one set operation whose SQL result isn't deduplicated and sorted.** It
+  runs as `array_cat`, which joins two arrays without removing duplicates. PostgreSQL sorts `text`
+  by the database collation rather than ordinally, so it can't sort it the way your sets are.
 - **That is harmless in exactly two places.** The operators `@>`, `<@` and `&&` ignore duplicates. When
   you load the result, reading the set sorts and deduplicates it again.
 - **Anything that depends on order or duplicates throws instead.** That covers equality, `Count`,
   `GroupBy`, `Distinct`, `OrderBy` and a value in `ExecuteUpdate`. The query throws rather than
   return a different answer from memory. The package checks this on the translated SQL.
+- **Your own element types must sort as their underlying type does.** An `Int32Set<OrderId>` sorts
+  the stored integers in the database and by `OrderId.CompareTo` in memory. Vogen and
+  StronglyTypedId compare by the underlying value.
 
 ## What runs in memory only
 
@@ -172,8 +184,7 @@ table. In the final `Select`, EF Core computes them in memory after it loads the
 
 | Operation | Why |
 |---|---|
-| `Intersect`, `Except` on value sets | not translated: filtering the left array keeps its order, but is canonical only over canonical rows, as `Union` is |
-| `Add` on value sets | inserting in order means sorting in SQL, by the database collation rather than ordinal |
+| `Intersect`, `Except` and `Add` on `StringSet` and `StringSet<TElement>` | not translated: their results have to be sorted, and PostgreSQL sorts `text` by the database collation rather than ordinally. On the other set types they run as SQL |
 | `Length` on the range types other than `Int32Range` and `Int64Range` | not translated: a temporal range open to `infinity` fails in PostgreSQL |
 | `Values()` and `Values(step)` on a discrete range, `Split` on any range | not translated: each would be `generate_series` collected into an array |
 | `Shift`, `Expand` on any range | not translated: rebuilding the range from `lower(x) + d` answers differently for the empty range, `time` past midnight and a bound moved past the last date .NET holds |

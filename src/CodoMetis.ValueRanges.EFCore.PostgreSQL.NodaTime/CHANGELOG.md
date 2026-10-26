@@ -5,7 +5,9 @@ covers all four packages, which share one version number and release together.
 
 ## [10.4.0]
 
-No change in this package.
+### Added
+
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ## [10.3.0] — 2026-10-25
 

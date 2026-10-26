@@ -133,23 +133,35 @@
   },
   {
     "members": "ValueSetExtensions.Intersect(*",
-    "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: not translated. Filtering the left array with unnest … WITH ORDINALITY keeps its order, but the result is canonical only when the stored arrays are, as with Union"
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest … WITH ORDINALITY, filtered by containment (#478); not translated on text, which sorts by the database collation rather than ordinally (#479)",
+    "except": {
+      "StringSet": "client",
+      "StringSet_TextKey": "client"
+    }
   },
   {
     "members": "ValueSetExtensions.Except(*",
-    "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: not translated. Filtering the left array with unnest … WITH ORDINALITY keeps its order, but the result is canonical only when the stored arrays are, as with Union"
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest … WITH ORDINALITY, filtered by containment (#478); not translated on text, which sorts by the database collation rather than ordinally (#479)",
+    "except": {
+      "StringSet": "client",
+      "StringSet_TextKey": "client"
+    }
   },
   {
     "members": "ValueSetExtensions.Add(*",
-    "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: inserting in canonical order means sorting in SQL, where text follows the database collation rather than ordinal order"
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest(array_cat(x, ARRAY[e])) WITH ORDINALITY (#478); not translated on text, which sorts by the database collation rather than ordinally (#479)",
+    "except": {
+      "StringSet": "client",
+      "StringSet_TextKey": "client"
+    }
   },
   {
     "members": "ValueSetExtensions.*",
     "support": "server",
-    "reason": "docs/efcore.md#what-runs-where: @>, &&, <@, array_cat, array_remove"
+    "reason": "docs/efcore.md#what-runs-where: @>, &&, <@, array_remove, and Union as a canonical subquery (array_cat on text)"
   },
   {
     "members": "RangeSet<TRange, T>.Count",

@@ -1,3 +1,6 @@
+using System.Linq.Expressions;
+using System.Reflection;
+using CodoMetis.ValueRanges.Core;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 
@@ -166,4 +169,56 @@ public sealed class NodaSetTests
     }
 
     private static readonly YearMonthSet Months = YearMonthSet.From(new YearMonth(2024, 1), new YearMonth(2024, 6));
+}
+
+/// <summary>
+/// The NodaTime sets canonicalize <c>Union</c>, <c>Add</c>, <c>Intersect</c> and <c>Except</c> in SQL as
+/// the BCL sets do (#478): their definitions reach the same guard through the same registry, so every
+/// set column of the model is asked, the arities and the month-aligned <c>YearMonthSet</c> included.
+/// </summary>
+[TestClass]
+public sealed class NodaCanonicalSetTranslationTests
+{
+    private static IEnumerable<PropertyInfo> SetColumns
+        => typeof(Reservation).GetProperties()
+                              .Where(p => p.PropertyType.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IValueSet<>))
+                                       && p.PropertyType != typeof(StringSet));
+
+    [TestMethod]
+    public void EveryNodaTimeSet_Canonicalizes()
+    {
+        var columns = SetColumns.ToList();
+        Assert.AreEqual(10, columns.Count, "the five NodaTime sets and their five arities");
+
+        using var db = new NodaTestDbContext();
+        foreach (var column in columns)
+        foreach (var operation in new[] { "Union", "Intersect", "Except" })
+        {
+            var r       = Expression.Parameter(typeof(Reservation), "r");
+            var set     = Expression.Property(r, column);
+            var element = column.PropertyType.GetInterfaces()
+                                .Single(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IValueSet<>))
+                                .GetGenericArguments()[0];
+            var method  = typeof(ValueSetExtensions).GetMethods()
+                                                    .Single(m => m.Name == operation && m.GetParameters().Length == 2)
+                                                    .MakeGenericMethod(column.PropertyType, element);
+            var count   = Expression.GreaterThan(
+                Expression.Property(Expression.Call(method, set, set), "Count"),
+                Expression.Constant(1));
+
+            var sql = db.Reservations.Where(Expression.Lambda<Func<Reservation, bool>>(count, r)).ToQueryString();
+            StringAssert.Contains(sql, "SELECT DISTINCT ON (vr0.x) vr0.x", $"{column.Name}.{operation}");
+        }
+    }
+
+    [TestMethod]
+    public void Add_OnAYearMonthSet_BindsTheMonthAsItsFirstDay()
+    {
+        var month = new YearMonth(2026, 3);
+
+        using var db = new NodaTestDbContext();
+        var sql = db.Reservations.Where(r => r.BillingMonths.Add(month).Count > 1).Select(r => r.Id).ToQueryString();
+
+        StringAssert.Contains(sql, "FROM unnest(array_cat(r.\"BillingMonths\", ARRAY[@month]::date[])) WITH ORDINALITY AS vr0(x)");
+    }
 }

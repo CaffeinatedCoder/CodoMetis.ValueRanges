@@ -83,6 +83,7 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
                 EmptyCollectionRewriter.Rewrite(
                     inner.Process(queryExpression, parametersDecorator),
                     Dependencies.SqlExpressionFactory,
-                    Dependencies.TypeMappingSource));
+                    Dependencies.TypeMappingSource),
+                Dependencies.TypeMappingSource);
     }
 }

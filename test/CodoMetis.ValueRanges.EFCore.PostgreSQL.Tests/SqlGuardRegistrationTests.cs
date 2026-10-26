@@ -79,6 +79,32 @@ public sealed class SqlGuardRegistrationTests
     }
 
     /// <summary>
+    /// The canonical operations fail closed the same way (#478): each is a placeholder only the guard
+    /// builds, so without the guard the SQL names a function PostgreSQL does not have rather than a
+    /// concatenation that would answer wrongly under equality.
+    /// </summary>
+    [TestMethod]
+    public void AReplacedProcessorFactory_SendsTheCanonicalPlaceholders()
+    {
+        using var context = new ReplacedFactoryContext();
+        var codes   = Int32Set.From(1, 2);
+        var element = 3;
+
+        foreach (var (sql, placeholder) in new[]
+                 {
+                     (context.Bookings.Where(b => b.Codes.Union(codes) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_union_without_sql_guard("),
+                     (context.Bookings.Where(b => b.Codes.Add(element) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_add_without_sql_guard("),
+                     (context.Bookings.Where(b => b.Codes.Intersect(codes) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_intersect_without_sql_guard("),
+                     (context.Bookings.Where(b => b.Codes.Except(codes) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_except_without_sql_guard(")
+                 })
+        {
+            StringAssert.Contains(sql, placeholder);
+            Assert.IsFalse(sql.Contains("array_cat(", StringComparison.Ordinal), sql);
+            Assert.IsFalse(sql.Contains("unnest(", StringComparison.Ordinal), sql);
+        }
+    }
+
+    /// <summary>
     /// The placeholder is renamed by the guard itself, not by detecting the decorator, so another
     /// library decorating <em>around</em> it — rather than replacing it — leaves the guard running and
     /// the SQL unchanged.

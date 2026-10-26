@@ -6,7 +6,8 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
 /// <summary>
 /// A value set <c>Union</c> or <c>Remove</c> with a NULL operand is NULL in a projection, as its filter
-/// <c>== null</c> says it is (#360).
+/// <c>== null</c> says it is (#360), and so are <c>Add</c>, <c>Intersect</c> and <c>Except</c> where they
+/// translate (#478).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -34,8 +35,16 @@ public sealed class ValueSetNullOperandParityTests
 
     private static readonly string[] Labels = ["a", "z", "b"];
 
+    // The canonical operations translate for every family but text (#478): Int32Set stands for them.
+    private static readonly Int32Set[] CodeSets =
+    [
+        Int32Set.From([1, 2]), Int32Set.Empty, Int32Set.From([1]), Int32Set.From([2, 3]), Int32Set.From([9])
+    ];
+
+    private static readonly int[] Numbers = [1, 9, 2];
+
     [TestMethod]
-    public async Task UnionAndRemove_OverANullOperand_AreNullInAProjectionAsInAFilter()
+    public async Task SetOperations_OverANullOperand_AreNullInAProjectionAsInAFilter()
     {
         ContainerLifecycle.RequireServer();
         var connectionString = await Seed();
@@ -120,11 +129,32 @@ public sealed class ValueSetNullOperandParityTests
         yield return Predicate("r.Tags.Union(r.Child.Tags).IsEmpty", r => r.Tags.Union(r.Child!.Tags).IsEmpty);
         yield return Predicate("r.Tags.Remove(r.Label).IsEmpty", r => r.Tags.Remove(r.Label!).IsEmpty);
         yield return Predicate("r.Tags.Remove(r.Label).Count > 1", r => r.Tags.Remove(r.Label!).Count > 1);
+
+        (string, LambdaExpression) Codes(string name, Expression<Func<NullOperandRow, Int32Set>> lambda) => (name, lambda);
+
+        var nine = Int32Set.From([9]);
+        Int32Set? noCodes = null;
+
+        yield return Codes("r.MaybeCodes.Union(r.Codes)", r => r.MaybeCodes!.Union(r.Codes));
+        yield return Codes("r.Codes.Union(r.Child.Codes)", r => r.Codes.Union(r.Child!.Codes));
+        yield return Codes("r.Codes.Add(r.Number)", r => r.Codes.Add(r.Number!.Value));
+        yield return Codes("r.MaybeCodes.Add(2)", r => r.MaybeCodes!.Add(2));
+        yield return Codes("r.Codes.Intersect(r.MaybeCodes)", r => r.Codes.Intersect(r.MaybeCodes!));
+        yield return Codes("r.Child.Codes.Intersect(r.Codes)", r => r.Child!.Codes.Intersect(r.Codes));
+        yield return Codes("r.MaybeCodes.Except(@{9})", r => r.MaybeCodes!.Except(nine));
+        yield return Codes("r.Codes.Except(@null)", r => r.Codes.Except(noCodes!));
+        yield return Codes("r.Codes.Except(r.Child.Codes)", r => r.Codes.Except(r.Child!.Codes));
+
+        yield return Predicate("r.MaybeCodes.Union(r.Codes) == r.Codes", r => r.MaybeCodes!.Union(r.Codes) == r.Codes);
+        yield return Predicate("r.Codes.Intersect(r.MaybeCodes).Count > 0", r => r.Codes.Intersect(r.MaybeCodes!).Count > 0);
+        yield return Predicate("r.Codes.Except(r.Child.Codes).IsEmpty", r => r.Codes.Except(r.Child!.Codes).IsEmpty);
+        yield return Predicate("r.Codes.Add(r.Number).Contains(1)", r => r.Codes.Add(r.Number!.Value).Contains(1));
     }
 
     private static string Describe(NullOperandRow row) =>
         $"Tags {row.Tags}, MaybeTags {row.MaybeTags?.ToString() ?? "NULL"}, Label {row.Label ?? "NULL"}, "
-      + (row.Child is { } child ? $"child {child.Tags} / {child.Name}" : "no child");
+      + $"Codes {row.Codes}, MaybeCodes {row.MaybeCodes?.ToString() ?? "NULL"}, Number {row.Number?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "NULL"}, "
+      + (row.Child is { } child ? $"child {child.Tags} / {child.Name} / {child.Codes}" : "no child");
 
     /// <summary>A database of its own: a NULL set every third row, a NULL element every third row from the second, a child every other row.</summary>
     private static async Task<string> Seed()
@@ -137,11 +167,20 @@ public sealed class ValueSetNullOperandParityTests
         {
             seed.Rows.Add(new NullOperandRow
             {
-                Id        = i + 1,
-                Tags      = Sets[i % Sets.Length],
-                MaybeTags = i % 3 == 0 ? null : Sets[(i + 2) % Sets.Length],
-                Label     = i % 3 == 1 ? null : Labels[i % Labels.Length],
-                Child     = i % 2 == 0 ? new NullOperandChild { Id = 100 + i, Tags = Sets[(i + 3) % Sets.Length], Name = Labels[(i + 1) % Labels.Length] } : null
+                Id         = i + 1,
+                Tags       = Sets[i % Sets.Length],
+                MaybeTags  = i % 3 == 0 ? null : Sets[(i + 2) % Sets.Length],
+                Label      = i % 3 == 1 ? null : Labels[i % Labels.Length],
+                Codes      = CodeSets[i % CodeSets.Length],
+                MaybeCodes = i % 3 == 0 ? null : CodeSets[(i + 2) % CodeSets.Length],
+                Number     = i % 3 == 1 ? null : Numbers[i % Numbers.Length],
+                Child      = i % 2 == 0
+                                 ? new NullOperandChild
+                                 {
+                                     Id = 100 + i, Tags = Sets[(i + 3) % Sets.Length], Name = Labels[(i + 1) % Labels.Length],
+                                     Codes = CodeSets[(i + 3) % CodeSets.Length]
+                                 }
+                                 : null
             });
         }
 
@@ -159,6 +198,12 @@ public sealed class ValueSetNullOperandParityTests
 
         public string? Label { get; set; }
 
+        public Int32Set Codes { get; set; } = Int32Set.Empty;
+
+        public Int32Set? MaybeCodes { get; set; }
+
+        public int? Number { get; set; }
+
         public NullOperandChild? Child { get; set; }
     }
 
@@ -171,6 +216,8 @@ public sealed class ValueSetNullOperandParityTests
         public StringSet Tags { get; set; } = StringSet.Empty;
 
         public string Name { get; set; } = "";
+
+        public Int32Set Codes { get; set; } = Int32Set.Empty;
     }
 
     private sealed class NullOperandContext(string connectionString) : DbContext
