@@ -240,6 +240,9 @@ public sealed class DeclaredNullabilityTests
 
     private static async Task<(bool Strict, bool Aggregate)?> Strictness(NpgsqlConnection connection, Declared function)
     {
+        // ARRAY((SELECT …)) is the array constructor, not a pg_proc function: never NULL, {} over no rows.
+        // The SQL guard builds it for a set operation (#478, #485).
+        if (function.Name is "ARRAY") return (Strict: false, Aggregate: false);
         // GREATEST and LEAST are conditional expressions, not pg_proc functions: they skip a NULL argument and
         // are NULL only when every argument is (PostgreSQL's "Conditional Expressions"). Clamp emits them (#486).
         if (function.Name is "GREATEST" or "LEAST") return (Strict: false, Aggregate: false);

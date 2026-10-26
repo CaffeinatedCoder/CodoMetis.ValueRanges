@@ -22,10 +22,11 @@ order you gave the values in.
 
 Good to know:
 
-- **In an EF Core query, every set operation runs as SQL, except three on text.** On `StringSet`
-  and `StringSet<T>`, `Intersect`, `Except` and `Add` run in memory only, because PostgreSQL sorts
-  `text` by the database collation rather than ordinally.
-  [What runs where](efcore.md#what-runs-where) has the details.
+- **In an EF Core query, every set operation runs as SQL.** On `StringSet` and `StringSet<T>`,
+  `Union`, `Add`, `Intersect` and `Except` leave the result unsorted, because PostgreSQL sorts `text`
+  by the database collation rather than ordinally. So they run only where order doesn't count, which
+  includes `Count`, `==` and the subset methods but not `OrderBy`.
+  [Combine sets with `Union`](efcore.md#combine-sets-with-union) has the details.
 - **An operation that changes nothing returns the same instance.**
 
 ## Pick a set type

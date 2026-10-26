@@ -51,6 +51,10 @@ public sealed class CanonicalSetOperationParityTests
     private static readonly IReadOnlyList<Type> Families =
         [.. FuzzTypes.Sets.Where(t => t.Primitive != typeof(string)).Select(t => t.Set)];
 
+    /// <summary>The text families, <see cref="StringSet"/> and its arity, which stay unsorted in SQL (#485).</summary>
+    private static readonly IReadOnlyList<Type> TextFamilies =
+        [.. FuzzTypes.Sets.Where(t => t.Primitive == typeof(string)).Select(t => t.Set)];
+
     [TestMethod]
     public async Task EveryFamilyButText_AnswersAsInMemory()
     {
@@ -63,6 +67,26 @@ public sealed class CanonicalSetOperationParityTests
         Candidates.Verdict(nameof(CanonicalSetOperationParityTests), lines,
             "A value set Union, Add, Intersect or Except answers differently in the database and in memory",
             method: nameof(EveryFamilyButText_AnswersAsInMemory));
+    }
+
+    /// <summary>
+    /// Text can't be sorted in SQL as memory sorts it (#479), so <c>Union</c>, <c>Add</c>, <c>Intersect</c> and
+    /// <c>Except</c> stay unsorted there and run only where that can't change the answer (#485): <c>Count</c> as the
+    /// distinct elements, <c>==</c> and <c>!=</c> as mutual containment, the containment operators, <c>IsEmpty</c>
+    /// and a projection. The probes put a supplementary character beside one in U+E000–U+FFFF, which UTF-16 and
+    /// code points order apart. Storing a result is refused.
+    /// </summary>
+    [TestMethod]
+    public async Task Text_AnswersAsInMemory_WhereOrderAndRepeatsDontCount()
+    {
+        ContainerLifecycle.RequireServer();
+        Assert.AreEqual(2, TextFamilies.Count, "StringSet and StringSet<TElement>");
+
+        var connectionString = await Database();
+        var lines = await ForEachFamily(nameof(SweepText), TextFamilies, connectionString);
+        Candidates.Verdict(nameof(CanonicalSetOperationParityTests), lines,
+            "A text value set Union, Add, Intersect or Except answers differently in the database and in memory",
+            method: nameof(Text_AnswersAsInMemory_WhereOrderAndRepeatsDontCount));
     }
 
     /// <summary>
@@ -268,6 +292,125 @@ public sealed class CanonicalSetOperationParityTests
         return failures;
     }
 
+    // =========================================================================
+    // Text
+    // =========================================================================
+
+    private static async Task<List<string>> SweepText<TSet, T>(string connectionString)
+        where TSet : class, IValueSetFactory<TSet, T>, IValueSet<T>
+        where T : IEquatable<T>
+    {
+        var name    = FuzzTypes.Name(typeof(TSet));
+        var probes  = new[] { "a", "\U0001F600", "\uFF61" }.Select(text => TSet.ParseValue(text, CultureInfo.InvariantCulture)).ToArray();
+        var subsets = Enumerable.Range(0, 1 << probes.Length)
+                                .Select(mask => TSet.From(probes.Where((_, i) => (mask & 1 << i) != 0)))
+                                .ToArray();
+        var pairs   = (from l in subsets from r in subsets select (l, r)).ToArray();
+        var element = probes[1];
+
+        await using (var write = new CanonicalContext(connectionString))
+        {
+            for (var i = 0; i < pairs.Length; i++)
+            foreach (var offset in new[] { 0, Foreign, WithNull })
+            {
+                var (l, r) = pairs[i];
+                write.Add(new CanonicalRow<TSet>
+                {
+                    Id = offset + i, Left = l, Right = r,
+                    Union = l.Union(r), Added = l.Add(element), Intersect = l.Intersect(r), Except = l.Except(r), Stored = TSet.Empty
+                });
+            }
+
+            await write.SaveChangesAsync();
+        }
+
+        Dictionary<int, CanonicalRow<TSet>> expected;
+        await using (var read = new CanonicalContext(connectionString))
+            expected = await read.Set<CanonicalRow<TSet>>().AsNoTracking().ToDictionaryAsync(r => r.Id);
+
+        // What another tool might store: the same sets out of order and twice, and with a NULL element.
+        await using (var write = new CanonicalContext(connectionString))
+        {
+            var table = Table<TSet>();
+            var foreignRows = $"""
+                UPDATE "{table}" SET
+                    "Left"  = ARRAY(SELECT x FROM unnest("Left") WITH ORDINALITY AS t(x, n) ORDER BY n DESC) || "Left",
+                    "Right" = ARRAY(SELECT x FROM unnest("Right") WITH ORDINALITY AS t(x, n) ORDER BY n DESC) || "Right"
+                WHERE "Id" >= {Foreign} AND "Id" < {WithNull}
+                """;
+            var nullRows = $"""
+                UPDATE "{table}" SET "Left" = array_append("Left", NULL), "Right" = array_prepend(NULL, "Right")
+                WHERE "Id" >= {WithNull}
+                """;
+            await write.Database.ExecuteSqlRawAsync(foreignRows);
+            await write.Database.ExecuteSqlRawAsync(nullRows);
+        }
+
+        string Row(int id) => $"{name} row {id} ({(id >= WithNull ? "with NULL" : id >= Foreign ? "out of order, twice" : "canonical")}: "
+                            + $"{expected[id].Left} with {expected[id].Right})";
+
+        Expression<Func<CanonicalRow<TSet>, TSet>> union     = r => r.Left.Union(r.Right);
+        Expression<Func<CanonicalRow<TSet>, TSet>> add       = r => r.Left.Add(element);
+        Expression<Func<CanonicalRow<TSet>, TSet>> intersect = r => r.Left.Intersect(r.Right);
+        Expression<Func<CanonicalRow<TSet>, TSet>> except    = r => r.Left.Except(r.Right);
+        var operations = new (string Name, Expression<Func<CanonicalRow<TSet>, TSet>> Server, Func<CanonicalRow<TSet>, TSet> Memory, Expression<Func<CanonicalRow<TSet>, TSet>> Column)[]
+        {
+            ("Union",     union,     e => e.Union,     r => r.Union),
+            ("Add",       add,       e => e.Added,     r => r.Added),
+            ("Intersect", intersect, e => e.Intersect, r => r.Intersect),
+            ("Except",    except,    e => e.Except,    r => r.Except)
+        };
+
+        var row      = Expression.Parameter(typeof(CanonicalRow<TSet>), "r");
+        var failures = new List<string>();
+
+        // Count: the distinct elements, every row. count(DISTINCT) skips a NULL element, as a set never holds one.
+        var counts = operations.Select(op => ($"{op.Name}.Count", (Expression)Expression.Property(Splice(op.Server, row), nameof(StringSet.Count)),
+                                              (Func<CanonicalRow<TSet>, object?>)(e => op.Memory(e).Values.Length))).ToList();
+        await Ask(connectionString, row, counts, int.MaxValue, "count(DISTINCT", expected, Row, failures);
+
+        // == and != against the expected set: mutual containment. Not over a NULL element, which never matches.
+        var equalities = new List<(string Name, Expression Server, Func<CanonicalRow<TSet>, object?> Memory)>();
+        foreach (var (op, server, _, column) in operations)
+        {
+            var value = Splice(server, row);
+            equalities.Add(($"{op} == expected", Expression.Equal(value, Splice(column, row)), _ => true));
+            equalities.Add(($"{op} != Left", Expression.NotEqual(value, Expression.Property(row, nameof(CanonicalRow<TSet>.Left))),
+                            e => !Equals(operations.Single(o => o.Name == op).Memory(e), e.Left)));
+        }
+
+        await Ask(connectionString, row, equalities, WithNull, " @> ", expected, Row, failures);
+
+        // The projection, containment and IsEmpty. Not over a NULL element, which a loaded set can't hold.
+        var multiset = new List<(string Name, Expression Server, Func<CanonicalRow<TSet>, object?> Memory)>();
+        foreach (var (op, server, memory, _) in operations)
+        {
+            var value = Splice(server, row);
+            multiset.Add((op, value, e => memory(e)));
+            multiset.Add(($"{op}.IsEmpty", Expression.Property(value, nameof(StringSet.IsEmpty)), e => memory(e).Values.IsEmpty));
+            multiset.Add(($"{op}.IsSupersetOf(Left)", Call(nameof(ValueSetExtensions.IsSupersetOf), value, Expression.Property(row, nameof(CanonicalRow<TSet>.Left))),
+                          e => memory(e).IsSupersetOf(e.Left)));
+            multiset.Add(($"{op}.Overlaps(Right)", Call(nameof(ValueSetExtensions.Overlaps), value, Expression.Property(row, nameof(CanonicalRow<TSet>.Right))),
+                          e => memory(e).Overlaps(e.Right)));
+        }
+
+        await Ask(connectionString, row, multiset, WithNull, "array_cat(", expected, Row, failures);
+
+        // Storing one would keep it unsorted, after which = against the row is wrong: refused.
+        foreach (var (op, server, _, _) in operations)
+        {
+            await using var update = new CanonicalContext(connectionString);
+            try
+            {
+                await update.Set<CanonicalRow<TSet>>().ExecuteUpdateAsync(s => s.SetProperty(r => r.Stored, server));
+                failures.Add($"{name} {op}: ExecuteUpdate stored a text set operation's unsorted result instead of refusing");
+            }
+            catch (InvalidOperationException) { }
+        }
+
+        return failures;
+    }
+
     /// <summary>Projects every question for every row below <paramref name="below"/>, and compares each answer with memory.</summary>
     private static async Task Ask<TSet>(
         string connectionString, ParameterExpression row, IReadOnlyList<(string Name, Expression Server, Func<CanonicalRow<TSet>, object?> Memory)> questions,
@@ -435,7 +578,7 @@ public sealed class CanonicalSetOperationParityTests
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            foreach (var set in Families)
+            foreach (var set in Families.Concat(TextFamilies))
             {
                 var entity = modelBuilder.Entity(typeof(CanonicalRow<>).MakeGenericType(set));
                 entity.ToTable($"canonical_{FuzzTypes.Name(set)}");
