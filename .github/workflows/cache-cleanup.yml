@@ -1,0 +1,39 @@
+# Deletes the Actions caches of a branch when the branch is deleted (#476). Merged branches are
+# deleted automatically (delete_branch_on_merge), and every pushed branch gets about 300 MB of
+# NuGet cache from GitHub's Automatic Dependency Submission run, which no run can restore once the
+# branch is gone. Left alone, they held 6.2 GB of the 10 GB limit and made eviction push out caches
+# that live branches still use. The logic is in .github/scripts/purge-branch-caches.sh, which runs
+# locally with --dry-run.
+#
+# GitHub runs a `delete` workflow only from the default branch, so this file lives on main only and
+# also covers release/10.x's branches. The daily and manual sweep deletes every cache whose branch is
+# gone, which catches a deletion this event missed.
+
+name: Cache cleanup
+
+on:
+  delete:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  purge:
+    name: Purge caches of deleted branches
+    if: github.event_name != 'delete' || github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          sparse-checkout: .github/scripts
+      # The branch name goes in through the environment, never interpolated into the script: a ref
+      # name may hold `$(…)`.
+      - run: .github/scripts/purge-branch-caches.sh ${BRANCH:+"$BRANCH"}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event_name == 'delete' && github.event.ref || '' }}
