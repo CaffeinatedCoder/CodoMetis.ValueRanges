@@ -258,8 +258,40 @@ public sealed class QueryTranslationTests
     [TestMethod]
     public void LowerBound_InOrderBy()
     {
-        var sql = Sql(db => db.Bookings.OrderBy(b => b.Period.LowerBound()));
-        StringAssert.Contains(sql, "ORDER BY lower(b.\"Period\")");
+        var sql = Sql(db => db.Bookings.OrderBy(b => b.Seats.LowerBound()));
+        StringAssert.Contains(sql, "ORDER BY lower(b.\"Seats\")");
+    }
+
+    /// <summary>
+    /// A date range's exclusive infinite bound is read one day inside, as memory loads it (#489):
+    /// <c>[x,infinity)</c> as <c>[x,9999-12-30]</c> and <c>(-infinity,x)</c> as starting on 0001-01-02. PostgreSQL's
+    /// <c>upper(x) - 1</c> is still <c>infinity</c>, and <c>lower(x)</c> is <c>-infinity</c>.
+    /// <c>ExclusiveInfinityBoundParityTests</c> (integration) is the authority.
+    /// </summary>
+    [TestMethod]
+    public void DateRangeBounds_ReadAnExclusiveInfinityOneDayInside()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => new { Lower = b.Period.LowerBound(), Upper = b.Period.UpperBound() }));
+
+        StringAssert.Contains(sql,
+            """
+            SELECT CASE
+                WHEN lower(b."Period") = DATE '-infinity' AND NOT (lower_inc(b."Period")) THEN DATE '0001-01-02'
+                ELSE lower(b."Period")
+            END AS "Lower", CASE
+                WHEN upper(b."Period") = DATE 'infinity' AND NOT (upper_inc(b."Period")) THEN DATE '9999-12-30'
+                ELSE upper(b."Period") - 1
+            END AS "Upper"
+            """);
+    }
+
+    /// <summary>Only a type whose extremes Npgsql writes as infinities reads its bounds through a <c>CASE</c>.</summary>
+    [TestMethod]
+    public void IntegerBounds_HaveNoInfinityToReadInside()
+    {
+        var sql = Sql(db => db.Bookings.Select(b => new { Lower = b.Seats.LowerBound(), Upper = b.Seats.UpperBound() }));
+
+        StringAssert.Contains(sql, "SELECT lower(b.\"Seats\") AS \"Lower\", upper(b.\"Seats\") - 1 AS \"Upper\"");
     }
 
     /// <summary>
@@ -272,8 +304,8 @@ public sealed class QueryTranslationTests
     public void BoundComparedWithNull_OnARequiredColumn_TestsTheBound()
     {
         var sql = Sql(db => db.Bookings.Where(b => b.Period.LowerBound() == null || b.BlockedDays.UpperBound() == null));
-        StringAssert.Contains(sql, "lower(b.\"Period\") IS NULL");
-        StringAssert.Contains(sql, "upper(b.\"BlockedDays\") IS NULL");
+        StringAssert.Contains(sql, "ELSE lower(b.\"Period\")\nEND IS NULL");
+        StringAssert.Contains(sql, "ELSE upper(b.\"BlockedDays\") - 1\nEND IS NULL");
         Assert.IsFalse(sql.Contains("FALSE"), sql);
     }
 
@@ -281,7 +313,8 @@ public sealed class QueryTranslationTests
     public void BoundCoalesced_OnARequiredColumn_KeepsTheCoalesce()
     {
         var sql = Sql(db => db.Bookings.Where(b => (b.Period.UpperBound() ?? DateOnly.MaxValue) >= Day));
-        StringAssert.Contains(sql, "COALESCE(upper(b.\"Period\") - 1, ");
+        StringAssert.Contains(sql, "ELSE upper(b.\"Period\") - 1\nEND, @MaxValue)");
+        StringAssert.Contains(sql, "WHERE COALESCE(CASE");
     }
 
     [TestMethod]
@@ -301,11 +334,23 @@ public sealed class QueryTranslationTests
     }
 
     [TestMethod]
-    public void BoundInclusive_TranslatesToLowerIncUpperInc()
+    public void BoundInclusive_Continuous_TranslatesToLowerIncUpperInc()
     {
-        var sql = Sql(db => db.Bookings.Where(b => b.Period.LowerBoundInclusive() && b.Price.UpperBoundInclusive()));
-        StringAssert.Contains(sql, "lower_inc(b.\"Period\")");
+        var sql = Sql(db => db.Bookings.Where(b => b.Price.LowerBoundInclusive() && b.Price.UpperBoundInclusive()));
+        StringAssert.Contains(sql, "lower_inc(b.\"Price\")");
         StringAssert.Contains(sql, "upper_inc(b.\"Price\")");
+    }
+
+    /// <summary>
+    /// On the closed discrete model, the lower bound is inclusive iff it exists, as the upper is. PostgreSQL's
+    /// <c>lower_inc</c> says the same except for an exclusive <c>-infinity</c>, which canonicalization leaves
+    /// exclusive and memory loads as the inclusive 0001-01-02 (#489).
+    /// </summary>
+    [TestMethod]
+    public void LowerBoundInclusive_Discrete_ExpandsToBoundednessCheck()
+    {
+        var sql = Sql(db => db.Bookings.Where(b => b.Period.LowerBoundInclusive()));
+        StringAssert.EndsWith(sql, "WHERE NOT (lower_inf(b.\"Period\")) AND NOT (isempty(b.\"Period\"))");
     }
 
     [TestMethod]
@@ -366,9 +411,9 @@ public sealed class QueryTranslationTests
             .OrderBy(b => b.BlockedDays.LowerBound())
             .Select(b => (object?)b.BlockedDays.UpperBound()));
 
-        StringAssert.Contains(sql, "lower_inc(b.\"BlockedDays\")");
-        StringAssert.Contains(sql, "ORDER BY lower(b.\"BlockedDays\")");
-        StringAssert.Contains(sql, "upper(b.\"BlockedDays\")");
+        StringAssert.Contains(sql, "WHERE NOT (lower_inf(b.\"BlockedDays\")) AND NOT (isempty(b.\"BlockedDays\"))");
+        StringAssert.Contains(sql, "ORDER BY CASE\n    WHEN lower(b.\"BlockedDays\") = DATE '-infinity' AND NOT (lower_inc(b.\"BlockedDays\")) THEN DATE '0001-01-02'");
+        StringAssert.Contains(sql, "WHEN upper(b.\"BlockedDays\") = DATE 'infinity' AND NOT (upper_inc(b.\"BlockedDays\")) THEN DATE '9999-12-30'");
     }
 
     // -------------------------------------------------------------------------
