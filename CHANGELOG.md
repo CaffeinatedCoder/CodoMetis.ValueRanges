@@ -17,6 +17,7 @@ has the rules.
 
 - EF Core: `Clamp` runs as SQL on every range type, no longer only on `Int32Range`, `Int64Range` and `DecimalRange`, and answers as memory does, at the extremes too. A `DateTime` stored as `timestamp with time zone` against a `DateTimeRange` runs in memory, because PostgreSQL would compare them through the session's time zone ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Count` on a `RangeSet` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds. It counts the ranges memory holds, and a `null` multirange gives `null`. Near the element type's extremes, a multirange the database computes can count one range more ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ### Changed
 

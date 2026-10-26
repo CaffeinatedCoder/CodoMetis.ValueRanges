@@ -1,0 +1,26 @@
+Seed: RangeSet.Count over a NULL multirange counts unnest(NULL), which is 0, instead of being NULL
+Oracles: RangeSetCountParityTests
+Fails: r.MaybeA.Count on the rows whose MaybeA is NULL: server 0, rule (c) NULL
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs
+index a055e5b..509d950 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMemberTranslator.cs
+@@ -129,15 +129,13 @@ internal sealed class ValueRangesMemberTranslator(
+         var multirange = sqlExpressionFactory.ApplyTypeMapping(Unwrap(instance), definition.RangeSetTypeMapping);
+         var integer    = typeMappingSource.FindMapping(typeof(int))!;
+ 
+-        return sqlExpressionFactory.Case(
+-            [new CaseWhenClause(sqlExpressionFactory.IsNull(multirange), sqlExpressionFactory.Constant(null, typeof(int?), integer))],
+-            sqlExpressionFactory.Function(
++        return sqlExpressionFactory.Function(
+                 MultirangeCount.Placeholder,
+                 [multirange],
+                 nullable: false,
+                 argumentsPropagateNullability: [false],
+                 typeof(int),
+-                integer));
++                integer);
+     }
+ 
+     /// <summary>Strips CLR-only reference conversions, so the range mapping reaches the column.</summary>
