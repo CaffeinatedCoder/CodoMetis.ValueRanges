@@ -267,19 +267,35 @@ public sealed class WrapperSetTranslationTests
             Where(db => db.Bookings.Where(b => b.WrappedSlots.IsEmpty)));
 
     /// <summary>
-    /// The Union refusal reaches the arities too — the guard keys off <c>array_cat</c> in the SQL
+    /// The Union refusal reaches the text arity too — the guard keys off <c>array_cat</c> in the SQL
     /// tree, not off the set type, but nothing pinned that for a family resolved through the
     /// registry's lazy open-generic path rather than a closed registration.
     /// </summary>
     [TestMethod]
-    public void WrapperSets_Union_Count_FailsTranslation()
+    public void TextWrapperSets_Union_Count_FailsTranslation()
+    {
+        var other = StringSet<TestKey>.From([TestKey.Parse("users.read", System.Globalization.CultureInfo.InvariantCulture)]);
+
+        using var context = new TestDbContext();
+        var query = context.Bookings.Where(b => b.Permissions.Union(other).Count > 1);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+    }
+
+    /// <summary>
+    /// The other arities resolve through the same lazy path and canonicalize in SQL, as their closed
+    /// siblings do (#478): the element sorts by its own <c>CompareTo</c>, which must order as the
+    /// primitive does (<c>docs/value-sets.md</c>).
+    /// </summary>
+    [TestMethod]
+    public void WrapperSets_Union_Count_IsCanonical()
     {
         var other = Int32Set<TestCode>.From([Code]);
 
         using var context = new TestDbContext();
-        var query = context.Bookings.Where(b => b.WrappedCodes.Union(other).Count > 1);
+        var sql = context.Bookings.Where(b => b.WrappedCodes.Union(other).Count > 1).ToQueryString();
 
-        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+        StringAssert.Contains(sql, "FROM unnest(array_cat(b.\"WrappedCodes\", @other)) WITH ORDINALITY AS vr0(x)");
     }
 
     // -------------------------------------------------------------------------
