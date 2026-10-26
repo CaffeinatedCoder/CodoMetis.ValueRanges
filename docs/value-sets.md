@@ -22,8 +22,10 @@ order you gave the values in.
 
 Good to know:
 
-- **`Intersect`, `Except` and `Add` run in memory only.** PostgreSQL has no array intersection or
-  difference operator, and it cannot insert a value at its sorted position.
+- **In an EF Core query, every set operation runs as SQL, except three on text.** On `StringSet`
+  and `StringSet<T>`, `Intersect`, `Except` and `Add` run in memory only, because PostgreSQL sorts
+  `text` by the database collation rather than ordinally.
+  [What runs where](efcore.md#what-runs-where) has the details.
 - **An operation that changes nothing returns the same instance.**
 
 ## Pick a set type
@@ -133,9 +135,10 @@ Your type needs these interfaces:
 - **`IFormattable`** gives the text that is stored.
 - **`IParsable<TSelf>`** runs your validation again whenever a value is read. So if the database
   holds bad data, loading it throws, and no invalid value gets into your code.
-- **`IComparable<TElement>`** is needed by every version except `StringSet<T>`. The sort order
-  comes from the underlying type. `StringSet<T>` sorts the text ordinal and ignores your type's
-  own comparison.
+- **`IComparable<TElement>`** is needed by every version except `StringSet<T>`. It must order your
+  values as the underlying type orders them, which is what Vogen, StronglyTypedId and a wrapper
+  that compares its one field do ([How your element types sort and serialize](#how-your-element-types-sort-and-serialize)).
+  `StringSet<T>` sorts the text ordinal and ignores your type's own comparison.
 
 You don't write a private constructor, a source generator integration or a value converter. To
 read a value, the set calls `TElement.Parse(text, invariant)`. To write one, it calls
@@ -238,6 +241,13 @@ Your `Parse` might accept more than that. A generated `Parse` built on `decimal.
 
 String-backed versions sort ordinal over the text. They ignore your type's own `IComparable` on
 purpose, because generated implementations usually use culture-sensitive string comparison.
+
+The other versions sort by your type's `CompareTo`. It must order your values as the underlying type
+orders them: an `OrderId` wrapping `42` sorts before one wrapping `43`. In an EF Core query,
+`Union`, `Add`, `Intersect` and `Except` sort in the database, by the stored `integer`, `numeric`,
+`uuid` or date, so a `CompareTo` that orders differently makes their result differ from memory. A
+`Union` compared with `==` then misses rows it matches in memory. Vogen, StronglyTypedId and a
+wrapper that compares its one field all order as the underlying type does.
 
 The same text goes into JSON:
 

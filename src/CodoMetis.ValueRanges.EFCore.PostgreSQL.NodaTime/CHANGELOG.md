@@ -18,6 +18,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 ### Added
 
 - EF Core: Npgsql 11's own temporal keys accept `YearMonthRange` and the NodaTime range and multirange columns. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over them on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ### Changed
 
@@ -25,7 +26,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 
 ### Fixed
 
-- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
+- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions and `Clamp` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
 - Docs: the [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where) tables list every public member a query can call. `Equals` runs as `=`. `Values` on a value set, `Count` and the indexer on a `RangeSet`, `From`, `Parse`, the NodaTime conversions, `ToString`, `GetHashCode` and `GetEnumerator` run in memory.
 
 ## [10.3.0] — 2026-10-25
