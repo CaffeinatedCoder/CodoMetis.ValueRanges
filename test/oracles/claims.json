@@ -1526,6 +1526,25 @@
     ]
   },
   {
+    "id": "E88-yearmonth-upper-bound-compares-as-a-month",
+    "source": "docs/efcore.md#store-a-yearmonthrange",
+    "quote": "So `r.BillingPeriod.UpperBound() == month` and `r.BillingPeriod.Clamp(month)` compare with a month in a filter as they do in memory. The last month, 9999-12, is stored as `infinity` and reads as 9999-12-01 too.",
+    "claim": "On YearMonthRange and RangeSet<YearMonthRange, YearMonth>, LowerBound(), UpperBound() and Clamp compared with a month by ==, < and > in a filter select the rows memory selects over the loaded rows, for every shape between months including 9999-12, whose upper bound is stored as infinity.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.UpperBound",
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.Clamp",
+      "RangeSet.UpperBound",
+      "RangeSet.LowerBound"
+    ],
+    "heldBy": [
+      "YearMonthBoundParityTests",
+      "ClampDomainParityTests",
+      "NodaQueryTranslationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",

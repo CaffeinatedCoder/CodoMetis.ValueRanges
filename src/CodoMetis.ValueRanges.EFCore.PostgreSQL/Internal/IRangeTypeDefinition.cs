@@ -54,6 +54,13 @@ internal interface IRangeTypeDefinition
     ExclusiveInfinity? ExclusiveInfinity => null;
 
     /// <summary>
+    /// For a discrete type whose element spans several values of its store type (<c>YearMonthRange</c>, a month of
+    /// dates), the step the upper bound readers take back from the stored bound instead of 1, and the element an
+    /// inclusive <c>infinity</c> stands for. <see langword="null"/> for every other type.
+    /// </summary>
+    CoarseUpperBound? CoarseUpperBound => null;
+
+    /// <summary>
     /// The type mapping for elements of the range, or <see langword="null"/> to resolve it
     /// from the type mapping source via <see cref="ElementClrType"/>/<see cref="ElementStoreType"/>.
     /// A definition whose element CLR type is unknown to the provider (e.g. NodaTime

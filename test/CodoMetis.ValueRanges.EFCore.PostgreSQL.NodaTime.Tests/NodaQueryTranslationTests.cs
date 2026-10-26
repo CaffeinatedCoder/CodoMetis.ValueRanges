@@ -137,7 +137,8 @@ public sealed class NodaQueryTranslationTests
     {
         var sql = Sql(db => db.Reservations.Select(r => new { Lower = r.BillingPeriod.LowerBound(), Upper = r.BillingPeriod.UpperBound() }));
 
-        StringAssert.Contains(sql, "SELECT lower(r.\"BillingPeriod\") AS \"Lower\", upper(r.\"BillingPeriod\") - 1 AS \"Upper\"");
+        StringAssert.Contains(sql, "SELECT lower(r.\"BillingPeriod\") AS \"Lower\", CASE");
+        Assert.IsFalse(sql.Contains("upper_inc", StringComparison.Ordinal), sql);
     }
 
     [TestMethod]
@@ -294,9 +295,17 @@ public sealed class NodaQueryTranslationTests
     public void YearMonthRange_UpperBound_Discrete_CompensatesCanonicalForm()
     {
         // upper() of the month-aligned daterange is the first day of the month after the
-        // end month; - 1 lands on the last day of the end month, which reads back as it.
+        // end month; a month back is the first day of the end month, as a YearMonth operand
+        // binds. A day back read back as the month, but compared unequal to it (#506). The
+        // end month 9999-12 is stored as infinity, which no interval steps back from.
         var sql = Sql(db => db.Reservations.Select(r => (object?)r.BillingPeriod.UpperBound()));
-        StringAssert.Contains(sql, "upper(r.\"BillingPeriod\") - 1");
+        StringAssert.Contains(sql, """
+            CASE
+                WHEN NOT (isfinite(upper(r."BillingPeriod"))) THEN DATE '9999-12-01'
+                ELSE CAST(upper(r."BillingPeriod") - INTERVAL '1 month' AS date)
+            END
+            """.ReplaceLineEndings("\n"));
+        Assert.IsFalse(sql.Contains("upper(r.\"BillingPeriod\") - 1", StringComparison.Ordinal), sql);
     }
 
     [TestMethod]
