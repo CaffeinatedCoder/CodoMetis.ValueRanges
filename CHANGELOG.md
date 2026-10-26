@@ -22,6 +22,7 @@ Some calls answer differently: [Changed answers in 10.4.0](https://github.com/Ca
 ### Added
 
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: on `StringSet` and `StringSet<TElement>`, `Intersect`, `Except` and `Add` run as SQL, left unsorted, where order and repeats don't change the answer. `Count` over them and over `Union` counts the distinct elements, and `==` and `!=` compare by mutual containment. Ordering, grouping and storing one still throw ([Combine sets with Union](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#combine-sets-with-union)).
 
 ### Changed
 

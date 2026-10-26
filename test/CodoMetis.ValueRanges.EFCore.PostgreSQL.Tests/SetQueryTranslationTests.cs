@@ -164,14 +164,13 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
-    public void Add_OnText_StillFailsTranslation()
+    public void Add_OnText_IsAConcatenation_WhereOrderAndRepeatsDontCount()
     {
         // Canonical order would mean sorting in SQL, and text sorts by the database collation
-        // rather than ordinally (#479). The other families canonicalize (CanonicalSetTranslationTests).
-        using var context = new TestDbContext();
-        var query = context.Bookings.Where(b => b.Tags.Add("x").IsEmpty);
-
-        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+        // rather than ordinally (#479). So Add stays unsorted, under the uses that ignore that (#485).
+        // The other families canonicalize (CanonicalSetTranslationTests).
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Add("x").IsEmpty)),
+                              "cardinality(array_cat(b.\"Tags\", ARRAY['x']::text[])) = 0");
     }
 
     // -------------------------------------------------------------------------
@@ -211,44 +210,33 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
-    public void Union_Equality_FailsTranslation()
+    public void Union_Equality_ComparesByMutualContainment()
     {
-        // array_cat concatenates, and array equality is sensitive to both multiplicity and order,
-        // so this would answer false for sets that are equal in memory. Both halves bite:
-        // {a,c} ∪ {a,b} differs from {a,b,c} by the repeated a, and {a,c} ∪ {b} differs by
-        // ordering alone with nothing repeated. Refusing beats a row quietly not matching.
-        using var context = new TestDbContext();
+        // array_cat concatenates, and array equality is sensitive to both multiplicity and order, so
+        // = would answer false for sets that are equal in memory: {a,c} ∪ {a,b} differs from {a,b,c}
+        // by the repeated a, and {a,c} ∪ {b} by order alone. Two sets are equal when each contains the
+        // other, which neither changes (#485).
+        const string same = "array_cat(b.\"Tags\", ARRAY['a','b']::text[]) @> ARRAY['a','b']::text[] AND ARRAY['a','b']::text[] @> array_cat(b.\"Tags\", ARRAY['a','b']::text[])";
 
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted)), same);
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted) != Wanted)), $"NOT ({same})");
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).Equals(Wanted))), same);
 
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted) != Wanted).ToQueryString());
-
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted).Equals(Wanted)).ToQueryString());
-
-        // And through a canonicality-preserving wrapper, as the Count refusal does.
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x") == Wanted).ToQueryString());
+        // And through array_remove, which keeps an unsorted array unsorted.
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x") == Wanted)),
+                              "array_remove(array_cat(b.\"Tags\", ARRAY['a','b']::text[]), 'x') @> ARRAY['a','b']::text[] AND");
     }
 
     [TestMethod]
-    public void Union_Equality_InAProjection_IsRefused_WhileCountFallsBackToTheClient()
+    public void Union_EqualityAndCount_InAProjection_RunAsSql()
     {
-        // EF does not fall back to client evaluation for a comparison it can translate: in a
-        // projection it emits SELECT array_cat(…) = @p, which answered false against live
-        // PostgreSQL for {a,c} ∪ {a,b} = {a,b,c}. So equality is refused in a projection too
-        // (UnionCanonicalityTests runs both against a server). Count differs: its translator
-        // declines a union, which is what hands a projection back to the client.
-        using var context = new TestDbContext();
-
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Select(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
-
-        var count = context.Bookings.Select(b => b.Tags.Union(Wanted).Count).ToQueryString();
-        Assert.DoesNotContain("cardinality", count);
-        StringAssert.Contains(count, "array_cat");
+        // In a projection EF emitted SELECT array_cat(…) = @p, which answered false against live PostgreSQL
+        // for {a,c} ∪ {a,b} = {a,b,c}, and Count declined the union and ran in memory. Both run as SQL now
+        // (#485), and UnionCanonicalityTests runs them against a server.
+        StringAssert.Contains(Sql(db => db.Bookings.Select(b => (object?)(b.Tags.Union(Wanted) == Wanted))),
+                              "array_cat(b.\"Tags\", ARRAY['a','b']::text[]) @> ARRAY['a','b']::text[] AND");
+        StringAssert.Contains(Sql(db => db.Bookings.Select(b => (object?)b.Tags.Union(Wanted).Count)),
+                              "count(DISTINCT (vr0.x))::int\n    FROM unnest(array_cat(b.\"Tags\", ARRAY['a','b']::text[])) AS vr0(x)");
     }
 
     [TestMethod]
@@ -291,27 +279,22 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
-    public void Union_Count_FailsTranslation()
+    public void Union_Count_CountsDistinctElements()
     {
-        // array_cat concatenates, so cardinality would count shared elements twice.
-        // Refusing beats a silently inflated number.
-        using var context = new TestDbContext();
-        var query = context.Bookings.Where(b => b.Tags.Union(Wanted).Count > 2);
-
-        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+        // array_cat concatenates, so cardinality would count shared elements twice. The distinct
+        // elements are the set's (#485).
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).Count > 2)),
+                              "count(DISTINCT (vr0.x))::int\n    FROM unnest(array_cat(b.\"Tags\", ARRAY['a','b']::text[])) AS vr0(x)) > 2");
     }
 
     [TestMethod]
-    public void Union_Remove_Count_FailsTranslation()
+    public void Union_Remove_Count_CountsDistinctElements()
     {
-        // array_remove preserves canonical form rather than establishing it, so a concatenation
-        // wrapped in one is still a concatenation. Matching only the outermost call let this
-        // through: against live PostgreSQL, {a,c}.Union({a,b}).Remove("x") counted 4 where the
-        // in-memory expression is {a,b,c} — 3.
-        using var context = new TestDbContext();
-        var query = context.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x").Count > 2);
-
-        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+        // array_remove keeps an unsorted array unsorted, so a concatenation wrapped in one is still one.
+        // Matching only the outermost call let this through as cardinality: against live PostgreSQL,
+        // {a,c}.Union({a,b}).Remove("x") counted 4 where the in-memory expression is {a,b,c}, 3.
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Union(Wanted).Remove("x").Count > 2)),
+                              "FROM unnest(array_remove(array_cat(b.\"Tags\", ARRAY['a','b']::text[]), 'x')) AS vr0(x)) > 2");
     }
 
     [TestMethod]
@@ -361,24 +344,20 @@ public sealed class SetQueryTranslationTests
     }
 
     // -------------------------------------------------------------------------
-    // Client-only members on text fail translation by design
+    // Intersect and Except on text: a filter of the left array, left unsorted (#485)
     // -------------------------------------------------------------------------
 
     [TestMethod]
-    public void Intersect_OnText_FailsTranslation()
+    public void Intersect_OnText_FiltersTheLeftArray()
     {
-        using var context = new TestDbContext();
-        var query = context.Bookings.Where(b => b.Tags.Intersect(Wanted).IsEmpty);
-
-        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Intersect(Wanted).IsEmpty)),
+                              "WHERE vr0.x IS NOT NULL AND ARRAY['a','b']::text[] @> ARRAY[vr0.x]::text[]))) = 0");
     }
 
     [TestMethod]
-    public void Except_OnText_FailsTranslation()
+    public void Except_OnText_FiltersTheLeftArray()
     {
-        using var context = new TestDbContext();
-        var query = context.Bookings.Where(b => b.Tags.Except(Wanted).IsEmpty);
-
-        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+        StringAssert.Contains(Sql(db => db.Bookings.Where(b => b.Tags.Except(Wanted).IsEmpty)),
+                              "WHERE vr0.x IS NOT NULL AND NOT (ARRAY['a','b']::text[] @> ARRAY[vr0.x]::text[])))) = 0");
     }
 }

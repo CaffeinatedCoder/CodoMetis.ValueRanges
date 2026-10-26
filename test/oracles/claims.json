@@ -344,8 +344,8 @@
   {
     "id": "E17-set-client-side-ops-fail-translation",
     "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
-    "quote": "On `StringSet` and `StringSet<TElement>`, `Intersect`, `Except` and `Add` run in memory only. EF Core fails to translate them, by design.",
-    "claim": "On StringSet and StringSet<TElement>, a value set Intersect, Except or Add inside a Where throws an EF translation InvalidOperationException rather than fetching the table; inside a Select it evaluates on the client.",
+    "quote": "On `StringSet` and `StringSet<TElement>`, `Union`, `Add`, `Intersect` and `Except` run as SQL with the result left unsorted. PostgreSQL sorts `text` by the database collation rather than ordinally, so it can't build the order your sets have in memory. They run where order and repeats don't count, and the query throws everywhere else",
+    "claim": "On StringSet and StringSet<TElement>, Intersect, Except and Add translate to unsorted placeholders the SQL guard builds (a filter of the first array, array_cat with a one-element array) and run where order and repeats don't count: under @>, <@ and &&, IsEmpty, a null test, Count (count(DISTINCT …)), == and != (mutual containment) and the outermost projection; ordering by one throws.",
     "oracle": "exception",
     "surfaces": [
       "ValueSetExtensions.Intersect",
@@ -355,14 +355,15 @@
     "heldBy": [
       "SetQueryTranslationTests",
       "CanonicalSetTranslationTests",
-      "WrapperSetTranslationTests"
+      "WrapperSetTranslationTests",
+      "CanonicalSetOperationParityTests"
     ]
   },
   {
     "id": "E18-union-derived-allowed-compositions",
     "source": "docs/efcore.md#combine-sets-with-union",
-    "quote": "It follows every value derived from a union: `array_cat` itself, `array_remove` over one, a conditional or `??` that may return one, and a subquery or `Concat` column that projects one. Such a value may only feed: - **`@>`, `<@` and `&&`**, that is `Contains`, `Overlaps`, and the subset and superset methods. - **`Remove` and `IsEmpty`.** - **A null test.** - **The outermost projection**, which is loaded and so put in canonical form.",
-    "claim": "A server-side Union of text sets (StringSet, StringSet<TElement>) composed under Contains/Overlaps/subset family/Remove/IsEmpty/null test or materialized in the outer projection executes and equals the in-memory result.",
+    "quote": "It follows every value derived from one of these four: the operation itself, `array_remove` over one, a conditional or `??` that may return one, and a subquery or `Concat` column that projects one. Such a value may feed: - **`@>`, `<@` and `&&`**, that is `Contains`, `Overlaps`, and the subset and superset methods. - **`Remove`, `IsEmpty` and `Count`.** - **`==` and `!=`.** - **A null test.** - **The outermost projection**, which is loaded and so put in canonical form.",
+    "claim": "A server-side Union, Add, Intersect or Except of text sets (StringSet, StringSet<TElement>), or a value derived from one, composed under Contains/Overlaps/the subset family/Remove/IsEmpty/a null test, counted (count(DISTINCT …)), compared with == or != (mutual containment), or materialized in the outer projection executes and equals the in-memory result, over rows stored canonical, out of order and twice, and through a derived table's column.",
     "oracle": "differential",
     "surfaces": [
       "ValueSetExtensions.Union",
@@ -374,6 +375,7 @@
     "heldBy": [
       "UnionCanonicalityTests",
       "SetQueryTranslationTests",
+      "CanonicalSetOperationParityTests",
       "SetOperatorParityTests",
       "DifferentialFuzzParityTests"
     ]
@@ -381,24 +383,28 @@
   {
     "id": "E19-union-derived-refusals",
     "source": "docs/efcore.md#combine-sets-with-union",
-    "quote": "Anything else throws, including: - **Equality, `Count`, `GroupBy`, `Distinct` and `OrderBy`.** - **`Union`, `Intersect` and `Except` of queries.** - **`Contains` over a sequence of sets.** - **An `ExecuteUpdate` value.** It would store the concatenation, and from then on equality and `Count` on that row would be wrong for good.",
-    "claim": "For text sets (StringSet, StringSet<TElement>), executing a query whose translated SQL feeds a union-derived array into =, cardinality, GROUP BY, DISTINCT, ORDER BY, a deduplicating set operation, IN, or an UPDATE setter throws before the SQL is sent, however the query was written; Select(b => b.Tags.Union(more).Count) is client-evaluated and returns the deduplicated count while Select(b => b.Tags.Union(more) == expected) throws.",
+    "quote": "Anything else throws, including: - **`GroupBy`, `Distinct` and `OrderBy`.** - **`Union`, `Intersect` and `Except` of queries.** - **`Contains` over a list of several sets.** - **An `ExecuteUpdate` value.** It would store the unsorted array, and from then on `==` against that row would be wrong for good.",
+    "claim": "For text sets (StringSet, StringSet<TElement>), executing a query whose translated SQL feeds a Union-, Add-, Intersect- or Except-derived array into GROUP BY, DISTINCT, ORDER BY, a deduplicating set operation, IN, or an UPDATE setter throws before the SQL is sent, however the query was written, and the row is unchanged.",
     "oracle": "exception",
     "surfaces": [
       "ValueSetExtensions.Union",
-      "StringSet.Count"
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except"
     ],
     "heldBy": [
       "UnionCanonicalityTests",
       "SetQueryTranslationTests",
-      "SetIntegrationTests"
+      "CanonicalSetTranslationTests",
+      "CanonicalSetOperationParityTests",
+      "SetCollectionTranslationTests"
     ]
   },
   {
     "id": "E20-guard-fails-closed",
     "source": "docs/efcore.md#combine-sets-with-union",
-    "quote": "Suppose something replaces that service after `UseValueRanges()`, such as a `ReplaceService` call or another extension that replaces it rather than decorating it. Then every query with a `Union` running as SQL fails with PostgreSQL's `function valueranges_union_without_sql_guard(…) does not exist`, instead of running as if the check weren't there.",
-    "claim": "With the IRelationalParameterBasedSqlProcessorFactory replaced after UseValueRanges(), a query containing a server-side Union of text sets fails on the server with an undefined-function error naming valueranges_union_without_sql_guard.",
+    "quote": "Suppose something replaces that service after `UseValueRanges()`, such as a `ReplaceService` call or another extension that replaces it rather than decorating it. Then every query with one of them running as SQL fails with PostgreSQL's `function valueranges_union_without_sql_guard(…) does not exist`, instead of running as if the check weren't there.",
+    "claim": "With the IRelationalParameterBasedSqlProcessorFactory replaced after UseValueRanges(), a query containing a server-side Union of text sets fails on the server with an undefined-function error naming valueranges_union_without_sql_guard, and Add, Intersect and Except name their own placeholders.",
     "oracle": "exception",
     "surfaces": [
       "ValueSetExtensions.Union",
@@ -656,16 +662,14 @@
     "id": "E35-client-side-in-where-throws",
     "source": "docs/getting-started.md#what-runs-in-memory-only",
     "quote": "When an in-memory-only operation appears in a `Where`, EF Core **throws**. It does not quietly fetch the whole table.",
-    "claim": "A query whose Where uses a client-side-only set operation (Intersect, Except or Add on StringSet or StringSet<TElement>) throws at translation instead of evaluating the predicate in memory over the whole table.",
+    "claim": "A query whose Where uses an in-memory-only operation (Shift or Expand on a range, Values, Split) throws at translation instead of evaluating the predicate in memory over the whole table.",
     "oracle": "exception",
     "surfaces": [
-      "ValueSetExtensions.Intersect",
-      "ValueSetExtensions.Except",
-      "ValueSetExtensions.Add"
+      "*Range.Shift",
+      "*Range.Expand"
     ],
     "heldBy": [
-      "SetQueryTranslationTests",
-      "CanonicalSetTranslationTests"
+      "ClientSideOnlyTranslationTests"
     ]
   },
   {
@@ -1335,8 +1339,8 @@
   {
     "id": "E82-canonical-set-operations-over-rows-of-other-tools",
     "source": "docs/efcore.md#rows-written-by-other-tools",
-    "quote": "`Union`, `Add`, `Intersect` and `Except` don't depend on it either, on every set type except text. They deduplicate and sort whatever the row holds, so comparing or counting their result gives the answer memory gives, even over such a row.",
-    "claim": "Over rows another tool stored out of order with duplicates, or with a NULL element on either side, a non-text Union, Add, Intersect or Except compared with == or counted gives memory's answer over the stored set, the NULL element dropped where the deduplicated form is built.",
+    "quote": "`Union`, `Add`, `Intersect` and `Except` don't depend on it either. On every set type except text they deduplicate and sort whatever the row holds. On text, `Count` over them counts the distinct elements and `==` compares by mutual containment. Either way, comparing or counting their result gives the answer memory gives, even over such a row.",
+    "claim": "Over rows another tool stored out of order with duplicates, or with a NULL element on either side, a Union, Add, Intersect or Except compared with == or counted gives memory's answer over the stored set: on non-text sets through the deduplicated form, which drops the NULL element; on text through count(DISTINCT …), which skips it, and mutual containment.",
     "oracle": "differential",
     "surfaces": [
       "ValueSetExtensions.Union",

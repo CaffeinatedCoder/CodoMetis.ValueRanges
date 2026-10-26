@@ -267,19 +267,18 @@ public sealed class WrapperSetTranslationTests
             Where(db => db.Bookings.Where(b => b.WrappedSlots.IsEmpty)));
 
     /// <summary>
-    /// The Union refusal reaches the text arity too — the guard keys off <c>array_cat</c> in the SQL
-    /// tree, not off the set type, but nothing pinned that for a family resolved through the
-    /// registry's lazy open-generic path rather than a closed registration.
+    /// The text arity's Union is unsorted as StringSet's is, and its Count is of the distinct elements (#485),
+    /// for a family resolved through the registry's lazy open-generic path rather than a closed registration.
     /// </summary>
     [TestMethod]
-    public void TextWrapperSets_Union_Count_FailsTranslation()
+    public void TextWrapperSets_Union_Count_CountsDistinctElements()
     {
         var other = StringSet<TestKey>.From([TestKey.Parse("users.read", System.Globalization.CultureInfo.InvariantCulture)]);
 
         using var context = new TestDbContext();
-        var query = context.Bookings.Where(b => b.Permissions.Union(other).Count > 1);
+        var sql = context.Bookings.Where(b => b.Permissions.Union(other).Count > 1).ToQueryString();
 
-        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+        StringAssert.Contains(sql, "FROM unnest(array_cat(b.\"Permissions\", @other)) AS vr0(x)) > 1");
     }
 
     /// <summary>
