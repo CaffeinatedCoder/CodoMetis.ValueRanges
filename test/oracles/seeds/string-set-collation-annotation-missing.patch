@@ -1,0 +1,17 @@
+Seed: the convention leaves a collated column unnamed, and the read-optimized model keeps no collation, so the guard sees none on the column
+Oracles: StringSetCollationTests
+Fails: Contains, Remove and Add over a value from a case_insensitive column, directly or through a derived table, a set operation, a concatenation or a CASE result; EF.Functions.Collate is still rejected
+History: never shipped; the annotation in #507's fix
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Infrastructure/StringSetCollation.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Infrastructure/StringSetCollation.cs
+index 5467b19..54752fa 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Infrastructure/StringSetCollation.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Infrastructure/StringSetCollation.cs
+@@ -86,7 +86,6 @@ internal sealed class StringSetCollationConvention : IModelFinalizingConvention
+             // guard has only the read-optimized model, which keeps no collation (#507).
+             if (!StringSetCollation.IsStringSet(property.ClrType))
+             {
+-                property.Builder.HasAnnotation(StringSetCollation.ElementAnnotation, collation);
+                 continue;
+             }
+ 

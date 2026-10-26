@@ -35,6 +35,15 @@ internal static class StringSetCollation
     public static bool IsStringSet(Type type)
         => type == typeof(StringSet) || type is { IsGenericType: true } && type.GetGenericTypeDefinition() == typeof(StringSet<>);
 
+    /// <summary>
+    /// The annotation on a property whose collation may not compare bytes, naming it, for the query guard (#507). The
+    /// read-optimized model a query runs on drops collations, which only migrations need.
+    /// </summary>
+    public const string ElementAnnotation = "CodoMetis:ValueRanges:Collation";
+
+    /// <summary>The collation <see cref="ElementAnnotation"/> names on a property, or <see langword="null"/>.</summary>
+    public static string? OfElement(IReadOnlyProperty property) => property.FindAnnotation(ElementAnnotation)?.Value as string;
+
     public static string Remedy
         => "Remove the collation, or use \"C\" (docs/efcore.md#store-a-value-set-in-an-array-column).";
 }
@@ -70,9 +79,16 @@ internal sealed class StringSetCollationConvention : IModelFinalizingConvention
 
         foreach (var property in type.GetDeclaredProperties())
         {
-            if (!StringSetCollation.IsStringSet(property.ClrType) || property.GetCollation() is not { } collation
-                || StringSetCollation.ComparesBytes(collation))
+            if (property.GetCollation() is not { } collation || StringSetCollation.ComparesBytes(collation))
                 continue;
+
+            // A value from this column compared with a string set compares under its collation too, and the query
+            // guard has only the read-optimized model, which keeps no collation (#507).
+            if (!StringSetCollation.IsStringSet(property.ClrType))
+            {
+                property.Builder.HasAnnotation(StringSetCollation.ElementAnnotation, collation);
+                continue;
+            }
 
             throw new InvalidOperationException(
                 $"'{type.DisplayName()}.{property.Name}' is a {property.ClrType.ShortDisplayName()} column with the collation "

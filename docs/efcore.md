@@ -474,6 +474,12 @@ Good to know:
   `pg_c_utf8` or `default`. `EF.Functions.Collate` over a string set throws the same way. A column
   that something outside your model gave a collation can't be checked, so keep that collation
   deterministic.
+- **The value you compare with a string set brings its collation too.** PostgreSQL compares under the
+  collation of either side. So a query throws when it compares a string set with a value from a column
+  whose collation may not compare bytes, or with `EF.Functions.Collate(value, …)` under one, and the
+  message names the collation. That covers `Contains`, `Add`, `Remove`, `==` and the subset operators,
+  in `ExecuteUpdate` too. To compare such a value as memory does, write
+  `g.Members.Contains(EF.Functions.Collate(g.Owner, "C"))`.
 - **Plain arrays keep their own mapping.** `T[]` and `List<T>` properties keep their native Npgsql
   mapping, and both can sit next to value sets in one model. Scaffolding a database gives you plain
   arrays, because choosing a set type is a decision you make in your model.
