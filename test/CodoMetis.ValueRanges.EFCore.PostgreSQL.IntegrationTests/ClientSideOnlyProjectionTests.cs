@@ -47,8 +47,8 @@ public class ClientSideOnlyProjectionTests
                 // Length on Int32Range and Int64Range translates (#405); on the other range types it stays in memory.
                 r.Price.Length,
                 Values   = r.Seats.Values().ToList(),
-                // Clamp on Int32Range, Int64Range and DecimalRange translates (#406); on the other range types it stays in memory.
-                Clamp    = r.Period.Clamp(new DateOnly(2026, 7, 1)),
+                // Clamp translates on every range type (#406, #486); its one in-memory case, a value whose time zone
+                // differs from the range's, is ClampDomainParityTests' (DateTimeRange_OfATimestamptzValue_…).
                 Shifted  = r.Seats.Shift(10),
                 Expanded = r.Seats.Expand(-1),
                 Stepped  = r.Seats.Values(2).ToList(),
@@ -65,7 +65,6 @@ public class ClientSideOnlyProjectionTests
 
         Assert.AreEqual(row.Price.Length, server.Length, "Length");
         CollectionAssert.AreEqual(row.Seats.Values().ToList(), server.Values, "Values()");
-        Assert.AreEqual(row.Period.Clamp(new DateOnly(2026, 7, 1)), server.Clamp, "Clamp");
         Assert.AreEqual(row.Seats.Shift(10), server.Shifted, "Shift");
         Assert.AreEqual(row.Seats.Expand(-1), server.Expanded, "Expand");
         CollectionAssert.AreEqual(row.Seats.Values(2).ToList(), server.Stepped, "Values(step)");

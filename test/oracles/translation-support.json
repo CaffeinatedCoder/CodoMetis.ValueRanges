@@ -16,13 +16,8 @@
   },
   {
     "members": "RangeExtensions.Clamp(*",
-    "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: LEAST(GREATEST(value, lower(x)), upper(x)) on Int32Range, Int64Range and DecimalRange, with one step back from a discrete type's exclusive upper bound and NULL for the empty range; not translated on the other range types, where the form has not been checked against memory",
-    "except": {
-      "Int32Range": "server",
-      "Int64Range": "server",
-      "DecimalRange": "server"
-    }
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: LEAST(GREATEST(value, lower(x)), upper(x)) on every range type, with one step back from a discrete type's exclusive upper bound and NULL for the empty range; a DateTime stored as timestamp with time zone against a DateTimeRange's tsrange runs in memory, since GREATEST and LEAST would compare them through the session's time zone"
   },
   {
     "members": "RangeExtensions.*",
@@ -165,8 +160,8 @@
   },
   {
     "members": "RangeSet<TRange, T>.Count",
-    "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: not translated. PostgreSQL has no function for the number of disjoint ranges, and it would be a subquery over unnest(x)"
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: (SELECT count(*) FROM unnest(x)), built after EF Core's alias pass, and NULL for a NULL multirange"
   },
   {
     "members": "*.Count",

@@ -6,9 +6,10 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
 /// Wraps the provider's <see cref="IRelationalParameterBasedSqlProcessorFactory"/> so that every
-/// processor it creates runs <see cref="EmptyCollectionRewriter"/> and then <see cref="ValueSetSqlGuard"/>
-/// over its result — the guard is also what turns a translated <c>Union</c> into <c>array_cat</c>, so
-/// a query that bypasses this decorator fails on the server instead of skipping the guard.
+/// processor it creates runs <see cref="EmptyCollectionRewriter"/>, <see cref="ValueSetSqlGuard"/> and
+/// <see cref="MultirangeCount"/> over its result — the guard is also what turns a translated <c>Union</c>
+/// into <c>array_cat</c>, and <see cref="MultirangeCount"/> what builds <c>RangeSet.Count</c>, so a query
+/// that bypasses this decorator fails on the server instead of skipping either.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -78,9 +79,12 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
         // EF Core's SELECT of bare NULLs under WHERE FALSE, which PostgreSQL types as text, so the
         // NULLs are given the column type every operator on them needs before the guard judges the
         // final tree (#290).
+        // RangeSet.Count is built here too, after EF Core's alias pass, so it can't be skipped silently either (#484).
         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
-            => ValueSetSqlGuard.Check(
-                EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory),
-                Dependencies.TypeMappingSource);
+            => MultirangeCount.Expand(
+                ValueSetSqlGuard.Check(
+                    EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory),
+                    Dependencies.TypeMappingSource),
+                Dependencies.SqlExpressionFactory);
     }
 }
