@@ -31,8 +31,13 @@ namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 /// takes <c>-0</c> for <c>0</c>, a <see cref="DateTimeOffset"/> for any offset of the same instant and a
 /// <see cref="DateTime"/> of any kind; <see cref="Exact"/> does not.
 /// </para>
+/// <para>
+/// <b>Not in parallel.</b> Each test seeds a database of its own; run beside the rest of the suite, their
+/// pools would add a dozen databases' connections to the shared server's limit at once.
+/// </para>
 /// </remarks>
 [TestClass]
+[DoNotParallelize]
 public sealed class ClampDomainParityTests
 {
     [TestMethod]
@@ -135,13 +140,17 @@ public sealed class ClampDomainParityTests
 
         foreach (var zone in new[] { "UTC", "Europe/Berlin", "America/Los_Angeles" })
         {
-            await using var context = new ZonedContext(new Npgsql.NpgsqlConnectionStringBuilder(connectionString) { Timezone = zone }.ConnectionString);
+            var session = new Npgsql.NpgsqlConnectionStringBuilder(connectionString) { Timezone = zone }.ConnectionString;
+            await using var context = new ZonedContext(session);
 
             Assert.AreEqual(stay.Clamp(at), await context.Rows.Select(r => r.Stay.Clamp(r.At)).SingleAsync(), $"Select in a {zone} session");
             var e = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => context.Rows.Where(r => r.Stay.Clamp(r.At) == r.At).ToListAsync(), $"Where in a {zone} session");
             StringAssert.Contains(e.Message, "could not be translated");
+            ClearPool(session);
         }
+
+        ClearPool(connectionString);
     }
 
     /// <summary>
@@ -161,6 +170,7 @@ public sealed class ClampDomainParityTests
         var endOfDay = TimeOnly.MaxValue;
         var server = await context.Rows.Select(r => r.Range.Clamp(endOfDay)).SingleAsync();
 
+        ClearPool(connectionString);
         Assert.AreEqual(new TimeOnly(23, 59, 59, 999, 999), server, "the bound parameter, truncated to the microsecond");
         Assert.AreEqual(TimeOnly.MaxValue, TimeRange.CreateUnboundedEnd(new TimeOnly(9, 0), true).Clamp(endOfDay), "memory's operand, every tick");
     }
@@ -248,7 +258,15 @@ public sealed class ClampDomainParityTests
             }
         }
 
+        // Each test has a database of its own, so its idle connections would otherwise stay open beside every other's.
+        ClearPool(connectionString);
         Assert.AreEqual(0, failures.Count, $"{failures.Count} disagreements:{Environment.NewLine}" + string.Join(Environment.NewLine, failures.Take(80)));
+    }
+
+    private static void ClearPool(string connectionString)
+    {
+        using var connection = new Npgsql.NpgsqlConnection(connectionString);
+        Npgsql.NpgsqlConnection.ClearPool(connection);
     }
 
     private static IEnumerable<(string Name, LambdaExpression Lambda)> Calls<TRange, T>(T[] points, bool valueColumn)
