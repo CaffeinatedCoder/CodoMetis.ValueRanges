@@ -189,6 +189,15 @@
     ]
   },
   {
+    "class": "CanonicalSetOperationParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "Union, Add, Intersect and Except over every pair of subsets of three probes, for every value set family but text, stored canonical, out of order and twice, and with a NULL element, asked under ==, Count, ExecuteUpdate, the projection, containment and IsEmpty, against the same expression in memory over the pairs as stored; and the copy of a value kept, for decimals by scale and floats by the sign of zero",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "SetOperatorParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
