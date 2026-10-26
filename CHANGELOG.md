@@ -11,6 +11,8 @@ A version's section is the GitHub release's notes. Each line is one change: what
 to do about it, and a link to the guide with the detail. [CONTRIBUTING.md](CONTRIBUTING.md#changelog)
 has the rules.
 
+## [10.5.0]
+
 ## [10.4.0] — 2026-10-26
 
 Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
