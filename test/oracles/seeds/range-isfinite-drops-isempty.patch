@@ -4,10 +4,10 @@ Fails: RangeShapePredicates_MatchInMemory — IsFinite on the empty row disagree
 History: the second state predicate that was only ever checked as SQL fragments (#118)
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
-index d7e38da..b829fbb 100644
+index ad8096a..79ff104 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
-@@ -181,9 +181,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+@@ -321,9 +321,7 @@ internal sealed class ValueRangesMethodCallTranslator(
          if (generic == IsFiniteMethod)
              return sqlExpressionFactory.AndAlso(
                  sqlExpressionFactory.Not(BoolFunction("lower_inf", Range(0))),
@@ -17,4 +17,4 @@ index d7e38da..b829fbb 100644
 +                sqlExpressionFactory.Not(BoolFunction("upper_inf", Range(0))));
  
          if (generic == LowerBoundMethod)
-             return BoundFunction("lower", Range(0), definition);
+             return LowerBoundFunction(Range(0), definition);

@@ -3,15 +3,15 @@ Oracles: ClampParityTests, ClampDomainParityTests
 Fails: r.Seats.Clamp(r.Value) and r.Tickets.Clamp(r.Big) on the rows whose value is above the range: server End + 1, rule (c) End
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
-index 4054aff..6df3389 100644
+index ad8096a..3b4e432 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
-@@ -820,7 +820,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+@@ -1152,7 +1152,7 @@ internal sealed class ValueRangesMethodCallTranslator(
                          BoolFunction("isempty", range)),
                      sqlExpressionFactory.Constant(null, type, mapping))
              ],
--            Skipping("LEAST", Skipping("GREATEST", value, BoundFunction("lower", range, definition)), UpperBoundFunction(range, definition)));
-+            Skipping("LEAST", Skipping("GREATEST", value, BoundFunction("lower", range, definition)), BoundFunction("upper", range, definition)));
+-            Skipping("LEAST", Skipping("GREATEST", value, LowerBoundFunction(range, definition)), UpperBoundFunction(range, definition)));
++            Skipping("LEAST", Skipping("GREATEST", value, LowerBoundFunction(range, definition)), BoundFunction("upper", range, definition)));
      }
  
      /// <summary>
