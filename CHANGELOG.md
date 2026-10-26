@@ -13,6 +13,12 @@ has the rules.
 
 ## [10.4.0]
 
+Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
+
+### Changed answers
+
+- EF Core: a `StringSet` or `StringSet<TElement>` property with a collation that may not compare bytes throws when the model is built, and so does `EF.Functions.Collate` over one in a query. Under a case-insensitive collation, `Contains("a")` matched `{A}` and `Remove("a")` deleted `A`, unlike in memory ([#496](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/496), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+
 ### Added
 
 - EF Core: `Clamp` runs as SQL on every range type, no longer only on `Int32Range`, `Int64Range` and `DecimalRange`, and answers as memory does, at the extremes too. A `DateTime` stored as `timestamp with time zone` against a `DateTimeRange` runs in memory, because PostgreSQL would compare them through the session's time zone ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
