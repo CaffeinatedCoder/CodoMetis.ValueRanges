@@ -30,6 +30,9 @@ public class Booking
 
     public RangeSet<DateRange, DateOnly> BlockedDays { get; set; } = RangeSet<DateRange, DateOnly>.Empty;
 
+    /// <summary>A nullable multirange column, for the NULL test around <c>RangeSet.Count</c> (#484).</summary>
+    public RangeSet<DateRange, DateOnly>? MaybeBlockedDays { get; set; }
+
     public RangeSet<Int32Range, int> SeatBlocks { get; set; } = RangeSet<Int32Range, int>.Empty;
 
     public DateOnly Day { get; set; }

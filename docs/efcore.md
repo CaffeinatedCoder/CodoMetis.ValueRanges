@@ -890,6 +890,7 @@ parameters. A text value set `Union` composes only under some operators; see
 | | `RangeAgg`, `RangeIntersectAgg`, over ranges or sets | `range_agg`, `range_intersect_agg` |
 | `RangeSet` | the same operations over multirange columns, plus `Complement` and `IsContainedBy` | the multirange forms, and `'{(,)}' - x` |
 | | `Gaps()`, `Gaps(window)` | `multirange(range_merge(x)) - x`, `multirange(window) - x` |
+| | `Count` | `(SELECT count(*) FROM unnest(x))`, and NULL for a NULL multirange |
 | Value sets | `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, and the proper variants | `@>`, `&&`, `<@` |
 | | `Count`, `IsEmpty` | `cardinality` |
 | | `Union`, `Add`, `Intersect`, `Except`, except on text | `ARRAY(SELECT DISTINCT ON … FROM unnest(…) WITH ORDINALITY …)`, deduplicated and sorted; `array_cat` or a plain filter where order and duplicates can't change the answer |
@@ -910,7 +911,7 @@ translation, and in the final projection EF runs them in memory instead:
 | `Intersect`, `Except` and `Add` on `StringSet` and `StringSet<TElement>` | Not translated. Their results have to be sorted, and PostgreSQL sorts `text` by the database collation rather than ordinally. On the other set types they run as SQL. |
 | The value set indexer, `set[0]` | Subscripting reads the stored array, which is canonical only for rows this library wrote ([Rows written by other tools](#rows-written-by-other-tools)). PostgreSQL arrays also start at 1, and an index past the end is `NULL` where memory throws. |
 | `Values` on a value set | It is the loaded array itself. In a query, use the set's own members, such as `Contains` and `Count`. |
-| `Count` and the indexer on a `RangeSet` | Not translated. PostgreSQL has no function for either, and each would be a subquery over `unnest(x)`. |
+| The indexer on a `RangeSet`, `set[0]` | Not translated. It would read the ranges `unnest(x)` returns, but an index past the end is `NULL` there, where memory throws. |
 | `Compare` on `RangeLowerBoundComparer`, `RangeSet.LowerBoundComparer`, any other `IComparer` of ranges or sets, and any other `Compare(x, y)` over them | EF Core reads every `Compare(x, y)` as the natural order of `x` and `y`, whatever the comparer. In SQL the lower-bound comparer would compare in the range order. What counts is what you compare, not the type the comparer is declared over: an `IComparer<IRange<T>>`, a non-generic `IComparer` and a comparer of value sets run in memory too. So do a `Compare` method on a class that isn't a comparer and a static `Compare`. The query runs the method you called, so a class whose public `Compare` differs from its `IComparer<T>.Compare` gets the public one, as in memory. For the range order in SQL, call `x.CompareTo(y)`. |
 | `From` and `Parse` on any range or set | They build a value in .NET. Given values your code passes in, EF Core runs them before the query and sends the result as a parameter. |
 | `ToInstantRange`, `ToInterval`, `ToLocalDateRange`, `ToDateInterval` and `ToYearMonthRange` (NodaTime package) | They convert in .NET: between NodaTime's `Interval` or `DateInterval` and a range type, or between `LocalDateRange` and `YearMonthRange`. |
@@ -934,6 +935,15 @@ Good to know:
   (`PostgresException`). For a week, or a year other than 0, the message names the argument. For a
   month, a quarter or the year 0, it shows the date PostgreSQL was asked to build: `Quarter(2026, 5)`
   reports `2026-13-01`.
+- **`Count` on a `RangeSet` counts the same ranges in the database as in memory.** PostgreSQL stores
+  a multirange merged and sorted, as a `RangeSet` holds it, so you can filter and sort by how many
+  separate ranges a row has. A `null` multirange gives `null`.
+- **Near the element type's extremes, a multirange the database computes can count one range
+  more.** `(,)` minus `[int.MinValue,0]` is `(,-2147483648),[1,)` in PostgreSQL, which counts 2. In
+  memory it is `[1,)`, because no `int` lies below `int.MinValue`. A date at `DateOnly.MinValue` or
+  `MaxValue` is adjacent to nothing in the database, so a union across it counts 2 there and 1 in
+  memory. A stored multirange counts the same either way
+  ([Domain width](architecture.md#domain-width-and-the-boundary)).
 - **An in-memory operation inside a `Where` fails loudly.** EF throws rather than silently fetching
   the whole table, and that is the intended behaviour.
 - **In the final `Select` it runs in memory.** EF Core evaluates the outermost projection on the

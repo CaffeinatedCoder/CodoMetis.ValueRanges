@@ -1349,6 +1349,35 @@
     ]
   },
   {
+    "id": "E84-rangeset-count-runs-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`Count` on a `RangeSet` counts the same ranges in the database as in memory.** PostgreSQL stores a multirange merged and sorted, as a `RangeSet` holds it, so you can filter and sort by how many separate ranges a row has. A `null` multirange gives `null`.",
+    "claim": "RangeSet.Count runs as SQL, (SELECT count(*)::int FROM unnest(x) AS vcN(r)) built after EF Core's alias pass inside CASE WHEN x IS NULL THEN NULL, and matches memory on every range type over stored multiranges built from ranges that include the element type's extremes, a NULL multirange column, and the server's Union, Except, Intersect, Complement() and Gaps() away from the extremes, in a filter, its negation, a null test, a final projection and both orderings; without the decorated processor the SQL names the placeholder and PostgreSQL rejects it.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.Count"
+    ],
+    "heldBy": [
+      "RangeSetCountTranslationTests",
+      "RangeSetCountParityTests",
+      "SqlGuardRegistrationTests",
+      "TranslationSupportProbeTests"
+    ]
+  },
+  {
+    "id": "E85-rangeset-count-at-the-domain-boundary",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**Near the element type's extremes, a multirange the database computes can count one range more.** `(,)` minus `[int.MinValue,0]` is `(,-2147483648),[1,)` in PostgreSQL, which counts 2. In memory it is `[1,)`, because no `int` lies below `int.MinValue`.",
+    "claim": "A multirange the server computes from an operand bounded at the element type's extreme can hold a range memory reads as empty ((,-2147483648) below int.MinValue, (infinity,) past the last date) or keep apart two ranges memory merges across a date extreme, so RangeSet.Count over it can be one more in SQL; a stored multirange counts the same at the extremes.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.Count"
+    ],
+    "heldBy": [
+      "RangeSetCountParityTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
@@ -2190,7 +2219,7 @@
   {
     "id": "M06-readonlylist-and-structural-equality",
     "source": "docs/ranges.md#read-and-compare-sets",
-    "quote": "A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use `Count` and the indexer. Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges are equal when they normalize to the same ranges:",
+    "quote": "A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use `Count` and the indexer. In an EF Core query, `Count` runs as SQL and the indexer runs in memory ([What runs where](efcore.md#what-runs-where)). Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges are equal when they normalize to the same ranges:",
     "claim": "Two RangeSets whose inputs normalize to the same elements are Equals, ==, share GetHashCode, enumerate the same elements in lower-bound order and agree on Count and indexer.",
     "oracle": "metamorphic",
     "surfaces": [

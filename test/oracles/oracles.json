@@ -366,6 +366,15 @@
     ]
   },
   {
+    "class": "RangeSetCountParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for RangeSet.Count on every range type over stored multiranges built from ranges that include the element type's extremes, a NULL multirange column, and the server's Union, Except, Intersect, Complement() and Gaps() over operands away from the extremes, in a filter, its negation, a null test, a final projection and both orderings",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "ClampParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",

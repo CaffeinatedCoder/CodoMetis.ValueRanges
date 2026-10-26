@@ -11,7 +11,8 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
 /// Translates <c>Length</c> on <see cref="Int32Range"/> and <see cref="Int64Range"/>, the number of
-/// integers the range holds, to SQL that answers what memory answers (#405).
+/// integers the range holds, to SQL that answers what memory answers (#405), and <c>Count</c> on a
+/// <see cref="RangeSet{TRange,T}"/>, the number of ranges it holds (#484, <see cref="MultirangeCount"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -50,6 +51,9 @@ internal sealed class ValueRangesMemberTranslator(
     )
     {
         if (instance is null) return null;
+
+        if (member is PropertyInfo { Name: nameof(RangeSet<,>.Count) } && IsRangeSet(member.DeclaringType))
+            return RangeSetCount(instance, member.DeclaringType!);
 
         var overInt64 = member.HasSameMetadataDefinitionAs(Int64Length);
         if (!overInt64 && !member.HasSameMetadataDefinitionAs(Int32Length)) return null;
@@ -103,6 +107,37 @@ internal sealed class ValueRangesMemberTranslator(
                     typeMappingSource.FindMapping(definition.ElementClrType)),
                 type,
                 mapping);
+    }
+
+    private static bool IsRangeSet(Type? type) => type is { IsGenericType: true } && type.GetGenericTypeDefinition() == typeof(RangeSet<,>);
+
+    /// <summary>
+    /// <c>CASE WHEN x IS NULL THEN NULL ELSE &lt;count&gt; END</c>, the count a placeholder that
+    /// <see cref="MultirangeCount"/> builds once aliases are final.
+    /// </summary>
+    /// <remarks>
+    /// <c>count(*)</c> over <c>unnest(NULL)</c> is <c>0</c>, while a <c>Count</c> over a NULL column is NULL, as
+    /// a value set's <c>cardinality(NULL)</c> is and as EF Core's own members are over NULL. So the placeholder
+    /// is reached only with a non-NULL multirange and is declared as never NULL and as propagating nothing,
+    /// the shape of <c>NullOverNullOperand</c> (#360). EF Core folds the test away for a required column, a
+    /// non-null parameter and a constant.
+    /// </remarks>
+    private SqlExpression? RangeSetCount(SqlExpression instance, Type rangeSetType)
+    {
+        if (!RangeTypeRegistry.TryGetByClrType(rangeSetType, out var definition, out var isSet) || !isSet) return null;
+
+        var multirange = sqlExpressionFactory.ApplyTypeMapping(Unwrap(instance), definition.RangeSetTypeMapping);
+        var integer    = typeMappingSource.FindMapping(typeof(int))!;
+
+        return sqlExpressionFactory.Case(
+            [new CaseWhenClause(sqlExpressionFactory.IsNull(multirange), sqlExpressionFactory.Constant(null, typeof(int?), integer))],
+            sqlExpressionFactory.Function(
+                MultirangeCount.Placeholder,
+                [multirange],
+                nullable: false,
+                argumentsPropagateNullability: [false],
+                typeof(int),
+                integer));
     }
 
     /// <summary>Strips CLR-only reference conversions, so the range mapping reaches the column.</summary>

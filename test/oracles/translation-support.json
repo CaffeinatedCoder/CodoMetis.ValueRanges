@@ -165,8 +165,8 @@
   },
   {
     "members": "RangeSet<TRange, T>.Count",
-    "support": "client",
-    "reason": "docs/efcore.md#what-runs-where: not translated. PostgreSQL has no function for the number of disjoint ranges, and it would be a subquery over unnest(x)"
+    "support": "server",
+    "reason": "docs/efcore.md#what-runs-where: (SELECT count(*) FROM unnest(x)), built after EF Core's alias pass, and NULL for a NULL multirange"
   },
   {
     "members": "*.Count",

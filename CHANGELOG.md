@@ -16,6 +16,7 @@ has the rules.
 ### Added
 
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Count` on a `RangeSet` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds. It counts the ranges memory holds, and a `null` multirange gives `null`. Near the element type's extremes, a multirange the database computes can count one range more ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ### Changed
 
