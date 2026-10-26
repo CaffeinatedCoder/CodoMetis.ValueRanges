@@ -375,6 +375,15 @@
     ]
   },
   {
+    "class": "ClampDomainParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for Clamp on the other ten range types over every range their factories build from points that include the element type's extremes, every inclusiveness, a value column, a parameter, an inlined constant and NULL range and value columns, compared exactly and in both orderings; and a timestamptz value against a DateTimeRange in three session time zones",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "ValueSetNullOperandParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
