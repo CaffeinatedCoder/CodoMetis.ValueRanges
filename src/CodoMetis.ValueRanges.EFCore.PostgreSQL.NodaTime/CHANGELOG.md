@@ -3,7 +3,7 @@
 The changes that affect the NodaTime EF Core package. The [root changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)
 covers all four packages, which share one version number and release together.
 
-## [10.4.0]
+## [10.4.0] — 2026-10-26
 
 Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
 
