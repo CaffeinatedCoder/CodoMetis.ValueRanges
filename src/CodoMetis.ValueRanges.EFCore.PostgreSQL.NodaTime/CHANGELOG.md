@@ -19,6 +19,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 
 - EF Core: Npgsql 11's own temporal keys accept `YearMonthRange` and the NodaTime range and multirange columns. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over them on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Count` on a `RangeSet` of the NodaTime ranges and of `YearMonthRange` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ### Changed
 
