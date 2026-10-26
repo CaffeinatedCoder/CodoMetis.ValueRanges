@@ -884,7 +884,7 @@ parameters. A text value set `Union` composes only under some operators; see
 | | `IsEmpty`, `IsUnboundedStart`/`End`, `IsInfinity`, `IsFinite` | `isempty`, `lower_inf`, `upper_inf`, and combinations |
 | | `LowerBound`/`UpperBound`, `LowerBoundInclusive`/`UpperBoundInclusive` | `lower`, `upper`, `lower_inc`, `upper_inc` |
 | | `Length` on `Int32Range` and `Int64Range` | `upper(x) - lower(x)` after a widening cast, and 0 for the empty range |
-| | `Clamp(value)` on `Int32Range`, `Int64Range` and `DecimalRange` | `LEAST(GREATEST(value, lower(x)), upper(x))`, one step back from a discrete type's exclusive upper bound, and NULL for the empty range |
+| | `Clamp(value)` | `LEAST(GREATEST(value, lower(x)), upper(x))`, one step back from a discrete type's exclusive upper bound, and NULL for the empty range |
 | | `CreateFinite`/`CreateUnboundedStart`/`CreateUnboundedEnd` | range constructor functions |
 | | `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column | `daterange(first, last, '[]')`, the days from `date_trunc` or `make_date`, and an error where memory throws |
 | | `RangeAgg`, `RangeIntersectAgg`, over ranges or sets | `range_agg`, `range_intersect_agg` |
@@ -907,7 +907,7 @@ translation, and in the final projection EF runs them in memory instead:
 | `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | Not translated. An array becomes a multirange through `range_agg` over one-element ranges, which needs care at the element type's extremes: `[2147483647,2147483647]` can't be built as an `int4range`. A multirange becomes an array only by enumerating it, as `Values` does. |
 | `Shift`, `Expand` on any range | Not translated. Rebuilding the range from `lower(x) + d` differs from memory unless each case is handled: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, and a bound moved past the last date .NET holds throws in memory where PostgreSQL returns a later date. A bound at `infinity` stays there in both. |
 | `LocalDateRange.Month`, `Quarter`, `Year` and `IsoWeek`, and `YearMonthRange.Quarter` and `Year`, with an argument read from a column | Not translated. PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start, and the database would fail where memory returns a range. That holds with Npgsql's infinity conversions on or off. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. On `DateRange` these run as SQL. |
-| `Clamp(value)` on the other range types | Not translated. The same `LEAST(GREATEST(…))` form would apply, but it has only been checked against memory on `Int32Range`, `Int64Range` and `DecimalRange`, where it runs as SQL. |
+| `Clamp(value)` on a `DateTimeRange`, with a `DateTime` stored as `timestamp with time zone` | Not translated. Npgsql stores a `DateTime` property as `timestamp with time zone` unless you map it otherwise, and a `DateTimeRange` as a `tsrange`. `GREATEST` and `LEAST` would compare the two through the session's time zone, while memory compares the clock times. Map the property with `HasColumnType("timestamp without time zone")` and `Clamp` runs as SQL. |
 | `Intersect`, `Except` and `Add` on `StringSet` and `StringSet<TElement>` | Not translated. Their results have to be sorted, and PostgreSQL sorts `text` by the database collation rather than ordinally. On the other set types they run as SQL. |
 | The value set indexer, `set[0]` | Subscripting reads the stored array, which is canonical only for rows this library wrote ([Rows written by other tools](#rows-written-by-other-tools)). PostgreSQL arrays also start at 1, and an index past the end is `NULL` where memory throws. |
 | `Values` on a value set | It is the loaded array itself. In a query, use the set's own members, such as `Contains` and `Count`. |
@@ -921,9 +921,13 @@ Good to know:
 - **`Length` on `Int32Range` and `Int64Range` counts in the database as it does in memory.** `[1,10]`
   measures 10, the empty range 0, and a range unbounded on either side `null`. An `Int64Range` whose
   count is larger than `long.MaxValue` measures `null` too, so you can filter and sort by `Length`.
-- **`Clamp` on `Int32Range`, `Int64Range` and `DecimalRange` clamps in the database as it does in
-  memory.** A value inside the range comes back as it is, and one outside comes back as the bound it
-  passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.
+- **`Clamp` clamps in the database as it does in memory, on every range type.** A value inside the
+  range comes back as it is, and one outside comes back as the bound it passes, even an exclusive
+  one. The empty range gives `null`, and so does a `null` range or value.
+- **A value you pass to `Clamp` comes back at the column's precision.** PostgreSQL keeps a
+  microsecond, so `TimeOnly.MaxValue` comes back as `23:59:59.999999`, as any value sent to the
+  database does. A bound at a date extreme, which the database holds as an infinity, clamps to the
+  extreme as in memory.
 - **`DateRange.Month`, `Quarter`, `Year` and `IsoWeek` over a column build the same range in the
   database as in memory.** `DateRange.Month(b.Day)` gives the month that holds each row's day, so
   you can filter, join and sort by it. The first period starts at `-infinity` and the last ends at

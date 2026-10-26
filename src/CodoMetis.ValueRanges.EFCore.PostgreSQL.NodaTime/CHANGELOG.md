@@ -9,6 +9,7 @@ covers all four packages, which share one version number and release together.
 
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 - EF Core: `Count` on a `RangeSet` of the NodaTime ranges and of `YearMonthRange` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Clamp` runs as SQL on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`, so a query can filter and sort by the clamped value. It answers as memory does, at the element types' extremes too ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ## [10.3.0] — 2026-10-25
 

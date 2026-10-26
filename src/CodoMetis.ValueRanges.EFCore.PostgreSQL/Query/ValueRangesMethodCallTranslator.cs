@@ -83,11 +83,9 @@ internal sealed class ValueRangesMethodCallTranslator(
     private static readonly MethodInfo LowerBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.LowerBoundInclusive));
     private static readonly MethodInfo UpperBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.UpperBoundInclusive));
 
-    // -- RangeExtensions.Clamp: extension<T>(IRange<T>), on the types whose bounds read as memory's (#406) --
+    // -- RangeExtensions.Clamp: extension<T>(IRange<T>), on every range type (#406, #486) --
 
     private static readonly MethodInfo ClampMethod = GetExtensionMethod(nameof(RangeExtensions.Clamp));
-
-    private static readonly HashSet<Type> ClampsAsSql = [typeof(Int32Range), typeof(Int64Range), typeof(DecimalRange)];
 
     // -- The calendar factories (Month, Quarter, Year, IsoWeek) over a column, on the types whose every answer
     //    PostgreSQL can hold (#191) --
@@ -339,9 +337,12 @@ internal sealed class ValueRangesMethodCallTranslator(
         if (generic == UpperBoundInclusiveMethod)
             return UpperInclusiveFunction(Range(0), definition);
 
-        // On every other range type Clamp runs in memory (docs/efcore.md#what-runs-where).
+        // A value whose time zone differs from the range's elements runs in memory (MixesTimeZones).
         if (generic == ClampMethod)
-            return ClampsAsSql.Contains(definition.RangeClrType) ? ClampFunction(Range(0), ApplyElementMapping(arguments[1], definition), definition) : null;
+        {
+            var value = ApplyElementMapping(arguments[1], definition);
+            return MixesTimeZones(value, definition) ? null : ClampFunction(Range(0), value, definition);
+        }
 
         return null;
     }
@@ -1049,12 +1050,13 @@ internal sealed class ValueRangesMethodCallTranslator(
     }
 
     /// <summary>
-    /// <c>Clamp(value)</c> on <see cref="Int32Range"/>, <see cref="Int64Range"/> and <see cref="DecimalRange"/>
-    /// (#406): <c>CASE WHEN x IS NULL OR v IS NULL OR isempty(x) THEN NULL ELSE LEAST(GREATEST(v, lower(x)),
-    /// &lt;upper&gt;) END</c>, where <c>&lt;upper&gt;</c> is the bound <see cref="UpperBoundFunction"/> reads:
-    /// <c>upper(x) - 1</c> on the discrete types, <c>upper(x)</c> on <c>numrange</c>.
+    /// <c>Clamp(value)</c> on every range type (#406, #486): <c>CASE WHEN x IS NULL OR v IS NULL OR isempty(x)
+    /// THEN NULL ELSE LEAST(GREATEST(v, lower(x)), &lt;upper&gt;) END</c>, where <c>&lt;upper&gt;</c> is the bound
+    /// <see cref="UpperBoundFunction"/> reads: <c>upper(x) - 1</c> on the discrete types, <c>upper(x)</c> on the
+    /// continuous ones.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Memory's rule: <see langword="null"/> for the empty range, the value itself inside the range, and
     /// otherwise the finite bound it falls outside of, whatever that bound's inclusiveness. An unbounded
     /// side never constrains, and <c>GREATEST</c> and <c>LEAST</c> skip the NULL <c>lower</c> or
@@ -1062,6 +1064,16 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// makes a NULL operand NULL (rule (c)) rather than the other one. Measured on PostgreSQL 16, the domain
     /// extremes included: <c>upper(x) - 1</c> cannot overflow, since a stored upper bound is at least one
     /// above a value.
+    /// </para>
+    /// <para>
+    /// The same form holds on the other types (#486), measured against memory on every shape and inclusiveness
+    /// with the extremes as bounds and values (<c>ClampDomainParityTests</c>). A temporal extreme is an
+    /// infinity on the server, which memory reads back as the extreme: <c>infinity - 1</c> is still
+    /// <c>infinity</c>, and a range ending at the last date is stored <c>infinity]</c>, inclusive, so that is the
+    /// date memory clamps to. A <c>YearMonthRange</c> steps back one day from its
+    /// first-of-month upper bound to the last day of its last month, which reads as that month; its value is
+    /// the first day of its month, so it compares as memory compares months.
+    /// </para>
     /// </remarks>
     private SqlExpression ClampFunction(SqlExpression range, SqlExpression value, IRangeTypeDefinition definition)
     {
@@ -1087,6 +1099,29 @@ internal sealed class ValueRangesMethodCallTranslator(
             ],
             Skipping("LEAST", Skipping("GREATEST", value, BoundFunction("lower", range, definition)), UpperBoundFunction(range, definition)));
     }
+
+    /// <summary>
+    /// Whether a value and the range's elements differ in carrying a time zone: a <c>timestamptz</c> value
+    /// against a <see cref="DateTimeRange"/>'s <c>tsrange</c>, which is what Npgsql maps a <see cref="DateTime"/>
+    /// property to by default.
+    /// </summary>
+    /// <remarks>
+    /// <c>GREATEST</c> and <c>LEAST</c> resolve their arguments to a common type, and between <c>timestamp</c>
+    /// and <c>timestamptz</c> that is <c>timestamptz</c>, reached through the session's <c>TimeZone</c>: the
+    /// range's bounds move by the session's offset, while memory compares ticks. In a Europe/Berlin session,
+    /// <c>[08:00,18:00)</c> clamped 17:30Z to 17:00Z (#486). The operators that take an element refuse the pair on
+    /// the server instead (<c>operator does not exist: tsrange @&gt; timestamp with time zone</c>), so declining
+    /// here keeps <c>Clamp</c> as loud as they are in a filter, and gives memory's answer in a final projection.
+    /// </remarks>
+    private bool MixesTimeZones(SqlExpression value, IRangeTypeDefinition definition)
+        => value.TypeMapping?.StoreType is { } valueType
+        && ElementMapping(definition)?.StoreType is { } elementType
+        && CarriesTimeZone(valueType) != CarriesTimeZone(elementType);
+
+    private static bool CarriesTimeZone(string storeType)
+        => storeType.Contains("with time zone", StringComparison.OrdinalIgnoreCase)
+        || storeType.StartsWith("timestamptz", StringComparison.OrdinalIgnoreCase)
+        || storeType.StartsWith("timetz", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The <c>upper_inc()</c> equivalent. On discrete types the model's canonical form is

@@ -385,8 +385,8 @@ Good to know:
 
 - **The empty range returns `null`.** There is no value to snap to.
 - **An unbounded side never constrains.** Clamping into `(-∞, 10]` only ever pulls a value down.
-- **`Clamp` runs as SQL on `Int32Range`, `Int64Range` and `DecimalRange`.** On the other range types
-  it runs in memory ([What runs where](efcore.md#what-runs-where)).
+- **`Clamp` runs as SQL on every range type.** The one exception is a `DateTimeRange` clamping a
+  `DateTime` stored with a time zone, which runs in memory ([What runs where](efcore.md#what-runs-where)).
 
 ### Compare positions
 
