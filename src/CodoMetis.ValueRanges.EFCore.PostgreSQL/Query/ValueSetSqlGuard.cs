@@ -164,6 +164,9 @@ internal static class ValueSetSqlGuard
         /// <summary>The columns found to project a derived value, for <see cref="CanonicalExpander"/>.</summary>
         public IReadOnlySet<(string Table, string Column)> DerivedColumns => _derivedColumns;
 
+        /// <summary>Subquery and set-operation columns that project a collated string, by table alias and column name.</summary>
+        private readonly Dictionary<(string Table, string Column), (string Name, bool Explicit)> _collatedColumns = [];
+
         public void Root(Expression expression)
         {
             switch (expression)
@@ -223,6 +226,7 @@ internal static class ValueSetSqlGuard
             {
                 case SelectExpression subquery:
                     Register(subquery.Alias, subquery, Select(subquery));
+                    RegisterCollations(subquery.Alias, subquery, subquery);
                     break;
 
                 case SetOperationBase setOperation:
@@ -230,6 +234,7 @@ internal static class ValueSetSqlGuard
                     if (setOperation.IsDistinct && either.Contains(true)) throw Refusal.For(Use.SetOperation);
 
                     Register(setOperation.Alias, setOperation.Source1, either);
+                    RegisterCollations(setOperation.Alias, setOperation.Source1, setOperation.Source2);
                     break;
 
                 case PredicateJoinExpressionBase join:
@@ -257,6 +262,14 @@ internal static class ValueSetSqlGuard
             if (alias is null) return;
             for (var i = 0; i < derived.Length; i++)
                 if (derived[i]) _derivedColumns.Add((alias, source.Projection[i].Alias));
+        }
+
+        private void RegisterCollations(string? alias, SelectExpression first, SelectExpression second)
+        {
+            if (alias is null) return;
+            for (var i = 0; i < first.Projection.Count; i++)
+                if (Collation([first.Projection[i].Expression, second.Projection[i].Expression]) is { } collation)
+                    _collatedColumns[(alias, first.Projection[i].Alias)] = collation;
         }
 
         /// <summary>Refuses a derived value in a position that does not tolerate one.</summary>
@@ -299,11 +312,13 @@ internal static class ValueSetSqlGuard
                 // A text Union, Add, Intersect or Except: unsorted, and a Union or Add may repeat an element.
                 // Its operands need not be sorted either, since the result isn't.
                 case SqlFunctionExpression { Name: var unguarded, Arguments: { } arguments } when IsUnguarded(unguarded) && IsSet(expression):
+                    Compared([.. arguments]);
                     foreach (var argument in arguments) Derived(argument);
                     return true;
 
                 // array_remove preserves canonical form rather than establishing it.
                 case SqlFunctionExpression { Name: "array_remove", Arguments: [var input, var element] } when IsSet(expression):
+                    Compared(input, element);
                     Consume(element);
                     return Derived(input);
 
@@ -355,6 +370,7 @@ internal static class ValueSetSqlGuard
 
                 // == and != over a derived set: the expander writes them as mutual containment (#485).
                 case SqlBinaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } equality:
+                    Compared(equality.Left, equality.Right);
                     Derived(equality.Left);
                     Derived(equality.Right);
                     return false;
@@ -367,6 +383,7 @@ internal static class ValueSetSqlGuard
                 // @>, <@ and && ignore order and multiplicity: the reason array_cat is a valid
                 // translation of Union at all.
                 case PgBinaryExpression { OperatorType: PgExpressionType.Contains or PgExpressionType.ContainedBy or PgExpressionType.Overlaps } containment:
+                    Compared(containment.Left, containment.Right);
                     Derived(containment.Left);
                     Derived(containment.Right);
                     return false;
@@ -389,6 +406,89 @@ internal static class ValueSetSqlGuard
                     return false;
             }
         }
+
+        /// <summary>
+        /// Refuses a string set operator whose comparison PostgreSQL would make under a collation that may not compare
+        /// bytes (#507). It derives the operator's collation from both sides, so a value from a case-insensitive column,
+        /// or collated by <c>EF.Functions.Collate</c>, makes <c>@&gt;</c>, <c>&amp;&amp;</c> and <c>array_remove</c>
+        /// compare case-insensitively however the set column is collated (#483 rejects that one when the model is built).
+        /// </summary>
+        /// <remarks>
+        /// An explicit <c>COLLATE</c> wins over the implicit collations of columns, as PostgreSQL's rule is, so
+        /// <c>EF.Functions.Collate(value, "C")</c> is the way to compare such a value as memory does.
+        /// </remarks>
+        private void Compared(params SqlExpression?[] operands)
+        {
+            if (!operands.Any(operand => operand is not null && StringSetCollation.IsStringSet(operand.Type))) return;
+
+            // EF.Functions.Collate over the set itself keeps its own message (#483).
+            foreach (var operand in operands)
+                if (operand is CollateExpression { Operand: var collated, Collation: var own }
+                    && StringSetCollation.IsStringSet(collated.Type) && !StringSetCollation.ComparesBytes(own))
+                    throw Refusal.Collation(own);
+
+            if (Collation(operands) is { Name: var name } && !StringSetCollation.ComparesBytes(name))
+                throw Refusal.ElementCollation(name);
+        }
+
+        /// <summary>
+        /// The collation PostgreSQL derives for the operands of one operator: an explicit one if any operand has one,
+        /// otherwise an implicit one, one that may not compare bytes first. <see langword="null"/> for the default.
+        /// </summary>
+        private (string Name, bool Explicit)? Collation(IEnumerable<SqlExpression?> operands)
+        {
+            (string Name, bool Explicit)? result = null;
+            foreach (var operand in operands)
+            {
+                if (Collation(operand) is not { } found) continue;
+                if (result is null
+                 || found.Explicit && !result.Value.Explicit
+                 || found.Explicit == result.Value.Explicit && StringSetCollation.ComparesBytes(result.Value.Name) && !StringSetCollation.ComparesBytes(found.Name))
+                    result = found;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The collation an expression carries into a comparison: a <c>COLLATE</c>, a mapped column's, a subquery
+        /// column's, or what a string-typed function, operator or array takes from its string-typed inputs. A
+        /// <c>CASE</c> takes it from its results only, and a non-string expression has none.
+        /// </summary>
+        private (string Name, bool Explicit)? Collation(SqlExpression? expression) => expression switch
+        {
+            null                       => null,
+            CollateExpression collate  => (collate.Collation, true),
+            ColumnExpression column    => ColumnCollation(column),
+            CaseExpression conditional => Collation([.. conditional.WhenClauses.Select(clause => clause.Result), conditional.ElseResult]),
+            ScalarSubqueryExpression { Subquery.Projection: [var only] } => Collation(only.Expression),
+            PgNewArrayExpression array => Collation(array.Expressions),
+            _ when !Collatable(expression) => null,
+            SqlFunctionExpression { Arguments: { } arguments } => Collation(arguments.Where(Collatable)),
+            SqlBinaryExpression binary => Collation(new[] { binary.Left, binary.Right }.Where(Collatable)),
+            SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when Collatable(convert.Operand) => Collation(convert.Operand),
+            _ => null
+        };
+
+        private (string Name, bool Explicit)? ColumnCollation(ColumnExpression column)
+        {
+            // The read-optimized model keeps no collation; the convention that rejects a collated string set column
+            // names the others on their properties.
+            var mapped = column.Column?.PropertyMappings.Select(mapping => StringSetCollation.OfElement(mapping.Property))
+                                       .FirstOrDefault(name => name is not null);
+
+            return mapped is not null ? (mapped, false)
+                 : _collatedColumns.TryGetValue((column.TableAlias, column.Name), out var derived) ? derived
+                 : null;
+        }
+
+        /// <summary>Text, or a set or array of it: what carries a collation.</summary>
+        private static bool Collatable(SqlExpression? expression)
+            => expression is not null
+            && (expression.Type == typeof(string) || expression.Type == typeof(string[]) || StringSetCollation.IsStringSet(expression.Type)
+             || expression.TypeMapping?.StoreType is { } store
+                && (store.StartsWith("text", StringComparison.Ordinal) || store.StartsWith("character", StringComparison.Ordinal)
+                 || store.StartsWith("varchar", StringComparison.Ordinal)));
 
         /// <summary>
         /// Refuses <c>to_jsonb(set)</c> (or <c>to_json</c>) inside an <c>UPDATE</c> setter, naming the
@@ -792,6 +892,13 @@ internal static class ValueSetSqlGuard
             $"A string set cannot be compared under the collation '{collation}' (EF.Functions.Collate). A string set "
           + "compares its elements ordinally in memory, and under a case- or accent-insensitive collation Contains, the "
           + "subset operators, == and Remove would answer differently in the database. Use \"C\", or compare in memory.");
+
+        public static InvalidOperationException ElementCollation(string collation) => new(
+            $"A string set cannot be compared with a value under the collation '{collation}', which the value takes from its "
+          + "column or from EF.Functions.Collate. PostgreSQL compares under the collation of either side, so under a case- "
+          + "or accent-insensitive one Contains, the subset operators, == and Remove would answer differently from memory, "
+          + "which compares ordinally, and Remove in ExecuteUpdate would delete elements memory keeps. Collate the value "
+          + "with EF.Functions.Collate(value, \"C\"), or compare in memory.");
 
         public static InvalidOperationException NullJsonSetter(string column, string? path) => new(
             $"'ExecuteUpdate' cannot set the value set '{column}{(path is null ? "" : "." + path)}' inside a JSON column "

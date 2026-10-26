@@ -269,14 +269,23 @@ public sealed class CompiledModelJsonTests
     private static IModel CompileModel(string connectionString)
     {
         using var context = new CompiledJsonContext(connectionString);
-        var assembly = typeof(CompiledJsonContext).Assembly;
+        return CompileModel(context, "CodoMetis.ValueRanges.CompiledJson");
+    }
+
+    /// <summary>
+    /// The compiled model <c>dotnet ef dbcontext optimize</c> writes for <paramref name="context"/>, compiled and loaded.
+    /// </summary>
+    internal static IModel CompileModel(DbContext context, string modelNamespace)
+    {
+        var contextType = context.GetType();
+        var assembly = contextType.Assembly;
         var services = new DesignTimeServicesBuilder(assembly, assembly, new OperationReporter(handler: null), [])
                       .Build(context);
 
         var options = new CompiledModelCodeGenerationOptions
         {
-            ContextType               = typeof(CompiledJsonContext),
-            ModelNamespace            = "CodoMetis.ValueRanges.CompiledJson",
+            ContextType               = contextType,
+            ModelNamespace            = modelNamespace,
             Language                  = "C#",
             UseNullableReferenceTypes = true
         };
@@ -285,7 +294,7 @@ public sealed class CompiledModelJsonTests
                             .GenerateModel(context.GetService<IDesignTimeModel>().Model, options);
 
         var compilation = CSharpCompilation.Create(
-            $"CompiledJsonModel_{Guid.NewGuid():N}",
+            $"CompiledModel_{Guid.NewGuid():N}",
             files.Select(file => CSharpSyntaxTree.ParseText(file.Code, path: file.Path)),
             AppDomain.CurrentDomain.GetAssemblies()
                      .Where(loaded => !loaded.IsDynamic && loaded.Location.Length > 0)
@@ -302,7 +311,7 @@ public sealed class CompiledModelJsonTests
         image.Position = 0;
         var model = AssemblyLoadContext.Default.LoadFromStream(image)
                                        .GetTypes()
-                                       .Single(type => type.Name == $"{nameof(CompiledJsonContext)}Model")
+                                       .Single(type => type.Name == $"{contextType.Name}Model")
                                        .GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)!
                                        .GetValue(null);
         return (IModel)model!;
