@@ -39,7 +39,7 @@ A range means *"every moment between these two"*. A set means *"exactly these mo
 The whole core set algebra applies:
 
 - **Queries:** `Contains`, `Overlaps`, `IsSubsetOf`/`IsSupersetOf` and their proper versions, `Count` and `IsEmpty`.
-- **Set operations:** `Union` and `Remove`, plus `Intersect`/`Except`/`Add`, which run in memory only.
+- **Set operations:** `Union`, `Add`, `Intersect`, `Except` and `Remove`. With the EF Core package, all of them run as SQL.
 - **Text and JSON:** array literal parsing and formatting, and JSON with [no setup needed](#json).
 - **Collection expressions.**
 

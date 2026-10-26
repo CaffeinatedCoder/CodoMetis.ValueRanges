@@ -102,8 +102,9 @@ Good to know:
 
 ## Query value sets
 
-The value set methods run as the array operators `@>`, `&&`, `<@`, `cardinality`, `array_remove`
-and `array_cat`:
+The value set methods run as the array operators `@>`, `&&`, `<@`, `cardinality` and
+`array_remove`, and `Union`, `Add`, `Intersect` and `Except` as one subquery that deduplicates and
+sorts, as memory does:
 
 ```csharp
 reservations.Where(r => r.Holidays.Contains(day));           // r."Holidays" @> ARRAY['2024-06-15']::date[]
@@ -111,23 +112,19 @@ reservations.Where(r => r.Holidays.Overlaps(closures));      // r."Holidays" && 
 reservations.Where(r => r.Holidays.IsSubsetOf(allowed));     // r."Holidays" <@ @allowed
 reservations.Where(r => r.BillingMonths.Count > 2);          // cardinality(r."BillingMonths") > 2
 reservations.Where(r => r.Holidays.Remove(day).IsEmpty);     // cardinality(array_remove(…)) = 0
+reservations.Where(r => r.Holidays.Union(closures) == all);  // ARRAY((SELECT DISTINCT ON (vr0.x) vr0.x FROM unnest(…) …)) = @all
 ```
 
 `Contains` always runs as `@>`, never as `= ANY`, so a plain GIN index on the column serves it.
 
 Good to know:
 
-- **`Intersect`, `Except` and `Add` run in memory only.** In a `Where` they fail to translate, by
-  design. In the final `Select`, EF Core computes them in memory after it loads the rows. The
-  EF Core guide lists everything that runs in memory, and why, in
+- **All five NodaTime sets get the same translations.** That includes their versions with your own
+  element type, and `YearMonthSet`, whose months sort as their first days. The EF Core guide lists
+  what runs where in
   [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where).
-- **`Union` is the one set operation whose SQL result isn't deduplicated and sorted.** It runs as
-  `array_cat`, which joins two arrays. That is harmless inside `@>`, `<@` and `&&`, which ignore
-  duplicates. It is also harmless when you load the result, because reading the set sorts and
-  deduplicates it again.
-- **Anything that depends on order or duplicates throws instead.** That covers equality, `Count`,
-  `GroupBy`, `Distinct`, `OrderBy` and a value in `ExecuteUpdate`. The query throws rather than
-  return a different answer from memory.
+- **Equal values keep the first copy, as in memory.** For a `Union`, the set you call it on comes
+  first.
 - **`Remove` is safe everywhere.** `array_remove` leaves the array sorted and deduplicated.
 
 ## What gets stored

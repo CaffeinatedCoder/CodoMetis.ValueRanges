@@ -3,10 +3,9 @@ Oracles: RepeatedExecutionProbeTests
 Fails: every captured operand and list after its first execution, wherever the first value was NULL or empty and a later one is not, and the other way
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs
-index 3a2ead0..2f0f5cf 100644
 --- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs
 +++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs
-@@ -78,8 +78,10 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
+@@ -78,9 +78,11 @@
          // EF Core's SELECT of bare NULLs under WHERE FALSE, which PostgreSQL types as text, so the
          // NULLs are given the column type every operator on them needs before the guard judges the
          // final tree (#290).
@@ -14,8 +13,10 @@ index 3a2ead0..2f0f5cf 100644
 +
          public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
 -            => ValueSetSqlGuard.Check(
--                EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory));
+-                EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory),
+-                Dependencies.TypeMappingSource);
 +            => _processed.GetOrAdd(queryExpression, query => ValueSetSqlGuard.Check(
-+                EmptyCollectionRewriter.Rewrite(inner.Process(query, parametersDecorator), Dependencies.SqlExpressionFactory)));
++                EmptyCollectionRewriter.Rewrite(inner.Process(query, parametersDecorator), Dependencies.SqlExpressionFactory),
++                Dependencies.TypeMappingSource));
      }
  }

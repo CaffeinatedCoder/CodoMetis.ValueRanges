@@ -80,6 +80,7 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
         // final tree (#290).
         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
             => ValueSetSqlGuard.Check(
-                EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory));
+                EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory),
+                Dependencies.TypeMappingSource);
     }
 }
