@@ -40,6 +40,7 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. Not
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 - Docs: the guides, the package READMEs, the changelog and an API reference are published as a [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/) with one set of pages per line. It opens on the stable 10.x line, and the 11.x previews are under `/11.x/`.
 - Docs: a [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md) follows one booking through a minimal API and PostgreSQL, from the request to the stored row and back, and says what changes at each step. CI runs its sample against the packages, so the responses and SQL on the page stay true.
+- EF Core: on `StringSet` and `StringSet<TElement>`, `Intersect`, `Except` and `Add` run as SQL, left unsorted, where order and repeats don't change the answer. `Count` over them and over `Union` counts the distinct elements, and `==` and `!=` compare by mutual containment. Ordering, grouping and storing one still throw ([Combine sets with Union](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#combine-sets-with-union)).
 
 ### Changed
 

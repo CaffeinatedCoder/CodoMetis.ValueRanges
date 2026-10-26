@@ -201,9 +201,11 @@ The sort order is chosen on purpose:
 
 Good to know:
 
-- **On text sets, `Intersect`, `Except` and `Add` run in memory only.** An EF Core query translates
-  them for every other set type, and doesn't for `StringSet` and `StringSet<TElement>`. The EF Core
-  guide says why in [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where).
+- **On text sets, the set operations run as SQL only where order doesn't count.** PostgreSQL sorts
+  `text` by the database collation, so an EF Core query leaves the result of `Union`, `Add`,
+  `Intersect` and `Except` unsorted on `StringSet` and `StringSet<TElement>`. `Count`, `==` and the
+  subset methods work, and ordering by one throws. The EF Core guide says why in
+  [Combine sets with `Union`](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#combine-sets-with-union).
 
 ## Literals, parsing and JSON
 

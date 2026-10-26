@@ -52,7 +52,7 @@ public sealed class SqlGuardRegistrationTests
 
         // And the guard actually runs through it.
         Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+            () => context.Bookings.OrderBy(b => b.Tags.Union(Wanted)).ToQueryString());
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public sealed class SqlGuardRegistrationTests
         Assert.IsFalse(sql.Contains(UnguardedUnion, StringComparison.Ordinal), sql);
 
         Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+            () => context.Bookings.OrderBy(b => b.Tags.Union(Wanted)).ToQueryString());
     }
 
     /// <summary>The name PostgreSQL reports when the guard did not run — part of the documented contract.</summary>

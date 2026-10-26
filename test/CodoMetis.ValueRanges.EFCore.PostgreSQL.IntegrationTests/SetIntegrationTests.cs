@@ -542,15 +542,14 @@ public class SetIntegrationTests
     }
 
     [TestMethod]
-    public async Task CountOverARemovedUnion_IsRefusedRatherThanCountedTwice()
+    public async Task CountOverARemovedUnion_CountsTheDistinctElements_NotTheConcatenation()
     {
         ContainerLifecycle.RequireDatabase();
 
         // array_cat concatenates and array_remove only preserves whatever canonical form its
-        // input had, so cardinality over the pair counts shared elements twice. This asserts
-        // the refusal against a live server together with the number it is refusing to return:
-        // {a,c} unioned with {a,b} is {a,c,a,b} on the server — 4 — where the in-memory
-        // expression is {a,b,c}, 3. Before the fix, only a bare Union was refused.
+        // input had, so cardinality over the pair counts shared elements twice: {a,c} unioned
+        // with {a,b} is {a,c,a,b} on the server, 4, where the in-memory expression is {a,b,c}, 3.
+        // Since 9.0.0 that was refused; since #485 the query counts the distinct elements.
         var tags  = StringSet.From("a", "c");
         var other = StringSet.From("a", "b");
 
@@ -567,11 +566,9 @@ public class SetIntegrationTests
                 """)
             .SingleAsync();
 
-        Assert.AreEqual(4, serverCount, "the server-side count the refusal exists to prevent");
+        Assert.AreEqual(4, serverCount, "the server-side count cardinality would return");
         Assert.AreEqual(3, tags.Union(other).Remove("x").Count, "the in-memory answer");
 
-        // Refusing the translation hands the projection back to client evaluation, which
-        // materializes the arrays and counts canonically — so the query now answers 3.
         var projected = await context.Reservations
             .Where(r => r.Id == 8052)
             .Select(r => r.Tags.Union(r.OptionalTags!).Remove("x").Count)
@@ -580,11 +577,8 @@ public class SetIntegrationTests
         Assert.AreEqual(3, projected,
             "the query must agree with the in-memory expression, not with cardinality over the concatenation");
 
-        // In a predicate there is no client fallback, so the same expression is refused outright
-        // rather than filtering on a number that is quietly too large.
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Reservations
-                         .Where(r => r.Tags.Union(r.OptionalTags!).Remove("x").Count > 3)
-                         .ToQueryString());
+        // In a predicate too, where there is no client fallback.
+        Assert.AreEqual(0, await context.Reservations.CountAsync(r => r.Id == 8052 && r.Tags.Union(r.OptionalTags!).Remove("x").Count > 3));
+        Assert.AreEqual(1, await context.Reservations.CountAsync(r => r.Id == 8052 && r.Tags.Union(r.OptionalTags!).Remove("x").Count == 3));
     }
 }
