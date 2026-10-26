@@ -81,11 +81,50 @@ public sealed class StringSetCollationTests
             "(p.\"Tags\" COLLATE \"C\") @> ARRAY['a']::text[]");
     }
 
+    /// <summary>
+    /// A value compared with a string set brings its collation to the comparison, since PostgreSQL derives the
+    /// operator's from both sides (#507). Through a derived table's column, a set operation's and a scalar subquery
+    /// the query is rejected as for the column itself; a byte-order collation, an explicit "C" over the column, and a
+    /// CASE that only tests the column run.
+    /// </summary>
+    [TestMethod]
+    public void AnElementWithACollationThatMayNotCompareBytes_IsRejected_WhereverItComesFrom()
+    {
+        using var context = new CollationContext(model => model.Entity<Post>().Property(p => p.Owner).UseCollation("case_insensitive"));
+
+        void Rejected(Func<IQueryable> query, string what)
+        {
+            var e = Assert.ThrowsExactly<InvalidOperationException>(() => query().ToQueryString(), what);
+            StringAssert.Contains(e.Message, "with a value under the collation 'case_insensitive'", what);
+        }
+
+        Rejected(() => context.Posts.Where(p => p.Tags.Contains(p.Owner)), "a column");
+        Rejected(() => context.Posts.Where(p => p.Tags.Contains(p.Owner + "!")), "a concatenation");
+        Rejected(() => context.Posts.Where(p => p.Tags.Contains(p.Id > 0 ? p.Owner : "a")), "a CASE result");
+        Rejected(() => context.Posts.Select(p => new { p.Tags, Name = p.Owner }).OrderBy(x => x.Name).Take(5).Where(x => x.Tags.Contains(x.Name)),
+                 "a derived table's column");
+        Rejected(() => context.Posts.Select(p => new { p.Tags, Name = p.Owner })
+                              .Concat(context.Posts.Select(p => new { p.Tags, Name = "x" }))
+                              .Where(x => x.Tags.Contains(x.Name)), "a set operation's column");
+        Rejected(() => context.Posts.Select(p => p.Tags.Remove(p.Owner)), "Remove in a projection");
+        Rejected(() => context.Posts.Select(p => p.Tags.Add(p.Owner).Count), "Add, counted");
+        Rejected(() => context.Posts.Where(p => p.Tags.Contains(EF.Functions.Collate("a", "case_insensitive"))), "EF.Functions.Collate");
+
+        StringAssert.Contains(context.Posts.Where(p => p.Tags.Contains(EF.Functions.Collate(p.Owner, "C"))).ToQueryString(),
+                              "@> ARRAY[p.\"Owner\" COLLATE \"C\"]");
+        StringAssert.Contains(context.Posts.Where(p => p.Tags.Contains(p.Owner.Length > 0 ? "a" : "b")).ToQueryString(), "@> ARRAY[CASE");
+        StringAssert.Contains(context.Posts.Where(p => p.Tags.Contains(p.Plain)).ToQueryString(), "@> ARRAY[p.\"Plain\"]");
+    }
+
     public sealed class Post
     {
         public int Id { get; set; }
 
         public StringSet Tags { get; set; } = StringSet.Empty;
+
+        public string Owner { get; set; } = "";
+
+        public string Plain { get; set; } = "";
 
         public StringSet<TestKey> Keys { get; set; } = StringSet<TestKey>.Empty;
 
