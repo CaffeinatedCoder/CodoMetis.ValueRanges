@@ -40,6 +40,9 @@ public class Booking
 
     public TimeOnly At { get; set; }
 
+    /// <summary>A <see cref="DateTime"/> as Npgsql maps it by default: <c>timestamp with time zone</c> (#486).</summary>
+    public DateTime CreatedAt { get; set; }
+
     // -- Value set properties (one per closed type, plus a wrapper instantiation) --
 
     public StringSet Tags { get; set; } = StringSet.Empty;
