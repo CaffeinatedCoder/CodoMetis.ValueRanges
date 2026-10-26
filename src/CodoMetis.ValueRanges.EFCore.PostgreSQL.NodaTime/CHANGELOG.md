@@ -10,6 +10,7 @@ Some calls answer differently: [Changed answers in 10.4.0](https://github.com/Ca
 ### Changed answers
 
 - EF Core: on a `LocalDateRange` and its multirange, `UpperBound()` and `Clamp` read an exclusive `infinity` as 9999-12-30 in a query, as the row loads, where they returned 9999-12-31, and `LowerBoundInclusive()` is `true` at an exclusive `-infinity`. `LowerBound()` there keeps `LocalDate.MinIsoValue`, because memory's -9998-01-02 isn't a PostgreSQL date ([#502](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/502), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+- EF Core: on a `YearMonthRange` and its multirange, `UpperBound()` and `Clamp` compare with a month in a query as in memory. They read the last day of the month, so on `[2026-01,2026-01]` `UpperBound() == 2026-01` was `false` and `UpperBound() > 2026-01` was `true` ([#511](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/511), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
 
 ### Added
 

@@ -1048,3 +1048,27 @@ it stored give the same answers as before. A range your query computes can hold 
   and a query that returns its infinite bound throws as it did.
 - **A `YearMonthRange` can't hold these forms.** Loading one throws, as before
   ([Rows written by other tools](efcore.md#rows-written-by-other-tools)).
+
+### Check `YearMonthRange` upper bounds compared in queries
+
+Check EF Core queries that compare `UpperBound()` or `Clamp` of a `YearMonthRange`, or `UpperBound()`
+of a `RangeSet` of them, with a month. Look in `Where`, in `OrderBy` keys compared later, and in
+projected comparisons.
+
+A `YearMonthRange` is stored as a month-aligned `daterange`, and a month you pass in is sent as its
+first day. Before 10.4.0, a query read the upper bound as the last day of the month. It loaded as the
+right month, but a comparison saw two different dates:
+
+| Query, on `[2026-01,2026-01]` | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(r => r.BillingPeriod.UpperBound() == new YearMonth(2026, 1))` | matches | no match |
+| `Where(r => r.BillingPeriod.UpperBound() > new YearMonth(2026, 1))` | no match | matches |
+| `Where(r => r.BillingPeriod.Clamp(new YearMonth(2026, 2)) == new YearMonth(2026, 1))` | matches | no match |
+| `Select(r => r.BillingPeriod.UpperBound())` | 2026-01 | 2026-01 |
+
+Now the query reads the first day of the month and compares as memory does. A projected bound loads
+as before.
+
+- **`Clamp` on a `YearMonthRange` first runs as SQL in 10.4.0.** Before, it ran in memory in a final
+  projection and failed translation in a filter, so only `UpperBound()` gave other answers.
+- **`LowerBound()` doesn't change.** It always read the first day of the month.
