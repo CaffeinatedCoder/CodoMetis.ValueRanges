@@ -309,6 +309,36 @@ public sealed class InfinityConversionsDisabledTests
         Assert.IsTrue(reader.GetBoolean(1), "Npgsql sends 9999-12-31 as a date, so the server finds 9999-12-30 next to it");
     }
 
+    /// <summary>
+    /// With the switch set no extreme is an infinity, so a date range another tool wrote open to an exclusive
+    /// <c>infinity)</c> can't be loaded. The bound readers then keep PostgreSQL's reading, <c>upper(x) - 1</c>,
+    /// rather than the 9999-12-30 they read where the extremes are infinities (#489): projecting the bound fails
+    /// as loading the row does, instead of answering for a row memory has no value for.
+    /// </summary>
+    [TestMethod]
+    public async Task AnExclusiveInfinity_AnotherToolWrote_FailsToReadInAQuery_AsTheRowFailsToLoad()
+    {
+        ContainerLifecycle.RequireDatabase();
+
+        await using (var write = new InfinityDisabledDbContext())
+        {
+            write.Rows.Add(new ExtremesRow { Id = 41 });
+            await write.SaveChangesAsync();
+#pragma warning disable EF1002
+            await write.Database.ExecuteSqlRawAsync("UPDATE \"Rows\" SET \"Native_Day\" = daterange('2026-01-01', 'infinity') WHERE \"Id\" = 41");
+#pragma warning restore EF1002
+        }
+
+        await using var read = new InfinityDisabledDbContext();
+        var upper = read.Rows.Where(r => r.Id == 41).Select(r => r.Native.Day.UpperBound());
+        Assert.AreEqual("SELECT upper(r.\"Native_Day\") - 1\nFROM \"Rows\" AS r\nWHERE r.\"Id\" = 41", upper.ToQueryString());
+
+        var load = await Assert.ThrowsExactlyAsync<InvalidCastException>(() => read.Rows.AsNoTracking().SingleAsync(r => r.Id == 41));
+        StringAssert.Contains(load.Message, "Cannot read infinity value");
+        var query = await Assert.ThrowsExactlyAsync<InvalidCastException>(() => upper.SingleAsync());
+        StringAssert.Contains(query.Message, "Cannot read infinity value");
+    }
+
     private static async Task<ExtremesRow> Insert(int id)
     {
         await using (var write = new InfinityDisabledDbContext())

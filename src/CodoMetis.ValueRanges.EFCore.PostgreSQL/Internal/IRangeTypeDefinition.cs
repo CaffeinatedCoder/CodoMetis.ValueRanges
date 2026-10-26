@@ -47,6 +47,13 @@ internal interface IRangeTypeDefinition
     bool IsDiscrete { get; }
 
     /// <summary>
+    /// For a discrete type whose extremes Npgsql writes as <c>-infinity</c> / <c>infinity</c>, those extremes and
+    /// the bounds memory loads for an exclusive bound at each, which the bound readers answer there. <see langword="null"/>
+    /// for every other type, and with <c>Npgsql.DisableDateTimeInfinityConversions</c> set, where no extreme is an infinity.
+    /// </summary>
+    ExclusiveInfinity? ExclusiveInfinity => null;
+
+    /// <summary>
     /// The type mapping for elements of the range, or <see langword="null"/> to resolve it
     /// from the type mapping source via <see cref="ElementClrType"/>/<see cref="ElementStoreType"/>.
     /// A definition whose element CLR type is unknown to the provider (e.g. NodaTime
