@@ -1,0 +1,18 @@
+Seed: the guard checks only the string set's own collation, so a value collated case-insensitively makes @> and array_remove compare by it
+Oracles: StringSetCollationTests
+Fails: Contains, Remove and Add over a value from a case_insensitive column, a concatenation, a CASE result, a derived table's or set operation's column, or EF.Functions.Collate: translated where it must throw
+History: shipped until 10.4.0 (#483 checked the set side only); fixed by #507
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+index a148b45..6ca3fd3 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+@@ -427,8 +427,6 @@ internal static class ValueSetSqlGuard
+                     && StringSetCollation.IsStringSet(collated.Type) && !StringSetCollation.ComparesBytes(own))
+                     throw Refusal.Collation(own);
+ 
+-            if (Collation(operands) is { Name: var name } && !StringSetCollation.ComparesBytes(name))
+-                throw Refusal.ElementCollation(name);
+         }
+ 
+         /// <summary>
