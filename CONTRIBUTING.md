@@ -45,7 +45,7 @@ stays on the floor (`test/Directory.Build.targets`). Both are required. To run t
 the two versions, which CI keeps in the `integration-legs` matrix of `.github/workflows/dotnet.yml`:
 
 ```bash
-dotnet test test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests -p:EfFloat=10.0.13 -p:NpgsqlEfFloat=10.0.3
+dotnet test test/CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests -p:EfFloat=10.0.14 -p:NpgsqlEfFloat=10.0.3
 ```
 
 A floor-only CI missed #302 that way: an empty captured list failed on the server on every EF Core

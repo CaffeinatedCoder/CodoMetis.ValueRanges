@@ -16,7 +16,7 @@
             under EFCore.ComplexIndexes.PostgreSQL's temporal and exclusion constraints and GiST indexes.
             Neither shipping package references the other.
         -->
-        <PackageReference Include="EFCore.ComplexIndexes.PostgreSQL" Version="5.4.0" />
+        <PackageReference Include="EFCore.ComplexIndexes.PostgreSQL" Version="5.6.0" />
         <!--
             The design-time services and C# compiled-model generator `dotnet ef dbcontext optimize` runs, at
             the EF Core version the provider resolves, and the Roslyn they bring, which compiles the generated
@@ -71,7 +71,7 @@
     -->
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
-        <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
+        <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.14" />
         <Compile Include="..\..\samples\Bookings\**\*.cs" Exclude="..\..\samples\Bookings\Program.cs;..\..\samples\Bookings\obj\**;..\..\samples\Bookings\bin\**"
                  Link="Walkthrough\%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>

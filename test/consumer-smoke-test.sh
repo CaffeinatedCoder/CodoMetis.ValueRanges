@@ -847,7 +847,7 @@ walkthrough_consumer
 # packages restore and compose in one consumer, from the feeds a consumer uses. GenerateCreateScript
 # runs the other package's differ (registered by UseNpgsqlComplexIndexes()), which renders the same
 # statements a migration would, and needs no database.
-complex_indexes_version=5.4.0
+complex_indexes_version=5.6.0
 
 cat > "$work/complexindexes.cs" <<'CSHARP'
 using CodoMetis.ValueRanges;
