@@ -301,6 +301,24 @@ public sealed class ClampDomainParityTests
             if (IsNegativeZero(point)) continue;
             yield return ($"r.Range.Clamp({Show(point)})", Expression.Lambda(new Inline().Visit(parameter.Body), parameter.Parameters));
         }
+
+        // The clamped value compared with every point in a filter, where it meets a bound the way a point is bound,
+        // not as read back: a YearMonthRange's upper bound read as the last day of its month projected as that
+        // month, and compared unequal to it (#506).
+        var bound = points.Select(Bound).Distinct().ToArray();
+        foreach (var point in bound)
+        foreach (var other in bound)
+        {
+            Expression<Func<ClampOf<TRange, T>, T?>> clamp = r => r.Range.Clamp(point);
+            Expression<Func<T?>> operand = () => other;
+            var row = clamp.Parameters[0];
+            foreach (var (op, compare) in new (string, Func<Expression, Expression, BinaryExpression>)[]
+                     { ("==", Expression.Equal), ("<", Expression.LessThan), (">", Expression.GreaterThan) })
+            {
+                yield return ($"r.Range.Clamp(@{Show(point)}) {op} @{Show(other)}",
+                              Expression.Lambda<Func<ClampOf<TRange, T>, bool>>(compare(clamp.Body, operand.Body), row));
+            }
+        }
     }
 
     /// <summary>
