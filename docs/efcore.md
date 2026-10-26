@@ -369,7 +369,7 @@ Good to know:
   what `HasTemporalConstraint` accepts.
 
 Everything in this section was run against PostgreSQL 18 with `EFCore.ComplexIndexes.PostgreSQL`
-5.4.0, over a `DateRange`, a `RangeSet<DateRange, DateOnly>` and a `TimeRange` column for the
+5.6.0, over a `DateRange`, a `RangeSet<DateRange, DateOnly>` and a `TimeRange` column for the
 temporal key, and a `DateRange` column for the foreign key.
 
 ## Store a value set in an array column

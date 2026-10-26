@@ -736,7 +736,7 @@
     "id": "E40-complexindexes-accepts-mapped-range-columns",
     "source": "docs/efcore.md#reject-overlapping-rows-with-an-exclusion-constraint",
     "quote": "It accepts a range column mapped by this package exactly as it accepts an `NpgsqlRange<T>`. That works because the constraint is declared over the *column*, and these types map as ordinary scalars:",
-    "claim": "EFCore.ComplexIndexes.PostgreSQL 5.4 accepts a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange (custom timerange) property as the overlap column of HasExclusionConstraint (builder and shorthand overloads) and as the period of HasTemporalConstraint: with UseNpgsqlComplexIndexes() the create script and EnsureCreated render EXCLUDE USING gist (\"RoomId\" WITH =, \"<column>\" WITH &&) on PostgreSQL 16 and 18 and UNIQUE (\"RoomId\", \"<column>\" WITHOUT OVERLAPS) on PostgreSQL 18, which pg_get_constraintdef reads back.",
+    "claim": "EFCore.ComplexIndexes.PostgreSQL 5.6 accepts a DateRange, a RangeSet<DateRange, DateOnly> and a TimeRange (custom timerange) property as the overlap column of HasExclusionConstraint (builder and shorthand overloads) and as the period of HasTemporalConstraint: with UseNpgsqlComplexIndexes() the create script and EnsureCreated render EXCLUDE USING gist (\"RoomId\" WITH =, \"<column>\" WITH &&) on PostgreSQL 16 and 18 and UNIQUE (\"RoomId\", \"<column>\" WITHOUT OVERLAPS) on PostgreSQL 18, which pg_get_constraintdef reads back.",
     "oracle": "claim",
     "surfaces": [
       "NpgsqlValueRangesDbContextOptionsBuilderExtensions.UseValueRanges",
