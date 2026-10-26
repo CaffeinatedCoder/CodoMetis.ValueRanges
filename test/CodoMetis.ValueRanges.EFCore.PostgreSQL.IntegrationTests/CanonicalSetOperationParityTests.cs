@@ -86,6 +86,24 @@ public sealed class CanonicalSetOperationParityTests
             method: nameof(TheFirstCopyOfEachValue_IsKept_AsInMemory));
     }
 
+    /// <summary>
+    /// <c>Add</c> takes a bare element, so the element has to reach the database as the set would store
+    /// it: a <c>LocalDate</c> in the Coptic calendar is added as its ISO date, in memory and in SQL.
+    /// </summary>
+    [TestMethod]
+    public async Task Add_StoresTheElementAsTheSetWould_AsInMemory()
+    {
+        ContainerLifecycle.RequireServer();
+        var families = new[] { typeof(LocalDateSet), typeof(LocalDateTimeSet) };
+
+        var connectionString = await Database();
+        var lines = await ForEachFamily(nameof(SweepNormalizedAdd), families, connectionString);
+
+        Candidates.Verdict(nameof(CanonicalSetOperationParityTests), lines,
+            "A value set Add stores another element in the database than memory adds",
+            method: nameof(Add_StoresTheElementAsTheSetWould_AsInMemory));
+    }
+
     private static async Task<string> Database()
     {
         var connectionString = await CompositionDatabase.Create("canonical_set_operations");
@@ -351,6 +369,38 @@ public sealed class CanonicalSetOperationParityTests
             }
         }
 
+        return failures;
+    }
+
+    private static async Task<List<string>> SweepNormalizedAdd<TSet, T>(string connectionString)
+        where TSet : class, IValueSetFactory<TSet, T>, IValueSet<T>
+        where T : IEquatable<T>
+    {
+        // The probe the set rewrites: the non-ISO one, never stored before it is added.
+        var probes  = SetProbes.For<T>();
+        var element = probes[^1];
+        var left    = TSet.From(probes[0]);
+        var added   = left.Add(element);
+        if (added.Values.Contains(element)) throw new InvalidOperationException($"{typeof(TSet).Name}: the probe is not one the set rewrites.");
+
+        await using (var write = new CanonicalContext(connectionString))
+        {
+            write.Add(new CanonicalRow<TSet>
+            {
+                Id = 1, Left = left, Right = TSet.Empty,
+                Union = TSet.Empty, Added = added, Intersect = TSet.Empty, Except = TSet.Empty, Stored = TSet.Empty
+            });
+            await write.SaveChangesAsync();
+        }
+
+        await using var read = new CanonicalContext(connectionString);
+        var answer = await read.Set<CanonicalRow<TSet>>().AsNoTracking()
+                               .Select(r => new { Same = r.Left.Add(element) == r.Added, Contains = r.Left.Add(element).Contains(element) })
+                               .SingleAsync();
+
+        var failures = new List<string>();
+        if (!answer.Same) failures.Add($"{FuzzTypes.Name(typeof(TSet))} Add({element}) == {added}: memory true, database false");
+        if (!answer.Contains) failures.Add($"{FuzzTypes.Name(typeof(TSet))} Add({element}).Contains({element}): memory true, database false");
         return failures;
     }
 
