@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
@@ -327,6 +328,12 @@ internal static class ValueSetSqlGuard
 
                 case SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when IsSet(convert):
                     return Derived(convert.Operand);
+
+                // EF.Functions.Collate over a string set: the operators would compare its elements by that
+                // collation, where memory compares ordinally (#483).
+                case CollateExpression { Operand: var collated, Collation: var collation }
+                    when StringSetCollation.IsStringSet(collated.Type) && !StringSetCollation.ComparesBytes(collation):
+                    throw Refusal.Collation(collation);
 
                 // IS NULL / IS NOT NULL: a concatenation is NULL exactly when an operand is.
                 case SqlUnaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } nullTest:
@@ -682,6 +689,11 @@ internal static class ValueSetSqlGuard
           + "set's literal string, so the row would no longer load and queries on the property would fail. "
           + $"Load the entity and save it with SaveChanges, or set the whole JSON property (SetProperty(e => e.{column}, …)) "
           + "or a whole complex property that contains the set.");
+
+        public static InvalidOperationException Collation(string collation) => new(
+            $"A string set cannot be compared under the collation '{collation}' (EF.Functions.Collate). A string set "
+          + "compares its elements ordinally in memory, and under a case- or accent-insensitive collation Contains, the "
+          + "subset operators, == and Remove would answer differently in the database. Use \"C\", or compare in memory.");
 
         public static InvalidOperationException NullJsonSetter(string column, string? path) => new(
             $"'ExecuteUpdate' cannot set the value set '{column}{(path is null ? "" : "." + path)}' inside a JSON column "

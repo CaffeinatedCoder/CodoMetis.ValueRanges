@@ -1,6 +1,8 @@
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Storage;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Infrastructure;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
@@ -34,7 +36,8 @@ public static class NpgsqlValueRangesServiceCollectionExtensions
            .TryAdd<IMemberTranslatorPlugin, ValueRangesMemberTranslatorPlugin>()
            .TryAdd<IMemberTranslatorPlugin, ValueSetsMemberTranslatorPlugin>()
            .TryAdd<IAggregateMethodCallTranslatorPlugin, ValueRangesAggregateMethodCallTranslatorPlugin>()
-           .TryAdd<IInterceptor, ValueRangesQueryExpressionInterceptor>();
+           .TryAdd<IInterceptor, ValueRangesQueryExpressionInterceptor>()
+           .TryAdd<IConventionSetPlugin, ValueRangesConventionSetPlugin>();
 
         // No plugin seam exists after translation, so the final-SQL check decorates the provider's
         // parameter-based processor rather than replacing it.
