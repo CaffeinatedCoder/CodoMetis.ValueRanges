@@ -105,6 +105,15 @@ was subtracted. Ranges another tool wrote this way load one day short
 ([Rows written by other tools](efcore.md#rows-written-by-other-tools)).
 `DomainBoundaryDivergenceTests` asserts that the column and the text agree for every form.
 
+A query's bound readers read the same model (#489). `upper(x) - 1` leaves `infinity` as it is and
+`lower(x)` returns `-infinity`, so a definition with `ExclusiveInfinity` names its extremes and the
+bounds memory loads for an exclusive one, and `LowerBound()`, `UpperBound()` and `Clamp` test for the
+exclusive sentinel in a `CASE`. `LowerBoundInclusive()` on a discrete type is `NOT lower_inf(x) AND
+NOT isempty(x)`, as the upper side is, because `lower_inc` is false for an exclusive `-infinity`.
+`LocalDateRange` has the upper side only: memory starts `(-infinity` on -9998-01-02, below
+PostgreSQL's dates. With `Npgsql.DisableDateTimeInfinityConversions` set no extreme is an infinity,
+and the SQL is the plain one. `ExclusiveInfinityBoundParityTests` asserts every reader over every form.
+
 **Calendars.** NodaTime equality includes the calendar system, and of its nineteen calendars only ISO
 and Gregorian can represent `9999-12-31` at all. Gregorian shares ISO's arithmetic but is a distinct
 `CalendarSystem` instance, so a Gregorian-spelled domain maximum compares unequal to

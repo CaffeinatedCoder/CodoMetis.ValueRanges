@@ -32,10 +32,14 @@ public static class NpgsqlValueRangesNodaTimeDbContextOptionsBuilderExtensions
             // resolution — nanoseconds truncated to microseconds and the extremes written as
             // infinity, exactly as Npgsql sends them, so a JSON document and a SQL literal carry
             // the value a parameter would.
+            // A bound reader answers an exclusive infinite bound as memory loads it (#489), on the upper side only:
+            // memory starts (-infinity on -9998-01-02, the day after LocalDate.MinIsoValue, which is below
+            // PostgreSQL's 4714 BC, so the lower side keeps the extreme.
             new RangeTypeDefinition<LocalDateRange, LocalDate>(
                 "daterange", "datemultirange", "date",
                 normalizeValue: static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),
-                infinityText: NodaStoreTemporal.InfinityText),
+                infinityText: NodaStoreTemporal.InfinityText,
+                exclusiveInfinity: (LocalDate.MinIsoValue, null, LocalDate.MaxIsoValue, new LocalDate(9999, 12, 30))),
             new RangeTypeDefinition<LocalDateTimeRange, LocalDateTime>(
                 "tsrange", "tsmultirange", "timestamp without time zone",
                 normalizeValue: static value => value.Calendar == CalendarSystem.Iso ? value : value.WithCalendar(CalendarSystem.Iso),

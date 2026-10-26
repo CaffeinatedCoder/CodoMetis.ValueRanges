@@ -59,6 +59,10 @@ public sealed class ClampTranslationTests
             """));
     }
 
+    /// <summary>
+    /// The bounds are the ones <c>LowerBound()</c> and <c>UpperBound()</c> read, so an exclusive infinity is clamped
+    /// to the day inside it that memory loads (#489).
+    /// </summary>
     [TestMethod]
     public void DateRangeClamp_OfAColumn_StepsBackADayFromTheExclusiveUpperBound()
     {
@@ -70,7 +74,13 @@ public sealed class ClampTranslationTests
             """
             SELECT CASE
                 WHEN isempty(b."Period") THEN NULL
-                ELSE LEAST(GREATEST(b."Day", lower(b."Period")), upper(b."Period") - 1)
+                ELSE LEAST(GREATEST(b."Day", CASE
+                    WHEN lower(b."Period") = DATE '-infinity' AND NOT (lower_inc(b."Period")) THEN DATE '0001-01-02'
+                    ELSE lower(b."Period")
+                END), CASE
+                    WHEN upper(b."Period") = DATE 'infinity' AND NOT (upper_inc(b."Period")) THEN DATE '9999-12-30'
+                    ELSE upper(b."Period") - 1
+                END)
             END
             """));
     }

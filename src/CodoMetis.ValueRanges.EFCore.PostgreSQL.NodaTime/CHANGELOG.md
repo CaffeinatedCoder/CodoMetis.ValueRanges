@@ -5,6 +5,12 @@ covers all four packages, which share one version number and release together.
 
 ## [10.4.0]
 
+Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
+
+### Changed answers
+
+- EF Core: on a `LocalDateRange` and its multirange, `UpperBound()` and `Clamp` read an exclusive `infinity` as 9999-12-30 in a query, as the row loads, where they returned 9999-12-31, and `LowerBoundInclusive()` is `true` at an exclusive `-infinity`. `LowerBound()` there keeps `LocalDate.MinIsoValue`, because memory's -9998-01-02 isn't a PostgreSQL date ([#502](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/502), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+
 ### Added
 
 - EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
