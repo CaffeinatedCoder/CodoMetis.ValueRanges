@@ -154,8 +154,8 @@
   {
     "id": "E06-discrete-upper-compensation",
     "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
-    "quote": "So `UpperBound()` becomes `upper(x) - 1`, and `UpperBoundInclusive()` becomes `NOT upper_inf(x) AND NOT isempty(x)`. The database always returns the same results as memory ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).",
-    "claim": "For a discrete range column (int4range, int8range, daterange and the NodaTime date forms), UpperBound() and UpperBoundInclusive() projected on the server equal the in-memory closed-canonical answers.",
+    "quote": "So `UpperBound()` becomes `upper(x) - 1`. `UpperBoundInclusive()` becomes `NOT upper_inf(x) AND NOT isempty(x)`, and `LowerBoundInclusive()` becomes `NOT lower_inf(x) AND NOT isempty(x)`. The database always returns the same results as memory ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).",
+    "claim": "For a discrete range column (int4range, int8range, daterange and the NodaTime date forms), UpperBound(), UpperBoundInclusive() and LowerBoundInclusive() projected on the server equal the in-memory closed-canonical answers.",
     "oracle": "differential",
     "surfaces": [
       "RangeExtensions.UpperBound",
@@ -1502,6 +1502,27 @@
     "heldBy": [
       "StringSetCollationTests",
       "StringSetCollationIntegrationTests"
+    ]
+  },
+  {
+    "id": "E87-exclusive-infinity-bounds-read-as-the-row-loads",
+    "source": "docs/efcore.md#rows-written-by-other-tools",
+    "quote": "On a `DateRange` or a `RangeSet` of them, `LowerBound()` gives 0001-01-02 and `UpperBound()` gives 9999-12-30 in the database as in memory. `LowerBoundInclusive()` gives `true`, and `Clamp` clamps to those days.",
+    "claim": "Over a daterange another tool wrote with an exclusive infinity ([x,infinity), (-infinity,x), and the unbounded and doubly infinite forms), and over the server's Except at the extremes, LowerBound(), UpperBound(), LowerBoundInclusive(), UpperBoundInclusive() and Clamp(MinValue/MaxValue/a mid value) in a predicate equal memory's answer for the loaded row on DateRange and RangeSet<DateRange, DateOnly>, and on LocalDateRange and its RangeSet except LowerBound() and Clamp(MinIsoValue) at an exclusive -infinity, which keep LocalDate.MinIsoValue; with the infinity conversions disabled such a row fails to read in a query as it fails to load.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeExtensions.LowerBoundInclusive",
+      "RangeExtensions.Clamp",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound",
+      "RangeSet.LowerBoundInclusive"
+    ],
+    "heldBy": [
+      "ExclusiveInfinityBoundParityTests",
+      "InfinityConversionsDisabledTests",
+      "QueryTranslationTests"
     ]
   },
   {
