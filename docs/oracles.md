@@ -216,7 +216,7 @@ range, a multirange or a value set, one key per overload, a generic family kept 
 overloads an expression tree cannot hold (`ReadOnlySpan<char>`, `out`) are out by rule.
 
 ```json
-{ "members": "RangeExtensions.Clamp(*", "support": "client", "reason": "docs/efcore.md#what-runs-where: …" }
+{ "members": "*Range.Shift(*", "support": "client", "reason": "docs/efcore.md#what-runs-where: …" }
 ```
 
 - The first entry whose `members` pattern matches a key classifies it: `server` (translates, and answers in

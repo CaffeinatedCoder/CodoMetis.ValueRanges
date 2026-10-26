@@ -105,6 +105,21 @@ public sealed class SqlGuardRegistrationTests
     }
 
     /// <summary>
+    /// <c>RangeSet.Count</c> fails closed the same way (#484): its subquery is built after EF Core's alias pass by
+    /// the same decorated processor, so without it the SQL names a function PostgreSQL does not have.
+    /// </summary>
+    [TestMethod]
+    public void AReplacedProcessorFactory_SendsTheCountPlaceholder()
+    {
+        using var context = new ReplacedFactoryContext();
+
+        var sql = context.Bookings.Where(b => b.BlockedDays.Count > 2).Select(b => b.Id).ToQueryString();
+
+        StringAssert.Contains(sql, "valueranges_multirange_count_without_sql_guard(");
+        Assert.IsFalse(sql.Contains("unnest(", StringComparison.Ordinal), sql);
+    }
+
+    /// <summary>
     /// The placeholder is renamed by the guard itself, not by detecting the decorator, so another
     /// library decorating <em>around</em> it — rather than replacing it — leaves the guard running and
     /// the SQL unchanged.
