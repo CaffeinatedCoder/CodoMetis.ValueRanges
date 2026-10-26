@@ -1018,3 +1018,33 @@ compare bytes are allowed: `"C"`, `"POSIX"`, `ucs_basic`, `pg_c_utf8` and `defau
 - **Otherwise remove the collation, or use `"C"`.** A deterministic collation other than those five
   answers as memory does, but the model can't tell it from a nondeterministic one by its name.
 - **A collation given to the column outside your model isn't seen.** Keep it deterministic.
+
+### Check date bounds at an exclusive infinity in queries
+
+Check EF Core queries that call `LowerBound()`, `UpperBound()`, `LowerBoundInclusive()` or `Clamp` on
+a `DateRange`, a `LocalDateRange` or a `RangeSet` of them. Rows that another tool wrote are the ones
+to look at, and so are ranges your query computes at the date extremes.
+
+PostgreSQL keeps an infinite bound as written, so `[2026-01-01,infinity)` and `(-infinity,2026-01-01)`
+exist. Memory loads them one day inside the extreme, as `[2026-01-01,9999-12-30]` and
+`[0001-01-02,2025-12-31]`. Before 10.4.0 a query read the bound the database holds instead:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Select(r => r.Period.UpperBound())` on `[2026-01-01,infinity)` | 9999-12-30 | 9999-12-31 |
+| `Select(r => r.Period.Clamp(DateOnly.MaxValue))` on `[2026-01-01,infinity)` | 9999-12-30 | 9999-12-31 |
+| `Select(r => r.Period.LowerBound())` on `(-infinity,2026-01-01)` | 0001-01-02 | 0001-01-01 |
+| `Select(r => r.Period.Clamp(DateOnly.MinValue))` on `(-infinity,2026-01-01)` | 0001-01-02 | 0001-01-01 |
+| `Where(r => r.Period.LowerBoundInclusive())` on `(-infinity,2026-01-01)` | matches | no match |
+
+Now the query returns what memory returns. The EF Core package never writes these forms, so the rows
+it stored give the same answers as before. A range your query computes can hold one:
+`r.Period.Except(DateRange.CreateUnboundedStart(DateOnly.MinValue, true))` on `(,)` is
+`(-infinity,)` in the database, and its `LowerBound()` was 0001-01-01.
+
+- **On a `LocalDateRange`, only the upper side changes.** Memory starts `(-infinity` on -9998-01-02,
+  and PostgreSQL has no such date. So in a query `LowerBound()` still gives `LocalDate.MinIsoValue`.
+- **With `Npgsql.DisableDateTimeInfinityConversions` set, nothing changes.** Such a row doesn't load,
+  and a query that returns its infinite bound throws as it did.
+- **A `YearMonthRange` can't hold these forms.** Loading one throws, as before
+  ([Rows written by other tools](efcore.md#rows-written-by-other-tools)).

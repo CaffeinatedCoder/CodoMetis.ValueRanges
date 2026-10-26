@@ -1232,6 +1232,13 @@
     "reason": "the ranges with a time part truncate to the store's microsecond as Npgsql does (StoreTemporal / NodaStoreTemporal); a date, a number and a year-month are stored as they are"
   },
   {
+    "family": "efcore range definitions",
+    "unit": "DateRange + LocalDateRange",
+    "member": "exclusiveInfinity",
+    "kind": "extra",
+    "reason": "only a discrete type whose extremes Npgsql writes as -infinity / infinity has an exclusive infinity to read one step inside (#489); a time part makes the type continuous, a number has no infinity, and YearMonthRange can't load the form. LocalDateRange's lower side is null because memory's -9998-01-02 is below PostgreSQL's dates"
+  },
+  {
     "family": "efcore set definitions",
     "unit": "DateTimeOffsetSet + DateTimeSet + Float32Set + Float64Set + LocalDateSet + LocalDateTimeSet",
     "member": "normalizeValue",

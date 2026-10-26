@@ -186,10 +186,13 @@ Good to know:
   ([Sort ranges](ranges.md#sort-ranges)).
 - **Discrete upper bounds are adjusted for you.** For `int4range`, `int8range` and `daterange`,
   PostgreSQL normalizes to the half-open form `[lower, upper)`. This library normalizes to the
-  closed form `[lower, upper]`. So `UpperBound()` becomes `upper(x) - 1`, and
-  `UpperBoundInclusive()` becomes `NOT upper_inf(x) AND NOT isempty(x)`. The database always
+  closed form `[lower, upper]`. So `UpperBound()` becomes `upper(x) - 1`.
+  `UpperBoundInclusive()` becomes `NOT upper_inf(x) AND NOT isempty(x)`, and
+  `LowerBoundInclusive()` becomes `NOT lower_inf(x) AND NOT isempty(x)`. The database always
   returns the same results as memory
-  ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).
+  ([verified against live PostgreSQL](../README.md#verified-against-postgresql)). On a date range,
+  an exclusive `infinity` or `-infinity` is read one day inside, as the row loads
+  ([Rows written by other tools](#rows-written-by-other-tools)).
 - **Aggregates over zero rows differ.** In SQL the aggregates return `NULL` for zero input rows,
   which is standard PostgreSQL aggregate behaviour. The in-memory `RangeAgg()` returns the empty set.
   `RangeIntersectAgg()` returns `null` in both.
@@ -639,6 +642,19 @@ example, `daterange('2026-01-01', 'infinity')` loads as `[2026-01-01,9999-12-30]
 `(-infinity,2026-01-01]` as starting on 0001-01-02. `DateOnly.MaxValue` and `MinValue` stand for
 `infinity` and `-infinity`, so the range can hold the extreme only when it includes the infinity.
 The literal, JSON and a JSON column read the same text the same way.
+
+In a query, the bound methods read those rows as they load. On a `DateRange` or a `RangeSet` of
+them, `LowerBound()` gives 0001-01-02 and `UpperBound()` gives 9999-12-30 in the database as in
+memory. `LowerBoundInclusive()` gives `true`, and `Clamp` clamps to those days. The same goes for a
+bound the database computes: `(,)` minus a range that ends at `DateOnly.MinValue` starts at an
+exclusive `-infinity` in the database, and on 0001-01-02 in memory.
+
+- **A `LocalDateRange` that starts at an exclusive `-infinity` keeps the extreme in a query.** It
+  loads as starting on -9998-01-02, the day after `LocalDate.MinIsoValue`, and PostgreSQL has no
+  such date. So in a query `LowerBound()` and `Clamp(LocalDate.MinIsoValue)` give
+  `LocalDate.MinIsoValue`. Its upper side reads 9999-12-30, as a `DateRange` does.
+- **With `Npgsql.DisableDateTimeInfinityConversions` set, such a row doesn't load.** Reading it
+  throws (`InvalidCastException`), and a query that returns its infinite bound throws the same way.
 
 `Shift` and `Expand` keep a bound that stands for an infinity where it is, so a row read from
 `tsrange('2026-01-01', 'infinity')`, moved and saved, still ends at `infinity`
