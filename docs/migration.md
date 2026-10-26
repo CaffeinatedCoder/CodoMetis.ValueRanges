@@ -831,6 +831,10 @@ where, so check these:
 - **EF Core: a string set column with a collation that may not compare bytes is rejected.** Building
   the model throws. Under a case-insensitive collation, `Contains("a")` matched `{A}`, and `Remove("a")`
   in `ExecuteUpdate` deleted `A` ([details](#check-string-set-columns-with-a-collation)).
+- **EF Core: a string set compared with a value under a collation that may not compare bytes throws.**
+  The value's column or `EF.Functions.Collate` gave the comparison its collation, so `Contains(g.Owner)`
+  matched `{A}` for `"a"` on a case-insensitive `Owner`
+  ([details](#check-string-set-columns-with-a-collation)).
 - **EF Core: a date bound at an exclusive infinity reads in a query as the row loads.** On
   `[2026-01-01,infinity)`, `UpperBound()` returned 9999-12-31 in a query and 9999-12-30 in memory
   ([details](#check-date-bounds-at-an-exclusive-infinity-in-queries)).
@@ -838,9 +842,9 @@ where, so check these:
   `[2026-01,2026-01]`, `UpperBound() == 2026-01` was `false` in a query and `true` in memory
   ([details](#check-yearmonthrange-upper-bounds-compared-in-queries)).
 
-The first four also shipped in 10.2.0, the next two in 10.3.0, and the last three in 10.4.0. If you
+The first four also shipped in 10.2.0, the next two in 10.3.0, and the last four in 10.4.0. If you
 upgrade from 10.2.0 or later, you've already met the first four, from 10.3.0 or later the first six,
-and from 10.4.0 or later all nine.
+and from 10.4.0 or later all ten.
 
 ### Check bound comparisons with `null` in queries
 
@@ -998,8 +1002,9 @@ that can be NULL gets `CASE WHEN … IS NULL THEN NULL ELSE array_cat(…) END`.
 
 ### Check string set columns with a collation
 
-Check `StringSet` and `StringSet<TElement>` properties configured with `UseCollation`, and queries
-that call `EF.Functions.Collate` on one.
+Check `StringSet` and `StringSet<TElement>` properties configured with `UseCollation`, queries that
+call `EF.Functions.Collate` on one, and queries that compare one with a value from a column configured
+with `UseCollation`.
 
 PostgreSQL compares the elements of a `text[]` column with the column's collation, and memory compares
 them ordinally. A deterministic collation breaks every tie by the bytes, so the two agree. A
@@ -1025,6 +1030,24 @@ compare bytes are allowed: `"C"`, `"POSIX"`, `ucs_basic`, `pg_c_utf8` and `defau
 - **Otherwise remove the collation, or use `"C"`.** A deterministic collation other than those five
   answers as memory does, but the model can't tell it from a nondeterministic one by its name.
 - **A collation given to the column outside your model isn't seen.** Keep it deterministic.
+
+The value you compare with a string set counts too, because PostgreSQL compares under the collation of
+either side. With `Members` holding `{A,b}`, no collation on it, and `Owner` holding `"a"` under a
+case-insensitive collation:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(g => g.Members.Contains(g.Owner))` | no match | matched |
+| `Where(g => g.Members.Contains(EF.Functions.Collate("a", "case_insensitive")))` | no match | matched |
+| `ExecuteUpdate(… g => g.Members.Remove(g.Owner))` | — | stored `{b}` |
+
+Now such a query throws `InvalidOperationException` and names the collation. The same five collations
+are allowed on the value's column.
+
+- **Compare with `EF.Functions.Collate(g.Owner, "C")`.** An explicit collation wins over the column's,
+  so the query compares bytes, as memory does. Unless the set column is collated `"C"` too, PostgreSQL
+  then can't use a GIN index on it for that comparison.
+- **Or load the value first.** A value your code passes in has no collation.
 
 ### Check date bounds at an exclusive infinity in queries
 
