@@ -51,6 +51,13 @@ internal sealed class YearMonthRangeTypeDefinition : IRangeTypeDefinition
 
     public bool SupportsSqlConstruction => false;
 
+    /// <summary>
+    /// A month back from the stored exclusive bound is the first day of the last month, as a <see cref="YearMonth"/>
+    /// operand binds; a day back is its last day, which compares unequal to it (#506). 9999-12 ends on
+    /// <c>infinity</c>.
+    /// </summary>
+    public CoarseUpperBound CoarseUpperBound { get; } = new("1 month", new YearMonth(9999, 12));
+
     public RelationalTypeMapping? ElementTypeMapping { get; } = new YearMonthTypeMapping();
 
     public RelationalTypeMapping RangeTypeMapping { get; } = new YearMonthRangeTypeMapping();

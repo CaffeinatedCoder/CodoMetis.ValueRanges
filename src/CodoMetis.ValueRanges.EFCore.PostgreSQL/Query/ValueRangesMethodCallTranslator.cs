@@ -1050,12 +1050,15 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// model's inclusive upper: <c>upper(x) - 1</c> restores agreement. NULL propagates
     /// through the subtraction for empty or unbounded operands. An exclusive <c>infinity</c>,
     /// which <c>- 1</c> leaves as it is, is read as memory loads it on a type that has an
-    /// <see cref="IRangeTypeDefinition.ExclusiveInfinity"/> (<see cref="InsideExclusiveInfinity"/>).
+    /// <see cref="IRangeTypeDefinition.ExclusiveInfinity"/> (<see cref="InsideExclusiveInfinity"/>). A type with a
+    /// <see cref="IRangeTypeDefinition.CoarseUpperBound"/> steps back by its element's span instead
+    /// (<see cref="CoarseUpper"/>).
     /// </summary>
     private SqlExpression UpperBoundFunction(SqlExpression argument, IRangeTypeDefinition definition)
     {
         var upper = BoundFunction("upper", argument, definition);
         if (!definition.IsDiscrete) return upper;
+        if (definition.CoarseUpperBound is { } coarse) return CoarseUpper(upper, coarse, definition);
 
         // The step constant must keep its own integer mapping: `date - 1` is date arithmetic
         // in PostgreSQL, and applying the element mapping to the 1 would render it as a date.
@@ -1064,6 +1067,27 @@ internal sealed class ValueRangesMethodCallTranslator(
         return definition.ExclusiveInfinity is { Upper: { } inside } bounds
                    ? InsideExclusiveInfinity(upper, closed, "upper_inc", argument, bounds.Max, inside, definition)
                    : closed;
+    }
+
+    /// <summary>
+    /// <c>CASE WHEN NOT isfinite(upper(x)) THEN last ELSE CAST(upper(x) - INTERVAL 'step' AS store) END</c>: the
+    /// first value of the last element, as an operand of the element type binds, not the last value of the store
+    /// type (#506, <see cref="CoarseUpperBound"/>). A NULL bound takes the <c>ELSE</c> and stays NULL.
+    /// </summary>
+    private SqlExpression CoarseUpper(SqlExpression upper, CoarseUpperBound coarse, IRangeTypeDefinition definition)
+    {
+        var type    = typeof(Nullable<>).MakeGenericType(definition.ElementClrType);
+        var mapping = ElementMapping(definition);
+
+        // date - interval is a timestamp, typed as one so the cast back to the subtype is written: at midnight of a
+        // whole day, it loses nothing.
+        var stepped = new SqlBinaryExpression(
+            ExpressionType.Subtract, upper, new SqlFragmentExpression($"INTERVAL '{coarse.Step}'", typeof(object), null),
+            typeof(DateTime), typeMappingSource.FindMapping(typeof(DateTime), "timestamp without time zone"));
+
+        return sqlExpressionFactory.Case(
+            [new CaseWhenClause(sqlExpressionFactory.Not(BoolFunction("isfinite", upper)), sqlExpressionFactory.Constant(coarse.Last, type, mapping))],
+            sqlExpressionFactory.Convert(stepped, type, mapping));
     }
 
     /// <summary>
@@ -1125,9 +1149,9 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// <c>infinity</c>, and a range ending at the last date is stored <c>infinity]</c>, inclusive, so that is the
     /// date memory clamps to. An exclusive infinity, which only another tool or the server's algebra writes, is
     /// clamped to the day inside it that memory loads, as the two bound readers read it (#489). A
-    /// <c>YearMonthRange</c> steps back one day from its
-    /// first-of-month upper bound to the last day of its last month, which reads as that month; its value is
-    /// the first day of its month, so it compares as memory compares months.
+    /// <c>YearMonthRange</c> steps back a month from its first-of-month upper bound, to the first day of its last
+    /// month, which is how its value binds: a day back read as that month, but compared unequal to it, and greater,
+    /// in a filter (#506).
     /// </para>
     /// </remarks>
     private SqlExpression ClampFunction(SqlExpression range, SqlExpression value, IRangeTypeDefinition definition)
