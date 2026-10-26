@@ -240,20 +240,21 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
-    public void NullIf_OverAServerSideUnion_IsRefusedAsEquality()
+    public void NullIf_OverAServerSideUnion_ComparesByMutualContainment()
     {
         // EF Core 10 writes `a == b ? null : a` as NULLIF(a, b) — shown on a plain column first, so the
-        // test is about that shape. Over a union it is array equality over a concatenation, refused as
-        // equality; without an arm of its own it was refused as "This use of it", naming no operation.
+        // test is about that shape. Over a union it compares a concatenation, which the guard writes as
+        // mutual containment, as it does == (#485); NULLIF has an arm of its own because the CASE arm
+        // doesn't see it.
         var target = StringSet.From("a", "b", "c");
         using var context = new TestDbContext();
 
         StringAssert.Contains(context.Bookings.Select(b => b.Id == 5 ? (int?)null : b.Id).ToQueryString(), "NULLIF(");
 
-        var refusal = Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Select(b => b.Tags.Union(Wanted) == target ? null : b.Tags.Union(Wanted)).ToQueryString());
+        var sql = context.Bookings.Select(b => b.Tags.Union(Wanted) == target ? null : b.Tags.Union(Wanted)).ToQueryString();
 
-        StringAssert.Contains(refusal.Message, "Value set equality");
+        Assert.DoesNotContain("NULLIF(", sql);
+        StringAssert.Contains(sql, "WHEN array_cat(b.\"Tags\", ARRAY['a','b']::text[]) @> @target AND @target @> array_cat(b.\"Tags\", ARRAY['a','b']::text[]) THEN NULL");
     }
 
     [TestMethod]
