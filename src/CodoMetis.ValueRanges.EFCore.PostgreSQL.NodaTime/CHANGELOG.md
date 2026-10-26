@@ -33,6 +33,21 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 - Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions and `Clamp` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
 - Docs: the [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where) tables list every public member a query can call. `Equals` runs as `=`. `Values` on a value set, `Count` and the indexer on a `RangeSet`, `From`, `Parse`, the NodaTime conversions, `ToString`, `GetHashCode` and `GetEnumerator` run in memory.
 
+## [10.4.0] — 2026-10-26
+
+Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
+
+### Changed answers
+
+- EF Core: on a `LocalDateRange` and its multirange, `UpperBound()` and `Clamp` read an exclusive `infinity` as 9999-12-30 in a query, as the row loads, where they returned 9999-12-31, and `LowerBoundInclusive()` is `true` at an exclusive `-infinity`. `LowerBound()` there keeps `LocalDate.MinIsoValue`, because memory's -9998-01-02 isn't a PostgreSQL date ([#502](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/502), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+- EF Core: on a `YearMonthRange` and its multirange, `UpperBound()` and `Clamp` compare with a month in a query as in memory. They read the last day of the month, so on `[2026-01,2026-01]` `UpperBound() == 2026-01` was `false` and `UpperBound() > 2026-01` was `true` ([#511](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/511), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+
+### Added
+
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Count` on a `RangeSet` of the NodaTime ranges and of `YearMonthRange` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Clamp` runs as SQL on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`, so a query can filter and sort by the clamped value. It answers as memory does, at the element types' extremes too ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+
 ## [10.3.0] — 2026-10-25
 
 ### Changed

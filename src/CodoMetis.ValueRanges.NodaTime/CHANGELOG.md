@@ -21,6 +21,10 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. The
 - Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
 - Value sets: every set type implements `IFormattable` itself, so `ToString()` and formatting no longer run the interface's default, whose shared-generic stub traps under Native AOT with ILCompiler 11 RC2 ([Native AOT](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/serialization.md#native-aot)).
 
+## [10.4.0] — 2026-10-26
+
+No change in this package.
+
 ## [10.3.0] — 2026-10-25
 
 ### Changed

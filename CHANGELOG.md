@@ -62,6 +62,28 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11. Not
 - Docs: an ordering by `LowerBound()` or `UpperBound()` puts the empty rows and those without that bound where PostgreSQL puts NULLs, last ascending and first descending, also on a required column. A `!= null` key in front sorts them as memory does ([EF Core](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - EF Core: an empty captured list of ranges or sets keeps EF Core's ordering column (`_ord`, behind `FirstOrDefault` over the list) an integer, as it is when the list has elements. It was cast to the range or set type. No answer changed, but comparing that column with an integer would have failed for the empty list ([Captured lists](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#match-a-column-against-a-list-of-sets)).
 
+## [10.4.0] — 2026-10-26
+
+Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
+
+### Changed answers
+
+- EF Core: a `StringSet` or `StringSet<TElement>` property with a collation that may not compare bytes throws when the model is built, and so does `EF.Functions.Collate` over one in a query. Under a case-insensitive collation, `Contains("a")` matched `{A}` and `Remove("a")` deleted `A`, unlike in memory ([#496](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/496), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+- EF Core: on a `DateRange`, a `LocalDateRange` and their multiranges, `LowerBound()`, `UpperBound()`, `LowerBoundInclusive()` and `Clamp` read an exclusive `infinity` or `-infinity` in a query as the row loads. On `[2026-01-01,infinity)`, `UpperBound()` returned 9999-12-31 where memory gives 9999-12-30 ([#502](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/502), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+- EF Core: on a `YearMonthRange` and its multirange, `UpperBound()` and `Clamp` compare with a month in a query as in memory. They read the last day of the month, so on `[2026-01,2026-01]` `UpperBound() == 2026-01` was `false` and `UpperBound() > 2026-01` was `true` ([#511](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/511), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+- EF Core: a query that compares a `StringSet` or `StringSet<TElement>` with a value whose column has a collation that may not compare bytes, or with `EF.Functions.Collate(value, …)` under one, throws, because the database compares under it: `Contains(g.Owner)` matched `{A}` for `"a"` on a case-insensitive `Owner`, and `Remove(g.Owner)` in `ExecuteUpdate` deleted `A` ([#512](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/512), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+
+### Added
+
+- EF Core: `Clamp` runs as SQL on every range type, no longer only on `Int32Range`, `Int64Range` and `DecimalRange`, and answers as memory does, at the extremes too. A `DateTime` stored as `timestamp with time zone` against a `DateTimeRange` runs in memory, because PostgreSQL would compare them through the session's time zone ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: on `StringSet` and `StringSet<TElement>`, `Intersect`, `Except` and `Add` run as SQL, left unsorted, where order and repeats don't change the answer. `Count` over them and over `Union` counts the distinct elements, and `==` and `!=` compare by mutual containment. Ordering, grouping and storing one still throw ([Combine sets with Union](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#combine-sets-with-union)).
+- EF Core: `Count` on a `RangeSet` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds. It counts the ranges memory holds, and a `null` multirange gives `null`. Near the element type's extremes, a multirange the database computes can count one range more ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+
+### Changed
+
+- Docs: a value set over your own element type, other than `StringSet<TElement>`, needs a `CompareTo` that orders values as the underlying type does, because the database sorts the underlying values ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#how-your-element-types-sort-and-serialize)).
+
 ## [10.3.0] — 2026-10-25
 
 Some calls answer differently: [Changed answers in 10.3.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030).

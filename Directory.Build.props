@@ -64,7 +64,7 @@
     -->
     <PropertyGroup>
         <EnablePackageValidation>true</EnablePackageValidation>
-        <PackageValidationBaselineVersion>10.3.0</PackageValidationBaselineVersion>
+        <PackageValidationBaselineVersion>10.4.0</PackageValidationBaselineVersion>
     </PropertyGroup>
 
     <!--
