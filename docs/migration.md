@@ -806,6 +806,16 @@ Some calls return a different value. Your code stays the same, so the compiler c
 - [Check value set `Union` and `Remove` over NULL in queries](#check-value-set-union-and-remove-over-null-in-queries)
 - [Move `RangeLowerBoundComparer` out of queries](#move-rangelowerboundcomparer-out-of-queries)
 
+## Changed answers in 10.4.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+11.0.0 makes the same changes, so each one is described under
+[Migration from v10.x](#migration-from-v10x):
+
+- [Check string set columns with a collation](#check-string-set-columns-with-a-collation)
+- [Check date bounds at an exclusive infinity in queries](#check-date-bounds-at-an-exclusive-infinity-in-queries)
+- [Check `YearMonthRange` upper bounds compared in queries](#check-yearmonthrange-upper-bounds-compared-in-queries)
+
 ## Migration from v10.x
 
 Nothing was removed or renamed. Some queries return different rows, and the compiler can't show you
