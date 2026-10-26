@@ -991,8 +991,9 @@ Each section below says how to find the calls whose answer changed. 11.0.0 makes
 
 ### Check string set columns with a collation
 
-Check `StringSet` and `StringSet<TElement>` properties configured with `UseCollation`, and queries
-that call `EF.Functions.Collate` on one.
+Check `StringSet` and `StringSet<TElement>` properties configured with `UseCollation`, queries that
+call `EF.Functions.Collate` on one, and queries that compare one with a value from a column configured
+with `UseCollation`.
 
 PostgreSQL compares the elements of a `text[]` column with the column's collation, and memory compares
 them ordinally. A deterministic collation breaks every tie by the bytes, so the two agree. A
@@ -1018,6 +1019,24 @@ compare bytes are allowed: `"C"`, `"POSIX"`, `ucs_basic`, `pg_c_utf8` and `defau
 - **Otherwise remove the collation, or use `"C"`.** A deterministic collation other than those five
   answers as memory does, but the model can't tell it from a nondeterministic one by its name.
 - **A collation given to the column outside your model isn't seen.** Keep it deterministic.
+
+The value you compare with a string set counts too, because PostgreSQL compares under the collation of
+either side. With `Members` holding `{A,b}`, no collation on it, and `Owner` holding `"a"` under a
+case-insensitive collation:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(g => g.Members.Contains(g.Owner))` | no match | matched |
+| `Where(g => g.Members.Contains(EF.Functions.Collate("a", "case_insensitive")))` | no match | matched |
+| `ExecuteUpdate(… g => g.Members.Remove(g.Owner))` | — | stored `{b}` |
+
+Now such a query throws `InvalidOperationException` and names the collation. The same five collations
+are allowed on the value's column.
+
+- **Compare with `EF.Functions.Collate(g.Owner, "C")`.** An explicit collation wins over the column's,
+  so the query compares bytes, as memory does. Unless the set column is collated `"C"` too, PostgreSQL
+  then can't use a GIN index on it for that comparison.
+- **Or load the value first.** A value your code passes in has no collation.
 
 ### Check date bounds at an exclusive infinity in queries
 

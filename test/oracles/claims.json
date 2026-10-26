@@ -1451,6 +1451,22 @@
     ]
   },
   {
+    "id": "E89-string-set-compared-with-a-collated-value",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "So a query throws when it compares a string set with a value from a column whose collation may not compare bytes, or with `EF.Functions.Collate(value, …)` under one, and the message names the collation.",
+    "claim": "A query comparing a StringSet with a value whose column is configured with a collation other than C, POSIX, ucs_basic, pg_c_utf8 or default, or with EF.Functions.Collate(value, such a collation) - through Contains, Add, Remove, ==, the subset operators and ExecuteUpdate with Remove, directly or through a derived table's or set operation's column, a concatenation, a CASE result or a scalar subquery - throws InvalidOperationException naming the collation, on a runtime and a compiled model, and leaves the row unchanged; EF.Functions.Collate(value, \"C\"), a byte-order column and a CASE that only tests the column translate and answer as memory does.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Remove",
+      "ValueSetExtensions.Add"
+    ],
+    "heldBy": [
+      "StringSetCollationTests",
+      "StringSetCollationIntegrationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",
