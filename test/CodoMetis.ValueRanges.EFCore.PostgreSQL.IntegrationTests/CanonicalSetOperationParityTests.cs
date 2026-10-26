@@ -8,6 +8,7 @@ using CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.Composition;
 using CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.Fuzzing;
 using CodoMetis.ValueRanges.Oracles;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -93,16 +94,29 @@ public sealed class CanonicalSetOperationParityTests
         return connectionString;
     }
 
+    /// <summary>
+    /// Two families at a time, and the database's pool emptied afterwards: the suite runs its methods in
+    /// parallel against one server, whose 100 connections the database-per-test sweeps share.
+    /// </summary>
     private static async Task<List<string>> ForEachFamily(string sweep, IEnumerable<Type> families, string connectionString)
     {
         var method = typeof(CanonicalSetOperationParityTests).GetMethod(sweep, BindingFlags.NonPublic | BindingFlags.Static)!;
         var lines  = new ConcurrentBag<string>();
-        await Parallel.ForEachAsync(families, new ParallelOptions { MaxDegreeOfParallelism = 4 }, async (set, _) =>
+        try
         {
-            var element = set.GetInterfaces().Single(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IValueSet<>)).GetGenericArguments()[0];
-            foreach (var line in await (Task<List<string>>)method.MakeGenericMethod(set, element).Invoke(null, [connectionString])!)
-                lines.Add(line);
-        });
+            await Parallel.ForEachAsync(families, new ParallelOptions { MaxDegreeOfParallelism = 2 }, async (set, _) =>
+            {
+                var element = set.GetInterfaces().Single(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IValueSet<>)).GetGenericArguments()[0];
+                foreach (var line in await (Task<List<string>>)method.MakeGenericMethod(set, element).Invoke(null, [connectionString])!)
+                    lines.Add(line);
+            });
+        }
+        finally
+        {
+            await using var connection = new NpgsqlConnection(connectionString);
+            NpgsqlConnection.ClearPool(connection);
+        }
+
         return [.. lines.Order(StringComparer.Ordinal)];
     }
 

@@ -5,7 +5,13 @@ covers all four packages, which share one version number and release together.
 
 ## [10.4.0]
 
-No change in this package.
+### Added
+
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+
+### Changed
+
+- Docs: a value set over your own element type, other than `StringSet<TElement>`, needs a `CompareTo` that orders values as the underlying type does, because the database sorts the underlying values ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#how-your-element-types-sort-and-serialize)).
 
 ## [10.3.0] — 2026-10-25
 

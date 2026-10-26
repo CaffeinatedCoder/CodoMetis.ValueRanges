@@ -13,6 +13,14 @@ has the rules.
 
 ## [10.4.0]
 
+### Added
+
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on value sets run as SQL for every set type except `StringSet` and `StringSet<TElement>`. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+
+### Changed
+
+- Docs: a value set over your own element type, other than `StringSet<TElement>`, needs a `CompareTo` that orders values as the underlying type does, because the database sorts the underlying values ([Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md#how-your-element-types-sort-and-serialize)).
+
 ## [10.3.0] — 2026-10-25
 
 Some calls answer differently: [Changed answers in 10.3.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1030).

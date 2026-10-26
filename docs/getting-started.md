@@ -213,11 +213,11 @@ shows how to declare either on a column this package maps.
 ## What runs in memory only
 
 Most operations run in the database. A few run in memory only, such as `Intersect`, `Except` and
-`Add` on *value sets*. [What runs where](efcore.md#what-runs-where) lists them all and says why
-for each.
+`Add` on *text sets* (`StringSet`). [What runs where](efcore.md#what-runs-where) lists them all and
+says why for each.
 
-Some queries over a `Union` of sets that the database computes throw instead of running as SQL,
-because the database would return a wrong result. An equality check on such a union is one.
+Some queries over a `Union` of text sets that the database computes throw instead of running as
+SQL, because the database would return a wrong result. An equality check on such a union is one.
 [Combine sets with `Union`](efcore.md#combine-sets-with-union) lists the rest.
 
 When an in-memory-only operation appears in a `Where`, EF Core **throws**. It does not quietly

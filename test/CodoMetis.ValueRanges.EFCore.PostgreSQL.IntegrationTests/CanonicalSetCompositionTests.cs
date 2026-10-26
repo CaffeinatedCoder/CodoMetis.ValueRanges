@@ -1,5 +1,6 @@
 using CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests.Composition;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
@@ -51,6 +52,15 @@ public sealed class CanonicalSetCompositionTests
     }
 
     private static IQueryable<CompositionRow> Equal(CompositionContext context) => context.Rows.Where(r => r.Id < 3);
+
+    /// <summary>Gives the server its connections back: the suite's database-per-test sweeps share its 100.</summary>
+    [ClassCleanup]
+    public static async Task EmptyThePool()
+    {
+        if (_connectionString is null) return;
+        await using var connection = new NpgsqlConnection(_connectionString);
+        NpgsqlConnection.ClearPool(connection);
+    }
 
     [TestMethod]
     public void TheData_IsWhatTheTestsAssume()
