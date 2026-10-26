@@ -153,6 +153,44 @@ public sealed class UnionCanonicalityTests
     }
 
     [TestMethod]
+    public async Task EqualityOnAUnionFromAScalarSubquery_AnswersAsMemoryDoes()
+    {
+        await using var context = await Context();
+        var rows = await Loaded(context);
+
+        // The row's own union, read back through a correlated scalar subquery, which EF Core keeps a
+        // subquery in the comparison. Was (10.4.0 before #505): (SELECT array_cat(…) … LIMIT 1) = @target, 0 rows; 10.3.0 refused it.
+        Assert.AreEqual(rows.Count(r => r.Tags.Union(Operand) == Target),
+                        await Rows(context).CountAsync(r => context.Reservations.Where(o => o.Id == r.Id).Select(o => o.Tags.Union(Operand)).FirstOrDefault() == Target));
+        Assert.AreEqual(rows.Count(r => r.Tags.Union(Operand) != Target),
+                        await Rows(context).CountAsync(r => context.Reservations.Where(o => o.Id == r.Id).Select(o => o.Tags.Union(Operand)).FirstOrDefault() != Target));
+        Assert.AreEqual(rows.Count(r => (r.OptionalTags ?? r.Tags.Union(Operand)) == Target),
+                        await Rows(context).CountAsync(r => (r.OptionalTags ?? context.Reservations.Where(o => o.Id == r.Id).Select(o => o.Tags.Union(Operand)).FirstOrDefault()) == Target));
+
+        // The other text operations take the same path: {a,c} + a, {a,c} ∩ {a,b,c}, {a,c} ∖ {z}.
+        var repeated = StringSet.From("a", "b", "c");
+        var absent   = StringSet.From("z");
+        Assert.AreEqual(rows.Count(r => r.Tags.Add("a") == r.Tags),
+                        await Rows(context).CountAsync(r => context.Reservations.Where(o => o.Id == r.Id).Select(o => o.Tags.Add("a")).FirstOrDefault() == r.Tags));
+        Assert.AreEqual(rows.Count(r => r.Tags.Intersect(repeated) == r.Tags),
+                        await Rows(context).CountAsync(r => context.Reservations.Where(o => o.Id == r.Id).Select(o => o.Tags.Intersect(repeated)).FirstOrDefault() == r.Tags));
+        Assert.AreEqual(rows.Count(r => r.Tags.Except(absent) == r.Tags),
+                        await Rows(context).CountAsync(r => context.Reservations.Where(o => o.Id == r.Id).Select(o => o.Tags.Except(absent)).FirstOrDefault() == r.Tags));
+    }
+
+    [TestMethod]
+    public async Task CountOverAUnionFromAScalarSubquery_CountsTheDistinctElements_AsMemoryDoes()
+    {
+        await using var context = await Context();
+        var rows = await Loaded(context);
+
+        // EF Core moves a bare .Count into the subquery; behind a COALESCE it stays outside.
+        // Was (10.4.0 before #505): cardinality(COALESCE((SELECT array_cat(…) …), …)) = 3 → 4 for {a,c,a,b}.
+        Assert.AreEqual(rows.Count(r => (r.OptionalTags ?? r.Tags.Union(Operand)).Count == 3),
+                        await Rows(context).CountAsync(r => (r.OptionalTags ?? context.Reservations.Where(o => o.Id == r.Id).Select(o => o.Tags.Union(Operand)).FirstOrDefault())!.Count == 3));
+    }
+
+    [TestMethod]
     public async Task EqualityOnARemovedUnion_AnswersAsMemoryDoes()
     {
         await using var context = await Context();
