@@ -366,10 +366,28 @@
     ]
   },
   {
+    "class": "RangeSetCountParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for RangeSet.Count on every range type over stored multiranges built from ranges that include the element type's extremes, a NULL multirange column, and the server's Union, Except, Intersect, Complement() and Gaps() over operands away from the extremes, in a filter, its negation, a null test, a final projection and both orderings",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
     "class": "ClampParityTests",
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
     "against": "memory over the loaded rows (NullRule), for Clamp on Int32Range, Int64Range and DecimalRange over every shape, exclusive numrange bounds and the element types' extremes, NULL range and value columns and a missing outer-join child, in a filter, its negation, a null test, a compound predicate, a coalesce, an ordering and a final projection",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "ClampDomainParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for Clamp on the other ten range types over every range their factories build from points that include the element type's extremes, every inclusiveness, a value column, a parameter, an inlined constant and NULL range and value columns, compared exactly and in both orderings; and a timestamptz value against a DateTimeRange in three session time zones",
     "needs": [
       "docker"
     ]

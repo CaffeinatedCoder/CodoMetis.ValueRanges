@@ -6,9 +6,10 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 
 /// <summary>
 /// Wraps the provider's <see cref="IRelationalParameterBasedSqlProcessorFactory"/> so that every
-/// processor it creates runs <see cref="EmptyCollectionRewriter"/> and then <see cref="ValueSetSqlGuard"/>
-/// over its result — the guard is also what turns a translated <c>Union</c> into <c>array_cat</c>, so
-/// a query that bypasses this decorator fails on the server instead of skipping the guard.
+/// processor it creates runs <see cref="EmptyCollectionRewriter"/>, <see cref="ValueSetSqlGuard"/> and
+/// <see cref="MultirangeCount"/> over its result — the guard is also what turns a translated <c>Union</c>
+/// into <c>array_cat</c>, and <see cref="MultirangeCount"/> what builds <c>RangeSet.Count</c>, so a query
+/// that bypasses this decorator fails on the server instead of skipping either.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -78,12 +79,15 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
         // VALUES with no rows, which the SQL generator refuses (EF Core 10.0.0 and 10.0.1), or EF
         // Core's own replacement with bare NULLs (10.0.2 and later), so it is given the typed SQL
         // that reads no rows before the guard judges the final tree.
+        // RangeSet.Count is built here too, after EF Core's alias pass, so it can't be skipped silently either (#484).
         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
-            => ValueSetSqlGuard.Check(
-                EmptyCollectionRewriter.Rewrite(
-                    inner.Process(queryExpression, parametersDecorator),
-                    Dependencies.SqlExpressionFactory,
+            => MultirangeCount.Expand(
+                ValueSetSqlGuard.Check(
+                    EmptyCollectionRewriter.Rewrite(
+                        inner.Process(queryExpression, parametersDecorator),
+                        Dependencies.SqlExpressionFactory,
+                        Dependencies.TypeMappingSource),
                     Dependencies.TypeMappingSource),
-                Dependencies.TypeMappingSource);
+                Dependencies.SqlExpressionFactory);
     }
 }

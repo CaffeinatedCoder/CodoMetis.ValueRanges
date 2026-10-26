@@ -385,8 +385,8 @@ Good to know:
 
 - **The empty range returns `null`.** There is no value to snap to.
 - **An unbounded side never constrains.** Clamping into `(-∞, 10]` only ever pulls a value down.
-- **`Clamp` runs as SQL on `Int32Range`, `Int64Range` and `DecimalRange`.** On the other range types
-  it runs in memory ([What runs where](efcore.md#what-runs-where)).
+- **`Clamp` runs as SQL on every range type.** The one exception is a `DateTimeRange` clamping a
+  `DateTime` stored with a time zone, which runs in memory ([What runs where](efcore.md#what-runs-where)).
 
 ### Compare positions
 
@@ -920,7 +920,8 @@ Good to know:
 ### Read and compare sets
 
 A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use
-`Count` and the indexer.
+`Count` and the indexer. In an EF Core query, `Count` runs as SQL and the indexer runs in memory
+([What runs where](efcore.md#what-runs-where)).
 
 Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges
 are equal when they normalize to the same ranges:

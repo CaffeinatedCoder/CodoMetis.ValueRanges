@@ -1,5 +1,5 @@
 Seed: Clamp on a discrete range reads the upper bound as PostgreSQL stores it (exclusive), one above the bound memory clamps to
-Oracles: ClampParityTests
+Oracles: ClampParityTests, ClampDomainParityTests
 Fails: r.Seats.Clamp(r.Value) and r.Tickets.Clamp(r.Big) on the rows whose value is above the range: server End + 1, rule (c) End
 
 diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
