@@ -916,7 +916,8 @@ Good to know:
 ### Read and compare sets
 
 A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use
-`Count` and the indexer.
+`Count` and the indexer. In an EF Core query, `Count` runs as SQL and the indexer runs in memory
+([What runs where](efcore.md#what-runs-where)).
 
 Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges
 are equal when they normalize to the same ranges:
