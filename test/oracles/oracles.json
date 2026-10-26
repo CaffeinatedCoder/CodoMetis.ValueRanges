@@ -445,5 +445,11 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "StringSetCollationTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests",
+    "kind": "exception",
+    "against": "the documented rejections of a collation that may not compare bytes on a string set comparison: on the set column when the model is built, EF.Functions.Collate over the set, and a value compared with the set under its column's collation or EF.Functions.Collate, directly, through a derived table's or a set operation's column, a concatenation or a CASE result, on the runtime model; a byte-order collation, an explicit \"C\" and a CASE that only tests the column translate"
   }
 ]
