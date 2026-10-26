@@ -1,0 +1,20 @@
+Seed: a YearMonthRange upper bound at infinity steps back by a month and stays infinity, where 9999-12 binds as 9999-12-01
+Oracles: YearMonthBoundParityTests
+Fails: UpperBound() == / > 9999-12 on the ranges ending in 9999-12, stored infinity]. Clamp never reaches it: no month lies above 9999-12, so it never clamps to that bound
+History: never shipped; the CASE in #506's fix
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index ebb3252..6cf1fea 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -1085,9 +1085,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+             ExpressionType.Subtract, upper, new SqlFragmentExpression($"INTERVAL '{coarse.Step}'", typeof(object), null),
+             typeof(DateTime), typeMappingSource.FindMapping(typeof(DateTime), "timestamp without time zone"));
+ 
+-        return sqlExpressionFactory.Case(
+-            [new CaseWhenClause(sqlExpressionFactory.Not(BoolFunction("isfinite", upper)), sqlExpressionFactory.Constant(coarse.Last, type, mapping))],
+-            sqlExpressionFactory.Convert(stepped, type, mapping));
++        return sqlExpressionFactory.Convert(stepped, type, mapping);
+     }
+ 
+     /// <summary>

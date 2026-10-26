@@ -114,6 +114,13 @@ NOT isempty(x)`, as the upper side is, because `lower_inc` is false for an exclu
 PostgreSQL's dates. With `Npgsql.DisableDateTimeInfinityConversions` set no extreme is an infinity,
 and the SQL is the plain one. `ExclusiveInfinityBoundParityTests` asserts every reader over every form.
 
+`YearMonthRange` is discrete, but one element spans a month of its `date` subtype (#506). `upper(x) - 1` is the
+last day of the last month, which loads as that month and compares unequal to it, because a `YearMonth` operand
+binds as the first day. Its definition names a `CoarseUpperBound`, so the upper bound readers write
+`CAST(upper(x) - INTERVAL '1 month' AS date)`, and `9999-12-01` where the bound is `infinity` (9999-12 ends on
+`LocalDate.MaxIsoValue`). `YearMonthBoundParityTests` and `ClampDomainParityTests` compare the readers with each
+month in a filter, where a projection would load both answers as the same month.
+
 **Calendars.** NodaTime equality includes the calendar system, and of its nineteen calendars only ISO
 and Gregorian can represent `9999-12-31` at all. Gregorian shares ISO's arithmetic but is a distinct
 `CalendarSystem` instance, so a Gregorian-spelled domain maximum compares unequal to

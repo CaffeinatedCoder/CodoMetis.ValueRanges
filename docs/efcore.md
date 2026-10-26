@@ -192,7 +192,8 @@ Good to know:
   returns the same results as memory
   ([verified against live PostgreSQL](../README.md#verified-against-postgresql)). On a date range,
   an exclusive `infinity` or `-infinity` is read one day inside, as the row loads
-  ([Rows written by other tools](#rows-written-by-other-tools)).
+  ([Rows written by other tools](#rows-written-by-other-tools)). On a `YearMonthRange`, `UpperBound()`
+  steps back a month instead of a day ([Store a YearMonthRange](#store-a-yearmonthrange)).
 - **Aggregates over zero rows differ.** In SQL the aggregates return `NULL` for zero input rows,
   which is standard PostgreSQL aggregate behaviour. The in-memory `RangeAgg()` returns the empty set.
   `RangeIntersectAgg()` returns `null` in both.
@@ -865,8 +866,10 @@ adding the constraint fails until you fix them.
 The NodaTime package stores `YearMonthRange` as a **month-aligned `daterange`**. For example,
 `[2024-01, 2024-03]` becomes `[2024-01-01, 2024-04-01)`. You need no custom database type, and
 every operator, bound accessor and aggregate runs as SQL and agrees with the in-memory results.
-The `upper()` adjustment lands on the last day of the end month, and that month is the inclusive
-upper bound in memory.
+In a query, `UpperBound()` reads the first day of the end month, which is how a `YearMonth` you pass
+in is sent. So `r.BillingPeriod.UpperBound() == month` and `r.BillingPeriod.Clamp(month)` compare
+with a month in a filter as they do in memory. The last month, 9999-12, is stored as `infinity` and
+reads as 9999-12-01 too.
 
 Reading checks month alignment. A `daterange` that covers part of a month fails loudly, instead of
 silently shifting the boundaries.
