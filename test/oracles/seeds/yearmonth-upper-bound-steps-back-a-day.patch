@@ -1,0 +1,17 @@
+Seed: a YearMonthRange upper bound steps back one day, to the last day of its last month, which loads as that month but compares unequal to it in a filter
+Oracles: ClampDomainParityTests, YearMonthBoundParityTests
+Fails: UpperBound() == / > a month and Clamp(@later) == / > the upper month, for every range ending in that month, on the range and its RangeSet
+History: UpperBound() since YearMonthRange's EF mapping (v5), Clamp since #486 (11.0.0-preview.1, 10.4.0); fixed by #506
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index ebb3252..217dba1 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -1058,7 +1058,6 @@ internal sealed class ValueRangesMethodCallTranslator(
+     {
+         var upper = BoundFunction("upper", argument, definition);
+         if (!definition.IsDiscrete) return upper;
+-        if (definition.CoarseUpperBound is { } coarse) return CoarseUpper(upper, coarse, definition);
+ 
+         // The step constant must keep its own integer mapping: `date - 1` is date arithmetic
+         // in PostgreSQL, and applying the element mapping to the 1 would render it as a date.

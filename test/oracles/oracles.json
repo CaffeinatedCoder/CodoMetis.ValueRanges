@@ -436,5 +436,14 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "YearMonthBoundParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows, for LowerBound() and UpperBound() of YearMonthRange and its RangeSet over every shape between five months (9999-12 among them), each compared with each month by ==, < and > in a filter",
+    "needs": [
+      "docker"
+    ]
   }
 ]
