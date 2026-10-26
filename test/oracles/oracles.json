@@ -490,5 +490,14 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "ExclusiveInfinityBoundParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded row, for LowerBound(), UpperBound(), both inclusiveness accessors and Clamp at the extremes on DateRange, LocalDateRange and their multiranges, over every infinite form a daterange holds, written by raw SQL, and over the server's Except at the extremes, each run as a predicate",
+    "needs": [
+      "docker"
+    ]
   }
 ]
