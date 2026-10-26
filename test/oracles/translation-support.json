@@ -129,29 +129,17 @@
   {
     "members": "ValueSetExtensions.Intersect(*",
     "support": "server",
-    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest … WITH ORDINALITY, filtered by containment (#478); not translated on text, which sorts by the database collation rather than ordinally (#479)",
-    "except": {
-      "StringSet": "client",
-      "StringSet_TextKey": "client"
-    }
+    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest … WITH ORDINALITY, filtered by containment (#478); on text, which sorts by the database collation rather than ordinally (#479), left unsorted where order and repeats don't count (#485)"
   },
   {
     "members": "ValueSetExtensions.Except(*",
     "support": "server",
-    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest … WITH ORDINALITY, filtered by containment (#478); not translated on text, which sorts by the database collation rather than ordinally (#479)",
-    "except": {
-      "StringSet": "client",
-      "StringSet_TextKey": "client"
-    }
+    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest … WITH ORDINALITY, filtered by containment (#478); on text, which sorts by the database collation rather than ordinally (#479), left unsorted where order and repeats don't count (#485)"
   },
   {
     "members": "ValueSetExtensions.Add(*",
     "support": "server",
-    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest(array_cat(x, ARRAY[e])) WITH ORDINALITY (#478); not translated on text, which sorts by the database collation rather than ordinally (#479)",
-    "except": {
-      "StringSet": "client",
-      "StringSet_TextKey": "client"
-    }
+    "reason": "docs/efcore.md#what-runs-where: a canonical subquery over unnest(array_cat(x, ARRAY[e])) WITH ORDINALITY (#478); on text, which sorts by the database collation rather than ordinally (#479), left unsorted where order and repeats don't count (#485)"
   },
   {
     "members": "ValueSetExtensions.*",

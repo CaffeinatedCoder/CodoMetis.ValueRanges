@@ -11,10 +11,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Query.Internal;
 namespace CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests;
 
 /// <summary>
-/// A value set <c>Union</c> computed on the server is <c>array_cat</c> — a concatenation, with
+/// A text value set <c>Union</c> computed on the server is <c>array_cat</c> — a concatenation, with
 /// duplicates and in operand order. Each test here either executes a composition that is correct
-/// for a concatenation and compares the answer with the same expression in memory, or executes one
-/// that is not and asserts it is refused — by running the query, never by inspecting its SQL.
+/// for a concatenation, or that the guard rewrites so it is (equality and <c>Count</c>, #485), and
+/// compares the answer with the same expression in memory, or executes one that is not and asserts it
+/// is refused — by running the query, never by inspecting its SQL.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -103,51 +104,62 @@ public sealed class UnionCanonicalityTests
 
     // -- Refused: each translated, and answered differently from memory, before 9.0.0 --
 
+    // -- Equality: two sets are equal when each contains the other, whatever the order and repeats (#485) --
+
+    /// <summary>The first row's tags, and both rows' as loaded, for the expectations.</summary>
+    private static async Task<List<Reservation>> Loaded(IntegrationDbContext context)
+        => await Rows(context).AsNoTracking().OrderBy(r => r.Id).ToListAsync();
+
     [TestMethod]
-    public async Task EqualityInAProjection_IsRefused()
+    public async Task EqualityInAProjection_AnswersAsMemoryDoes()
     {
         await using var context = await Context();
+        var first = (await Loaded(context))[0];
 
-        // Was: SELECT array_cat(r."Tags", @x) = @target → false, where memory says true.
-        await AssertRefused(() => FirstRow(context).Select(r => r.Tags.Union(Operand) == Target).SingleAsync(), "equality");
-        await AssertRefused(() => FirstRow(context).Select(r => new { r.Id, Same = r.Tags.Union(Operand).Equals(Target) }).SingleAsync(), "equality");
+        // Was: SELECT array_cat(r."Tags", @x) = @target → false, where memory says true; then refused.
+        Assert.AreEqual(first.Tags.Union(Operand) == Target, await FirstRow(context).Select(r => r.Tags.Union(Operand) == Target).SingleAsync());
+        Assert.AreEqual(first.Tags.Union(Operand).Equals(Target),
+                        (await FirstRow(context).Select(r => new { r.Id, Same = r.Tags.Union(Operand).Equals(Target) }).SingleAsync()).Same);
+        Assert.IsTrue(first.Tags.Union(Operand) == Target, "the data makes the answer true");
     }
 
     [TestMethod]
-    public async Task EqualityOnAProjectedUnion_IsRefused()
+    public async Task EqualityOnAProjectedUnion_AnswersAsMemoryDoes()
     {
         await using var context = await Context();
+        var rows = await Loaded(context);
 
-        // Was: 0 rows, where memory finds 1.
-        await AssertRefused(
-            () => FirstRow(context).Select(r => new { r.Id, U = r.Tags.Union(Operand) }).Where(a => a.U == Target).CountAsync(),
-            "equality");
+        // Was: 0 rows, where memory finds 1; then refused.
+        Assert.AreEqual(rows.Take(1).Count(r => r.Tags.Union(Operand) == Target),
+                        await FirstRow(context).Select(r => new { r.Id, U = r.Tags.Union(Operand) }).Where(a => a.U == Target).CountAsync());
 
-        // The same over a UNION ALL, which EF cannot inline: the predicate reads a column of the
-        // derived table, so the refusal has to follow the column to the array_cat that fills it.
-        await AssertRefused(
-            () => Concatenated(context).Where(a => a.U != Target).CountAsync(),
-            "equality");
+        // The same over a UNION ALL, which EF cannot inline: the predicate reads a column of the derived
+        // table, so the rewrite has to follow the column to the array_cat that fills it.
+        Assert.AreEqual(rows.Count(r => r.Tags.Union(Operand) != Target), await Concatenated(context).Where(a => a.U != Target).CountAsync());
+        Assert.AreEqual(rows.Count(r => r.Tags.Union(Operand) == Target), await Concatenated(context).Where(a => a.U == Target).CountAsync());
     }
 
     [TestMethod]
-    public async Task EqualityOnAConditionalOrCoalescedUnion_IsRefused()
+    public async Task EqualityOnAConditionalOrCoalescedUnion_AnswersAsMemoryDoes()
     {
         await using var context = await Context();
+        var first = (await Loaded(context))[0];
 
-        // Was: CASE … = @target and COALESCE(…) = @target, 0 rows each.
-        await AssertRefused(
-            () => FirstRow(context).CountAsync(r => (r.Id > 0 ? r.Tags.Union(Operand) : r.Tags) == Target), "equality");
-        await AssertRefused(
-            () => FirstRow(context).CountAsync(r => (r.OptionalTags ?? r.Tags.Union(Operand)) == Target), "equality");
+        // Was: CASE … = @target and COALESCE(…) = @target, 0 rows each; then refused.
+        Assert.AreEqual((first.Id > 0 ? first.Tags.Union(Operand) : first.Tags) == Target ? 1 : 0,
+                        await FirstRow(context).CountAsync(r => (r.Id > 0 ? r.Tags.Union(Operand) : r.Tags) == Target));
+        Assert.AreEqual((first.OptionalTags ?? first.Tags.Union(Operand)) == Target ? 1 : 0,
+                        await FirstRow(context).CountAsync(r => (r.OptionalTags ?? r.Tags.Union(Operand)) == Target));
     }
 
     [TestMethod]
-    public async Task EqualityOnARemovedUnion_IsRefused()
+    public async Task EqualityOnARemovedUnion_AnswersAsMemoryDoes()
     {
         await using var context = await Context();
+        var first = (await Loaded(context))[0];
 
-        await AssertRefused(() => FirstRow(context).CountAsync(r => r.Tags.Union(Operand).Remove("z") == Target), "equality");
+        Assert.AreEqual(first.Tags.Union(Operand).Remove("z") == Target ? 1 : 0,
+                        await FirstRow(context).CountAsync(r => r.Tags.Union(Operand).Remove("z") == Target));
     }
 
     [TestMethod]
@@ -206,17 +218,21 @@ public sealed class UnionCanonicalityTests
     }
 
     [TestMethod]
-    public async Task CountOverACoalescedUnion_IsRefused()
+    public async Task CountOverAUnion_CountsTheDistinctElements_AsMemoryDoes()
     {
         await using var context = await Context();
+        var rows = await Loaded(context);
 
-        // Was: cardinality(COALESCE(…, array_cat(…))) = 3 → 0 rows. The translator now declines it,
-        // so EF reports the predicate untranslatable.
-        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-            () => FirstRow(context).CountAsync(r => (r.OptionalTags ?? r.Tags.Union(Operand)).Count == 3));
+        // Was: cardinality(COALESCE(…, array_cat(…))) = 3 → 0 rows; then refused. The distinct elements are
+        // the set's (#485).
+        Assert.AreEqual(rows.Take(1).Count(r => (r.OptionalTags ?? r.Tags.Union(Operand)).Count == 3),
+                        await FirstRow(context).CountAsync(r => (r.OptionalTags ?? r.Tags.Union(Operand)).Count == 3));
+        Assert.AreEqual(rows[0].Tags.Union(Operand).Count, await FirstRow(context).Select(r => r.Tags.Union(Operand).Count).SingleAsync());
+        Assert.AreEqual(rows[0].Tags.Union(Operand).Remove("c").Count,
+                        await FirstRow(context).Select(r => r.Tags.Union(Operand).Remove("c").Count).SingleAsync());
 
-        // Through a column of a derived table the translator cannot see the union; the SQL check can.
-        await AssertRefused(() => Concatenated(context).CountAsync(a => a.U.Count == 3), "'Count'");
+        // Through a column of a derived table, which the rewrite follows to the array_cat that fills it.
+        Assert.AreEqual(rows.Count(r => r.Tags.Union(Operand).Count == 3), await Concatenated(context).CountAsync(a => a.U.Count == 3));
     }
 
     [TestMethod]
@@ -316,7 +332,7 @@ public sealed class UnionCanonicalityTests
                                                   .ToListAsync();
         CollectionAssert.AreEqual(new[] { Target, Target }, concatenated);
 
-        // Count in a projection falls back to the client, against the materialized set.
+        // Count in a projection counts the distinct elements on the server (#485).
         Assert.AreEqual(3, await FirstRow(context).Select(r => r.Tags.Union(Operand).Count).SingleAsync());
         Assert.AreEqual(3, await FirstRow(context).Select(r => (r.OptionalTags ?? r.Tags.Union(Operand)).Count).SingleAsync());
     }

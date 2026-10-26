@@ -431,9 +431,11 @@ bookings.Where(b => b.Id == id)
         .ExecuteUpdate(s => s.SetProperty(b => b.Codes, b => b.Codes.Add(code)));
 ```
 
-On `StringSet` and `StringSet<TElement>`, `Intersect`, `Except` and `Add` run in memory only. EF
-Core fails to translate them, by design. PostgreSQL sorts `text` by the database collation rather
-than ordinally, so it can't build the order your sets have in memory.
+On `StringSet` and `StringSet<TElement>`, `Union`, `Add`, `Intersect` and `Except` run as SQL
+with the result left unsorted. PostgreSQL sorts `text` by the database collation rather than
+ordinally, so it can't build the order your sets have in memory. They run where order and repeats
+don't count, and the query throws everywhere else
+([Combine sets with `Union`](#combine-sets-with-union)).
 
 Good to know:
 
@@ -450,7 +452,8 @@ Good to know:
   [How your element types sort and serialize](value-sets.md#how-your-element-types-sort-and-serialize)
   says what that requires.
 - **`Remove` keeps the set canonical.** `array_remove` leaves the array sorted and deduplicated,
-  so you can combine it with anything. A text `Union` is different, as the next section shows.
+  so you can combine it with anything. The text set operations are different, as the next section
+  shows.
 - **Your own element types travel as their underlying type.** An `AccessRight` parameter is bound
   as `text`, and loading a row runs the element's validation again.
 - **An empty set and `NULL` stay different.** They are `{}` and `NULL` in the column. Whether the
@@ -507,71 +510,76 @@ Good to know:
 - **Before 9.1.0 a captured list failed.** Npgsql sent it as one array parameter and threw
   (`InvalidCastException`) because it couldn't write the array of arrays. A constant list and an
   inline `new[] { … }` already worked.
-- **A text `Union` in the database can't be matched against a list.** `IN` is equality, so
-  `wanted.Contains(b.Tags.Union(more))` throws, as the next section explains. On the other set
-  types it runs.
+- **A text set operation in the database matches one set, not a list of several.**
+  `wanted.Contains(b.Tags.Union(more))` throws when `wanted` holds more than one set, because `IN`
+  compares arrays as written, as the next section explains. With one set, EF Core writes `==`,
+  which runs. On the other set types both run.
 
 ### Combine sets with `Union`
 
-On every set type except the two text ones, `Union` gives the deduplicated, sorted set shown above,
-and you can use it anywhere. This section is about `StringSet` and `StringSet<TElement>`.
+On every set type except the two text ones, `Union`, `Add`, `Intersect` and `Except` give the
+deduplicated, sorted set shown above, and you can use them anywhere. This section is about
+`StringSet` and `StringSet<TElement>`.
 
-On text, `Union` runs as `array_cat`. It is the one operation running as SQL whose result is
-**not** canonical, because `array_cat` only concatenates the two arrays. You can't tell in exactly
-two places: the operators above all ignore duplicates, and reading a set back puts it in canonical
-form again. Anything that depends on order or on duplicates throws instead of running.
+On text, PostgreSQL can't sort the result as memory does, because it sorts `text` by the database
+collation rather than ordinally. So these four run as SQL and leave the result unsorted. `Union` is
+`array_cat`, which also repeats an element both sets hold. `Add` appends the element, and
+`Intersect` and `Except` filter the first set. Most uses don't depend on order or repeats, and
+they run as SQL with the answer memory gives:
 
-Array equality depends on both, and the order is the part that surprises people. In the database:
+```csharp
+bookings.Select(b => b.Tags.Union(more));                    // fine: read back deduplicated and sorted
+bookings.Where(b => b.Tags.Union(more).IsSupersetOf(need));  // fine: @> ignores order and repeats
+bookings.Where(b => b.Tags.Union(more).Count > 2);           // fine: counts the distinct elements
+bookings.Where(b => b.Tags.Intersect(more) == expected);     // fine: compared by mutual containment
+bookings.OrderBy(b => b.Tags.Union(more));                   // throws
+```
+
+`Count` counts the distinct elements, `(SELECT count(DISTINCT x) FROM unnest(…))`. `==` and `!=`
+compare by mutual containment: two sets are equal when each contains the other, `a @> b AND
+b @> a`, and neither order nor repeats change that. Plain array equality would get both wrong in
+the database:
 
 - **`{a,c} ∪ {a,b} = {a,b,c}` is false** because of the repeated element.
 - **`{a,c} ∪ {b} = {a,b,c}` is false** because of the order alone, where nothing repeats.
 
-Both are true in memory. To compare a union, use `IsSubsetOf`/`IsSupersetOf` instead. For
-canonical sets they mean the same thing, and they ignore both order and duplicates. Or load the
-rows first with `AsEnumerable()` and compare in memory:
+Comparing two stored columns keeps `=`, which a btree index can serve
+([Rows written by other tools](#rows-written-by-other-tools)).
 
-```csharp
-bookings.Select(b => b.Tags.Union(more));                    // fine — materialized canonical
-bookings.Select(b => b.Tags.Union(more).Count);              // fine — client-evaluated, correct
-bookings.Where(b => b.Tags.Union(more).IsSupersetOf(need));  // fine — @> ignores order and duplicates
-bookings.Where(b => b.Tags.Union(more).Count > 2);           // throws
-bookings.Select(b => b.Tags.Union(more) == expected);        // throws
-bookings.AsEnumerable().Where(b => b.Tags.Union(more) == expected);  // fine — in memory
-```
-
-`Count` in a **projection** still works. Its translator declines a union, so EF runs `Count` in
-memory on the loaded set. A comparison doesn't get that fallback, because EF translates `==`
-itself. So a comparison throws in a projection too.
-
-Since 9.0.0 the check runs on the **translated SQL**, right before it is sent, so it doesn't matter
-how you write the query. It follows every value derived from a union: `array_cat` itself,
+The check runs on the **translated SQL**, right before it is sent, so it doesn't matter how you
+write the query. It follows every value derived from one of these four: the operation itself,
 `array_remove` over one, a conditional or `??` that may return one, and a subquery or `Concat`
-column that projects one. Such a value may only feed:
+column that projects one. Such a value may feed:
 
 - **`@>`, `<@` and `&&`**, that is `Contains`, `Overlaps`, and the subset and superset methods.
-- **`Remove` and `IsEmpty`.**
+- **`Remove`, `IsEmpty` and `Count`.**
+- **`==` and `!=`.**
 - **A null test.**
 - **The outermost projection**, which is loaded and so put in canonical form.
 
 Anything else throws, including:
 
-- **Equality, `Count`, `GroupBy`, `Distinct` and `OrderBy`.**
+- **`GroupBy`, `Distinct` and `OrderBy`.**
 - **`Union`, `Intersect` and `Except` of queries.**
-- **`Contains` over a sequence of sets.**
-- **An `ExecuteUpdate` value.** It would store the concatenation, and from then on equality and
-  `Count` on that row would be wrong for good.
+- **`Contains` over a list of several sets.**
+- **An `ExecuteUpdate` value.** It would store the unsorted array, and from then on `==` against
+  that row would be wrong for good.
 
 Good to know:
 
+- **Before 10.4.0, less of this ran as SQL.** `Intersect`, `Except` and `Add` on text ran in memory
+  only, and `Count`, `==` and `!=` over a text `Union` computed in the database threw. In a
+  projection, `Count` ran in memory on the loaded set.
 - **Before 9.0.0 the check missed most cases.** A LINQ-level pattern caught only `==`/`Equals` in
   predicates and `Count` over a bare union. A projection, a conditional, a coalesce, a grouping
   key, `Distinct` and `ExecuteUpdate` all ran and returned wrong answers.
 - **Keep the SQL check in place.** The check runs from a decorator around the provider's
-  `IRelationalParameterBasedSqlProcessorFactory`, and it **fails closed**. A `Union` running as SQL
-  carries the placeholder name `valueranges_union_without_sql_guard` until the check renames it to
-  `array_cat`. Suppose something replaces that service after `UseValueRanges()`, such as a
+  `IRelationalParameterBasedSqlProcessorFactory`, and it **fails closed**. A text `Union` running as
+  SQL carries the placeholder name `valueranges_union_without_sql_guard` until the check builds it
+  as `array_cat`, and `Add`, `Intersect` and `Except` carry `valueranges_add_without_sql_guard` and
+  its siblings. Suppose something replaces that service after `UseValueRanges()`, such as a
   `ReplaceService` call or another extension that replaces it rather than decorating it. Then every
-  query with a `Union` running as SQL fails with PostgreSQL's
+  query with one of them running as SQL fails with PostgreSQL's
   `function valueranges_union_without_sql_guard(…) does not exist`, instead of running as if the
   check weren't there. On the other set types the check also builds the deduplicated form, so
   their `Union`, `Add`, `Intersect` and `Except` fail the same way, naming
@@ -616,9 +624,10 @@ Two members depend on every writer storing canonical form:
 `IsEmpty` isn't affected. An array is empty exactly when it has no elements, however many times
 any of them repeats.
 
-`Union`, `Add`, `Intersect` and `Except` don't depend on it either, on every set type except text.
-They deduplicate and sort whatever the row holds, so comparing or counting their result gives the
-answer memory gives, even over such a row.
+`Union`, `Add`, `Intersect` and `Except` don't depend on it either. On every set type except text
+they deduplicate and sort whatever the row holds. On text, `Count` over them counts the distinct
+elements and `==` compares by mutual containment. Either way, comparing or counting their result
+gives the answer memory gives, even over such a row.
 
 A NULL element another tool stored can't be loaded: reading the row throws. Where a query builds
 the deduplicated form, `Union`, `Add`, `Intersect` and `Except` drop it, as a set never holds one.
@@ -879,7 +888,8 @@ doesn't stop a translation. For the rest, SQL would answer differently from memo
 library can't rule out. These two tables are the whole picture.
 
 **Runs as SQL.** You can use these in `Where`, `OrderBy` and `Select`, on columns and on
-parameters. A text value set `Union` composes only under some operators; see
+parameters. On text, `Union`, `Add`, `Intersect` and `Except` compose only where order and repeats
+don't count; see
 [Combine sets with `Union`](#combine-sets-with-union).
 
 | Surface | Operations | PostgreSQL |
@@ -902,7 +912,8 @@ parameters. A text value set `Union` composes only under some operators; see
 | Value sets | `Contains`, `Overlaps`, `IsSubsetOf`, `IsSupersetOf`, and the proper variants | `@>`, `&&`, `<@` |
 | | `Count`, `IsEmpty` | `cardinality` |
 | | `Union`, `Add`, `Intersect`, `Except`, except on text | `ARRAY(SELECT DISTINCT ON … FROM unnest(…) WITH ORDINALITY …)`, deduplicated and sorted; `array_cat` or a plain filter where order and duplicates can't change the answer |
-| | `Union` on text, `Remove` | `array_cat`, `array_remove` |
+| | `Union`, `Add`, `Intersect` and `Except` on text | `array_cat` or a filter of the first set, left unsorted; under `Count`, `count(DISTINCT …)`, and under `==` and `!=`, `@>` both ways |
+| | `Remove` | `array_remove` |
 | Both families | `==`/`!=` and `Equals` on a column | `=`, `<>` |
 
 **Runs in memory only.** These compute the right answer in memory. In a predicate they fail
@@ -916,7 +927,6 @@ translation, and in the final projection EF runs them in memory instead:
 | `Shift`, `Expand` on any range | Not translated. Rebuilding the range from `lower(x) + d` differs from memory unless each case is handled: the empty range becomes `(,)`, `time` wraps at midnight where `TimeRange` throws, and a bound moved past the last date .NET holds throws in memory where PostgreSQL returns a later date. A bound at `infinity` stays there in both. |
 | `LocalDateRange.Month`, `Quarter`, `Year` and `IsoWeek`, and `YearMonthRange.Quarter` and `Year`, with an argument read from a column | Not translated. PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start, and the database would fail where memory returns a range. That holds with Npgsql's infinity conversions on or off. Built from values your code passes in, the range is computed in memory and sent as one constant, so comparing a column against a month runs as SQL. On `DateRange` these run as SQL. |
 | `Clamp(value)` on a `DateTimeRange`, with a `DateTime` stored as `timestamp with time zone` | Not translated. Npgsql stores a `DateTime` property as `timestamp with time zone` unless you map it otherwise, and a `DateTimeRange` as a `tsrange`. `GREATEST` and `LEAST` would compare the two through the session's time zone, while memory compares the clock times. Map the property with `HasColumnType("timestamp without time zone")` and `Clamp` runs as SQL. |
-| `Intersect`, `Except` and `Add` on `StringSet` and `StringSet<TElement>` | Not translated. Their results have to be sorted, and PostgreSQL sorts `text` by the database collation rather than ordinally. On the other set types they run as SQL. |
 | The value set indexer, `set[0]` | Subscripting reads the stored array, which is canonical only for rows this library wrote ([Rows written by other tools](#rows-written-by-other-tools)). PostgreSQL arrays also start at 1, and an index past the end is `NULL` where memory throws. |
 | `Values` on a value set | It is the loaded array itself. In a query, use the set's own members, such as `Contains` and `Count`. |
 | The indexer on a `RangeSet`, `set[0]` | Not translated. It would read the ranges `unnest(x)` returns, but an index past the end is `NULL` there, where memory throws. |
@@ -964,9 +974,9 @@ Good to know:
 - **`ToString`, `GetHashCode` and `GetEnumerator` run in memory too.** They are for loaded values:
   the literal, hashing and `foreach`. The literal is formatted in .NET, so `ToString` gives the
   library's literal rather than PostgreSQL's text output.
-- **`Count` over a text `Union` computed in the database throws.** `array_cat` concatenates without
-  deduplicating, so the query throws rather than returning a wrong count. In a projection, EF
-  counts the loaded set in memory instead. See [Combine sets with `Union`](#combine-sets-with-union).
+- **`Count` over a text set operation counts its distinct elements.** `array_cat` repeats an element
+  both sets hold, so the query counts with `count(DISTINCT …)` rather than `cardinality`. See
+  [Combine sets with `Union`](#combine-sets-with-union).
 
 ### Known differences in 10.2.0
 

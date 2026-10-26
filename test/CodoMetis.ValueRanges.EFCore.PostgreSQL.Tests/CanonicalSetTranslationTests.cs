@@ -229,8 +229,12 @@ public sealed class CanonicalSetTranslationTests
         }
     }
 
+    /// <summary>
+    /// Text has no canonical form in SQL (#479), so its count is of the distinct elements of the unsorted
+    /// result (#485), and an ordering, which would see the order, is still refused.
+    /// </summary>
     [TestMethod]
-    public void Text_StillRefusesWhereOrderMatters()
+    public void Text_CountsDistinctElements_AndStillRefusesWhereOrderMatters()
     {
         var columns = SetColumns.Where(IsText).ToList();
         Assert.AreEqual(2, columns.Count, "StringSet and StringSet<TestKey>");
@@ -238,6 +242,28 @@ public sealed class CanonicalSetTranslationTests
         using var db = new TestDbContext();
         foreach (var column in columns)
         foreach (var operation in new[] { "Union", "Intersect", "Except" })
-            Assert.ThrowsExactly<InvalidOperationException>(() => CountOf(db, column, operation).ToQueryString(), $"{column.Name}.{operation}");
+        {
+            var sql = CountOf(db, column, operation).ToQueryString();
+            StringAssert.Contains(sql, "count(DISTINCT (vr", $"{column.Name}.{operation}");
+            Assert.DoesNotContain("DISTINCT ON", sql, $"{column.Name}.{operation}");
+            Assert.ThrowsExactly<InvalidOperationException>(() => OrderedBy(db, column, operation).ToQueryString(), $"{column.Name}.{operation}");
+        }
+    }
+
+    /// <summary><c>b.Column.Operation(b.Column)</c> as an ordering key.</summary>
+    private static IQueryable OrderedBy(TestDbContext db, PropertyInfo column, string operation)
+    {
+        var b       = Expression.Parameter(typeof(Booking), "b");
+        var set     = Expression.Property(b, column);
+        var element = column.PropertyType.GetInterfaces()
+                            .Single(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IValueSet<>))
+                            .GetGenericArguments()[0];
+        var method  = typeof(ValueSetExtensions).GetMethods()
+                                                .Single(m => m.Name == operation && m.GetParameters().Length == 2)
+                                                .MakeGenericMethod(column.PropertyType, element);
+        var key     = Expression.Lambda(Expression.Call(method, set, set), b);
+        var orderBy = typeof(Queryable).GetMethods().Single(m => m.Name == nameof(Queryable.OrderBy) && m.GetParameters().Length == 2)
+                                       .MakeGenericMethod(typeof(Booking), column.PropertyType);
+        return (IQueryable)orderBy.Invoke(null, [db.Bookings, key])!;
     }
 }

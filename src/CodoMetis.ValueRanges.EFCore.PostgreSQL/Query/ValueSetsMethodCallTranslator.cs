@@ -192,12 +192,21 @@ internal sealed class ValueSetsMethodCallTranslator(
             case nameof(ValueSetExtensions.Except) when arguments.Count == 2 && definition.CanonicalizesInSql:
                 return NullOverNullOperand(definition, ValueSetSqlGuard.CanonicalExcept, Set(0), Set(1));
 
-            // Text: the server-side result is unsorted and undeduplicated — fine inside predicates
-            // (the operators above ignore both), and a materialized result re-canonicalizes on read.
-            // Emitted under a placeholder name that only ValueSetSqlGuard renames to array_cat, so
-            // the guard cannot be skipped silently.
+            // Text: PostgreSQL can't sort it as memory does (#479), so the server-side result stays unsorted,
+            // and a Union or Add may repeat an element — fine where order and repeats don't count, and a
+            // loaded result is sorted again on read (#485). Emitted under placeholder names only
+            // ValueSetSqlGuard builds, so the guard cannot be skipped silently.
             case nameof(ValueSetExtensions.Union) when arguments.Count == 2:
                 return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedUnion, Set(0), Set(1));
+
+            case nameof(ValueSetExtensions.Add) when arguments.Count == 2:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedAdd, Set(0), ApplyElementMapping(Element(1), definition));
+
+            case nameof(ValueSetExtensions.Intersect) when arguments.Count == 2:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedIntersect, Set(0), Set(1));
+
+            case nameof(ValueSetExtensions.Except) when arguments.Count == 2:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedExcept, Set(0), Set(1));
 
             default:
                 return null;
