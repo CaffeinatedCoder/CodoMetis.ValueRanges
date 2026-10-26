@@ -1486,6 +1486,21 @@
     ]
   },
   {
+    "id": "E86-string-set-collation-compares-bytes",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "**A string set column compares its elements by the column's collation.** Memory compares them ordinally. A case- or accent-insensitive collation would make `Contains`, the subset operators, `==` and `Remove` answer differently in the database, and `Remove` in `ExecuteUpdate` would delete elements memory keeps. So building the model throws for a collation on a `StringSet` or `StringSet<TElement>` property unless it compares bytes: `\"C\"`, `\"POSIX\"`, `ucs_basic`, `pg_c_utf8` or `default`. `EF.Functions.Collate` over a string set throws the same way.",
+    "claim": "Building a model with UseCollation on a StringSet or StringSet<T> column throws InvalidOperationException naming the property unless the collation is C, POSIX, ucs_basic, pg_c_utf8 or default, which map with the collation; a string set inside a JSON document is not checked; a query over EF.Functions.Collate on a string set with any other collation throws, in a predicate, an equality and a projection; and a column collated \"C\" answers Contains, Overlaps, Remove and ExecuteUpdate with Remove as memory does.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "StringSetCollationTests",
+      "StringSetCollationIntegrationTests"
+    ]
+  },
+  {
     "id": "J01-tostring-is-postgres-literal",
     "source": "docs/serialization.md#print-a-range-as-a-literal",
     "quote": "`ToString()` and `IFormattable.ToString(format, provider)` both give you the PostgreSQL range literal.",

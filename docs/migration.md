@@ -828,9 +828,13 @@ where, so check these:
 - **EF Core: `RangeLowerBoundComparer.Compare` runs in memory only in a query.** In a filter or an
   ordering it fails translation. In SQL it compared in the range order, so it selected other rows
   ([details](#move-rangelowerboundcomparer-out-of-queries)).
+- **EF Core: a string set column with a collation that may not compare bytes is rejected.** Building
+  the model throws. Under a case-insensitive collation, `Contains("a")` matched `{A}`, and `Remove("a")`
+  in `ExecuteUpdate` deleted `A` ([details](#check-string-set-columns-with-a-collation)).
 
-The first four also shipped in 10.2.0, and the last two in 10.3.0. If you upgrade from 10.2.0 or later,
-you've already met the first four, and from 10.3.0 or later, all six.
+The first four also shipped in 10.2.0, the next two in 10.3.0, and the last in 10.4.0. If you upgrade
+from 10.2.0 or later, you've already met the first four, from 10.3.0 or later the first six, and from
+10.4.0 or later all seven.
 
 ### Check bound comparisons with `null` in queries
 
@@ -985,6 +989,36 @@ that can be NULL gets `CASE WHEN … IS NULL THEN NULL ELSE array_cat(…) END`.
 - **Say which set you want for a NULL one.** `(b.MaybeTags ?? StringSet.Empty).Union(more)` loads
   `more` for the NULL rows, as the query did before.
 - **In memory, both still throw for a `null`.** Only the query changes.
+
+### Check string set columns with a collation
+
+Check `StringSet` and `StringSet<TElement>` properties configured with `UseCollation`, and queries
+that call `EF.Functions.Collate` on one.
+
+PostgreSQL compares the elements of a `text[]` column with the column's collation, and memory compares
+them ordinally. A deterministic collation breaks every tie by the bytes, so the two agree. A
+nondeterministic one, such as a case-insensitive ICU collation, treats `A` and `a` as equal. Before
+10.4.0 the EF Core package translated the set operators as they are, so with `Tags` holding `{A}`:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(p => p.Tags.Contains("a"))` | no match | matched |
+| `Where(p => p.Tags.IsSubsetOf(StringSet.From("a")))` | no match | matched |
+| `Where(p => p.Tags == StringSet.From("a"))` | no match | matched |
+| `Select(p => p.Tags.Remove("a"))` | `{A}` | `{}` |
+| `ExecuteUpdate(… p => p.Tags.Remove("a"))` | — | stored `{}` |
+
+Now building the model throws `InvalidOperationException` and names the property. The collations that
+compare bytes are allowed: `"C"`, `"POSIX"`, `ucs_basic`, `pg_c_utf8` and `default`. A query over
+`EF.Functions.Collate(p.Tags, …)` with any other collation throws too.
+
+- **Search for `UseCollation` on string set properties.** The exception names each one.
+- **If you wanted case-insensitive matching, store the elements folded.** Lower-case them before you
+  build the set, in your code or in a wrapper element type, so memory and the database compare the
+  same text.
+- **Otherwise remove the collation, or use `"C"`.** A deterministic collation other than those five
+  answers as memory does, but the model can't tell it from a nondeterministic one by its name.
+- **A collation given to the column outside your model isn't seen.** Keep it deterministic.
 
 ### Move `RangeLowerBoundComparer` out of queries
 
