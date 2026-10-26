@@ -164,10 +164,10 @@ public sealed class SetQueryTranslationTests
     }
 
     [TestMethod]
-    public void Add_StillFailsTranslation()
+    public void Add_OnText_StillFailsTranslation()
     {
-        // PostgreSQL cannot insert at a sorted position: array_append would break canonical
-        // order, and array_sort orders by collation rather than ordinal.
+        // Canonical order would mean sorting in SQL, and text sorts by the database collation
+        // rather than ordinally (#479). The other families canonicalize (CanonicalSetTranslationTests).
         using var context = new TestDbContext();
         var query = context.Bookings.Where(b => b.Tags.Add("x").IsEmpty);
 
@@ -200,7 +200,7 @@ public sealed class SetQueryTranslationTests
     }
 
     // -------------------------------------------------------------------------
-    // Union — array_cat; the server value re-canonicalizes on read
+    // Union on text — array_cat; the server value re-canonicalizes on read
     // -------------------------------------------------------------------------
 
     [TestMethod]
@@ -361,14 +361,23 @@ public sealed class SetQueryTranslationTests
     }
 
     // -------------------------------------------------------------------------
-    // Client-only members fail translation by design
+    // Client-only members on text fail translation by design
     // -------------------------------------------------------------------------
 
     [TestMethod]
-    public void Intersect_FailsTranslation()
+    public void Intersect_OnText_FailsTranslation()
     {
         using var context = new TestDbContext();
         var query = context.Bookings.Where(b => b.Tags.Intersect(Wanted).IsEmpty);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
+    }
+
+    [TestMethod]
+    public void Except_OnText_FailsTranslation()
+    {
+        using var context = new TestDbContext();
+        var query = context.Bookings.Where(b => b.Tags.Except(Wanted).IsEmpty);
 
         Assert.ThrowsExactly<InvalidOperationException>(() => query.ToQueryString());
     }
