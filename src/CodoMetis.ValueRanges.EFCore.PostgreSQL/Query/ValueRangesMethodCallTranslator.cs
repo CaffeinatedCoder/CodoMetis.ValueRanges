@@ -326,13 +326,13 @@ internal sealed class ValueRangesMethodCallTranslator(
                     sqlExpressionFactory.Not(BoolFunction("isempty", Range(0)))));
 
         if (generic == LowerBoundMethod)
-            return BoundFunction("lower", Range(0), definition);
+            return LowerBoundFunction(Range(0), definition);
 
         if (generic == UpperBoundMethod)
             return UpperBoundFunction(Range(0), definition);
 
         if (generic == LowerBoundInclusiveMethod)
-            return BoolFunction("lower_inc", Range(0));
+            return LowerInclusiveFunction(Range(0), definition);
 
         if (generic == UpperBoundInclusiveMethod)
             return UpperInclusiveFunction(Range(0), definition);
@@ -505,13 +505,13 @@ internal sealed class ValueRangesMethodCallTranslator(
                 return SetBinary(PgExpressionType.RangeExcept, AsSet(0), Set(instance));
 
             case nameof(RangeSet<,>.LowerBound) when instance is not null && arguments.Count == 0:
-                return BoundFunction("lower", Set(instance), definition);
+                return LowerBoundFunction(Set(instance), definition);
 
             case nameof(RangeSet<,>.UpperBound) when instance is not null && arguments.Count == 0:
                 return UpperBoundFunction(Set(instance), definition);
 
             case nameof(RangeSet<,>.LowerBoundInclusive) when instance is not null && arguments.Count == 0:
-                return BoolFunction("lower_inc", Set(instance));
+                return LowerInclusiveFunction(Set(instance), definition);
 
             case nameof(RangeSet<,>.UpperBoundInclusive) when instance is not null && arguments.Count == 0:
                 return UpperInclusiveFunction(Set(instance), definition);
@@ -1032,11 +1032,25 @@ internal sealed class ValueRangesMethodCallTranslator(
             ElementMapping(definition));
 
     /// <summary>
+    /// <c>lower()</c>, with an exclusive <c>-infinity</c> read as memory loads it on a type that has an
+    /// <see cref="IRangeTypeDefinition.ExclusiveInfinity"/> (<see cref="InsideExclusiveInfinity"/>).
+    /// </summary>
+    private SqlExpression LowerBoundFunction(SqlExpression argument, IRangeTypeDefinition definition)
+    {
+        var lower = BoundFunction("lower", argument, definition);
+        return definition.ExclusiveInfinity is { Lower: { } inside } bounds
+                   ? InsideExclusiveInfinity(lower, lower, "lower_inc", argument, bounds.Min, inside, definition)
+                   : lower;
+    }
+
+    /// <summary>
     /// <c>upper()</c> with discrete-canonicalization compensation. PostgreSQL stores
     /// discrete ranges half-open (<c>[lower, upper)</c>) while the model is closed
     /// (<c>[lower, upper]</c>), so the server's exclusive upper is one step past the
     /// model's inclusive upper: <c>upper(x) - 1</c> restores agreement. NULL propagates
-    /// through the subtraction for empty or unbounded operands.
+    /// through the subtraction for empty or unbounded operands. An exclusive <c>infinity</c>,
+    /// which <c>- 1</c> leaves as it is, is read as memory loads it on a type that has an
+    /// <see cref="IRangeTypeDefinition.ExclusiveInfinity"/> (<see cref="InsideExclusiveInfinity"/>).
     /// </summary>
     private SqlExpression UpperBoundFunction(SqlExpression argument, IRangeTypeDefinition definition)
     {
@@ -1045,8 +1059,47 @@ internal sealed class ValueRangesMethodCallTranslator(
 
         // The step constant must keep its own integer mapping: `date - 1` is date arithmetic
         // in PostgreSQL, and applying the element mapping to the 1 would render it as a date.
-        var one = sqlExpressionFactory.Constant(1, typeMappingSource.FindMapping(typeof(int)));
-        return sqlExpressionFactory.Subtract(upper, one, ElementMapping(definition));
+        var one    = sqlExpressionFactory.Constant(1, typeMappingSource.FindMapping(typeof(int)));
+        var closed = sqlExpressionFactory.Subtract(upper, one, ElementMapping(definition));
+        return definition.ExclusiveInfinity is { Upper: { } inside } bounds
+                   ? InsideExclusiveInfinity(upper, closed, "upper_inc", argument, bounds.Max, inside, definition)
+                   : closed;
+    }
+
+    /// <summary>
+    /// <c>CASE WHEN bound = extreme AND NOT inclusive(x) THEN inside ELSE otherwise END</c>: a bound at the
+    /// infinity an extreme is written as, if it is exclusive, read as the value memory loads for it (#489).
+    /// </summary>
+    /// <remarks>
+    /// PostgreSQL leaves an infinite discrete bound uncanonicalized, so <c>[2026-01-01,infinity)</c> and
+    /// <c>(-infinity,2026-01-01)</c> exist: another tool writes them, and the server's algebra computes them,
+    /// as <c>(,) - (,-infinity]</c> is <c>(-infinity,)</c> and <c>(,) - [infinity,)</c> is <c>(,infinity)</c>.
+    /// Memory loads them one day inside, <c>[2026-01-01,9999-12-30]</c> and <c>[0001-01-02,2025-12-31]</c>, but
+    /// <c>upper(x) - 1</c> is still <c>infinity</c> and <c>lower(x)</c> is <c>-infinity</c>, which read as the
+    /// extremes. An inclusive <c>infinity]</c> or <c>[-infinity</c>, a finite bound, and the NULL of an empty or
+    /// unbounded side take the <c>ELSE</c> unchanged. Measured on PostgreSQL 16 and 18.
+    /// </remarks>
+    private SqlExpression InsideExclusiveInfinity(
+        SqlExpression        bound,
+        SqlExpression        otherwise,
+        string               inclusive,
+        SqlExpression        argument,
+        object               extreme,
+        object               inside,
+        IRangeTypeDefinition definition)
+    {
+        var type    = typeof(Nullable<>).MakeGenericType(definition.ElementClrType);
+        var mapping = ElementMapping(definition);
+
+        return sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.AndAlso(
+                        sqlExpressionFactory.Equal(bound, sqlExpressionFactory.Constant(extreme, type, mapping)),
+                        sqlExpressionFactory.Not(BoolFunction(inclusive, argument))),
+                    sqlExpressionFactory.Constant(inside, type, mapping))
+            ],
+            otherwise);
     }
 
     /// <summary>
@@ -1070,7 +1123,9 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// with the extremes as bounds and values (<c>ClampDomainParityTests</c>). A temporal extreme is an
     /// infinity on the server, which memory reads back as the extreme: <c>infinity - 1</c> is still
     /// <c>infinity</c>, and a range ending at the last date is stored <c>infinity]</c>, inclusive, so that is the
-    /// date memory clamps to. A <c>YearMonthRange</c> steps back one day from its
+    /// date memory clamps to. An exclusive infinity, which only another tool or the server's algebra writes, is
+    /// clamped to the day inside it that memory loads, as the two bound readers read it (#489). A
+    /// <c>YearMonthRange</c> steps back one day from its
     /// first-of-month upper bound to the last day of its last month, which reads as that month; its value is
     /// the first day of its month, so it compares as memory compares months.
     /// </para>
@@ -1097,7 +1152,7 @@ internal sealed class ValueRangesMethodCallTranslator(
                         BoolFunction("isempty", range)),
                     sqlExpressionFactory.Constant(null, type, mapping))
             ],
-            Skipping("LEAST", Skipping("GREATEST", value, BoundFunction("lower", range, definition)), UpperBoundFunction(range, definition)));
+            Skipping("LEAST", Skipping("GREATEST", value, LowerBoundFunction(range, definition)), UpperBoundFunction(range, definition)));
     }
 
     /// <summary>
@@ -1122,6 +1177,19 @@ internal sealed class ValueRangesMethodCallTranslator(
         => storeType.Contains("with time zone", StringComparison.OrdinalIgnoreCase)
         || storeType.StartsWith("timestamptz", StringComparison.OrdinalIgnoreCase)
         || storeType.StartsWith("timetz", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The <c>lower_inc()</c> equivalent, as <see cref="UpperInclusiveFunction"/> is <c>upper_inc()</c>'s. On discrete
+    /// types the model's lower bound is inclusive exactly when a finite one exists, which <c>lower_inc</c> says too,
+    /// except for an exclusive <c>-infinity</c>: canonicalization leaves it exclusive, and memory loads it as the
+    /// inclusive day after the extreme (#489).
+    /// </summary>
+    private SqlExpression LowerInclusiveFunction(SqlExpression argument, IRangeTypeDefinition definition)
+        => definition.IsDiscrete
+               ? sqlExpressionFactory.AndAlso(
+                   sqlExpressionFactory.Not(BoolFunction("lower_inf", argument)),
+                   sqlExpressionFactory.Not(BoolFunction("isempty", argument)))
+               : BoolFunction("lower_inc", argument);
 
     /// <summary>
     /// The <c>upper_inc()</c> equivalent. On discrete types the model's canonical form is

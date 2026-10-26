@@ -112,6 +112,34 @@ public sealed class NodaQueryTranslationTests
         StringAssert.Contains(sql, "upper(r.\"Period\") - 1");
     }
 
+    /// <summary>
+    /// An exclusive <c>infinity</c> upper bound is read as 9999-12-30, as memory loads it (#489). The lower side keeps
+    /// <c>lower(x)</c>: memory starts <c>(-infinity</c> on -9998-01-02, the day after <see cref="LocalDate.MinIsoValue"/>,
+    /// which PostgreSQL's dates can't hold.
+    /// </summary>
+    [TestMethod]
+    public void LocalDateRangeBounds_ReadAnExclusiveInfinityAsMemoryLoadsIt_OnTheUpperSide()
+    {
+        var sql = Sql(db => db.Reservations.Select(r => new { Lower = r.Period.LowerBound(), Upper = r.Period.UpperBound() }));
+
+        StringAssert.Contains(sql,
+            """
+            SELECT lower(r."Period") AS "Lower", CASE
+                WHEN upper(r."Period") = DATE 'infinity' AND NOT (upper_inc(r."Period")) THEN DATE '9999-12-30'
+                ELSE upper(r."Period") - 1
+            END AS "Upper"
+            """);
+    }
+
+    /// <summary>A month-aligned range can't load an exclusive infinity, so it has no day inside one to read.</summary>
+    [TestMethod]
+    public void YearMonthRangeBounds_HaveNoExclusiveInfinityToRead()
+    {
+        var sql = Sql(db => db.Reservations.Select(r => new { Lower = r.BillingPeriod.LowerBound(), Upper = r.BillingPeriod.UpperBound() }));
+
+        StringAssert.Contains(sql, "SELECT lower(r.\"BillingPeriod\") AS \"Lower\", upper(r.\"BillingPeriod\") - 1 AS \"Upper\"");
+    }
+
     [TestMethod]
     public void UpperBound_Continuous_IsBareUpper()
     {

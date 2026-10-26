@@ -51,8 +51,10 @@ internal static class RangeTypeRegistry
             // The temporal definitions end in StoreTemporal: bounds truncated to the store's
             // microsecond and the extremes written as infinity, exactly as Npgsql sends them, so a
             // JSON document and a SQL literal carry the value a parameter would.
+            // A bound reader answers an exclusive infinite bound as memory loads it, one day inside (#489).
             new RangeTypeDefinition<DateRange, DateOnly>(
-                "daterange", "datemultirange", "date", infinityText: StoreTemporal.InfinityText),
+                "daterange", "datemultirange", "date", infinityText: StoreTemporal.InfinityText,
+                exclusiveInfinity: (DateOnly.MinValue, new DateOnly(1, 1, 2), DateOnly.MaxValue, new DateOnly(9999, 12, 30))),
 
             // PostgreSQL `timestamp` has no time zone: Npgsql rejects UTC-kinded values, so
             // bounds are written as wall-clock time with DateTimeKind.Unspecified.
