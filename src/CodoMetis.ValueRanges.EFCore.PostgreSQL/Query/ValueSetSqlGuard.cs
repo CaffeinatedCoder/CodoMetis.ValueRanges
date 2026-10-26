@@ -646,6 +646,10 @@ internal static class ValueSetSqlGuard
             CaseExpression conditional => conditional.WhenClauses.Any(clause => IsDerived(clause.Result)) || IsDerived(conditional.ElseResult),
             SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when IsSet(convert)        => IsDerived(convert.Operand),
             ColumnExpression column                                                                        => derivedColumns.Contains((column.TableAlias, column.Name)),
+
+            // The walker lets ==, != and Count through over a scalar subquery that projects one, so this
+            // must find it too, or the raw = and cardinality reach the server (#505).
+            ScalarSubqueryExpression { Subquery.Projection: [var only] }                                   => IsDerived(only.Expression),
             _                                                                                              => false
         };
 
