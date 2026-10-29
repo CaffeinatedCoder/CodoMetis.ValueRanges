@@ -42,6 +42,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PULL: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
         run: |
+          # Measurement only (#526): hold back a payload without labels, so it finishes last.
+          if [ "$(jq '.pull_request.labels | length' "$GITHUB_EVENT_PATH")" = 0 ]; then sleep 60; fi
           sleep 20
           fields='[.head.sha, .base.ref, (.body // ""), ([.labels[].name] | sort)]'
           live=$(gh api "$PULL" | jq -c "$fields")
