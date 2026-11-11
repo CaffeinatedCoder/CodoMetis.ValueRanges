@@ -1,0 +1,17 @@
+Seed: Clamp compares a timestamptz value with a tsrange through the session time zone instead of declining it
+Oracles: ClampDomainParityTests
+Fails: DateTimeRange_OfATimestamptzValue_RunsInMemory_WhateverTheSessionZone: the Where translates (no exception) in every session, and in a Europe/Berlin session the Select clamps 17:30Z to 17:00Z where memory keeps 17:30
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index ccf2747..3f6c70e 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -341,7 +341,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+         if (generic == ClampMethod)
+         {
+             var value = ApplyElementMapping(arguments[1], definition);
+-            return MixesTimeZones(value, definition) ? null : ClampFunction(Range(0), value, definition);
++            return ClampFunction(Range(0), value, definition);
+         }
+ 
+         return null;

@@ -263,8 +263,8 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     /// <remarks>
     /// The pieces are adjacent and hold exactly the values of the range, so
     /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound. On a continuous type each piece but the last is half-open, so a closed range ends in a closed piece rather than a single point. Each boundary is counted from the range's start, so a split by months keeps the start's day where the calendar has it.
-    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
-    /// <c>generate_series</c> returns rows, not a value.
+    /// The empty range yields nothing. This runs in memory only; an EF Core
+    /// query doesn't translate it.
     /// </remarks>
     /// <param name="step">The length of each piece; it must be positive.</param>
     /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
@@ -363,7 +363,7 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     /// A period with months or years follows NodaTime's calendar arithmetic, which clips to the end of a
     /// shorter month, so moving back does not always restore the range. Days, weeks and time units move
     /// every value by the same amount.
-    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// This runs in memory only; an EF Core query doesn't translate it.
     /// A bound at <see cref="LocalDateTime.MinIsoValue"/> or <see cref="LocalDateTime.MaxIsoValue"/> stands for PostgreSQL's <c>-infinity</c> or
     /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
     /// bound moved past either one still throws.
@@ -380,7 +380,7 @@ public abstract partial record LocalDateTimeRange : IRange<LocalDateTime>, IRang
     /// <remarks>
     /// A negative <paramref name="amount"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
-    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// unbounded side stays unbounded. This runs in memory only; an EF Core query doesn't translate it.
     /// A bound at <see cref="LocalDateTime.MinIsoValue"/> or <see cref="LocalDateTime.MaxIsoValue"/> stands for PostgreSQL's <c>-infinity</c> or
     /// <c>infinity</c>, and it stays where it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
     /// bound moved past either one still throws.

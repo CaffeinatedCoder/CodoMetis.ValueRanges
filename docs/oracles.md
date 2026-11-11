@@ -68,8 +68,8 @@ One entry per sentence a consumer-facing document states about behaviour, in a f
   `ComplexIndexesCrossTests` is the one record on the 11 line, until #333.
 
 The claim sources, in order of authority: `README.md`, `docs/ranges.md`, `docs/value-sets.md`,
-`docs/serialization.md`, `docs/efcore.md`, `docs/getting-started.md`, then the package READMEs for
-anything not already claimed. Every one of the six must carry at least one claim. `architecture.md`,
+`docs/serialization.md`, `docs/efcore.md`, `docs/getting-started.md`, `docs/walkthrough.md`, then the
+package READMEs for anything not already claimed. Every one of the seven must carry at least one claim. `architecture.md`,
 `testing.md`, `why.md`, `migration.md` and the changelog explain and record; they are not promises.
 
 ### The API surface — what the library offers
@@ -204,6 +204,47 @@ issue outlives its member, and a waiver that points at a `docs/*.md#heading` poi
 exists. Refreshing the listing against a new major therefore turns its new rows into failures naming
 them, each a decision: a member, a waiver, or an issue.
 
+### `translation-support.json` — what EF Core does with each query member
+
+`postgres-surface.json` starts from PostgreSQL. This file starts from the C# side: every public member a
+query can call on a range, a `RangeSet` or a value set, and whether it runs as SQL. The members are
+discovered from the public API (`QueryMembers`, conventions project), not from the registered translators,
+because the members no translator knows are the ones worth finding: every public method and instance
+property of a public, non-nested type of the two libraries whose receiver, a parameter or the result is a
+range, a multirange or a value set, one key per overload, a generic family kept generic
+(`RangeSet<TRange, T>.Union(TRange)`, `StringSet<TElement>.Count`). Converters, static constants and the
+overloads an expression tree cannot hold (`ReadOnlySpan<char>`, `out`) are out by rule.
+
+```json
+{ "members": "*Range.Shift(*", "support": "client", "reason": "docs/efcore.md#what-runs-where: …" }
+```
+
+- The first entry whose `members` pattern matches a key classifies it: `server` (translates, and answers in
+  the database what it answers in memory), `client` (refused where the server must evaluate it, correct in
+  a final projection; `reason` says why, and says so when the docs do not mention the member) or `planned`
+  (as `client`, with the `issue` that adds the translation). `except` maps a closed type a generic member
+  behaves differently for to its own support.
+- `TranslationSupportInventoryTests` holds it without a database: every key classified, every entry still
+  classifying one, every entry with what its support needs. A new public member therefore fails CI until
+  someone says how a query treats it.
+- `TranslationSupportProbeTests` (integration) holds it true: each key over every closed type it applies to,
+  with a column as an operand so EF Core cannot evaluate the whole call before the query, first where the
+  server must evaluate it (a filter for a predicate, a null test for a value that can be NULL, an ordering
+  for one that cannot, since EF Core folds `(int?)x == null` away untranslated, `HAVING` for an aggregate),
+  then in a final projection, both against memory over the rows as loaded. A successful `Select` alone
+  proves nothing: EF Core evaluates on the client what it cannot translate there. A `server` member that is
+  refused or answers differently is a defect; a `client` or `planned` member that now translates is a
+  change to classify. The first run found #385: EF Core rewrites any `Compare(a, b)` to the natural order,
+  so `RangeLowerBoundComparer.Compare` ran as SQL in the range order.
+- `TranslatorDispatchSweepTests` (conventions, no database) asks the other question about the same keys:
+  not whether a member translates, but whether a translation maps each operand as the type its overload
+  declares. Each key over every closed type goes to the translator providers of a real context, with one
+  operand per declared parameter type. A translation that maps one as anything else, or answers another type
+  than the member, fails, and so does a translator that throws. The translators recognize an overload by its
+  name, and used to map an operand from what it was not, so an overload added later with another operand
+  type would have been translated as a range (#295). Each arm now names its operand types, and any other is
+  refused (`MissingArm`).
+
 ### `axes.md` — what a consumer varies
 
 The claims say what is promised and the surface says what is offered. Neither says which *settings* a
@@ -264,6 +305,32 @@ the same projection run in memory over the rows as loaded. Its first run registe
 range collection no `Contains` reads also fails loudly, as `42809` for `Any(==)` and for `timerange`), and
 found #137: `Any` or `Count` with a predicate over an empty collection the plugin sends one parameter per
 element throws.
+
+### The composition sweeps
+
+The sweeps above vary shapes, types and operand kinds, mostly in a projection over one nullable column at
+most. #349, #350, #355, #360 and #361 came from how a translated call *composes*: where a NULL comes from,
+what a filter, a negation or EF Core's null semantics do around it, and what the next execution reuses. Six
+classes in the integration project (#362) vary that instead, each over `DateRange`, its `RangeSet` and
+`StringSet`, with the members discovered (`Composition/CompositionMembers.cs`):
+
+| Class | What it composes |
+|---|---|
+| `OuterJoinProbeTests` (#375) | every member over the child of a parent without one: a navigation, `GroupJoin` with `DefaultIfEmpty`, `LeftJoin`; the range factories over the child's element columns |
+| `NullableOperandPairProbeTests` (#376) | every binary member over two nullable columns, a `CASE` and a `COALESCE` of them, on every (null, value) pair; equality and `CompareTo` under their own rules |
+| `QuantifierProbeTests` (#377) | `Any`, `All`, `Count`, `Contains` over captured lists holding a NULL; `P && Q`, `P \|\| Q` against De Morgan; a predicate over a value-producing member |
+| `RepeatedExecutionProbeTests` (#378) | the same query run again with its parameter walked null → finite → empty → `(,)` → null and back; `EF.CompileQuery` and `EF.CompileAsyncQuery` |
+| `FilteredAggregateProbeTests` (#379) | `RangeAgg` and `RangeIntersectAgg` over groups a filter empties, all NULL, holding `empty`, or reached by a `LeftJoin` with no rows, consumed by every member, `HAVING` and an ordering |
+| `DeclaredNullabilityTests` (#380) | every function the translators emit, its declaration against `pg_proc.proisstrict` and the server; and every translated value's null test against its projection |
+
+Their reference is `Composition/NullRule.cs`: the expression rewritten so that a NULL never reaches the
+library, the explicit guard a consumer writes over loaded rows. A predicate with a null on either side is
+`false` and its negation `true` (rule (c)); a value-producing member over a null, or over a missing element,
+has no value; equality and `CompareTo` keep their documented rules; the aggregates skip a null. So what the
+library does *today* for a null in memory (#350's 11.0.0 half) is never what a row is judged against. Beside
+the reference, `CompositionRunner` checks every call without one: `Where(P)` and `Where(!P)` partition the
+rows, and `Select(P)` is `true` exactly on `Where(P)`'s; for a value, the same with `== null`. A
+declaration that disagrees with the server shows there even where memory has no answer.
 
 ## How to use it
 

@@ -1,0 +1,31 @@
+Seed: RangeSet.From stores a null range, or skips it after an infinite one, instead of refusing it
+Oracles: RangeSetNullContractTests
+Fails: EveryRangeType_RefusesANullRangeInEveryConstructionPath, on the first range type, for From over [null]
+
+diff --git a/src/CodoMetis.ValueRanges/RangeSet.cs b/src/CodoMetis.ValueRanges/RangeSet.cs
+--- a/src/CodoMetis.ValueRanges/RangeSet.cs
++++ b/src/CodoMetis.ValueRanges/RangeSet.cs
+@@ -153,7 +153,6 @@
+         {
+             // A null anywhere refuses the whole call, so every input is read, also after an
+             // infinity has decided the result.
+-            if (range is null) throw NullRange();
+             if (range is IEmptyRange<T>) continue;
+             if (range is IInfinityRange<T>) infinite = true;
+             else if (!infinite) working.Add(range);
+@@ -173,7 +172,6 @@
+         var infinite = false;
+         foreach (var range in ranges)
+         {
+-            if (range is null) throw NullRange();
+             if (range is IEmptyRange<T>) continue;
+             if (range is IInfinityRange<T>) infinite = true;
+             else if (!infinite) working.Add(range);
+@@ -186,7 +184,6 @@
+     private static ImmutableArray<TRange> NormalizeSingle(TRange only)
+         => only switch
+            {
+-               null              => throw NullRange(),
+                IEmptyRange<T>    => [],
+                IInfinityRange<T> => [TRange.Infinite],
+                _                 => [only]

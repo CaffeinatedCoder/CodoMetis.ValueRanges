@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="MSTest" Version="4.5.1" />
+      <PackageReference Include="MSTest" Version="4.5.2" />
       <PackageReference Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
     </ItemGroup>
 
@@ -19,6 +19,11 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\CodoMetis.ValueRanges.NodaTime\CodoMetis.ValueRanges.NodaTime.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- One reflection sweep for both packages' per-type aggregate overloads (#361). -->
+        <Compile Include="..\CodoMetis.ValueRanges.Tests\AggregateNullInputs.cs" Link="AggregateNullInputs.cs" />
     </ItemGroup>
 
 </Project>

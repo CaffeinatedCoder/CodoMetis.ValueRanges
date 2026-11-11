@@ -328,8 +328,8 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     /// <remarks>
     /// The pieces are adjacent and hold exactly the values of the range, so
     /// <c>RangeSet.From(range.Split(step))</c> is the range itself. The last piece is clipped to the range's end and keeps the range's upper bound.
-    /// The empty range yields nothing. This runs in memory only: PostgreSQL's
-    /// <c>generate_series</c> returns rows, not a value.
+    /// The empty range yields nothing. This runs in memory only; an EF Core
+    /// query doesn't translate it.
     /// </remarks>
     /// <param name="days">The length of each piece, in days; it must be positive.</param>
     /// <returns>The pieces, in order. The checks run at the call; the pieces are computed as you enumerate.</returns>
@@ -461,7 +461,7 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     /// <remarks>
     /// <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an unbounded side stays
     /// unbounded. A negative <paramref name="days"/> moves the range down.
-    /// This runs in memory only: PostgreSQL has no range arithmetic.
+    /// This runs in memory only; an EF Core query doesn't translate it.
     /// A bound at <see cref="DateOnly.MinValue"/> or <see cref="DateOnly.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
     /// <c>infinity</c>, and it stays where it is, and so does a closed end the day before the maximum, whose exclusive end it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
     /// bound moved past either one still throws.
@@ -478,7 +478,7 @@ public abstract partial record DateRange : IRange<DateOnly>, IRangeFactory<DateR
     /// <remarks>
     /// A negative <paramref name="days"/> shrinks the range, and a range shrunk past its own width is
     /// <see cref="Empty"/>. <see cref="Empty"/> and <see cref="Infinite"/> come back as they are, and an
-    /// unbounded side stays unbounded. This runs in memory only: PostgreSQL has no range arithmetic.
+    /// unbounded side stays unbounded. This runs in memory only; an EF Core query doesn't translate it.
     /// A bound at <see cref="DateOnly.MinValue"/> or <see cref="DateOnly.MaxValue"/> stands for PostgreSQL's <c>-infinity</c> or
     /// <c>infinity</c>, and it stays where it is, and so does a closed end the day before the maximum, whose exclusive end it is, as <c>infinity ± d</c> does in PostgreSQL. A finite
     /// bound moved past either one still throws.

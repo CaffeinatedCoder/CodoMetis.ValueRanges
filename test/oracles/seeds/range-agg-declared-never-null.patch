@@ -1,0 +1,17 @@
+Seed: range_agg is declared never NULL, so EF Core drops the NULL test of a RangeAgg over a group whose inputs are all filtered away, NULL or absent
+Oracles: FilteredAggregateProbeTests
+Fails: RangeAgg() == null, ?? and every predicate under HAVING NOT on the groups with no non-NULL input
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesAggregateMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesAggregateMethodCallTranslator.cs
+index 950f649..bcde0ee 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesAggregateMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesAggregateMethodCallTranslator.cs
+@@ -49,7 +49,7 @@ internal sealed class ValueRangesAggregateMethodCallTranslator(
+                     "range_agg",
+                     [argument],
+                     source,
+-                    nullable: true,
++                    nullable: false,
+                     argumentsPropagateNullability: [false],
+                     definition.RangeSetClrType,
+                     definition.RangeSetTypeMapping),

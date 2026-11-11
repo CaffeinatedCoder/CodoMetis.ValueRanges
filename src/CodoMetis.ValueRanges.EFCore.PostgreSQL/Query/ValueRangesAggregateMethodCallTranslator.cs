@@ -35,9 +35,13 @@ internal sealed class ValueRangesAggregateMethodCallTranslator(
 
         // range_agg and range_intersect_agg are each declared over anyrange and over anymultirange.
         // The method's source type says which one this is; the return type does not, since
-        // RangeAgg returns a set either way.
-        var overSets = method.GetParameters() is [{ ParameterType: { IsGenericType: true } sourceType }]
-                    && sourceType.GetGenericArguments()[0] == definition.RangeSetClrType;
+        // RangeAgg returns a set either way. A source of anything else has no arm here (#295).
+        var input = method.GetParameters() is [{ ParameterType: { IsGenericType: true } sourceType }]
+            ? sourceType.GetGenericArguments()[0]
+            : null;
+        var overSets = input == definition.RangeSetClrType;
+        if (!overSets && input != definition.RangeClrType)
+            throw MissingArm.For(method, input);
 
         var argument = sqlExpressionFactory.ApplyTypeMapping(
             selector, overSets ? definition.RangeSetTypeMapping : definition.RangeTypeMapping);

@@ -1308,10 +1308,10 @@
     "signature": "unnest(anymultirange)",
     "kind": "function",
     "since": 14,
-    "member": null,
-    "translation": null,
+    "member": "RangeSet.Count",
+    "translation": "FROM unnest(b.\"BlockedDays\") AS vc0(r)",
     "waiver": null,
-    "issue": 94
+    "issue": null
   },
   {
     "signature": "upper(anymultirange)",

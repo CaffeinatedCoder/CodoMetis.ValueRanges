@@ -1,0 +1,20 @@
+Seed: the guard's rewrite misses a scalar subquery projecting a text set operation, so == and Count over it compare the unsorted array_cat
+Oracles: UnionCanonicalityTests
+Fails: EqualityOnAUnionFromAScalarSubquery and CountOverAUnionFromAScalarSubquery: the server drops {a,c} ∪ {a,b} == {a,b,c} and counts {a,c,a,b} as 4
+History: introduced by #485 (11.0.0-preview.1, and 10.4.0 before its tag), fixed by #505
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+index 5a2e977..c6ea1ae 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+@@ -645,10 +645,6 @@ internal static class ValueSetSqlGuard
+             CaseExpression conditional => conditional.WhenClauses.Any(clause => IsDerived(clause.Result)) || IsDerived(conditional.ElseResult),
+             SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when IsSet(convert)        => IsDerived(convert.Operand),
+             ColumnExpression column                                                                        => derivedColumns.Contains((column.TableAlias, column.Name)),
+-
+-            // The walker lets ==, != and Count through over a scalar subquery that projects one, so this
+-            // must find it too, or the raw = and cardinality reach the server (#505).
+-            ScalarSubqueryExpression { Subquery.Projection: [var only] }                                   => IsDerived(only.Expression),
+             _                                                                                              => false
+         };
+ 

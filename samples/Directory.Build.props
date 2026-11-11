@@ -1,0 +1,7 @@
+<!--
+    Stops MSBuild's walk up to the repository's Directory.Build.props, so a sample builds here exactly
+    as it does in a reader's own folder: no warnings-as-errors, no documentation file, no package
+    validation. test/consumer-smoke-test.sh copies each sample out of the repository before it builds
+    it, so CI never depends on this file; it is for anyone who builds a sample in place.
+-->
+<Project />

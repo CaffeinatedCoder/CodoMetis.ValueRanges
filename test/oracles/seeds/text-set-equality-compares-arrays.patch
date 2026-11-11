@@ -1,0 +1,17 @@
+Seed: == and != rewrite only when both sides are a text Union, Add, Intersect or Except, so one compared with a stored or captured set keeps =, which sees order and repeats
+Oracles: CanonicalSetOperationParityTests, UnionCanonicalityTests
+Fails: Union == expected on the rows whose operands share an element or arrive out of order: the database answers false; EqualityInAProjection_AnswersAsMemoryDoes
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+index 640c468..5975f47 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+@@ -488,7 +488,7 @@ internal static class ValueSetSqlGuard
+                 // == and != with an unsorted text set on a side: two sets are equal when each contains the
+                 // other, whatever their order and repeats (#485). Two stored columns keep = and its index.
+                 case SqlBinaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } equality
+-                    when (IsSet(equality.Left) || IsSet(equality.Right)) && (IsDerived(equality.Left) || IsDerived(equality.Right)):
++                    when (IsSet(equality.Left) || IsSet(equality.Right)) && (IsDerived(equality.Left) && IsDerived(equality.Right)):
+                     var same = MutualContainment(equality.Left, equality.Right);
+                     return equality.OperatorType == ExpressionType.Equal
+                         ? same

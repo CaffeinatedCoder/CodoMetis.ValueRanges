@@ -8,6 +8,25 @@
 # Triggered on label and description edits as well as pushes, so adding the missing label turns the
 # check green without a new commit. `pull_request`, not `pull_request_target`: a PR from a fork runs
 # with a read-only token and never sees a secret.
+#
+# One run per event, and none is cancelled (#526). A PR pushed and then labelled and described within
+# seconds starts several runs, and GitHub counts every one of them in the commit's status: a cancelled
+# run, or a failed run for a payload that had no labels yet, turns it red beside a later green run.
+# With a concurrency group and `cancel-in-progress: true`, 61 of the last 100 merged PRs showed a
+# failing status for nothing but cancelled runs of this check. Without a group, the runs overlap and
+# finish in any order. So each run first waits for the burst to settle, then compares its payload with
+# the PR as it is now. If the head, the base, the labels or the description changed since, the event
+# that changed them started a newer run, which decides; this one passes without checking. Only those
+# four fields are compared, because a change to any of them is itself a trigger (`synchronize`,
+# `edited`, `labeled`, `unlabeled`): a newer run is certain to exist.
+#
+# Measured on #527, a throwaway PR (2026-10-29). Without a group but with no comparison, five events
+# in seven seconds ran to the end, and the two whose payloads failed (no labels yet; two type labels)
+# left the commit's status FAILURE beside a green latest run. With the comparison, seven events
+# passed with no cancelled run and the status SUCCESS: four were superseded, among them a payload
+# without labels held back to finish 55 seconds after the run that replaced it, and the three whose
+# payloads matched the PR checked it. Leaving the PR without a type label failed the newest run. A run
+# that judged a payload the PR really had stays red after a later fix, as it did before.
 
 name: PR hygiene
 
@@ -18,17 +37,32 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: pr-hygiene-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  pull-requests: read
 
 jobs:
   check:
     name: Labels and issue link
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Skip a superseded payload
+        id: payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+        run: |
+          sleep 20
+          fields='[.head.sha, .base.ref, (.body // ""), ([.labels[].name] | sort)]'
+          live=$(gh api "$PULL" | jq -c "$fields")
+          sent=$(jq -c ".pull_request | $fields" "$GITHUB_EVENT_PATH")
+          if [[ $live == "$sent" ]]; then
+            echo "superseded=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "superseded=true" >> "$GITHUB_OUTPUT"
+            echo "The PR changed after this event, so the run for the newer event decides." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - if: steps.payload.outputs.superseded == 'false'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           sparse-checkout: .github/scripts
-      - run: .github/scripts/pr-hygiene.sh "$GITHUB_EVENT_PATH"
+      - if: steps.payload.outputs.superseded == 'false'
+        run: .github/scripts/pr-hygiene.sh "$GITHUB_EVENT_PATH"

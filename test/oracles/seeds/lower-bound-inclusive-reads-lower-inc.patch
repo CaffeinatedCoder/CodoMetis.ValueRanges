@@ -1,0 +1,18 @@
+Seed: LowerBoundInclusive() on a discrete range reads lower_inc, which is false for an exclusive -infinity that memory loads as an inclusive bound
+Oracles: ExclusiveInfinityBoundParityTests
+Fails: LowerBoundInclusive() of (-infinity,2026-01-01) on DateRange and LocalDateRange: server false, memory true
+History: #489
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index ad8096a..6956f94 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -332,7 +332,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+             return UpperBoundFunction(Range(0), definition);
+ 
+         if (generic == LowerBoundInclusiveMethod)
+-            return LowerInclusiveFunction(Range(0), definition);
++            return BoolFunction("lower_inc", Range(0));
+ 
+         if (generic == UpperBoundInclusiveMethod)
+             return UpperInclusiveFunction(Range(0), definition);

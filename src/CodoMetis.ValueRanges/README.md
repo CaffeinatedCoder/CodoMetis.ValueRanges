@@ -201,8 +201,11 @@ The sort order is chosen on purpose:
 
 Good to know:
 
-- **`Intersect`, `Except` and `Add` run in memory only.** PostgreSQL's array type has no
-  intersection, no difference and no sorted insert.
+- **On text sets, the set operations run as SQL only where order doesn't count.** PostgreSQL sorts
+  `text` by the database collation, so an EF Core query leaves the result of `Union`, `Add`,
+  `Intersect` and `Except` unsorted on `StringSet` and `StringSet<TElement>`. `Count`, `==` and the
+  subset methods work, and ordering by one throws. The EF Core guide says why in
+  [Combine sets with `Union`](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#combine-sets-with-union).
 
 ## Literals, parsing and JSON
 
@@ -223,10 +226,13 @@ covers the parsing rules and the JSON options.
 ## Documentation
 
 The [project README](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/README.md)
-is the starting point. The guides go into detail:
+is the starting point. You can read the guides, with an API reference for every package, on the
+[documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/). They go into detail:
 
 - **[Getting started](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/getting-started.md)**
   takes you from an empty project to a first query that runs in PostgreSQL.
+- **[Walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md)**
+  follows one booking through a minimal API and PostgreSQL, and shows what changes at each step.
 - **[Ranges and range sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/ranges.md)**
   covers every operation with examples, and the multirange operators.
 - **[Value sets](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/value-sets.md)**

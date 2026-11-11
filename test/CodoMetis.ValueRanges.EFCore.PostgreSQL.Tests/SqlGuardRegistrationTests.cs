@@ -52,7 +52,7 @@ public sealed class SqlGuardRegistrationTests
 
         // And the guard actually runs through it.
         Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+            () => context.Bookings.OrderBy(b => b.Tags.Union(Wanted)).ToQueryString());
     }
 
     /// <summary>
@@ -76,6 +76,47 @@ public sealed class SqlGuardRegistrationTests
             Assert.IsFalse(sql.Contains("array_cat(", StringComparison.Ordinal), sql);
             StringAssert.Contains(sql, UnguardedUnion + "(");
         }
+    }
+
+    /// <summary>
+    /// The canonical operations fail closed the same way (#478): each is a placeholder only the guard
+    /// builds, so without the guard the SQL names a function PostgreSQL does not have rather than a
+    /// concatenation that would answer wrongly under equality.
+    /// </summary>
+    [TestMethod]
+    public void AReplacedProcessorFactory_SendsTheCanonicalPlaceholders()
+    {
+        using var context = new ReplacedFactoryContext();
+        var codes   = Int32Set.From(1, 2);
+        var element = 3;
+
+        foreach (var (sql, placeholder) in new[]
+                 {
+                     (context.Bookings.Where(b => b.Codes.Union(codes) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_union_without_sql_guard("),
+                     (context.Bookings.Where(b => b.Codes.Add(element) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_add_without_sql_guard("),
+                     (context.Bookings.Where(b => b.Codes.Intersect(codes) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_intersect_without_sql_guard("),
+                     (context.Bookings.Where(b => b.Codes.Except(codes) == codes).Select(b => b.Id).ToQueryString(), "valueranges_canonical_except_without_sql_guard(")
+                 })
+        {
+            StringAssert.Contains(sql, placeholder);
+            Assert.IsFalse(sql.Contains("array_cat(", StringComparison.Ordinal), sql);
+            Assert.IsFalse(sql.Contains("unnest(", StringComparison.Ordinal), sql);
+        }
+    }
+
+    /// <summary>
+    /// <c>RangeSet.Count</c> fails closed the same way (#484): its subquery is built after EF Core's alias pass by
+    /// the same decorated processor, so without it the SQL names a function PostgreSQL does not have.
+    /// </summary>
+    [TestMethod]
+    public void AReplacedProcessorFactory_SendsTheCountPlaceholder()
+    {
+        using var context = new ReplacedFactoryContext();
+
+        var sql = context.Bookings.Where(b => b.BlockedDays.Count > 2).Select(b => b.Id).ToQueryString();
+
+        StringAssert.Contains(sql, "valueranges_multirange_count_without_sql_guard(");
+        Assert.IsFalse(sql.Contains("unnest(", StringComparison.Ordinal), sql);
     }
 
     /// <summary>
@@ -108,7 +149,7 @@ public sealed class SqlGuardRegistrationTests
         Assert.IsFalse(sql.Contains(UnguardedUnion, StringComparison.Ordinal), sql);
 
         Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => b.Tags.Union(Wanted) == Wanted).ToQueryString());
+            () => context.Bookings.OrderBy(b => b.Tags.Union(Wanted)).ToQueryString());
     }
 
     /// <summary>The name PostgreSQL reports when the guard did not run — part of the documented contract.</summary>

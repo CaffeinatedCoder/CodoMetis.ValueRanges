@@ -1,0 +1,25 @@
+Seed: the parameter-based SQL processor keeps its first output per query, so a query run again with a NULL, an empty list or a value where it first saw another reuses the SQL built for the first
+Oracles: RepeatedExecutionProbeTests
+Fails: every captured operand and list after its first execution, wherever the first value was NULL or empty and a later one is not, and the other way
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs
+index 32f9040..2f81d86 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesParameterBasedSqlProcessorFactory.cs
+@@ -80,11 +80,13 @@ internal sealed class ValueRangesParameterBasedSqlProcessorFactory(
+         // NULLs are given the column type every operator on them needs before the guard judges the
+         // final tree (#290).
+         // RangeSet.Count is built here too, after EF Core's alias pass, so it can't be skipped silently either (#484).
++        private readonly System.Collections.Concurrent.ConcurrentDictionary<Expression, Expression> _processed = new(ReferenceEqualityComparer.Instance);
++
+         public override Expression Process(Expression queryExpression, ParametersCacheDecorator parametersDecorator)
+-            => MultirangeCount.Expand(
++            => _processed.GetOrAdd(queryExpression, query => MultirangeCount.Expand(
+                 ValueSetSqlGuard.Check(
+-                    EmptyCollectionRewriter.Rewrite(inner.Process(queryExpression, parametersDecorator), Dependencies.SqlExpressionFactory),
++                    EmptyCollectionRewriter.Rewrite(inner.Process(query, parametersDecorator), Dependencies.SqlExpressionFactory),
+                     Dependencies.TypeMappingSource),
+-                Dependencies.SqlExpressionFactory);
++                Dependencies.SqlExpressionFactory));
+     }
+ }

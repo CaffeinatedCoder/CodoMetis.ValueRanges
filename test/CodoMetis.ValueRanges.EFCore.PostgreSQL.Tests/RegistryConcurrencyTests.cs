@@ -278,6 +278,8 @@ public sealed class RegistryConcurrencyTests
 
         public RelationalTypeMapping SetTypeMapping => throw Unreachable();
 
+        public bool CanonicalizesInSql => throw Unreachable();
+
         public object EmptySet => throw Unreachable();
     }
 

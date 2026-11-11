@@ -785,3 +785,364 @@ runtimes. Look at the text instead:
 - **Say "the end of the day" another way.** Use an unbounded end, `[22:00,)`, or an inclusive
   `23:59:59.9999999` bound
   ([TimeRange and the custom timerange type](efcore.md#timerange-and-the-custom-timerange-type)).
+
+## Changed answers in 10.2.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+11.0.0 makes the same changes, so each one is described under
+[Migration from v10.x](#migration-from-v10x):
+
+- [Check bound comparisons with `null` in queries](#check-bound-comparisons-with-null-in-queries)
+- [Check `RangeAgg` and `RangeIntersectAgg` over `null` ranges](#check-rangeagg-and-rangeintersectagg-over-null-ranges)
+- [Keep `null` out of a range set](#keep-null-out-of-a-range-set)
+- [Check predicates over a `null` range or a NULL column](#check-predicates-over-a-null-range-or-a-null-column)
+
+## Changed answers in 10.3.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+11.0.0 makes the same changes, so each one is described under
+[Migration from v10.x](#migration-from-v10x):
+
+- [Check value set `Union` and `Remove` over NULL in queries](#check-value-set-union-and-remove-over-null-in-queries)
+- [Move `RangeLowerBoundComparer` out of queries](#move-rangelowerboundcomparer-out-of-queries)
+
+## Changed answers in 10.4.0
+
+Some calls return a different value. Your code stays the same, so the compiler can't show you where.
+11.0.0 makes the same changes, so each one is described under
+[Migration from v10.x](#migration-from-v10x):
+
+- [Check string set columns with a collation](#check-string-set-columns-with-a-collation)
+- [Check date bounds at an exclusive infinity in queries](#check-date-bounds-at-an-exclusive-infinity-in-queries)
+- [Check `YearMonthRange` upper bounds compared in queries](#check-yearmonthrange-upper-bounds-compared-in-queries)
+
+## Migration from v10.x
+
+Nothing was removed or renamed. Some queries return different rows, and the compiler can't show you
+where, so check these:
+
+- **EF Core: a bound tested for `null` in a query selects the rows memory selects.**
+  `LowerBound() == null` selected no rows of a required column, and `?? fallback` lost its fallback
+  ([details](#check-bound-comparisons-with-null-in-queries)).
+- **`RangeAgg()` and `RangeIntersectAgg()` skip a `null` input.** With a `null` after another range,
+  `RangeIntersectAgg()` could return `empty`, and `RangeAgg()` could throw
+  ([details](#check-rangeagg-and-rangeintersectagg-over-null-ranges)).
+- **A `null` range in a range set throws `ArgumentException`.** `RangeSet.From` stored it, so the set
+  reported a range it didn't have ([details](#keep-null-out-of-a-range-set)).
+- **A predicate over a `null` range or a NULL column is `false`.** In memory, some predicates returned
+  `true` or threw. In a query, a negated predicate dropped the NULL rows and a projected one threw
+  ([details](#check-predicates-over-a-null-range-or-a-null-column)).
+- **EF Core: a value set `Union` or `Remove` over NULL is NULL in a query.** A `Select` loaded the
+  other set, where `Where(… == null)` selected the row
+  ([details](#check-value-set-union-and-remove-over-null-in-queries)).
+- **EF Core: `RangeLowerBoundComparer.Compare` runs in memory only in a query.** In a filter or an
+  ordering it fails translation. In SQL it compared in the range order, so it selected other rows
+  ([details](#move-rangelowerboundcomparer-out-of-queries)).
+- **EF Core: a string set column with a collation that may not compare bytes is rejected.** Building
+  the model throws. Under a case-insensitive collation, `Contains("a")` matched `{A}`, and `Remove("a")`
+  in `ExecuteUpdate` deleted `A` ([details](#check-string-set-columns-with-a-collation)).
+- **EF Core: a string set compared with a value under a collation that may not compare bytes throws.**
+  The value's column or `EF.Functions.Collate` gave the comparison its collation, so `Contains(g.Owner)`
+  matched `{A}` for `"a"` on a case-insensitive `Owner`
+  ([details](#check-string-set-columns-with-a-collation)).
+- **EF Core: a date bound at an exclusive infinity reads in a query as the row loads.** On
+  `[2026-01-01,infinity)`, `UpperBound()` returned 9999-12-31 in a query and 9999-12-30 in memory
+  ([details](#check-date-bounds-at-an-exclusive-infinity-in-queries)).
+- **EF Core: a `YearMonthRange` upper bound compares with a month in a query as in memory.** On
+  `[2026-01,2026-01]`, `UpperBound() == 2026-01` was `false` in a query and `true` in memory
+  ([details](#check-yearmonthrange-upper-bounds-compared-in-queries)).
+
+The first four also shipped in 10.2.0, the next two in 10.3.0, and the last four in 10.4.0. If you
+upgrade from 10.2.0 or later, you've already met the first four, from 10.3.0 or later the first six,
+and from 10.4.0 or later all ten.
+
+### Check bound comparisons with `null` in queries
+
+Check EF Core queries that call `LowerBound()` or `UpperBound()` on a range or `RangeSet` column and
+then test the result for `null`. That covers `== null`, `!= null`, `HasValue` and `??` with a
+fallback, in a filter or a projection. It also covers a filter on a bound you projected first, which
+is what a data grid sends for a "blank" filter.
+
+PostgreSQL's `lower` and `upper` return `NULL` for an empty range and for an unbounded side. The
+in-memory methods return `null` for the same values. Before 10.2.0, the EF Core package declared
+that a bound is `NULL` only when the column is, and EF Core simplified the query on that basis. On a
+required column:
+
+| Query | Before 10.2.0 | Now |
+|---|---|---|
+| `Where(r => r.Period.LowerBound() == null)` | no rows | the empty rows and the rows with no lower bound |
+| `Where(r => r.Period.UpperBound() != null)`, or `HasValue` | every row | the rows with an upper bound |
+| `Where(r => (r.Period.UpperBound() ?? DateOnly.MaxValue) >= day)` | the empty rows and the rows with no upper bound are missing | those rows match through the fallback |
+| `Select(r => r.Period.UpperBound() ?? DateOnly.MaxValue)` | throws (`InvalidOperationException`) at an empty row or a row with no upper bound | returns the fallback for it |
+| `Select(r => new { To = r.Period.UpperBound() }).Where(x => x.To == null)` | no rows | the empty rows and the rows with no upper bound |
+
+On a nullable column, `LowerBound() == null` ran as the column's own `IS NULL`. It found the `NULL`
+rows and missed the empty and unbounded ones.
+
+This holds for every range type and for `RangeSet`: the .NET and NodaTime ranges, `TimeRange`, the
+float ranges and `YearMonthRange`. Code that runs in memory is unchanged.
+
+- **Search your queries for `LowerBound()` and `UpperBound()`.** Each one followed by `== null`,
+  `!= null`, `HasValue` or `??` now returns the rows the same code returns in memory.
+- **Keep or drop the workarounds you wrote for it.** A query that adds `IsEmpty()`,
+  `IsUnboundedStart()` or `IsUnboundedEnd()` beside the `null` test returns the same rows as before,
+  so the extra test is now optional.
+- **Check reports built on the old rows.** On a required column, a count of rows with no end date
+  was 0, and a filter on a date with a `??` fallback left out every open-ended row.
+
+### Check `RangeAgg` and `RangeIntersectAgg` over `null` ranges
+
+Check code that aggregates ranges in memory from a source that can hold `null`: the values of a
+nullable property, or query results you load first and aggregate afterwards.
+
+PostgreSQL's `range_agg` and `range_intersect_agg` skip a `NULL` row, so a `GroupBy` over a
+nullable column aggregates the ranges it has. Before 10.2.0 the in-memory versions didn't. With `a`
+as `[1,10]` and `b` as `[5,25]`:
+
+| Sequence | Before 10.2.0 | Now |
+|---|---|---|
+| `[a, b, null].RangeIntersectAgg()` | `empty` | `[5,10]` |
+| `[null, a, b].RangeIntersectAgg()` | `[5,10]` | `[5,10]` |
+| `[(,), null].RangeIntersectAgg()` | throws `NullReferenceException` | `(,)` |
+| `[a, null].RangeAgg()` | throws `InvalidOperationException` | `{[1,10]}` |
+| `[null].RangeAgg()` | a set holding `null`: `Count` is 1, `IsEmpty()` is `false` | `{}` |
+
+Over sets, a `null` set made `RangeAgg()` throw `NullReferenceException`, and `RangeIntersectAgg()`
+too when it came after another set. Now it is skipped. This holds for every range type, the NodaTime
+ones included. Queries are unchanged, because the database already skipped NULL rows.
+
+- **Search for `RangeIntersectAgg()` over a sequence that can hold `null`.** A `!` in
+  `rows.Select(r => r.Period!).RangeIntersectAgg()` often marks the place: it silenced the nullable
+  warning for a property that can be `null`.
+- **Remove a `Where(r => r.Period != null)` you added before aggregating, if you like.** The answer is
+  the same with or without it.
+- **A group of nothing but `null` still differs from the database.** In memory `RangeAgg()` returns
+  the empty set, where the query returns `null`, as for zero rows
+  ([Read bounds, merge ranges and aggregate](efcore.md#read-bounds-merge-ranges-and-aggregate)).
+
+### Keep `null` out of a range set
+
+Check code that builds a `RangeSet` from ranges that can be `null`: `RangeSet.From`, a collection
+expression such as `[a, b]`, and `RangeSet.Create`.
+
+Before 10.2.0, a `null` range went into the set. `RangeSet<Int32Range, int>.From([null])` had a
+`Count` of 1, `IsEmpty()` returned `false`, and the first `Contains` threw `NullReferenceException`.
+With two or more ranges, `From` threw `InvalidOperationException` while sorting them, and next to
+`(,)` the `null` was ignored. Now each of these throws `ArgumentException`, wherever the `null`
+stands. `Union` and `Except` called on a `null` range threw or built such a set, and they throw now
+too.
+
+- **Filter before you build the set** if `null` means "no range" in your data:
+  `RangeSet<DateRange, DateOnly>.From(periods.OfType<DateRange>())` leaves the `null` ranges out.
+- **Aggregate with `RangeAgg()`** if you collect ranges from a nullable column. It skips `null`, as
+  PostgreSQL's `range_agg` does ([details](#check-rangeagg-and-rangeintersectagg-over-null-ranges)).
+
+### Check predicates over a `null` range or a NULL column
+
+Check code that calls a predicate such as `Contains`, `Overlaps` or `IsEmpty()` on a range or set that
+can be `null`, in memory or in a query over a nullable column.
+
+The rule is the one EF Core uses for its own types. A predicate with a `null` range or set on either
+side is `false`, and its negation `true`. EF Core writes `!b.Name.StartsWith("a")` so that it keeps
+the rows whose `Name` is NULL, and the range predicates now do the same.
+
+In memory, most predicates already returned `false` for a `null` range, but not all. With `nothing`
+as a `null` `DateRange`:
+
+| Call | Before 10.2.0 | Now |
+|---|---|---|
+| `nothing.Contains(DateRange.Empty)` | `true` | `false` |
+| `nothing.IsContainedBy(DateRange.Infinite)` | `true` | `false` |
+| `DateRange.Infinite.Contains(nothing)` | `true` | `false` |
+| `nothing.Contains(day)` | throws `NullReferenceException` | `false` |
+| `range.Overlaps(nullSet)`, `set.Contains(nothing)` | throws `NullReferenceException`, or `true` | `false` |
+
+In a query over a nullable column, a predicate over a NULL value was NULL. A filter dropped the row
+whether the predicate was negated or not, and a projected predicate threw when it read the NULL:
+
+| Query on a nullable `DateRange? Period` | Before 10.2.0 | Now |
+|---|---|---|
+| `Where(b => !b.Period!.Overlaps(p))` | the NULL rows are missing | the NULL rows are included |
+| `Where(b => b.Period!.Overlaps(p))` | no NULL rows | no NULL rows |
+| `Select(b => b.Period!.IsEmpty())` | throws (`InvalidOperationException`) at a NULL row | `false` for it |
+| `Where(b => !b.Tags!.Contains("x"))` on a nullable value set | the NULL rows are missing | the NULL rows are included |
+| `Where(b => !b.Period.Contains(b.Visit!.On))`, for a booking without a visit | the row is missing | the row is included |
+| `Select(b => b.Period.Contains(b.Day!.Value))` on a nullable `DateOnly? Day` | throws (`InvalidOperationException`) at a NULL `Day` | `false` for it |
+| `Where(b => DateRange.CreateUnboundedEnd(b.Visit!.From).Contains(v))`, for a booking without a visit | the row is included: the range was `(,)` | the row is missing: the range is NULL |
+
+The same goes for the element `Contains(T)` looks for, when it is NULL: a required column of a
+missing child in an outer join, or a nullable column read with `.Value`. The SQL of a required
+column doesn't change. A nullable one gets `b."Period" IS NULL OR NOT (…)` under a negation. A
+range factory over a NULL element is NULL, where it built `empty` (`CreateFinite`) or `(,)`.
+
+- **Search for negated predicates over a nullable column.** A `!` that silenced the nullable warning,
+  as in `!b.Period!.Overlaps(p)`, often marks the place.
+- **Say "has a period and doesn't overlap" when that is what you mean.** Write
+  `Where(b => b.Period != null && !b.Period.Overlaps(p))`. It selects the rows the negated predicate
+  selected before.
+- **`CompareTo` and `==` keep their own rules for a NULL column** ([Sort ranges](ranges.md#sort-ranges)).
+- **Value sets still throw in memory for a `null` set.** Only the query changes for them.
+
+### Check value set `Union` and `Remove` over NULL in queries
+
+Check EF Core queries that load a value set `Union` or `Remove` where a set or an element can be NULL:
+a nullable column, a column of a missing child in an outer join, or a `null` parameter.
+
+PostgreSQL's `array_cat` and `array_remove` skip a NULL: `array_cat(NULL, '{z}')` is `{z}`, and
+`array_remove('{a}', NULL)` is `{a}`. Before 10.3.0, the EF Core package called them as they are,
+while a filter treated the result as NULL. So the same expression was NULL in a `Where` and a set in a
+`Select`. Now it is NULL in both. With `more` as `{z}`:
+
+| Query | Before 10.3.0 | Now |
+|---|---|---|
+| `Select(b => b.MaybeTags!.Union(more))`, for a NULL `MaybeTags` | `{z}` | `null` |
+| `Select(b => b.Tags.Remove(b.Label!))`, for a NULL `Label` | `Tags` as stored | `null` |
+| `Select(b => b.Tags.Union(b.Visit!.Tags))`, for a booking without a visit | `Tags` as stored | `null` |
+| `Where(b => b.Tags.Remove(b.Label!).IsEmpty)`, for a NULL `Label` | the rows whose `Tags` is empty | none of them |
+| `Where(b => b.MaybeTags!.Union(more) == null)` | the NULL rows | the NULL rows |
+
+The SQL of a required column, a non-null parameter and a constant doesn't change. A set or element
+that can be NULL gets `CASE WHEN … IS NULL THEN NULL ELSE array_cat(…) END`.
+
+- **Search for `Union` and `Remove` in a `Select`.** A `!` on a nullable set or element, as in
+  `b.MaybeTags!.Union(more)`, often marks the place.
+- **Say which set you want for a NULL one.** `(b.MaybeTags ?? StringSet.Empty).Union(more)` loads
+  `more` for the NULL rows, as the query did before.
+- **In memory, both still throw for a `null`.** Only the query changes.
+
+### Check string set columns with a collation
+
+Check `StringSet` and `StringSet<TElement>` properties configured with `UseCollation`, queries that
+call `EF.Functions.Collate` on one, and queries that compare one with a value from a column configured
+with `UseCollation`.
+
+PostgreSQL compares the elements of a `text[]` column with the column's collation, and memory compares
+them ordinally. A deterministic collation breaks every tie by the bytes, so the two agree. A
+nondeterministic one, such as a case-insensitive ICU collation, treats `A` and `a` as equal. Before
+10.4.0 the EF Core package translated the set operators as they are, so with `Tags` holding `{A}`:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(p => p.Tags.Contains("a"))` | no match | matched |
+| `Where(p => p.Tags.IsSubsetOf(StringSet.From("a")))` | no match | matched |
+| `Where(p => p.Tags == StringSet.From("a"))` | no match | matched |
+| `Select(p => p.Tags.Remove("a"))` | `{A}` | `{}` |
+| `ExecuteUpdate(… p => p.Tags.Remove("a"))` | — | stored `{}` |
+
+Now building the model throws `InvalidOperationException` and names the property. The collations that
+compare bytes are allowed: `"C"`, `"POSIX"`, `ucs_basic`, `pg_c_utf8` and `default`. A query over
+`EF.Functions.Collate(p.Tags, …)` with any other collation throws too.
+
+- **Search for `UseCollation` on string set properties.** The exception names each one.
+- **If you wanted case-insensitive matching, store the elements folded.** Lower-case them before you
+  build the set, in your code or in a wrapper element type, so memory and the database compare the
+  same text.
+- **Otherwise remove the collation, or use `"C"`.** A deterministic collation other than those five
+  answers as memory does, but the model can't tell it from a nondeterministic one by its name.
+- **A collation given to the column outside your model isn't seen.** Keep it deterministic.
+
+The value you compare with a string set counts too, because PostgreSQL compares under the collation of
+either side. With `Members` holding `{A,b}`, no collation on it, and `Owner` holding `"a"` under a
+case-insensitive collation:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(g => g.Members.Contains(g.Owner))` | no match | matched |
+| `Where(g => g.Members.Contains(EF.Functions.Collate("a", "case_insensitive")))` | no match | matched |
+| `ExecuteUpdate(… g => g.Members.Remove(g.Owner))` | — | stored `{b}` |
+
+Now such a query throws `InvalidOperationException` and names the collation. The same five collations
+are allowed on the value's column.
+
+- **Compare with `EF.Functions.Collate(g.Owner, "C")`.** An explicit collation wins over the column's,
+  so the query compares bytes, as memory does. Unless the set column is collated `"C"` too, PostgreSQL
+  then can't use a GIN index on it for that comparison.
+- **Or load the value first.** A value your code passes in has no collation.
+
+### Check date bounds at an exclusive infinity in queries
+
+Check EF Core queries that call `LowerBound()`, `UpperBound()`, `LowerBoundInclusive()` or `Clamp` on
+a `DateRange`, a `LocalDateRange` or a `RangeSet` of them. Rows that another tool wrote are the ones
+to look at, and so are ranges your query computes at the date extremes.
+
+PostgreSQL keeps an infinite bound as written, so `[2026-01-01,infinity)` and `(-infinity,2026-01-01)`
+exist. Memory loads them one day inside the extreme, as `[2026-01-01,9999-12-30]` and
+`[0001-01-02,2025-12-31]`. Before 10.4.0 a query read the bound the database holds instead:
+
+| Query | Memory | Before 10.4.0 |
+|---|---|---|
+| `Select(r => r.Period.UpperBound())` on `[2026-01-01,infinity)` | 9999-12-30 | 9999-12-31 |
+| `Select(r => r.Period.Clamp(DateOnly.MaxValue))` on `[2026-01-01,infinity)` | 9999-12-30 | 9999-12-31 |
+| `Select(r => r.Period.LowerBound())` on `(-infinity,2026-01-01)` | 0001-01-02 | 0001-01-01 |
+| `Select(r => r.Period.Clamp(DateOnly.MinValue))` on `(-infinity,2026-01-01)` | 0001-01-02 | 0001-01-01 |
+| `Where(r => r.Period.LowerBoundInclusive())` on `(-infinity,2026-01-01)` | matches | no match |
+
+Now the query returns what memory returns. The EF Core package never writes these forms, so the rows
+it stored give the same answers as before. A range your query computes can hold one:
+`r.Period.Except(DateRange.CreateUnboundedStart(DateOnly.MinValue, true))` on `(,)` is
+`(-infinity,)` in the database, and its `LowerBound()` was 0001-01-01.
+
+- **On a `LocalDateRange`, only the upper side changes.** Memory starts `(-infinity` on -9998-01-02,
+  and PostgreSQL has no such date. So in a query `LowerBound()` still gives `LocalDate.MinIsoValue`.
+- **With `Npgsql.DisableDateTimeInfinityConversions` set, nothing changes.** Such a row doesn't load,
+  and a query that returns its infinite bound throws as it did.
+- **A `YearMonthRange` can't hold these forms.** Loading one throws, as before
+  ([Rows written by other tools](efcore.md#rows-written-by-other-tools)).
+
+### Check `YearMonthRange` upper bounds compared in queries
+
+Check EF Core queries that compare `UpperBound()` or `Clamp` of a `YearMonthRange`, or `UpperBound()`
+of a `RangeSet` of them, with a month. Look in `Where`, in `OrderBy` keys compared later, and in
+projected comparisons.
+
+A `YearMonthRange` is stored as a month-aligned `daterange`, and a month you pass in is sent as its
+first day. Before 10.4.0, a query read the upper bound as the last day of the month. It loaded as the
+right month, but a comparison saw two different dates:
+
+| Query, on `[2026-01,2026-01]` | Memory | Before 10.4.0 |
+|---|---|---|
+| `Where(r => r.BillingPeriod.UpperBound() == new YearMonth(2026, 1))` | matches | no match |
+| `Where(r => r.BillingPeriod.UpperBound() > new YearMonth(2026, 1))` | no match | matches |
+| `Where(r => r.BillingPeriod.Clamp(new YearMonth(2026, 2)) == new YearMonth(2026, 1))` | matches | no match |
+| `Select(r => r.BillingPeriod.UpperBound())` | 2026-01 | 2026-01 |
+
+Now the query reads the first day of the month and compares as memory does. A projected bound loads
+as before.
+
+- **`Clamp` on a `YearMonthRange` first runs as SQL in 10.4.0.** Before, it ran in memory in a final
+  projection and failed translation in a filter, so only `UpperBound()` gave other answers.
+- **`LowerBound()` doesn't change.** It always read the first day of the month.
+
+### Move `RangeLowerBoundComparer` out of queries
+
+Check EF Core queries that call `Compare` on `RangeLowerBoundComparer`, on
+`RangeSet.LowerBoundComparer`, or on another `IComparer` of ranges or sets.
+
+EF Core reads every `Compare(x, y)` as the natural order of `x` and `y`, whatever the comparer. For a
+range, that is the range order `CompareTo` uses, not the lower bound. Before 10.3.0 the comparer ran
+in SQL in that order. Now it runs in memory only, like the other members under
+[What runs where](efcore.md#what-runs-where). With `p` as `[2026-03-01,2026-03-10]`:
+
+| Query | Before 10.3.0 | Now |
+|---|---|---|
+| `Where(r => comparer.Compare(r.Period, p) == 0)` | only the rows equal to `p` | throws (`InvalidOperationException`): could not be translated |
+| `OrderBy(r => comparer.Compare(r.Period, p))` | sorted in the range order | throws, as above |
+| `Select(r => comparer.Compare(r.Period, p))`, for `[2026-03-01,)` | `1` | `0`, computed in memory |
+| `Select(r => comparer.Compare(r.Period, p))`, for a NULL `Period` | throws (`InvalidOperationException`) | `-1`, computed in memory |
+
+`Comparer<DateRange>.Default.Compare` runs in memory too. Once the comparer is a query parameter, a
+query can't tell one comparer from another. So do comparers declared over another type, when what they
+compare is a range or a set: an `IComparer<IRange<DateOnly>>`, a non-generic `IComparer` (such as
+`Comparer<DateRange>.Create(…)` held as one) and an `IComparer<StringSet>`. The same goes for any
+other method named `Compare` that takes two ranges or two sets, such as a static helper or one on a
+class that isn't a comparer. The query runs the method you called, so a class whose public `Compare`
+differs from its `IComparer<T>.Compare` gets the public one, as in memory.
+
+- **Search your queries for `Compare(`.** Each `Compare` over ranges or sets in a `Where` or an
+  `OrderBy` now throws, so running the query finds it.
+- **Filter and sort by the lower bound itself.** `LowerBound()` and `LowerBoundInclusive()` run as
+  SQL, so `Where(r => r.Period.LowerBound() == day)` and `OrderBy(r => r.Period.LowerBound())` work.
+  An ordering puts the rows without a lower bound where PostgreSQL puts NULL, last ascending
+  ([details](efcore.md#read-bounds-merge-ranges-and-aggregate)).
+- **Use `CompareTo` for the range order.** `r.Period.CompareTo(p)` runs as SQL in the order
+  `Comparer<DateRange>.Default` uses.

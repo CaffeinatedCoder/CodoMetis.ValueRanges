@@ -15,8 +15,8 @@ readable; they never make them vaguer.
 ## Which pages
 
 The root `README.md`, the package READMEs under `src/*/README.md`, and the consumer guides:
-`docs/getting-started.md`, `ranges.md`, `value-sets.md`, `serialization.md`, `efcore.md`,
-`migration.md` and `why.md`. The contributor pages (`architecture.md`, `testing.md`,
+`docs/getting-started.md`, `walkthrough.md`, `ranges.md`, `value-sets.md`, `serialization.md`,
+`efcore.md`, `migration.md` and `why.md`. The contributor pages (`architecture.md`, `testing.md`,
 `discard-triage.md`) and `CHANGELOG.md` keep their own style.
 
 ## The voice

@@ -75,7 +75,7 @@ var day = new DateOnly(2024, 6, 15);
 bookings.Where(b => b.Period.Contains(day));        // b."Period" @> @day
 bookings.Where(b => b.Period.Overlaps(other));      // b."Period" && @other
 bookings.Select(b => b.Period.Intersect(other));    // b."Period" * @other
-bookings.OrderBy(b => b.Period.LowerBound());       // ORDER BY lower(b."Period")
+bookings.OrderBy(b => b.Period.LowerBound());       // ORDER BY lower(b."Period"); no start sorts last
 bookings.Select(b => b.Period.Merge(other));        // range_merge(b."Period", @other)
 bookings.Select(b => b.BlockedDays.Gaps(month));    // datemultirange(@month) - b."BlockedDays"
 bookings.Where(b => b.BlockedDays == someSet);      // b."BlockedDays" = @set
@@ -152,33 +152,46 @@ users.Where(u => u.Roles.Remove("admin").IsEmpty);  // cardinality(array_remove(
 
 `Contains` always runs as `@>`, never as `= ANY`, so a plain GIN index on the column serves it.
 
+`Union`, `Add`, `Intersect` and `Except` run as SQL too, on every set type except the two text
+ones, and give the deduplicated, sorted set memory gives:
+
+```csharp
+orders.Where(o => o.Codes.Union(more) == expected);  // ARRAY((SELECT DISTINCT ON (vr0.x) vr0.x FROM unnest(…) …)) = @expected
+orders.Where(o => o.Codes.Intersect(wanted).Count > 1);
+```
+
 Good to know:
 
-- **`Union` is the one set operation whose SQL result isn't deduplicated and sorted.** It runs as
-  `array_cat`, which joins two arrays without removing duplicates.
-- **That is harmless in exactly two places.** The operators `@>`, `<@` and `&&` ignore duplicates. When
-  you load the result, reading the set sorts and deduplicates it again.
-- **Anything that depends on order or duplicates throws instead.** That covers equality, `Count`,
-  `GroupBy`, `Distinct`, `OrderBy` and a value in `ExecuteUpdate`. The query throws rather than
-  return a different answer from memory. The package checks this on the translated SQL.
+- **On text, `Union`, `Add`, `Intersect` and `Except` leave their SQL result unsorted.** PostgreSQL
+  sorts `text` by the database collation rather than ordinally, so it can't sort it the way your sets
+  are, and `Union` runs as `array_cat`, which repeats an element both sets hold.
+- **Most uses don't depend on that.** The operators `@>`, `<@` and `&&` ignore order and repeats.
+  `Count` counts the distinct elements, and `==` compares by mutual containment. When you load the
+  result, reading the set sorts and deduplicates it again.
+- **Anything that depends on order or repeats throws instead.** That covers `GroupBy`, `Distinct`,
+  `OrderBy`, `Contains` over a list of several sets and a value in `ExecuteUpdate`. The query throws
+  rather than return a different answer from memory. The package checks this on the translated SQL.
+- **Your own element types must sort as their underlying type does.** An `Int32Set<OrderId>` sorts
+  the stored integers in the database and by `OrderId.CompareTo` in memory. Vogen and
+  StronglyTypedId compare by the underlying value.
 
 ## What runs in memory only
 
-These operations give the right answer in memory, but have no SQL form that always gives the same
-one. The table says why for each.
+These operations give the right answer in memory, and an EF Core query doesn't translate them.
+Some would need composed SQL that isn't written; for others, SQL would answer differently. The
+table says which.
 In a `Where`, the query fails to translate. It fails loudly, instead of quietly fetching the whole
-table. In a `Select`, EF Core computes them in memory after it loads the rows.
+table. In the final `Select`, EF Core computes them in memory after it loads the rows.
 
 | Operation | Why |
 |---|---|
-| `Intersect`, `Except`, `Add` on value sets | PostgreSQL's array type has no intersection, difference or sorted insert |
-| `Length` on any range | the empty range measures 0 where `upper(x) - lower(x)` yields `NULL`, and `int4range` overflows `int4` before a cast can widen it |
-| `Values()` and `Values(step)` on a discrete range, `Split` on any range | `generate_series` returns rows, not a scalar |
-| `Shift`, `Expand` on any range | PostgreSQL has no range arithmetic, and rebuilding the range from `lower(x) + d` answers differently for the empty range, `time` past midnight, a daylight-saving change and `infinity` |
-| `DateRange.Month`, `Quarter`, `Year` and `IsoWeek` with an argument read from a column | not translated yet: PostgreSQL has no calendar-range function. Built from values your code passes in, the range is sent as one constant, so comparing a column against a month runs as SQL |
-| `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | arrays and multiranges convert only through `unnest` and a custom aggregate |
-| `Clamp(value)` on any range | the empty and unbounded shapes have no bound to clamp to |
-| the value set indexer, `set[0]` | canonical order is the CLR comparer's, not the server's |
+| `Length` on the range types other than `Int32Range` and `Int64Range` | not translated: a temporal range open to `infinity` fails in PostgreSQL |
+| `Values()` and `Values(step)` on a discrete range, `Split` on any range | not translated: each would be `generate_series` collected into an array |
+| `Shift`, `Expand` on any range | not translated: rebuilding the range from `lower(x) + d` answers differently for the empty range, `time` past midnight and a bound moved past the last date .NET holds |
+| `LocalDateRange.Month`, `Quarter`, `Year` and `IsoWeek`, and `YearMonthRange.Quarter` and `Year`, with an argument read from a column | not translated: PostgreSQL has no dates before 4714-11-24 BC, so the month and the year that hold its first day have no start, with Npgsql's infinity conversions on or off. Built from values your code passes in, the range is sent as one constant, so comparing a column against a month runs as SQL. On `DateRange` they run as SQL |
+| `ToRangeSet()` / `ToInt32Set()` and the other bridge conversions | not translated: an array becomes a multirange by aggregating one-element ranges, and the reverse is enumeration |
+| `Clamp(value)` on a `DateTimeRange`, with a `DateTime` stored as `timestamp with time zone` | not translated: `GREATEST` and `LEAST` would compare `timestamp` and `timestamptz` through the session's time zone. Map the property as `timestamp without time zone` and it runs as SQL |
+| the value set indexer, `set[0]` | a row another tool wrote may not be canonical, arrays start at 1, and an index past the end is `NULL` where memory throws |
 
 Everything else on the range, multirange and array surface runs in the database. The EF Core guide
 puts both halves side by side in
@@ -192,10 +205,14 @@ and call `npgsql.UseValueRangesNodaTime()` instead.
 
 ## Documentation
 
+You can read every guide, with an API reference, on the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/).
+
 - **The [EF Core guide](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md)**
   shows every translation with the SQL it generates.
 - **[Getting started](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/getting-started.md)**
   walks you through a first entity, migration and query.
+- **The [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md)**
+  follows one booking through a minimal API and PostgreSQL, and shows what changes at each step.
 - **The [changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/CHANGELOG.md)**
   lists what changed in each version.
 

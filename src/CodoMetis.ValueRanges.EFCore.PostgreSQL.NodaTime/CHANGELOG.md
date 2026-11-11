@@ -9,15 +9,65 @@ The first preview of the 11 line: the same public API as 10.0.0, on .NET 11, EF 
 
 ### Breaking
 
-- Targets `net11.0` and references `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime` 11 (a release candidate while .NET 11 is in preview). PostgreSQL 16 or later, as in 10.x.
+- Targets `net11.0` and references `Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime` 11 (`11.0.0-rc.3` until Npgsql ships 11.0.0). PostgreSQL 16 or later, as in 10.x.
+- EF Core: `LowerBound()` and `UpperBound()` of a NodaTime range or multirange column, `YearMonthRange` included, are `NULL` in a query for an empty value and on an unbounded side, as in memory. So `== null` selects those rows, where it selected none on a required column, and `?? fallback` returns the fallback, where the row was missing ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-bound-comparisons-with-null-in-queries)).
+- EF Core: a range, multirange or value set predicate over a NULL column is `false`, so its negation keeps the row, as EF Core does for `string` and `string[]`. `!b.Period.Overlaps(p)` dropped the NULL rows, and a projected predicate threw ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
+- EF Core: `Contains(T)` on a range or multirange is `false` in a query when the element is NULL: a column of a missing child in an outer join, or a nullable column read with `.Value`. Its negation dropped the row, and a projection threw ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
+- EF Core: `CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd` over a NULL element are NULL in a query, as EF Core's own `AddDays` is. They built `empty` or `(,)`, so `Contains(v)` selected a row without the element ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-predicates-over-a-null-range-or-a-null-column)).
+- EF Core: on a `LocalDateRange` and its multirange, `UpperBound()` and `Clamp` read an exclusive `infinity` as 9999-12-30 in a query, as the row loads, where they returned 9999-12-31, and `LowerBoundInclusive()` is `true` at an exclusive `-infinity`. `LowerBound()` there keeps `LocalDate.MinIsoValue`, because memory's -9998-01-02 isn't a PostgreSQL date ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-date-bounds-at-an-exclusive-infinity-in-queries)).
+- EF Core: on a `YearMonthRange` and its multirange, `UpperBound()` and `Clamp` compare with a month in a query as in memory. They read the last day of the month, so on `[2026-01,2026-01]` `UpperBound() == 2026-01` was `false` and `UpperBound() > 2026-01` was `true` ([Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#check-yearmonthrange-upper-bounds-compared-in-queries)).
 
 ### Added
 
 - EF Core: Npgsql 11's own temporal keys accept `YearMonthRange` and the NodaTime range and multirange columns. `HasKey(…).WithoutOverlaps()` and `WithPeriod()` foreign keys work over them on PostgreSQL 18 with `SetPostgresVersion(18, 0)` ([Temporal keys](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#reject-overlapping-rows-with-npgsqls-temporal-keys-postgresql-18)).
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Count` on a `RangeSet` of the NodaTime ranges and of `YearMonthRange` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Clamp` runs as SQL on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`, so a query can filter and sort by the clamped value. It answers as memory does, at the element types' extremes too ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
 
 ### Changed
 
+- Docs: each package's Project website link on NuGet opens the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/), and its README links the site and the [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md).
 - Packaging: a package's release notes on nuget.org and in Visual Studio are its version's section of its changelog, in plain text, ending with a link to the changelog at the version's tag, where they were a link to the latest changelog ([Changelog](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/CHANGELOG.md)).
+
+### Fixed
+
+- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions and `Clamp` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
+- Docs: the [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where) tables list every public member a query can call. `Equals` runs as `=`. `Values` on a value set, `Count` and the indexer on a `RangeSet`, `From`, `Parse`, the NodaTime conversions, `ToString`, `GetHashCode` and `GetEnumerator` run in memory.
+
+## [10.4.0] — 2026-10-26
+
+Some calls answer differently: [Changed answers in 10.4.0](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040).
+
+### Changed answers
+
+- EF Core: on a `LocalDateRange` and its multirange, `UpperBound()` and `Clamp` read an exclusive `infinity` as 9999-12-30 in a query, as the row loads, where they returned 9999-12-31, and `LowerBoundInclusive()` is `true` at an exclusive `-infinity`. `LowerBound()` there keeps `LocalDate.MinIsoValue`, because memory's -9998-01-02 isn't a PostgreSQL date ([#502](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/502), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+- EF Core: on a `YearMonthRange` and its multirange, `UpperBound()` and `Clamp` compare with a month in a query as in memory. They read the last day of the month, so on `[2026-01,2026-01]` `UpperBound() == 2026-01` was `false` and `UpperBound() > 2026-01` was `true` ([#511](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/511), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1040)).
+
+### Added
+
+- EF Core: `Union`, `Add`, `Intersect` and `Except` on the NodaTime value sets, their versions with your own element type and `YearMonthSet` run as SQL. They give the deduplicated, sorted set memory gives, so a query can compare, count, group by and store the result ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Count` on a `RangeSet` of the NodaTime ranges and of `YearMonthRange` runs as SQL, so a query can filter and sort by how many separate ranges a multirange holds ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+- EF Core: `Clamp` runs as SQL on `LocalDateRange`, `LocalDateTimeRange`, `InstantRange` and `YearMonthRange`, so a query can filter and sort by the clamped value. It answers as memory does, at the element types' extremes too ([What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where)).
+
+## [10.3.0] — 2026-10-25
+
+### Changed
+
+- Docs: each package's Project website link on NuGet opens the [documentation site](https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/), and its README links the site and the [walkthrough](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/walkthrough.md).
+
+## [10.2.0] — 2026-10-25
+
+### Changed answers
+
+- EF Core: `LowerBound()` and `UpperBound()` of a NodaTime range or multirange column, `YearMonthRange` included, are `NULL` in a query for an empty value and on an unbounded side, as in memory. So `== null` selects those rows, where it selected none on a required column, and `?? fallback` returns the fallback, where the row was missing ([#354](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/354), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+- EF Core: a range, multirange or value set predicate over a NULL column is `false`, so its negation keeps the row, as EF Core does for `string` and `string[]`. `!b.Period.Overlaps(p)` dropped the NULL rows, and a projected predicate threw ([#357](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/357), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+- EF Core: `Contains(T)` on a range or multirange is `false` in a query when the element is NULL: a column of a missing child in an outer join, or a nullable column read with `.Value`. Its negation dropped the row, and a projection threw ([#387](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/387), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+- EF Core: `CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd` over a NULL element are NULL in a query, as EF Core's own `AddDays` is. They built `empty` or `(,)`, so `Contains(v)` selected a row without the element ([#388](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/issues/388), [Migration](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/migration.md#changed-answers-in-1020)).
+
+### Fixed
+
+- Docs: [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where), the READMEs and the XML docs give each in-memory operation's real reason. `Shift` and `Expand` keep a bound at `infinity`, so that reason was stale. `Length`, `Values`, `Split`, the bridge conversions, `Clamp`, `Intersect` and `Except` would take composed SQL, not a missing operator. In-memory operations run in the final `Select` only.
+- Docs: the [What runs where](https://github.com/CaffeinatedCoder/CodoMetis.ValueRanges/blob/main/docs/efcore.md#what-runs-where) tables list every public member a query can call. `Equals` runs as `=`. `Values` on a value set, `Count` and the indexer on a `RangeSet`, `From`, `Parse`, the NodaTime conversions, `ToString`, `GetHashCode` and `GetEnumerator` run in memory.
 
 ## [10.1.0] — 2026-10-19
 

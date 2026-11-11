@@ -31,17 +31,26 @@ internal sealed class RangeTypeDefinition<TRange, T> : IRangeTypeDefinition
     /// <param name="infinityText">
     /// <c>-infinity</c> / <c>infinity</c> for a bound Npgsql maps to it, otherwise <see langword="null"/>.
     /// </param>
+    /// <param name="exclusiveInfinity">
+    /// For a discrete type, the extremes <paramref name="infinityText"/> writes as infinities and the bound memory
+    /// loads for an exclusive bound at each (<see cref="IRangeTypeDefinition.ExclusiveInfinity"/>). It applies only while
+    /// <paramref name="infinityText"/> maps them, so not with <c>Npgsql.DisableDateTimeInfinityConversions</c> set.
+    /// </param>
     internal RangeTypeDefinition(
-        string             rangeStoreType,
-        string             multirangeStoreType,
-        string             elementStoreType,
-        Func<T, T>?        normalizeValue = null,
-        Func<T, T>?        storeValue     = null,
-        Func<T, string?>?  infinityText   = null)
+        string                         rangeStoreType,
+        string                         multirangeStoreType,
+        string                         elementStoreType,
+        Func<T, T>?                    normalizeValue    = null,
+        Func<T, T>?                    storeValue        = null,
+        Func<T, string?>?              infinityText      = null,
+        (T Min, T? Lower, T Max, T? Upper)? exclusiveInfinity = null)
     {
         RangeStoreType      = rangeStoreType;
         MultirangeStoreType = multirangeStoreType;
         ElementStoreType    = elementStoreType;
+
+        if (exclusiveInfinity is { } bounds && infinityText?.Invoke(bounds.Min) is not null && infinityText(bounds.Max) is not null)
+            ExclusiveInfinity = new ExclusiveInfinity(bounds.Min, bounds.Lower, bounds.Max, bounds.Upper);
 
         var toStore = (normalizeValue, storeValue) switch
                       {
@@ -78,6 +87,8 @@ internal sealed class RangeTypeDefinition<TRange, T> : IRangeTypeDefinition
 
     // A domain with a successor function is discrete; continuous types return null.
     public bool IsDiscrete { get; } = TRange.NextValueAfter(default) is not null;
+
+    public ExclusiveInfinity? ExclusiveInfinity { get; }
 
     public RelationalTypeMapping RangeTypeMapping { get; }
 

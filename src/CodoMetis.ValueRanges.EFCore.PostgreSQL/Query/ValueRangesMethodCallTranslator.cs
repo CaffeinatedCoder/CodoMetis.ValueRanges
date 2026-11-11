@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
+using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -82,6 +83,16 @@ internal sealed class ValueRangesMethodCallTranslator(
     private static readonly MethodInfo LowerBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.LowerBoundInclusive));
     private static readonly MethodInfo UpperBoundInclusiveMethod = GetExtensionMethod(nameof(RangeExtensions.UpperBoundInclusive));
 
+    // -- RangeExtensions.Clamp: extension<T>(IRange<T>), on every range type (#406, #486) --
+
+    private static readonly MethodInfo ClampMethod = GetExtensionMethod(nameof(RangeExtensions.Clamp));
+
+    // -- The calendar factories (Month, Quarter, Year, IsoWeek) over a column, on the types whose every answer
+    //    PostgreSQL can hold (#191) --
+
+    private static readonly HashSet<Type> CalendarFactoriesAsSql = [typeof(DateRange)];
+
+
     private static MethodInfo GetExtensionMethod(string name, Func<MethodInfo, bool>? filter = null)
         => typeof(RangeExtensions)
           .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -103,18 +114,70 @@ internal sealed class ValueRangesMethodCallTranslator(
         IDiagnosticsLogger<DbLoggerCategory.Query> logger
     )
     {
+        var translation = TranslateCall(instance, method, arguments);
+
+        return translation is not null && translation.Type == typeof(bool)
+            ? FalseOverNull(translation, instance is null ? arguments : [instance, .. arguments])
+            : translation;
+    }
+
+    /// <summary>
+    /// A predicate with a NULL range or multirange on either side is <c>false</c>: what EF Core answers
+    /// for a predicate over NULL on its own types, and what the in-memory predicates answer for a null
+    /// (#350, #355), and so is one with a NULL element: <c>Contains(T)</c> over the optional side of an
+    /// outer join or a nullable column read with <c>.Value</c> (#381). Each range, multirange or element
+    /// operand becomes <c>x IS NOT NULL AND &lt;predicate&gt;</c>. EF Core's nullability processing drops
+    /// the check for a required column and a non-null parameter, and writes <c>x IS NULL OR NOT (…)</c>
+    /// under a negation, so a negated predicate keeps the NULL row.
+    /// </summary>
+    /// <remarks>
+    /// <c>CompareTo</c> never reaches this: EF Core turns <c>a.CompareTo(b) op k</c> into a comparison,
+    /// which keeps <c>Comparer&lt;T&gt;.Default</c>'s rule for a null (#261). Equality is EF Core's own.
+    /// </remarks>
+    private SqlExpression FalseOverNull(SqlExpression predicate, IReadOnlyList<SqlExpression> operands)
+    {
+        var unwrapped = operands.Select(Unwrap).ToList();
+
+        // The element type is the one of the range or multirange the predicate is over.
+        IRangeTypeDefinition? ranges = null;
+        foreach (var operand in unwrapped)
+            if (RangeTypeRegistry.TryGetByClrType(operand.Type, out ranges, out _)) break;
+
+        for (var index = unwrapped.Count - 1; index >= 0; index--)
+        {
+            var operand = unwrapped[index];
+
+            SqlExpression mapped;
+            if (RangeTypeRegistry.TryGetByClrType(operand.Type, out var definition, out var isSet))
+                mapped = operand.TypeMapping is null
+                    ? sqlExpressionFactory.ApplyTypeMapping(operand, isSet ? definition.RangeSetTypeMapping : definition.RangeTypeMapping)
+                    : operand;
+            else if (ranges is not null && (Nullable.GetUnderlyingType(operand.Type) ?? operand.Type) == ranges.ElementClrType)
+                mapped = operand.TypeMapping is null ? ApplyElementMapping(operand, ranges) : operand;
+            else
+                continue;
+
+            predicate = sqlExpressionFactory.AndAlso(sqlExpressionFactory.IsNotNull(mapped), predicate);
+        }
+
+        return predicate;
+    }
+
+    private SqlExpression? TranslateCall(SqlExpression? instance, MethodInfo method, IReadOnlyList<SqlExpression> arguments)
+    {
         var declaringType = method.DeclaringType;
 
         if (declaringType == typeof(RangeExtensions))
             return TranslateRangeExtensionCall(method, arguments);
 
         if (declaringType is { IsGenericType: true } && declaringType.GetGenericTypeDefinition() == typeof(RangeSet<,>))
-            return TranslateRangeSetCall(instance, declaringType, method.Name, arguments);
+            return TranslateRangeSetCall(instance, declaringType, method, method.Name, [.. method.GetParameters().Select(p => p.ParameterType)], arguments);
 
         // The static form of RangeSet.Contains the interceptor substitutes (RangeSetContains): the set
         // is the first argument, and the method translates as the instance call it stands for.
         if (declaringType == typeof(RangeSetContains) && arguments.Count == 2)
-            return TranslateRangeSetCall(arguments[0], method.GetParameters()[0].ParameterType, nameof(RangeSet<,>.Contains), [arguments[1]]);
+            return TranslateRangeSetCall(arguments[0], method.GetParameters()[0].ParameterType, method, nameof(RangeSet<,>.Contains),
+                                         [method.GetParameters()[1].ParameterType], [arguments[1]]);
 
         if (declaringType is not null
             && RangeTypeRegistry.TryGetByClrType(declaringType, out var definition, out var isSet)
@@ -152,7 +215,7 @@ internal sealed class ValueRangesMethodCallTranslator(
                 nameof(RangeExtensions.DoesNotExtendRightOf) => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeDoesNotExtendRightOf, Range(0), set),
                 nameof(RangeExtensions.DoesNotExtendLeftOf)  => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeDoesNotExtendLeftOf, Range(0), set),
                 nameof(RangeExtensions.IsAdjacentTo)         => sqlExpressionFactory.MakePostgresBinary(PgExpressionType.RangeIsAdjacentTo, Range(0), set),
-                _                                            => null
+                _                                            => throw MissingArm.For(method)
             };
         }
 
@@ -263,16 +326,23 @@ internal sealed class ValueRangesMethodCallTranslator(
                     sqlExpressionFactory.Not(BoolFunction("isempty", Range(0)))));
 
         if (generic == LowerBoundMethod)
-            return BoundFunction("lower", Range(0), definition);
+            return LowerBoundFunction(Range(0), definition);
 
         if (generic == UpperBoundMethod)
             return UpperBoundFunction(Range(0), definition);
 
         if (generic == LowerBoundInclusiveMethod)
-            return BoolFunction("lower_inc", Range(0));
+            return LowerInclusiveFunction(Range(0), definition);
 
         if (generic == UpperBoundInclusiveMethod)
             return UpperInclusiveFunction(Range(0), definition);
+
+        // A value whose time zone differs from the range's elements runs in memory (MixesTimeZones).
+        if (generic == ClampMethod)
+        {
+            var value = ApplyElementMapping(arguments[1], definition);
+            return MixesTimeZones(value, definition) ? null : ClampFunction(Range(0), value, definition);
+        }
 
         return null;
     }
@@ -301,7 +371,9 @@ internal sealed class ValueRangesMethodCallTranslator(
     private SqlExpression? TranslateRangeSetCall(
         SqlExpression?               instance,
         Type                         declaringType,
+        MethodInfo                   method,
         string                       methodName,
+        IReadOnlyList<Type>          parameterTypes,
         IReadOnlyList<SqlExpression> arguments
     )
     {
@@ -314,49 +386,57 @@ internal sealed class ValueRangesMethodCallTranslator(
         SqlExpression Range(SqlExpression expression)
             => sqlExpressionFactory.ApplyTypeMapping(Unwrap(expression), definition.RangeTypeMapping);
 
+        // An operand is mapped as the type its overload declares for it, never as whatever it is not: an
+        // overload with any other operand type has no arm here and is refused (#295).
+        var rangeInterface = typeof(IRange<>).MakeGenericType(definition.ElementClrType);
+
+        bool IsSet(int index)   => parameterTypes[index] == definition.RangeSetClrType;
+        bool IsRange(int index) => parameterTypes[index] == definition.RangeClrType || parameterTypes[index] == rangeInterface;
+
         // Single-range operands of set operations are lifted to one-element multiranges.
-        SqlExpression AsSet(SqlExpression expression)
-            => Unwrap(expression).Type == definition.RangeSetClrType
-                   ? Set(expression)
-                   : AsMultirange(Range(expression), definition);
+        SqlExpression AsSet(int index)
+            => IsSet(index)   ? Set(arguments[index])
+             : IsRange(index) ? AsMultirange(Range(arguments[index]), definition)
+                              : throw MissingArm.For(method, parameterTypes[index]);
 
         // Boolean comparisons accept element, range, and multirange operands natively —
         // no lifting required, only the matching type mapping.
-        SqlExpression Operand(SqlExpression expression)
-            => Unwrap(expression).Type == definition.RangeSetClrType ? Set(expression)
-             : expression.Type == definition.ElementClrType          ? ApplyElementMapping(expression, definition)
-                                                                     : Range(expression);
+        SqlExpression Operand(int index)
+            => IsSet(index)                                       ? Set(arguments[index])
+             : IsRange(index)                                     ? Range(arguments[index])
+             : parameterTypes[index] == definition.ElementClrType ? ApplyElementMapping(arguments[index], definition)
+                                                                  : throw MissingArm.For(method, parameterTypes[index]);
 
         switch (methodName)
         {
             case nameof(RangeSet<,>.Contains) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.Contains(Set(instance), Operand(arguments[0]));
+                return sqlExpressionFactory.Contains(Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.Overlaps) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.Overlaps(Set(instance), Operand(arguments[0]));
+                return sqlExpressionFactory.Overlaps(Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsContainedBy) when instance is not null && arguments.Count == 1:
-                return sqlExpressionFactory.ContainedBy(Set(instance), Operand(arguments[0]));
+                return sqlExpressionFactory.ContainedBy(Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsAdjacentTo) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeIsAdjacentTo, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeIsAdjacentTo, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsStrictlyLeftOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeIsStrictlyLeftOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeIsStrictlyLeftOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.IsStrictlyRightOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeIsStrictlyRightOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeIsStrictlyRightOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.DoesNotExtendRightOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeDoesNotExtendRightOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeDoesNotExtendRightOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.DoesNotExtendLeftOf) when instance is not null && arguments.Count == 1:
                 return sqlExpressionFactory.MakePostgresBinary(
-                    PgExpressionType.RangeDoesNotExtendLeftOf, Set(instance), Operand(arguments[0]));
+                    PgExpressionType.RangeDoesNotExtendLeftOf, Set(instance), Operand(0));
 
             case nameof(RangeSet<,>.Merge) when instance is not null && arguments.Count == 0:
                 return sqlExpressionFactory.Function(
@@ -392,13 +472,13 @@ internal sealed class ValueRangesMethodCallTranslator(
                         sqlExpressionFactory.Not(BoolFunction("isempty", Set(instance)))));
 
             case nameof(RangeSet<,>.Union) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeUnion, Set(instance), AsSet(arguments[0]));
+                return SetBinary(PgExpressionType.RangeUnion, Set(instance), AsSet(0));
 
             case nameof(RangeSet<,>.Intersect) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeIntersect, Set(instance), AsSet(arguments[0]));
+                return SetBinary(PgExpressionType.RangeIntersect, Set(instance), AsSet(0));
 
             case nameof(RangeSet<,>.Except) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeExcept, Set(instance), AsSet(arguments[0]));
+                return SetBinary(PgExpressionType.RangeExcept, Set(instance), AsSet(0));
 
             case nameof(RangeSet<,>.Complement) when instance is not null && arguments.Count == 0:
                 return SetBinary(
@@ -422,29 +502,29 @@ internal sealed class ValueRangesMethodCallTranslator(
                     Set(instance));
 
             case nameof(RangeSet<,>.Gaps) when instance is not null && arguments.Count == 1:
-                return SetBinary(PgExpressionType.RangeExcept, AsSet(arguments[0]), Set(instance));
+                return SetBinary(PgExpressionType.RangeExcept, AsSet(0), Set(instance));
 
             case nameof(RangeSet<,>.LowerBound) when instance is not null && arguments.Count == 0:
-                return BoundFunction("lower", Set(instance), definition);
+                return LowerBoundFunction(Set(instance), definition);
 
             case nameof(RangeSet<,>.UpperBound) when instance is not null && arguments.Count == 0:
                 return UpperBoundFunction(Set(instance), definition);
 
             case nameof(RangeSet<,>.LowerBoundInclusive) when instance is not null && arguments.Count == 0:
-                return BoolFunction("lower_inc", Set(instance));
+                return LowerInclusiveFunction(Set(instance), definition);
 
             case nameof(RangeSet<,>.UpperBoundInclusive) when instance is not null && arguments.Count == 0:
                 return UpperInclusiveFunction(Set(instance), definition);
 
             // User-defined operators arrive as static binary methods.
             case "op_BitwiseOr" when arguments.Count == 2:
-                return SetBinary(PgExpressionType.RangeUnion, AsSet(arguments[0]), AsSet(arguments[1]));
+                return SetBinary(PgExpressionType.RangeUnion, AsSet(0), AsSet(1));
 
             case "op_BitwiseAnd" when arguments.Count == 2:
-                return SetBinary(PgExpressionType.RangeIntersect, AsSet(arguments[0]), AsSet(arguments[1]));
+                return SetBinary(PgExpressionType.RangeIntersect, AsSet(0), AsSet(1));
 
             case "op_Subtraction" when arguments.Count == 2:
-                return SetBinary(PgExpressionType.RangeExcept, AsSet(arguments[0]), AsSet(arguments[1]));
+                return SetBinary(PgExpressionType.RangeExcept, AsSet(0), AsSet(1));
 
             default:
                 return null;
@@ -464,37 +544,85 @@ internal sealed class ValueRangesMethodCallTranslator(
         IReadOnlyList<SqlExpression> arguments
     )
     {
+        // On every other range type the calendar factories run in memory (docs/efcore.md#what-runs-where).
+        if (method.Name is "Month" or "Quarter" or "Year" or "IsoWeek" && CalendarFactoriesAsSql.Contains(definition.RangeClrType))
+            return CalendarFactory(definition, method, arguments);
+
         if (!definition.SupportsSqlConstruction) return null;
 
-        // Bound inclusiveness must be a compile-time constant to pick the bounds literal;
-        // in practice it always is, because the flags default at the call site.
+        var element = definition.ElementClrType;
+
+        // Each factory is recognized by its whole signature, and another overload of the same name is
+        // refused below rather than translated as one of these (#295). Bound inclusiveness must be a
+        // compile-time constant to pick the bounds literal; in practice it always is, because the flags
+        // default at the call site.
         switch (method.Name)
         {
-            case "CreateFinite" when arguments.Count == 4
-                                     && arguments[2] is SqlConstantExpression { Value: bool startInclusive }
-                                     && arguments[3] is SqlConstantExpression { Value: bool endInclusive }:
-                return GuardedFiniteRangeConstructor(
+            case "CreateFinite" when Takes(method, element, element, typeof(bool), typeof(bool)):
+            {
+                if (arguments[2] is not SqlConstantExpression { Value: bool startInclusive }
+                 || arguments[3] is not SqlConstantExpression { Value: bool endInclusive })
+                    return null;
+
+                var lower = ApplyElementMapping(arguments[0], definition);
+                var upper = ApplyElementMapping(arguments[1], definition);
+                return NullOverNullElement(
                     definition,
-                    ApplyElementMapping(arguments[0], definition),
-                    ApplyElementMapping(arguments[1], definition),
-                    $"{(startInclusive ? '[' : '(')}{(endInclusive ? ']' : ')')}");
+                    GuardedFiniteRangeConstructor(definition, lower, upper, $"{(startInclusive ? '[' : '(')}{(endInclusive ? ']' : ')')}"),
+                    lower, upper);
+            }
 
-            case "CreateUnboundedStart" when arguments.Count == 2
-                                             && arguments[1] is SqlConstantExpression { Value: bool endInclusive }:
-                return RangeConstructor(
-                    definition, NullConstant(definition.ElementClrType), arguments[0],
-                    $"({(endInclusive ? ']' : ')')}");
+            case "CreateUnboundedStart" when Takes(method, element, typeof(bool)):
+            {
+                if (arguments[1] is not SqlConstantExpression { Value: bool endInclusive })
+                    return null;
 
-            case "CreateUnboundedEnd" when arguments.Count == 2
-                                           && arguments[1] is SqlConstantExpression { Value: bool startInclusive }:
-                return RangeConstructor(
-                    definition, arguments[0], NullConstant(definition.ElementClrType),
-                    $"{(startInclusive ? '[' : '(')})");
+                var upper = ApplyElementMapping(arguments[0], definition);
+                return NullOverNullElement(
+                    definition,
+                    RangeConstructor(definition, NullConstant(definition.ElementClrType), upper, $"({(endInclusive ? ']' : ')')}"),
+                    upper);
+            }
+
+            case "CreateUnboundedEnd" when Takes(method, element, typeof(bool)):
+            {
+                if (arguments[1] is not SqlConstantExpression { Value: bool startInclusive })
+                    return null;
+
+                var lower = ApplyElementMapping(arguments[0], definition);
+                return NullOverNullElement(
+                    definition,
+                    RangeConstructor(definition, lower, NullConstant(definition.ElementClrType), $"{(startInclusive ? '[' : '(')})"),
+                    lower);
+            }
+
+            case "CreateFinite" or "CreateUnboundedStart" or "CreateUnboundedEnd":
+                throw MissingArm.For(method);
 
             default:
                 return null;
         }
     }
+
+    private static bool Takes(MethodInfo method, params Type[] parameterTypes)
+        => method.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(parameterTypes);
+
+    /// <summary>
+    /// A factory over a NULL element is NULL, as EF Core's own value-producing members are over NULL
+    /// (#382). Without this, <c>CreateFinite</c> fell into its inverted-bounds guard and gave
+    /// <c>empty</c>, and the unbounded factories gave <c>(,)</c>, since PostgreSQL's range constructor
+    /// reads a NULL bound as unbounded. An element is NULL on the optional side of an outer join or in
+    /// a nullable column read with <c>.Value</c>. EF Core's nullability processing folds the test away
+    /// for a required column, a non-null parameter and a constant, so their SQL is unchanged.
+    /// </summary>
+    private SqlExpression NullOverNullElement(IRangeTypeDefinition definition, SqlExpression range, params SqlExpression[] elements)
+        => sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    elements.Select(element => sqlExpressionFactory.IsNull(element)).Aggregate(sqlExpressionFactory.OrElse),
+                    sqlExpressionFactory.Constant(null, definition.RangeClrType, definition.RangeTypeMapping))
+            ],
+            range);
 
     /// <summary>
     /// A range constructor call guarded against inverted bounds: <c>CreateFinite</c> returns
@@ -530,6 +658,261 @@ internal sealed class ValueRangesMethodCallTranslator(
             argumentsPropagateNullability: [false, false, false],
             definition.RangeClrType,
             definition.RangeTypeMapping);
+
+    // -------------------------------------------------------------------------
+    // Calendar factories (#191)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// <c>DateRange.Month</c>, <c>Quarter</c>, <c>Year</c> and <c>IsoWeek</c> over a column (#191): the
+    /// period's first and last day, <c>daterange(first, last, '[]')</c>, and NULL over a NULL argument
+    /// (rule (c)).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Measured on PostgreSQL 16 and 18 (#191). The first and the last period of <see cref="DateOnly"/>'s
+    /// days are written as constants, taken from memory's factory: the range PostgreSQL builds holds what
+    /// Npgsql binds for memory's answer, <c>-infinity</c> for <see cref="DateOnly.MinValue"/> and
+    /// <c>infinity</c> for <see cref="DateOnly.MaxValue"/> (or the days themselves, with
+    /// <c>Npgsql.DisableDateTimeInfinityConversions</c> set), and PostgreSQL turns a finite <c>]</c> into
+    /// <c>)</c>. A date argument at or past those periods takes them too, which covers the <c>-infinity</c>
+    /// and <c>infinity</c> a column holds for the extremes: <c>date_trunc</c> keeps an infinity, and the
+    /// <c>[)</c> range between two of them is empty. <c>date_trunc</c> takes an explicit <c>timestamp</c>,
+    /// since a <c>date</c> resolves to its <c>timestamptz</c> overload, which reads the session time zone.
+    /// </para>
+    /// <para>
+    /// An argument memory refuses raises. <c>make_date</c> raises for a month outside 1 to 12 and for the
+    /// year 0. A guard raises for any other year outside 1 to 9999, which <c>make_date</c> accepts, for a week
+    /// the week-year does not have, and for the week that ends after 9999-12-31. It casts its message to the
+    /// type it stands in for, and PostgreSQL drops it unread when the argument is a constant in range.
+    /// <c>to_date(…, 'IYYY-IW')</c> is not used: it rolls week 53 of a 52-week year over to the next year's
+    /// week 1.
+    /// </para>
+    /// </remarks>
+    private SqlExpression CalendarFactory(IRangeTypeDefinition definition, MethodInfo method, IReadOnlyList<SqlExpression> arguments)
+    {
+        var date = definition.ElementClrType;
+        var name = $"{definition.RangeClrType.Name}.{method.Name}";
+
+        var operands = method.GetParameters()
+                             .Select((parameter, index) => parameter.ParameterType == typeof(int) ? sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), IntMapping)
+                                                         : parameter.ParameterType == date        ? ApplyElementMapping(arguments[index], definition)
+                                                                                                  : throw MissingArm.For(method, parameter.ParameterType))
+                             .ToArray();
+
+        SqlExpression Is(int index, int value) => sqlExpressionFactory.Equal(operands[index], Int(value));
+        SqlExpression Both(SqlExpression left, SqlExpression right) => sqlExpressionFactory.AndAlso(left, right);
+
+        var range = method.Name switch
+        {
+            "Month" when Takes(method, date)
+                => OfDate(definition, operands[0], "month", Interval(months: 1), DateRange.Month, name),
+            "Month" when Takes(method, typeof(int), typeof(int))
+                => OfParts(definition, MakeDate(Year(operands[0], name), operands[1], 1), Interval(months: 1),
+                           Both(Is(0, 1), Is(1, 1)), Both(Is(0, 9999), Is(1, 12))),
+            "Quarter" when Takes(method, date)
+                => OfDate(definition, operands[0], "quarter", Interval(months: 3), DateRange.Quarter, name),
+            "Quarter" when Takes(method, typeof(int), typeof(int))
+                => OfParts(definition, MakeDate(Year(operands[0], name), FirstMonthOf(operands[1]), 1), Interval(months: 3),
+                           Both(Is(0, 1), Is(1, 1)), Both(Is(0, 9999), Is(1, 4))),
+            "Year" when Takes(method, date)
+                => OfDate(definition, operands[0], "year", Interval(years: 1), DateRange.Year, name),
+            "Year" when Takes(method, typeof(int))
+                => OfParts(definition, MakeDate(Year(operands[0], name), Int(1), 1), Interval(years: 1), Is(0, 1), Is(0, 9999)),
+            "IsoWeek" when Takes(method, date)
+                => OfDate(definition, operands[0], "week", Interval(weeks: 1), DateRange.IsoWeek, name),
+            "IsoWeek" when Takes(method, typeof(int), typeof(int))
+                => OfParts(definition, MondayOf(operands[0], operands[1], name, definition), Interval(weeks: 1),
+                           Both(Is(0, 1), Is(1, 1)), Both(Is(0, 9999), Is(1, 52)),
+                           Raise([$"{name}: week ", Text(operands[1]), " of ", Text(operands[0]), $" ends after {DateOnly.MaxValue:yyyy-MM-dd}"], date, ElementMapping(definition))),
+            _ => throw MissingArm.For(method)
+        };
+
+        return NullOverNullElement(definition, range, operands);
+    }
+
+    /// <summary>
+    /// The period holding the date <paramref name="value"/>: <c>date_trunc(unit, value::timestamp)</c> and
+    /// that plus <paramref name="length"/> less a day, or memory's first or last period for a date inside or
+    /// before or after it. A last period memory refuses (the ISO week past 9999-12-31) raises instead.
+    /// </summary>
+    private SqlExpression OfDate(
+        IRangeTypeDefinition definition, SqlExpression value, string unit, SqlExpression length, Func<DateOnly, DateRange> factory, string name)
+    {
+        var mapping = ElementMapping(definition);
+        var first   = (DateRange.Finite)factory(DateOnly.MinValue);
+
+        // From here on the date is in the last period, or, where memory refuses that period (only the ISO week
+        // past 9999-12-31 is refused), in the week starting on the Monday of DateOnly.MaxValue's week.
+        var monday =DateOnly.MaxValue.AddDays(-(((int)DateOnly.MaxValue.DayOfWeek + 6) % 7));
+        var last   = Refuses(factory, DateOnly.MaxValue) ? null : (DateRange.Finite)factory(DateOnly.MaxValue);
+        var from   = sqlExpressionFactory.Constant(last?.Start ?? monday, mapping);
+
+        var start = sqlExpressionFactory.Function(
+            "date_trunc", [sqlExpressionFactory.Constant(unit, TextMapping), Timestamp(value)],
+            nullable: true, argumentsPropagateNullability: [false, true], typeof(DateTime), TimestampMapping);
+
+        var inFirst = sqlExpressionFactory.LessThanOrEqual(value, sqlExpressionFactory.Constant(first.End, mapping));
+        var inLast  = sqlExpressionFactory.GreaterThanOrEqual(value, from);
+
+        var lower = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(inFirst, sqlExpressionFactory.Constant(first.Start, mapping)),
+                new CaseWhenClause(inLast, sqlExpressionFactory.Constant(last?.Start ?? monday, mapping))
+            ],
+            sqlExpressionFactory.Convert(start, definition.ElementClrType, mapping));
+
+        var upper = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    inLast,
+                    last is null
+                        ? Raise([$"{name}: the week of ", Text(value), $" ends after {DateOnly.MaxValue:yyyy-MM-dd}"], definition.ElementClrType, mapping)
+                        : sqlExpressionFactory.Constant(last.End, mapping)),
+                new CaseWhenClause(inFirst, sqlExpressionFactory.Constant(first.End, mapping))
+            ],
+            LastDay(start, length, definition));
+
+        return CalendarRange(definition, lower, upper);
+    }
+
+    /// <summary>
+    /// The period starting on <paramref name="first"/>, built from integer arguments, with memory's first
+    /// period's start where <paramref name="isFirst"/> and its last period's end where <paramref name="isLast"/>,
+    /// or <paramref name="refusal"/> where memory refuses the last period.
+    /// </summary>
+    private SqlExpression OfParts(
+        IRangeTypeDefinition definition, SqlExpression first, SqlExpression length, SqlExpression isFirst, SqlExpression isLast,
+        SqlExpression? refusal = null)
+    {
+        var mapping = ElementMapping(definition);
+
+        var lower = sqlExpressionFactory.Case(
+            [new CaseWhenClause(isFirst, sqlExpressionFactory.Constant(DateOnly.MinValue, mapping))],
+            first);
+
+        var upper = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    isLast,
+                    refusal ?? sqlExpressionFactory.Constant(DateOnly.MaxValue, mapping))
+            ],
+            LastDay(Timestamp(first), length, definition));
+
+        return CalendarRange(definition, lower, upper);
+    }
+
+    private static bool Refuses(Func<DateOnly, DateRange> factory, DateOnly value)
+    {
+        try { factory(value); return false; }
+        catch (ArgumentOutOfRangeException) { return true; }
+    }
+
+    /// <summary>
+    /// <c>daterange(first, last, '[]')</c>. Never NULL: PostgreSQL's range constructor reads a NULL bound
+    /// as unbounded, and both bounds here are days.
+    /// </summary>
+    private SqlExpression CalendarRange(IRangeTypeDefinition definition, SqlExpression lower, SqlExpression upper)
+        => sqlExpressionFactory.Function(
+            definition.RangeStoreType,
+            [lower, upper, sqlExpressionFactory.Constant("[]")],
+            nullable: false,
+            argumentsPropagateNullability: [false, false, false],
+            definition.RangeClrType,
+            definition.RangeTypeMapping);
+
+    /// <summary><c>(start + length - 1 day)::date</c>, the period's last day.</summary>
+    private SqlExpression LastDay(SqlExpression start, SqlExpression length, IRangeTypeDefinition definition)
+        => sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Add(start, length, TimestampMapping), definition.ElementClrType, ElementMapping(definition));
+
+    /// <summary>
+    /// The Monday of ISO week <paramref name="week"/> of <paramref name="year"/>: the Monday on or before
+    /// January 4, plus <c>7 * (week - 1)</c> days, raising for a week outside 1 to the year's last,
+    /// <c>date_part('week', make_date(year, 12, 28))</c>.
+    /// </summary>
+    private SqlExpression MondayOf(SqlExpression year, SqlExpression week, string name, IRangeTypeDefinition definition)
+    {
+        var weeks = sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Function(
+                "date_part", [sqlExpressionFactory.Constant("week", TextMapping), MakeDate(year, Int(12), 28)],
+                nullable: true, argumentsPropagateNullability: [false, true], typeof(double)),
+            typeof(int), IntMapping);
+
+        var checkedWeek = sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.AndAlso(sqlExpressionFactory.GreaterThanOrEqual(week, Int(1)), sqlExpressionFactory.LessThanOrEqual(week, weeks)),
+                    week)
+            ],
+            Raise([$"{name}: the week-year ", Text(year), " has no week ", Text(week)], typeof(int), IntMapping));
+
+        var firstMonday = sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Function(
+                "date_trunc", [sqlExpressionFactory.Constant("week", TextMapping), Timestamp(MakeDate(Year(year, name), Int(1), 4))],
+                nullable: true, argumentsPropagateNullability: [false, true], typeof(DateTime), TimestampMapping),
+            definition.ElementClrType, ElementMapping(definition));
+
+        return sqlExpressionFactory.Add(
+            firstMonday,
+            sqlExpressionFactory.Multiply(Int(7), sqlExpressionFactory.Subtract(checkedWeek, Int(1))),
+            ElementMapping(definition));
+    }
+
+    /// <summary>The year, raising for one outside 1 to 9999, which <c>make_date</c> would accept, unless it is 0.</summary>
+    private SqlExpression Year(SqlExpression year, string name)
+        => sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.AndAlso(
+                        sqlExpressionFactory.GreaterThanOrEqual(year, Int(DateOnly.MinValue.Year)),
+                        sqlExpressionFactory.LessThanOrEqual(year, Int(DateOnly.MaxValue.Year))),
+                    year)
+            ],
+            Raise([$"{name}: the year ", Text(year), $" is outside {DateOnly.MinValue.Year} to {DateOnly.MaxValue.Year}"], typeof(int), IntMapping));
+
+    /// <summary><c>quarter * 3 - 2</c>, a month outside 1 to 12 for every quarter outside 1 to 4, which <c>make_date</c> refuses.</summary>
+    private SqlExpression FirstMonthOf(SqlExpression quarter)
+        => sqlExpressionFactory.Subtract(sqlExpressionFactory.Multiply(quarter, Int(3)), Int(2));
+
+    private SqlExpression MakeDate(SqlExpression year, SqlExpression month, int day)
+        => sqlExpressionFactory.Function(
+            "make_date", [year, month, Int(day)],
+            nullable: true, argumentsPropagateNullability: [true, true, true], typeof(DateOnly),
+            typeMappingSource.FindMapping(typeof(DateOnly), "date"));
+
+    /// <summary><c>'1 month -1 day'::interval</c> and the like: a period's length less the day that ends it.</summary>
+    private SqlExpression Interval(int years = 0, int months = 0, int weeks = 0)
+    {
+        var length = years > 0 ? $"{years} year" : months > 0 ? $"{months} month" : $"{weeks} week";
+        return sqlExpressionFactory.Convert(
+            sqlExpressionFactory.Constant($"{length} -1 day", TextMapping), typeof(TimeSpan),
+            typeMappingSource.FindMapping(typeof(TimeSpan), "interval"));
+    }
+
+    /// <summary>
+    /// An error raised where the value would be: the message, cast to <paramref name="type"/>, fails as
+    /// <c>invalid input syntax</c> (22P02 for <c>integer</c>, 22007 for <c>date</c>) and carries the message.
+    /// The message must hold an argument: PostgreSQL folds a constant cast while planning, inside a
+    /// <c>CASE</c> branch no row reaches, and raises for every query.
+    /// </summary>
+    private SqlExpression Raise(IReadOnlyList<object> parts, Type type, RelationalTypeMapping? mapping)
+        => sqlExpressionFactory.Convert(
+            parts.Select(part => part as SqlExpression ?? sqlExpressionFactory.Constant((string)part, TextMapping))
+                 .Aggregate((left, right) => sqlExpressionFactory.Add(left, right, TextMapping)),
+            type, mapping);
+
+    private SqlExpression Text(SqlExpression value) => sqlExpressionFactory.Convert(value, typeof(string), TextMapping);
+
+    private SqlExpression Timestamp(SqlExpression value) => sqlExpressionFactory.Convert(value, typeof(DateTime), TimestampMapping);
+
+    private SqlExpression Int(int value) => sqlExpressionFactory.Constant(value, IntMapping);
+
+    private RelationalTypeMapping IntMapping => typeMappingSource.FindMapping(typeof(int))!;
+
+    private RelationalTypeMapping TextMapping => typeMappingSource.FindMapping(typeof(string), "text")!;
+
+    private RelationalTypeMapping TimestampMapping => typeMappingSource.FindMapping(typeof(DateTime), "timestamp without time zone")!;
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -634,34 +1017,203 @@ internal sealed class ValueRangesMethodCallTranslator(
     /// <summary>
     /// A bound-extraction function (<c>lower</c>/<c>upper</c>) on a range or multirange.
     /// PostgreSQL returns NULL for an empty or correspondingly unbounded operand, hence the
-    /// nullable CLR type.
+    /// nullable CLR type. That NULL comes from a non-null argument, so the argument must not be
+    /// declared as propagating nullability: EF Core would then take the bound of a required column
+    /// as never NULL, fold <c>IS NULL</c> to <c>FALSE</c> and drop the <c>COALESCE</c> of a
+    /// <c>??</c>, and test a nullable column's bound with the column's own <c>IS NULL</c>.
     /// </summary>
     private SqlExpression BoundFunction(string name, SqlExpression argument, IRangeTypeDefinition definition)
         => sqlExpressionFactory.Function(
             name,
             [argument],
             nullable: true,
-            argumentsPropagateNullability: [true],
+            argumentsPropagateNullability: [false],
             typeof(Nullable<>).MakeGenericType(definition.ElementClrType),
             ElementMapping(definition));
+
+    /// <summary>
+    /// <c>lower()</c>, with an exclusive <c>-infinity</c> read as memory loads it on a type that has an
+    /// <see cref="IRangeTypeDefinition.ExclusiveInfinity"/> (<see cref="InsideExclusiveInfinity"/>).
+    /// </summary>
+    private SqlExpression LowerBoundFunction(SqlExpression argument, IRangeTypeDefinition definition)
+    {
+        var lower = BoundFunction("lower", argument, definition);
+        return definition.ExclusiveInfinity is { Lower: { } inside } bounds
+                   ? InsideExclusiveInfinity(lower, lower, "lower_inc", argument, bounds.Min, inside, definition)
+                   : lower;
+    }
 
     /// <summary>
     /// <c>upper()</c> with discrete-canonicalization compensation. PostgreSQL stores
     /// discrete ranges half-open (<c>[lower, upper)</c>) while the model is closed
     /// (<c>[lower, upper]</c>), so the server's exclusive upper is one step past the
     /// model's inclusive upper: <c>upper(x) - 1</c> restores agreement. NULL propagates
-    /// through the subtraction for empty or unbounded operands.
+    /// through the subtraction for empty or unbounded operands. An exclusive <c>infinity</c>,
+    /// which <c>- 1</c> leaves as it is, is read as memory loads it on a type that has an
+    /// <see cref="IRangeTypeDefinition.ExclusiveInfinity"/> (<see cref="InsideExclusiveInfinity"/>). A type with a
+    /// <see cref="IRangeTypeDefinition.CoarseUpperBound"/> steps back by its element's span instead
+    /// (<see cref="CoarseUpper"/>).
     /// </summary>
     private SqlExpression UpperBoundFunction(SqlExpression argument, IRangeTypeDefinition definition)
     {
         var upper = BoundFunction("upper", argument, definition);
         if (!definition.IsDiscrete) return upper;
+        if (definition.CoarseUpperBound is { } coarse) return CoarseUpper(upper, coarse, definition);
 
         // The step constant must keep its own integer mapping: `date - 1` is date arithmetic
         // in PostgreSQL, and applying the element mapping to the 1 would render it as a date.
-        var one = sqlExpressionFactory.Constant(1, typeMappingSource.FindMapping(typeof(int)));
-        return sqlExpressionFactory.Subtract(upper, one, ElementMapping(definition));
+        var one    = sqlExpressionFactory.Constant(1, typeMappingSource.FindMapping(typeof(int)));
+        var closed = sqlExpressionFactory.Subtract(upper, one, ElementMapping(definition));
+        return definition.ExclusiveInfinity is { Upper: { } inside } bounds
+                   ? InsideExclusiveInfinity(upper, closed, "upper_inc", argument, bounds.Max, inside, definition)
+                   : closed;
     }
+
+    /// <summary>
+    /// <c>CASE WHEN NOT isfinite(upper(x)) THEN last ELSE CAST(upper(x) - INTERVAL 'step' AS store) END</c>: the
+    /// first value of the last element, as an operand of the element type binds, not the last value of the store
+    /// type (#506, <see cref="CoarseUpperBound"/>). A NULL bound takes the <c>ELSE</c> and stays NULL.
+    /// </summary>
+    private SqlExpression CoarseUpper(SqlExpression upper, CoarseUpperBound coarse, IRangeTypeDefinition definition)
+    {
+        var type    = typeof(Nullable<>).MakeGenericType(definition.ElementClrType);
+        var mapping = ElementMapping(definition);
+
+        // date - interval is a timestamp, typed as one so the cast back to the subtype is written: at midnight of a
+        // whole day, it loses nothing.
+        var stepped = new SqlBinaryExpression(
+            ExpressionType.Subtract, upper, new SqlFragmentExpression($"INTERVAL '{coarse.Step}'", typeof(object), null),
+            typeof(DateTime), typeMappingSource.FindMapping(typeof(DateTime), "timestamp without time zone"));
+
+        return sqlExpressionFactory.Case(
+            [new CaseWhenClause(sqlExpressionFactory.Not(BoolFunction("isfinite", upper)), sqlExpressionFactory.Constant(coarse.Last, type, mapping))],
+            sqlExpressionFactory.Convert(stepped, type, mapping));
+    }
+
+    /// <summary>
+    /// <c>CASE WHEN bound = extreme AND NOT inclusive(x) THEN inside ELSE otherwise END</c>: a bound at the
+    /// infinity an extreme is written as, if it is exclusive, read as the value memory loads for it (#489).
+    /// </summary>
+    /// <remarks>
+    /// PostgreSQL leaves an infinite discrete bound uncanonicalized, so <c>[2026-01-01,infinity)</c> and
+    /// <c>(-infinity,2026-01-01)</c> exist: another tool writes them, and the server's algebra computes them,
+    /// as <c>(,) - (,-infinity]</c> is <c>(-infinity,)</c> and <c>(,) - [infinity,)</c> is <c>(,infinity)</c>.
+    /// Memory loads them one day inside, <c>[2026-01-01,9999-12-30]</c> and <c>[0001-01-02,2025-12-31]</c>, but
+    /// <c>upper(x) - 1</c> is still <c>infinity</c> and <c>lower(x)</c> is <c>-infinity</c>, which read as the
+    /// extremes. An inclusive <c>infinity]</c> or <c>[-infinity</c>, a finite bound, and the NULL of an empty or
+    /// unbounded side take the <c>ELSE</c> unchanged. Measured on PostgreSQL 16 and 18.
+    /// </remarks>
+    private SqlExpression InsideExclusiveInfinity(
+        SqlExpression        bound,
+        SqlExpression        otherwise,
+        string               inclusive,
+        SqlExpression        argument,
+        object               extreme,
+        object               inside,
+        IRangeTypeDefinition definition)
+    {
+        var type    = typeof(Nullable<>).MakeGenericType(definition.ElementClrType);
+        var mapping = ElementMapping(definition);
+
+        return sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.AndAlso(
+                        sqlExpressionFactory.Equal(bound, sqlExpressionFactory.Constant(extreme, type, mapping)),
+                        sqlExpressionFactory.Not(BoolFunction(inclusive, argument))),
+                    sqlExpressionFactory.Constant(inside, type, mapping))
+            ],
+            otherwise);
+    }
+
+    /// <summary>
+    /// <c>Clamp(value)</c> on every range type (#406, #486): <c>CASE WHEN x IS NULL OR v IS NULL OR isempty(x)
+    /// THEN NULL ELSE LEAST(GREATEST(v, lower(x)), &lt;upper&gt;) END</c>, where <c>&lt;upper&gt;</c> is the bound
+    /// <see cref="UpperBoundFunction"/> reads: <c>upper(x) - 1</c> on the discrete types, <c>upper(x)</c> on the
+    /// continuous ones.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Memory's rule: <see langword="null"/> for the empty range, the value itself inside the range, and
+    /// otherwise the finite bound it falls outside of, whatever that bound's inclusiveness. An unbounded
+    /// side never constrains, and <c>GREATEST</c> and <c>LEAST</c> skip the NULL <c>lower</c> or
+    /// <c>upper</c> returns there. They skip a NULL range or value too, so both are tested first, which
+    /// makes a NULL operand NULL (rule (c)) rather than the other one. Measured on PostgreSQL 16, the domain
+    /// extremes included: <c>upper(x) - 1</c> cannot overflow, since a stored upper bound is at least one
+    /// above a value.
+    /// </para>
+    /// <para>
+    /// The same form holds on the other types (#486), measured against memory on every shape and inclusiveness
+    /// with the extremes as bounds and values (<c>ClampDomainParityTests</c>). A temporal extreme is an
+    /// infinity on the server, which memory reads back as the extreme: <c>infinity - 1</c> is still
+    /// <c>infinity</c>, and a range ending at the last date is stored <c>infinity]</c>, inclusive, so that is the
+    /// date memory clamps to. An exclusive infinity, which only another tool or the server's algebra writes, is
+    /// clamped to the day inside it that memory loads, as the two bound readers read it (#489). A
+    /// <c>YearMonthRange</c> steps back a month from its first-of-month upper bound, to the first day of its last
+    /// month, which is how its value binds: a day back read as that month, but compared unequal to it, and greater,
+    /// in a filter (#506).
+    /// </para>
+    /// </remarks>
+    private SqlExpression ClampFunction(SqlExpression range, SqlExpression value, IRangeTypeDefinition definition)
+    {
+        var type    = typeof(Nullable<>).MakeGenericType(definition.ElementClrType);
+        var mapping = ElementMapping(definition);
+
+        SqlExpression Skipping(string name, SqlExpression left, SqlExpression right)
+            => sqlExpressionFactory.Function(
+                name,
+                [left, right],
+                nullable: true,
+                argumentsPropagateNullability: [false, false],
+                type,
+                mapping);
+
+        return sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.OrElse(
+                        sqlExpressionFactory.OrElse(sqlExpressionFactory.IsNull(range), sqlExpressionFactory.IsNull(value)),
+                        BoolFunction("isempty", range)),
+                    sqlExpressionFactory.Constant(null, type, mapping))
+            ],
+            Skipping("LEAST", Skipping("GREATEST", value, LowerBoundFunction(range, definition)), UpperBoundFunction(range, definition)));
+    }
+
+    /// <summary>
+    /// Whether a value and the range's elements differ in carrying a time zone: a <c>timestamptz</c> value
+    /// against a <see cref="DateTimeRange"/>'s <c>tsrange</c>, which is what Npgsql maps a <see cref="DateTime"/>
+    /// property to by default.
+    /// </summary>
+    /// <remarks>
+    /// <c>GREATEST</c> and <c>LEAST</c> resolve their arguments to a common type, and between <c>timestamp</c>
+    /// and <c>timestamptz</c> that is <c>timestamptz</c>, reached through the session's <c>TimeZone</c>: the
+    /// range's bounds move by the session's offset, while memory compares ticks. In a Europe/Berlin session,
+    /// <c>[08:00,18:00)</c> clamped 17:30Z to 17:00Z (#486). The operators that take an element refuse the pair on
+    /// the server instead (<c>operator does not exist: tsrange @&gt; timestamp with time zone</c>), so declining
+    /// here keeps <c>Clamp</c> as loud as they are in a filter, and gives memory's answer in a final projection.
+    /// </remarks>
+    private bool MixesTimeZones(SqlExpression value, IRangeTypeDefinition definition)
+        => value.TypeMapping?.StoreType is { } valueType
+        && ElementMapping(definition)?.StoreType is { } elementType
+        && CarriesTimeZone(valueType) != CarriesTimeZone(elementType);
+
+    private static bool CarriesTimeZone(string storeType)
+        => storeType.Contains("with time zone", StringComparison.OrdinalIgnoreCase)
+        || storeType.StartsWith("timestamptz", StringComparison.OrdinalIgnoreCase)
+        || storeType.StartsWith("timetz", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The <c>lower_inc()</c> equivalent, as <see cref="UpperInclusiveFunction"/> is <c>upper_inc()</c>'s. On discrete
+    /// types the model's lower bound is inclusive exactly when a finite one exists, which <c>lower_inc</c> says too,
+    /// except for an exclusive <c>-infinity</c>: canonicalization leaves it exclusive, and memory loads it as the
+    /// inclusive day after the extreme (#489).
+    /// </summary>
+    private SqlExpression LowerInclusiveFunction(SqlExpression argument, IRangeTypeDefinition definition)
+        => definition.IsDiscrete
+               ? sqlExpressionFactory.AndAlso(
+                   sqlExpressionFactory.Not(BoolFunction("lower_inf", argument)),
+                   sqlExpressionFactory.Not(BoolFunction("isempty", argument)))
+               : BoolFunction("lower_inc", argument);
 
     /// <summary>
     /// The <c>upper_inc()</c> equivalent. On discrete types the model's canonical form is

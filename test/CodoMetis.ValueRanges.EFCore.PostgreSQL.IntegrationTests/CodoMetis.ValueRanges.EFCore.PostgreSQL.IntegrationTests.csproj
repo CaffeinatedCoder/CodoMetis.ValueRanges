@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="MSTest" Version="4.5.1" />
+        <PackageReference Include="MSTest" Version="4.5.2" />
         <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
         <!--
             Test-only, and only here: ComplexIndexesCrossTests proves that this package's columns work
@@ -28,7 +28,7 @@
             the EF Core version the provider resolves, and the Roslyn they bring, which compiles the generated
             model in-process (CompiledModelJsonTests). Test-only: the shipping package never references it.
         -->
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.2.26504.105" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.3.26522.148" />
     </ItemGroup>
 
     <ItemGroup>
@@ -67,7 +67,24 @@
             (see test/oracles/README.md). Linked, not referenced, so the projects stay independent.
         -->
         <Compile Include="..\oracles\Candidates.cs" Link="Candidates.cs" />
+        <Compile Include="..\oracles\TranslationSupport.cs" Link="TranslationSupport.cs" />
+        <!-- The public query members the translation-support probe runs (TranslationSupportProbeTests, #384). -->
+        <Compile Include="..\CodoMetis.ValueRanges.Conventions.Tests\QueryMembers.cs" Link="QueryMembers.cs" />
         <Compile Include="..\oracles\StringOverloads.cs" Link="StringOverloads.cs" />
+    </ItemGroup>
+
+    <!--
+        The booking service docs/walkthrough.md walks through (samples/Bookings), hosted in-process by
+        WalkthroughSampleTests against the shared server, so the page's claims have a holder this suite
+        runs. Linked, not copied: the test exercises the sample's own endpoints, entities and migration.
+        Program.cs stays out, because the test host composes the same three calls itself.
+        test/consumer-smoke-test.sh runs the sample as a reader would, against the packed packages.
+    -->
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="11.0.0" />
+        <Compile Include="..\..\samples\Bookings\**\*.cs" Exclude="..\..\samples\Bookings\Program.cs;..\..\samples\Bookings\obj\**;..\..\samples\Bookings\bin\**"
+                 Link="Walkthrough\%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
 
 </Project>

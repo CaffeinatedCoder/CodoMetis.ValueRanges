@@ -211,7 +211,7 @@ int Status()
         Console.WriteLine($"  MISSING {e.Signature,-48} {(e.Issue is { } n ? $"#{n}" : "NOT FILED")}");
 
     Console.WriteLine("document headings with no claim (read them for promises):");
-    foreach (var file in new[] { "README.md", "docs/ranges.md", "docs/value-sets.md", "docs/serialization.md", "docs/efcore.md", "docs/getting-started.md" })
+    foreach (var file in new[] { "README.md", "docs/ranges.md", "docs/value-sets.md", "docs/serialization.md", "docs/efcore.md", "docs/getting-started.md", "docs/walkthrough.md" })
     {
         var claimed = claims.Where(c => c.Source.StartsWith(file + "#", StringComparison.Ordinal)).Select(c => c.Source[(file.Length + 1)..]).ToHashSet(StringComparer.Ordinal);
         var silent = Headings(Path.Combine(root, file)).Where(h => !claimed.Contains(h)).ToList();

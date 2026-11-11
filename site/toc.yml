@@ -1,0 +1,52 @@
+- name: Home
+  href: ../README.md
+- name: Guides
+  items:
+    - name: Getting started
+      href: ../docs/getting-started.md
+    - name: Walkthrough
+      href: ../docs/walkthrough.md
+    - name: Why ranges and sets
+      href: ../docs/why.md
+    - name: Ranges
+      href: ../docs/ranges.md
+    - name: Value sets
+      href: ../docs/value-sets.md
+    - name: EF Core (PostgreSQL)
+      href: ../docs/efcore.md
+    - name: Serialization
+      href: ../docs/serialization.md
+    - name: Migration
+      href: ../docs/migration.md
+- name: Packages
+  items:
+    - name: CodoMetis.ValueRanges
+      href: ../src/CodoMetis.ValueRanges/README.md
+    - name: CodoMetis.ValueRanges.NodaTime
+      href: ../src/CodoMetis.ValueRanges.NodaTime/README.md
+    - name: CodoMetis.ValueRanges.EFCore.PostgreSQL
+      href: ../src/CodoMetis.ValueRanges.EFCore.PostgreSQL/README.md
+    - name: CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime
+      href: ../src/CodoMetis.ValueRanges.EFCore.PostgreSQL.NodaTime/README.md
+- name: API
+  href: obj/api/
+- name: Changelog
+  href: ../CHANGELOG.md
+- name: Contributing
+  items:
+    - name: Contributing
+      href: ../CONTRIBUTING.md
+    - name: Security policy
+      href: ../SECURITY.md
+    - name: Architecture
+      href: ../docs/architecture.md
+    - name: Testing
+      href: ../docs/testing.md
+    - name: Oracles
+      href: ../docs/oracles.md
+    - name: Discard triage
+      href: ../docs/discard-triage.md
+    - name: Agent guide
+      href: ../AGENTS.md
+- name: Versions
+  href: https://caffeinatedcoder.github.io/CodoMetis.ValueRanges/versions.html

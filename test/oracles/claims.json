@@ -112,8 +112,8 @@
   {
     "id": "E04-factories-translate-guarded",
     "source": "docs/efcore.md#query-ranges-with-linq",
-    "quote": "**`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor calls inside a guard. As in memory, a start after the end gives you an empty range.",
-    "claim": "When a factory is called on column values inside a query, it translates to a CASE-guarded range constructor and the server-built range equals what the in-memory factory builds, including Empty for inverted bounds.",
+    "quote": "**`CreateFinite`, `CreateUnboundedStart` and `CreateUnboundedEnd`** become range constructor calls inside a guard. As in memory, a start after the end gives you an empty range. Over a NULL element, such as a column of a missing child in an outer join, the range is NULL, as EF Core's own `AddDays` is.",
+    "claim": "When a factory is called on column values inside a query, it translates to a CASE-guarded range constructor and the server-built range equals what the in-memory factory builds, including Empty for inverted bounds; over a NULL element (the optional side of an outer join, or a nullable column read with .Value) it is NULL, and the SQL over required elements carries no null test.",
     "oracle": "differential",
     "surfaces": [
       "*Range.CreateFinite",
@@ -124,7 +124,9 @@
     "heldBy": [
       "QueryTranslationTests",
       "MultirangeCoverageTests",
-      "NodaQueryTranslationTests"
+      "NodaQueryTranslationTests",
+      "NullOperandTranslationTests",
+      "OuterJoinProbeTests"
     ]
   },
   {
@@ -152,8 +154,8 @@
   {
     "id": "E06-discrete-upper-compensation",
     "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
-    "quote": "So `UpperBound()` becomes `upper(x) - 1`, and `UpperBoundInclusive()` becomes `NOT upper_inf(x) AND NOT isempty(x)`. The database always returns the same results as memory ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).",
-    "claim": "For a discrete range column (int4range, int8range, daterange and the NodaTime date forms), UpperBound() and UpperBoundInclusive() projected on the server equal the in-memory closed-canonical answers.",
+    "quote": "So `UpperBound()` becomes `upper(x) - 1`. `UpperBoundInclusive()` becomes `NOT upper_inf(x) AND NOT isempty(x)`, and `LowerBoundInclusive()` becomes `NOT lower_inf(x) AND NOT isempty(x)`. The database always returns the same results as memory ([verified against live PostgreSQL](../README.md#verified-against-postgresql)).",
+    "claim": "For a discrete range column (int4range, int8range, daterange and the NodaTime date forms), UpperBound(), UpperBoundInclusive() and LowerBoundInclusive() projected on the server equal the in-memory closed-canonical answers.",
     "oracle": "differential",
     "surfaces": [
       "RangeExtensions.UpperBound",
@@ -183,7 +185,8 @@
     "heldBy": [
       "RangeAggregateParityTests",
       "RangeAggregateTests",
-      "ExecutedQueryTests"
+      "ExecutedQueryTests",
+      "FilteredAggregateProbeTests"
     ]
   },
   {
@@ -342,8 +345,8 @@
   {
     "id": "E17-set-client-side-ops-fail-translation",
     "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
-    "quote": "`Intersect`, `Except` and `Add` run in memory only. EF Core fails to translate them, by design.",
-    "claim": "A value set Intersect, Except or Add inside a Where throws an EF translation InvalidOperationException rather than fetching the table; inside a Select it evaluates on the client.",
+    "quote": "On `StringSet` and `StringSet<TElement>`, `Union`, `Add`, `Intersect` and `Except` run as SQL with the result left unsorted. PostgreSQL sorts `text` by the database collation rather than ordinally, so it can't build the order your sets have in memory. They run where order and repeats don't count, and the query throws everywhere else",
+    "claim": "On StringSet and StringSet<TElement>, Intersect, Except and Add translate to unsorted placeholders the SQL guard builds (a filter of the first array, array_cat with a one-element array) and run where order and repeats don't count: under @>, <@ and &&, IsEmpty, a null test, Count (count(DISTINCT …)), == and != (mutual containment) and the outermost projection; ordering by one throws.",
     "oracle": "exception",
     "surfaces": [
       "ValueSetExtensions.Intersect",
@@ -351,14 +354,17 @@
       "ValueSetExtensions.Add"
     ],
     "heldBy": [
-      "SetQueryTranslationTests"
+      "SetQueryTranslationTests",
+      "CanonicalSetTranslationTests",
+      "WrapperSetTranslationTests",
+      "CanonicalSetOperationParityTests"
     ]
   },
   {
     "id": "E18-union-derived-allowed-compositions",
     "source": "docs/efcore.md#combine-sets-with-union",
-    "quote": "It follows every value derived from a union: `array_cat` itself, `array_remove` over one, a conditional or `??` that may return one, and a subquery or `Concat` column that projects one. Such a value may only feed: - **`@>`, `<@` and `&&`**, that is `Contains`, `Overlaps`, and the subset and superset methods. - **`Remove` and `IsEmpty`.** - **A null test.** - **The outermost projection**, which is loaded and so put in canonical form.",
-    "claim": "A server-side set Union composed under Contains/Overlaps/subset family/Remove/IsEmpty/null test or materialized in the outer projection executes and equals the in-memory result.",
+    "quote": "It follows every value derived from one of these four: the operation itself, `array_remove` over one, a conditional or `??` that may return one, and a subquery or `Concat` column that projects one. Such a value may feed: - **`@>`, `<@` and `&&`**, that is `Contains`, `Overlaps`, and the subset and superset methods. - **`Remove`, `IsEmpty` and `Count`.** - **`==` and `!=`.** - **A null test.** - **The outermost projection**, which is loaded and so put in canonical form.",
+    "claim": "A server-side Union, Add, Intersect or Except of text sets (StringSet, StringSet<TElement>), or a value derived from one, composed under Contains/Overlaps/the subset family/Remove/IsEmpty/a null test, counted (count(DISTINCT …)), compared with == or != (mutual containment), or materialized in the outer projection executes and equals the in-memory result, over rows stored canonical, out of order and twice, and through a derived table's column.",
     "oracle": "differential",
     "surfaces": [
       "ValueSetExtensions.Union",
@@ -370,6 +376,7 @@
     "heldBy": [
       "UnionCanonicalityTests",
       "SetQueryTranslationTests",
+      "CanonicalSetOperationParityTests",
       "SetOperatorParityTests",
       "DifferentialFuzzParityTests"
     ]
@@ -377,24 +384,28 @@
   {
     "id": "E19-union-derived-refusals",
     "source": "docs/efcore.md#combine-sets-with-union",
-    "quote": "Anything else throws, including: - **Equality, `Count`, `GroupBy`, `Distinct` and `OrderBy`.** - **`Union`, `Intersect` and `Except` of queries.** - **`Contains` over a sequence of sets.** - **An `ExecuteUpdate` value.** It would store the concatenation, and from then on equality and `Count` on that row would be wrong for good.",
-    "claim": "Executing a query whose translated SQL feeds a union-derived array into =, cardinality, GROUP BY, DISTINCT, ORDER BY, a deduplicating set operation, IN, or an UPDATE setter throws before the SQL is sent, however the query was written; Select(b => b.Tags.Union(more).Count) is client-evaluated and returns the deduplicated count while Select(b => b.Tags.Union(more) == expected) throws.",
+    "quote": "Anything else throws, including: - **`GroupBy`, `Distinct` and `OrderBy`.** - **`Union`, `Intersect` and `Except` of queries.** - **`Contains` over a list of several sets.** - **An `ExecuteUpdate` value.** It would store the unsorted array, and from then on `==` against that row would be wrong for good.",
+    "claim": "For text sets (StringSet, StringSet<TElement>), executing a query whose translated SQL feeds a Union-, Add-, Intersect- or Except-derived array into GROUP BY, DISTINCT, ORDER BY, a deduplicating set operation, IN, or an UPDATE setter throws before the SQL is sent, however the query was written, and the row is unchanged.",
     "oracle": "exception",
     "surfaces": [
       "ValueSetExtensions.Union",
-      "StringSet.Count"
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except"
     ],
     "heldBy": [
       "UnionCanonicalityTests",
       "SetQueryTranslationTests",
-      "SetIntegrationTests"
+      "CanonicalSetTranslationTests",
+      "CanonicalSetOperationParityTests",
+      "SetCollectionTranslationTests"
     ]
   },
   {
     "id": "E20-guard-fails-closed",
     "source": "docs/efcore.md#combine-sets-with-union",
-    "quote": "Suppose something replaces that service after `UseValueRanges()`, such as a `ReplaceService` call or another extension that replaces it rather than decorating it. Then every query with a `Union` running as SQL fails with PostgreSQL's `function valueranges_union_without_sql_guard(…) does not exist`, instead of running as if the check weren't there.",
-    "claim": "With the IRelationalParameterBasedSqlProcessorFactory replaced after UseValueRanges(), a query containing a server-side set Union fails on the server with an undefined-function error naming valueranges_union_without_sql_guard.",
+    "quote": "Suppose something replaces that service after `UseValueRanges()`, such as a `ReplaceService` call or another extension that replaces it rather than decorating it. Then every query with one of them running as SQL fails with PostgreSQL's `function valueranges_union_without_sql_guard(…) does not exist`, instead of running as if the check weren't there.",
+    "claim": "With the IRelationalParameterBasedSqlProcessorFactory replaced after UseValueRanges(), a query containing a server-side Union of text sets fails on the server with an undefined-function error naming valueranges_union_without_sql_guard, and Add, Intersect and Except name their own placeholders.",
     "oracle": "exception",
     "surfaces": [
       "ValueSetExtensions.Union",
@@ -572,14 +583,15 @@
       "YearMonthRange.CreateUnboundedStart"
     ],
     "heldBy": [
-      "NodaQueryTranslationTests"
+      "NodaQueryTranslationTests",
+      "TranslationSupportProbeTests"
     ]
   },
   {
     "id": "E31-range-client-side-only-operations",
     "source": "docs/efcore.md#what-runs-where",
-    "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in a projection EF runs them in memory instead:",
-    "claim": "Length, Values(), Values(step), Split, Clamp, Shift, Expand, ToRangeSet()/ToInt32Set() and the set indexer each throw an EF translation exception inside a Where and evaluate on the client with the in-memory answer inside a Select.",
+    "quote": "**Runs in memory only.** These compute the right answer in memory. In a predicate they fail translation, and in the final projection EF runs them in memory instead:",
+    "claim": "Length (on every range type but Int32Range and Int64Range), Values(), Values(step), Split, Clamp (on a DateTimeRange with a DateTime stored as timestamp with time zone, which GREATEST and LEAST would compare through the session's time zone), Shift, Expand, ToRangeSet()/ToInt32Set(), the set indexer and Compare on RangeLowerBoundComparer, RangeSet.LowerBoundComparer and any IComparer of ranges or sets (decided by the operands, so also a comparer declared over IRange<T>, the non-generic IComparer and a comparer of value sets), and any other Compare(x, y) over ranges or sets (a static one, or one on a class that is no comparer, running the method called rather than IComparer<T>.Compare) each throw an EF translation exception inside a Where (an OrderBy for the comparer) and evaluate on the client with the in-memory answer inside a Select.",
     "oracle": "exception",
     "surfaces": [
       "*Range.Length",
@@ -590,11 +602,14 @@
       "*Range.Expand",
       "ValueSetRangeExtensions.ToRangeSet",
       "ValueSetRangeExtensions.ToInt32Set",
-      "StringSet.Item"
+      "StringSet.Item",
+      "RangeLowerBoundComparer.Compare"
     ],
     "heldBy": [
       "ClientSideOnlyTranslationTests",
-      "ClientSideOnlyProjectionTests"
+      "ClientSideOnlyProjectionTests",
+      "TranslationSupportProbeTests",
+      "LowerBoundComparerQueryTests"
     ]
   },
   {
@@ -648,15 +663,14 @@
     "id": "E35-client-side-in-where-throws",
     "source": "docs/getting-started.md#what-runs-in-memory-only",
     "quote": "When an in-memory-only operation appears in a `Where`, EF Core **throws**. It does not quietly fetch the whole table.",
-    "claim": "A query whose Where uses a client-side-only set operation (Intersect, Except, Add) throws at translation instead of evaluating the predicate in memory over the whole table.",
+    "claim": "A query whose Where uses an in-memory-only operation (Shift or Expand on a range, Values, Split) throws at translation instead of evaluating the predicate in memory over the whole table.",
     "oracle": "exception",
     "surfaces": [
-      "ValueSetExtensions.Intersect",
-      "ValueSetExtensions.Except",
-      "ValueSetExtensions.Add"
+      "*Range.Shift",
+      "*Range.Expand"
     ],
     "heldBy": [
-      "SetQueryTranslationTests"
+      "ClientSideOnlyTranslationTests"
     ]
   },
   {
@@ -828,15 +842,17 @@
     "id": "E46-calendar-range-inlined-as-constant",
     "source": "docs/ranges.md#create-a-month-a-quarter-a-year-or-a-week",
     "quote": "`b.Period.Overlaps(DateRange.Month(2026, 10))` runs as SQL with the month as one constant.",
-    "claim": "A calendar factory called with values the query does not read is evaluated in memory and inlined as one daterange constant, and the query runs and returns the in-memory answer; one that reads a column fails translation in a Where and runs in memory in a Select.",
+    "claim": "A calendar factory called with values the query does not read is evaluated in memory and inlined as one daterange constant, and the query runs and returns the in-memory answer; on LocalDateRange and YearMonthRange one that reads a column fails translation in a Where and runs in memory in a Select.",
     "oracle": "differential",
     "surfaces": [
       "DateRange.Month",
-      "DateRange.IsoWeek"
+      "DateRange.IsoWeek",
+      "LocalDateRange.Month",
+      "YearMonthRange.Quarter"
     ],
     "heldBy": [
       "InlineRangeConstantTests",
-      "ClientSideOnlyTranslationTests",
+      "NodaCalendarFactoryClientSideTests",
       "ClientSideOnlyProjectionTests"
     ]
   },
@@ -1205,6 +1221,343 @@
     ],
     "heldBy": [
       "NativeTemporalKeyTests"
+    ]
+  },
+  {
+    "id": "E70-bounds-null-for-unbounded-or-empty-in-sql",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**`LowerBound()` and `UpperBound()` return `T?`.** PostgreSQL's `lower` and `upper` return `NULL` for an unbounded or empty range, and the in-memory methods match that. So `== null`, `HasValue` and `??` on a bound select the same rows in a query as in memory, on a range or a `RangeSet` column.",
+    "claim": "In a query over a range or multirange column of any family, LowerBound() and UpperBound() are NULL exactly for the empty range or set and for the unbounded side, as in memory: compared with null, read through HasValue, coalesced with ?? in a filter or a projection, or compared with null after being projected, they select and return what the same expression gives over the rows as loaded.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests",
+      "OuterJoinProbeTests",
+      "DeclaredNullabilityTests"
+    ]
+  },
+  {
+    "id": "E71-predicate-over-a-null-column-is-false",
+    "source": "docs/efcore.md#query-ranges-with-linq",
+    "quote": "On a nullable column, a predicate over a NULL value is `false`, and its negation `true`.",
+    "claim": "Over a nullable range, multirange and value set column, every discovered Boolean predicate of RangeExtensions, RangeSet and ValueSetExtensions, with the column on either side, selects in a filter, a negated filter and a projection what the same expression selects over the rows as loaded, with false for a NULL row where memory throws, and the same for Contains(T) over a NULL element (the optional side of an outer join, or a nullable column read with .Value); a required column's SQL carries no null check, and a nullable one reads x IS NULL OR NOT (…) under a negation.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsEmpty",
+      "RangeSet.Overlaps",
+      "ValueSetExtensions.Contains"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests",
+      "NullOperandTranslationTests",
+      "OuterJoinProbeTests",
+      "NullableOperandPairProbeTests",
+      "QuantifierProbeTests",
+      "RepeatedExecutionProbeTests"
+    ]
+  },
+  {
+    "id": "E72-ordering-by-a-bound-puts-nulls-where-postgres-does",
+    "source": "docs/efcore.md#read-bounds-merge-ranges-and-aggregate",
+    "quote": "**Ordering by a bound puts the rows without it where PostgreSQL puts NULLs.** `OrderBy(b => b.Period.LowerBound())` sorts the empty rows and the rows with no lower bound last, and `OrderByDescending(b => b.Period.UpperBound())` sorts those with no upper bound first. That holds on a required column too, because the bound is NULL there.",
+    "claim": "Over a required range column and a required multirange column holding every shape, ordering by LowerBound() or UpperBound(), ascending or descending, gives the in-memory order with the rows whose bound is null moved to the end ascending and to the front descending; with a Bound() != null key in front (OrderBy/ThenBy, or OrderByDescending/ThenByDescending), it gives the in-memory order exactly.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound"
+    ],
+    "heldBy": [
+      "ExecutedQueryTests",
+      "FilteredAggregateProbeTests"
+    ]
+  },
+  {
+    "id": "E73-integer-length-runs-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`Length` on `Int32Range` and `Int64Range` counts in the database as it does in memory.** `[1,10]` measures 10, the empty range 0, and a range unbounded on either side `null`. An `Int64Range` whose count is larger than `long.MaxValue` measures `null` too, so you can filter and sort by `Length`.",
+    "claim": "Int32Range.Length and Int64Range.Length run as SQL (0 for isempty, else upper - lower widened to bigint, or to numeric with NULL above long.MaxValue) and match memory over every shape, the widest storable ranges, a NULL column and a missing outer-join child, in a filter, its negation, a null test, a compound predicate, an ordering and a final projection.",
+    "oracle": "differential",
+    "surfaces": [
+      "Int32Range.Length",
+      "Int64Range.Length",
+      "ValueRangesMemberTranslatorPlugin.Translators"
+    ],
+    "heldBy": [
+      "IntegerLengthTranslationTests",
+      "IntegerLengthParityTests",
+      "TranslationSupportProbeTests"
+    ]
+  },
+  {
+    "id": "E74-clamp-runs-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`Clamp` clamps in the database as it does in memory, on every range type.** A value inside the range comes back as it is, and one outside comes back as the bound it passes, even an exclusive one. The empty range gives `null`, and so does a `null` range or value.",
+    "claim": "RangeExtensions.Clamp on every range type runs as SQL (NULL for a NULL range or value and for isempty, else LEAST(GREATEST(v, lower(x)), upper(x), less one on the discrete types)) and matches memory: on Int32Range, Int64Range and DecimalRange over every shape, exclusive numrange bounds, the element types' extremes, NULL range and value columns and a missing outer-join child on either side, in a filter, its negation, a null test, a compound predicate, a coalesce, an ordering and a final projection; on the other ten types over every range their factories build from points that include the element type's extremes (an infinity on the server for the temporal ones), every inclusiveness, a value column, a parameter, an inlined constant and NULL range and value columns, exactly (the sign of a zero, a DateTimeOffset's offset) and in both orderings. A DateTime stored as timestamp with time zone against a DateTimeRange is declined: a filter fails translation and a final projection runs in memory, whatever the session's time zone.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Clamp"
+    ],
+    "heldBy": [
+      "ClampTranslationTests",
+      "ClampParityTests",
+      "ClampDomainParityTests",
+      "TranslationSupportProbeTests"
+    ]
+  },
+  {
+    "id": "E75-set-union-and-remove-null-over-a-null-operand",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "**A NULL set or element gives NULL.** In a query, `Union`, `Intersect` and `Except` give NULL when either set is NULL, and `Add` and `Remove` give NULL when the set or the element is. A `Select` loads `null` for those rows, and `Where(… == null)` selects them.",
+    "claim": "A value set Union, Intersect or Except with a NULL set on either side, and Add or Remove with a NULL set or a NULL element, are NULL in a query: a nullable set or element column, a captured null and the child of an outer join on either side, in Where(== null), Where(!= null) and a final Select, and the predicates built on them agree with rule (c).",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except",
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "ValueSetNullOperandParityTests"
+    ]
+  },
+  {
+    "id": "E76-calendar-factories-over-a-column-run-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`DateRange.Month`, `Quarter`, `Year` and `IsoWeek` over a column build the same range in the database as in memory.** `DateRange.Month(b.Day)` gives the month that holds each row's day, so you can filter, join and sort by it. The first period starts at `-infinity` and the last ends at `infinity`, as Npgsql writes `DateOnly.MinValue` and `MaxValue` (the days themselves with `Npgsql.DisableDateTimeInfinityConversions`), so they still equal a stored range.",
+    "claim": "DateRange.Month, Quarter, Year and IsoWeek over a date column or integer columns run as SQL (daterange(first, last, '[]') with memory's first and last periods as constants, -infinity/infinity under Npgsql's conversions and the days themselves without them) and match memory over every period boundary, the ISO weeks of the neighbouring year and the extremes, NULL arguments (rule (c)) and a missing outer-join child, in a filter, its negation, a null test, equality with a stored range, a compound predicate, an ordering, a join key (a date form against an integer form, the first and last periods included) and a final projection; an argument memory rejects raises a PostgreSQL error, never a rolled-over week.",
+    "oracle": "differential",
+    "surfaces": [
+      "DateRange.Month",
+      "DateRange.Quarter",
+      "DateRange.Year",
+      "DateRange.IsoWeek"
+    ],
+    "heldBy": [
+      "CalendarFactoryTranslationTests",
+      "CalendarFactoryParityTests",
+      "CalendarFactoryExtremesTests",
+      "DeclaredNullabilityTests",
+      "TranslationSupportProbeTests"
+    ]
+  },
+  {
+    "id": "E77-store-type-names-resolve-to-range-types",
+    "source": "docs/efcore.md#map-ranges-to-postgresql-columns",
+    "quote": "**A range or multirange column type on its own maps to these types.**",
+    "claim": "With UseValueRanges, FindMapping on a range or multirange store type name with no CLR type returns this package's range or RangeSet type for every core range type; with UseValueRangesNodaTime, Npgsql's NodaTime plugin answers daterange, tsrange and tstzrange first (DateInterval, NpgsqlRange<LocalDateTime>, Interval) and the multiranges still resolve to the core RangeSet types; an array store type name never resolves to a value set; an NpgsqlRange<int> property with HasColumnType(\"int4range\") keeps Npgsql's mapping, and an Int32Range property with HasColumnType(\"int8range\") throws InvalidOperationException at model building.",
+    "oracle": "claim",
+    "surfaces": [
+      "ValueRangesTypeMappingSourcePlugin.FindMapping",
+      "ValueSetsTypeMappingSourcePlugin.FindMapping"
+    ],
+    "heldBy": [
+      "StoreTypeNameResolutionTests",
+      "NodaStoreTypeNameResolutionTests"
+    ]
+  },
+  {
+    "id": "E78-canonical-set-operations-run-as-sql",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "`Union`, `Add`, `Intersect` and `Except` run as SQL too, on every set type except the two text ones. The result is deduplicated and sorted, as in memory, so you can compare it, count it, group by it and store it",
+    "claim": "For every value set family but text (closed, wrapper arity and NodaTime), Union, Add, Intersect and Except in a query give the set memory gives under ==, Count, GroupBy, Distinct, OrderBy, a deduplicating set operation, IN, a conditional, a coalesce, a derived-table column, a final Select and an ExecuteUpdate value, on PostgreSQL 16 and 18.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except"
+    ],
+    "heldBy": [
+      "CanonicalSetOperationParityTests",
+      "CanonicalSetCompositionTests",
+      "CanonicalSetTranslationTests",
+      "NodaCanonicalSetTranslationTests"
+    ]
+  },
+  {
+    "id": "E79-canonical-set-keeps-the-first-copy",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "**Equal values keep the first copy, as in memory.** `DecimalSet` keeps whichever of `1.0` and `1.00` comes first, and `Float64Set` and `Float32Set` whichever of `-0` and `0`. For a `Union`, the set you call it on comes first.",
+    "claim": "A Union, Add or Intersect computed in the database and stored by ExecuteUpdate keeps, of two equal decimals written at different scales or of -0 and 0, the copy memory keeps: the first in input order, the receiver's for a Union, for the closed decimal and float sets and their wrapper arities.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect"
+    ],
+    "heldBy": [
+      "CanonicalSetOperationParityTests"
+    ]
+  },
+  {
+    "id": "E80-canonical-set-multiset-where-order-cannot-matter",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "Where order and duplicates can't change the answer, the query skips it: under `Contains`, `Overlaps`, the subset and superset methods, `IsEmpty` and a null test, and in the final `Select`, which is loaded and put in canonical form anyway.",
+    "claim": "Under @>, <@, &&, cardinality(...) = 0, a null test and in an outermost projection that neither groups nor deduplicates, a non-text Union or Add is the bare array_cat and an Intersect or Except a filter without DISTINCT ON or ORDER BY, and each still answers as in memory.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except"
+    ],
+    "heldBy": [
+      "CanonicalSetTranslationTests",
+      "CanonicalSetOperationParityTests"
+    ]
+  },
+  {
+    "id": "E81-canonical-set-placeholders-fail-closed",
+    "source": "docs/efcore.md#combine-sets-with-union",
+    "quote": "On the other set types the check also builds the deduplicated form, so their `Union`, `Add`, `Intersect` and `Except` fail the same way, naming `valueranges_canonical_union_without_sql_guard` or its `add`, `intersect` or `except` sibling.",
+    "claim": "With the IRelationalParameterBasedSqlProcessorFactory replaced after UseValueRanges(), a non-text Union, Add, Intersect or Except reaches the SQL as valueranges_canonical_union_without_sql_guard, valueranges_canonical_add_without_sql_guard, valueranges_canonical_intersect_without_sql_guard or valueranges_canonical_except_without_sql_guard, with no array_cat and no unnest.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except"
+    ],
+    "heldBy": [
+      "SqlGuardRegistrationTests"
+    ]
+  },
+  {
+    "id": "E82-canonical-set-operations-over-rows-of-other-tools",
+    "source": "docs/efcore.md#rows-written-by-other-tools",
+    "quote": "`Union`, `Add`, `Intersect` and `Except` don't depend on it either. On every set type except text they deduplicate and sort whatever the row holds. On text, `Count` over them counts the distinct elements and `==` compares by mutual containment. Either way, comparing or counting their result gives the answer memory gives, even over such a row.",
+    "claim": "Over rows another tool stored out of order with duplicates, or with a NULL element on either side, a Union, Add, Intersect or Except compared with == or counted gives memory's answer over the stored set: on non-text sets through the deduplicated form, which drops the NULL element; on text through count(DISTINCT …), which skips it, and mutual containment.",
+    "oracle": "differential",
+    "surfaces": [
+      "ValueSetExtensions.Union",
+      "ValueSetExtensions.Add",
+      "ValueSetExtensions.Intersect",
+      "ValueSetExtensions.Except"
+    ],
+    "heldBy": [
+      "CanonicalSetOperationParityTests"
+    ]
+  },
+  {
+    "id": "E83-clamp-returns-the-operand-at-the-columns-precision",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**A value you pass to `Clamp` comes back at the column's precision.** PostgreSQL keeps a microsecond, so `TimeOnly.MaxValue` comes back as `23:59:59.999999`, as any value sent to the database does. A bound at a date extreme, which the database holds as an infinity, clamps to the extreme as in memory.",
+    "claim": "Clamp over a range that contains the value returns, in SQL, the value as Npgsql bound it, truncated to the store's microsecond (TimeOnly.MaxValue as 23:59:59.999999), where memory returns every tick; a range bound at a temporal extreme, stored as an infinity, clamps to the extreme memory reads back.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.Clamp"
+    ],
+    "heldBy": [
+      "ClampDomainParityTests"
+    ]
+  },
+  {
+    "id": "E84-rangeset-count-runs-as-sql",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**`Count` on a `RangeSet` counts the same ranges in the database as in memory.** PostgreSQL stores a multirange merged and sorted, as a `RangeSet` holds it, so you can filter and sort by how many separate ranges a row has. A `null` multirange gives `null`.",
+    "claim": "RangeSet.Count runs as SQL, (SELECT count(*)::int FROM unnest(x) AS vcN(r)) built after EF Core's alias pass inside CASE WHEN x IS NULL THEN NULL, and matches memory on every range type over stored multiranges built from ranges that include the element type's extremes, a NULL multirange column, and the server's Union, Except, Intersect, Complement() and Gaps() away from the extremes, in a filter, its negation, a null test, a final projection and both orderings; without the decorated processor the SQL names the placeholder and PostgreSQL rejects it.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.Count"
+    ],
+    "heldBy": [
+      "RangeSetCountTranslationTests",
+      "RangeSetCountParityTests",
+      "SqlGuardRegistrationTests",
+      "TranslationSupportProbeTests"
+    ]
+  },
+  {
+    "id": "E85-rangeset-count-at-the-domain-boundary",
+    "source": "docs/efcore.md#what-runs-where",
+    "quote": "**Near the element type's extremes, a multirange the database computes can count one range more.** `(,)` minus `[int.MinValue,0]` is `(,-2147483648),[1,)` in PostgreSQL, which counts 2. In memory it is `[1,)`, because no `int` lies below `int.MinValue`.",
+    "claim": "A multirange the server computes from an operand bounded at the element type's extreme can hold a range memory reads as empty ((,-2147483648) below int.MinValue, (infinity,) past the last date) or keep apart two ranges memory merges across a date extreme, so RangeSet.Count over it can be one more in SQL; a stored multirange counts the same at the extremes.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeSet.Count"
+    ],
+    "heldBy": [
+      "RangeSetCountParityTests"
+    ]
+  },
+  {
+    "id": "E86-string-set-collation-compares-bytes",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "**A string set column compares its elements by the column's collation.** Memory compares them ordinally. A case- or accent-insensitive collation would make `Contains`, the subset operators, `==` and `Remove` answer differently in the database, and `Remove` in `ExecuteUpdate` would delete elements memory keeps. So building the model throws for a collation on a `StringSet` or `StringSet<TElement>` property unless it compares bytes: `\"C\"`, `\"POSIX\"`, `ucs_basic`, `pg_c_utf8` or `default`. `EF.Functions.Collate` over a string set throws the same way.",
+    "claim": "Building a model with UseCollation on a StringSet or StringSet<T> column throws InvalidOperationException naming the property unless the collation is C, POSIX, ucs_basic, pg_c_utf8 or default, which map with the collation; a string set inside a JSON document is not checked; a query over EF.Functions.Collate on a string set with any other collation throws, in a predicate, an equality and a projection; and a column collated \"C\" answers Contains, Overlaps, Remove and ExecuteUpdate with Remove as memory does.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Remove"
+    ],
+    "heldBy": [
+      "StringSetCollationTests",
+      "StringSetCollationIntegrationTests"
+    ]
+  },
+  {
+    "id": "E87-exclusive-infinity-bounds-read-as-the-row-loads",
+    "source": "docs/efcore.md#rows-written-by-other-tools",
+    "quote": "On a `DateRange` or a `RangeSet` of them, `LowerBound()` gives 0001-01-02 and `UpperBound()` gives 9999-12-30 in the database as in memory. `LowerBoundInclusive()` gives `true`, and `Clamp` clamps to those days.",
+    "claim": "Over a daterange another tool wrote with an exclusive infinity ([x,infinity), (-infinity,x), and the unbounded and doubly infinite forms), and over the server's Except at the extremes, LowerBound(), UpperBound(), LowerBoundInclusive(), UpperBoundInclusive() and Clamp(MinValue/MaxValue/a mid value) in a predicate equal memory's answer for the loaded row on DateRange and RangeSet<DateRange, DateOnly>, and on LocalDateRange and its RangeSet except LowerBound() and Clamp(MinIsoValue) at an exclusive -infinity, which keep LocalDate.MinIsoValue; with the infinity conversions disabled such a row fails to read in a query as it fails to load.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.UpperBound",
+      "RangeExtensions.LowerBoundInclusive",
+      "RangeExtensions.Clamp",
+      "RangeSet.LowerBound",
+      "RangeSet.UpperBound",
+      "RangeSet.LowerBoundInclusive"
+    ],
+    "heldBy": [
+      "ExclusiveInfinityBoundParityTests",
+      "InfinityConversionsDisabledTests",
+      "QueryTranslationTests"
+    ]
+  },
+  {
+    "id": "E88-yearmonth-upper-bound-compares-as-a-month",
+    "source": "docs/efcore.md#store-a-yearmonthrange",
+    "quote": "So `r.BillingPeriod.UpperBound() == month` and `r.BillingPeriod.Clamp(month)` compare with a month in a filter as they do in memory. The last month, 9999-12, is stored as `infinity` and reads as 9999-12-01 too.",
+    "claim": "On YearMonthRange and RangeSet<YearMonthRange, YearMonth>, LowerBound(), UpperBound() and Clamp compared with a month by ==, < and > in a filter select the rows memory selects over the loaded rows, for every shape between months including 9999-12, whose upper bound is stored as infinity.",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeExtensions.UpperBound",
+      "RangeExtensions.LowerBound",
+      "RangeExtensions.Clamp",
+      "RangeSet.UpperBound",
+      "RangeSet.LowerBound"
+    ],
+    "heldBy": [
+      "YearMonthBoundParityTests",
+      "ClampDomainParityTests",
+      "NodaQueryTranslationTests"
+    ]
+  },
+  {
+    "id": "E89-string-set-compared-with-a-collated-value",
+    "source": "docs/efcore.md#store-a-value-set-in-an-array-column",
+    "quote": "So a query throws when it compares a string set with a value from a column whose collation may not compare bytes, or with `EF.Functions.Collate(value, …)` under one, and the message names the collation.",
+    "claim": "A query comparing a StringSet with a value whose column is configured with a collation other than C, POSIX, ucs_basic, pg_c_utf8 or default, or with EF.Functions.Collate(value, such a collation) - through Contains, Add, Remove, ==, the subset operators and ExecuteUpdate with Remove, directly or through a derived table's or set operation's column, a concatenation, a CASE result or a scalar subquery - throws InvalidOperationException naming the collation, on a runtime and a compiled model, and leaves the row unchanged; EF.Functions.Collate(value, \"C\"), a byte-order column and a CASE that only tests the column translate and answer as memory does.",
+    "oracle": "exception",
+    "surfaces": [
+      "ValueSetExtensions.Contains",
+      "ValueSetExtensions.Remove",
+      "ValueSetExtensions.Add"
+    ],
+    "heldBy": [
+      "StringSetCollationTests",
+      "StringSetCollationIntegrationTests"
     ]
   },
   {
@@ -2049,7 +2402,7 @@
   {
     "id": "M06-readonlylist-and-structural-equality",
     "source": "docs/ranges.md#read-and-compare-sets",
-    "quote": "A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use `Count` and the indexer. Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges are equal when they normalize to the same ranges:",
+    "quote": "A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use `Count` and the indexer. In an EF Core query, `Count` runs as SQL and the indexer runs in memory ([What runs where](efcore.md#what-runs-where)). Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges are equal when they normalize to the same ranges:",
     "claim": "Two RangeSets whose inputs normalize to the same elements are Equals, ==, share GetHashCode, enumerate the same elements in lower-bound order and agree on Count and indexer.",
     "oracle": "metamorphic",
     "surfaces": [
@@ -2288,6 +2641,20 @@
     ],
     "heldBy": [
       "Float64DomainTests"
+    ]
+  },
+  {
+    "id": "M18-rangeset-refuses-a-null-range",
+    "source": "docs/ranges.md#rangeset--multirange-support",
+    "quote": "A `null` range is not an empty range, so it isn't dropped. Creating a set from one throws `ArgumentException`, wherever it stands among the inputs.",
+    "claim": "For every range type of both libraries, RangeSet.From over an IEnumerable and over a span, and RangeSet.Create (the collection-expression builder), throw ArgumentException for a null range placed first, after a bounded range, after the empty range or after the infinite one; Union and Except called on a null range throw an ArgumentException too, where each built a set holding null.",
+    "oracle": "exception",
+    "surfaces": [
+      "RangeSet.From",
+      "RangeSet.Create"
+    ],
+    "heldBy": [
+      "RangeSetNullContractTests"
     ]
   },
   {
@@ -3276,6 +3643,44 @@
     ]
   },
   {
+    "id": "R48-aggregates-skip-null-inputs",
+    "source": "docs/ranges.md#aggregate-a-sequence-of-ranges",
+    "quote": "**A `null` range is skipped**, as PostgreSQL skips a `NULL` row. So a group over a nullable column aggregates the ranges it has, and a sequence of nothing but `null` counts as empty.",
+    "claim": "RangeAgg and RangeIntersectAgg over ranges of every type (every per-type overload, core and NodaTime) and over sets skip a null element wherever it stands, answering what the same sequence without it answers; a sequence of only nulls answers as an empty one. Over a nullable range, multirange and NodaTime range column, range_agg and range_intersect_agg agree with them for every subset of inputs with a NULL row at every position, except that a group of only NULLs is NULL for range_agg where RangeAgg answers the empty set (the zero-rows case of E07).",
+    "oracle": "differential",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg",
+      "RangeAggregateExtensions.RangeIntersectAgg",
+      "NodaTimeRangeAggregateExtensions.RangeAgg",
+      "NodaTimeRangeAggregateExtensions.RangeIntersectAgg"
+    ],
+    "heldBy": [
+      "RangeAggregateTests",
+      "NodaTimeRangeAggregateTests",
+      "RangeAggregateParityTests"
+    ]
+  },
+  {
+    "id": "R49-predicates-false-for-a-null",
+    "source": "docs/ranges.md#ask-questions-about-a-range",
+    "quote": "If the range you call it on, or the range or set you pass, is `null`, a query method returns `false`. That is what the same query returns for a NULL column in the database. The `RangeSet` methods return `false` for a `null` range or set you pass, too.",
+    "claim": "For every range type of both libraries, every public bool member of RangeExtensions answers false, without throwing, with null as the range it is called on, as the operand, or both, against every shape and set probe; and every Boolean instance member of RangeSet taking a range or a set answers false for a null operand.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeExtensions.Contains",
+      "RangeExtensions.IsContainedBy",
+      "RangeExtensions.Overlaps",
+      "RangeExtensions.IsAdjacentTo",
+      "RangeSet.Contains",
+      "RangeSet.IsContainedBy",
+      "RangeSet.Overlaps",
+      "RangeSet.IsAdjacentTo"
+    ],
+    "heldBy": [
+      "RangeNullPredicateContractTests"
+    ]
+  },
+  {
     "id": "S01-canonical-set",
     "source": "docs/value-sets.md#value-sets",
     "quote": "Every set is immutable and deduplicated, sorted, and free of nulls.",
@@ -3684,6 +4089,269 @@
     "heldBy": [
       "Float64DomainTests",
       "SetWrapperParityTests"
+    ]
+  },
+  {
+    "id": "T01-walkthrough-exclusion-migration",
+    "source": "docs/walkthrough.md#reject-double-bookings-in-the-database",
+    "quote": "The sample adds an exclusion constraint in its migration, with explicit SQL, because EF Core has no API for one",
+    "claim": "Applying the sample's migration creates ex_bookings_room_period as EXCLUDE USING gist (\"RoomId\" WITH =, \"Period\" WITH &&) over the daterange column the package maps.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeJsonConverter.Read"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T02-walkthrough-query-stay-canonical",
+    "source": "docs/walkthrough.md#search-for-a-free-room",
+    "quote": "You sent `[2026-07-01,2026-07-05)`, and the response holds `[2026-07-01,2026-07-04]`.",
+    "claim": "A minimal-API DateRange parameter bound from the query string with no registration takes the closed canonical form, and the JSON response writes that form.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateRange.TryParse",
+      "RangeJsonConverter.Write"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T03-walkthrough-query-features-sorted",
+    "source": "docs/walkthrough.md#search-for-a-free-room",
+    "quote": "You sent `{sea-view,balcony}`, and the response holds `[\"balcony\",\"sea-view\"]`.",
+    "claim": "A minimal-API StringSet parameter bound from the query string is sorted ordinally, and the response writes it as a JSON array.",
+    "oracle": "claim",
+    "surfaces": [
+      "StringSet.TryParse",
+      "ValueSetJsonConverter.Write"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T04-walkthrough-search-one-statement",
+    "source": "docs/walkthrough.md#search-for-a-free-room",
+    "quote": "The whole query runs in PostgreSQL, as one statement.",
+    "claim": "IsSupersetOf on a StringSet column, Contains(range) on a DateRange column and Overlaps inside a correlated Any translate to @>, @> and && in one SELECT, with no client evaluation.",
+    "oracle": "claim",
+    "surfaces": [
+      "ValueSetExtensions.IsSupersetOf",
+      "RangeExtensions.Contains",
+      "RangeExtensions.Overlaps"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T05-walkthrough-json-shapes",
+    "source": "docs/walkthrough.md#search-for-a-free-room",
+    "quote": "A range is a JSON string, and a set is a JSON array.",
+    "claim": "With nothing registered, a DateRange and a RangeSet in an ASP.NET Core response are JSON strings holding their literals, and a StringSet is a JSON array of its elements.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeJsonConverter.Write",
+      "RangeSetJsonConverter.Write",
+      "ValueSetJsonConverter.Write"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T06-walkthrough-unparsable-literal-400",
+    "source": "docs/walkthrough.md#validate-the-stay",
+    "quote": "Either way the response is a 400 with an empty body.",
+    "claim": "A reversed range literal fails binding before the handler runs: from the query string (TryParse returns false) and from a JSON body (the converter throws), each with status 400 and no row written.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.TryParse",
+      "RangeJsonConverter.Read"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T07-walkthrough-open-stay-binds",
+    "source": "docs/walkthrough.md#validate-the-stay",
+    "quote": "A stay with no last night, `[2026-08-01,)`, is a valid range, so it binds.",
+    "claim": "[2026-08-01,) binds as DateRange.UnboundedEnd, so the handler's shape switch, not binding, rejects it with a validation problem.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateRange.Parse"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T08-walkthrough-post-echoes-input",
+    "source": "docs/walkthrough.md#book-a-room",
+    "quote": "The arrival is what you sent: the same offset, and all seven fraction digits.",
+    "claim": "The 201 response built from the tracked entity after SaveChanges writes the DateTimeOffsetRange as received: +02:00 and seven fraction digits.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateTimeOffsetRange.Parse"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T09-walkthrough-tstzrange-utc",
+    "source": "docs/walkthrough.md#read-the-booking-back",
+    "quote": "A `tstzrange` keeps the instant, not the offset.",
+    "claim": "A DateTimeOffsetRange written with +02:00 bounds is read back at +00:00 with the same instants, and PostgreSQL's text shows +00.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateTimeOffsetRange.Parse",
+      "RangeJsonConverter.Read",
+      "RangeJsonConverter.Write"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T10-walkthrough-microsecond-truncation",
+    "source": "docs/walkthrough.md#read-the-booking-back",
+    "quote": "PostgreSQL keeps microseconds, so `.1234567` is stored as `.123456`, and you read back `.1234560`.",
+    "claim": "A bound with seven fraction digits is stored with six (truncated, not rounded) and read back with the seventh digit zero.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateTimeOffsetRange.Parse",
+      "RangeJsonConverter.Read",
+      "RangeJsonConverter.Write"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T11-walkthrough-daterange-spelling",
+    "source": "docs/walkthrough.md#read-the-booking-back",
+    "quote": "PostgreSQL stores a `daterange` half-open, `[2026-07-01,2026-07-05)`.",
+    "claim": "The DateRange [2026-07-01,2026-07-04] is stored as PostgreSQL's canonical [2026-07-01,2026-07-05) and read back as the closed form.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateRange.Parse",
+      "RangeJsonConverter.Read"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T12-walkthrough-open-end-not-infinity",
+    "source": "docs/walkthrough.md#read-the-booking-back",
+    "quote": "PostgreSQL stores `[2026-01-01,)`, with no upper bound. It doesn't store `infinity`.",
+    "claim": "An UnboundedEnd DateRange is stored with an omitted upper bound, never as an explicit infinity bound.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateRange.CreateUnboundedEnd"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T13-walkthrough-features-stored-sorted",
+    "source": "docs/walkthrough.md#read-the-booking-back",
+    "quote": "the `text[]` column holds `{balcony,sea-view}`",
+    "claim": "A StringSet built from [\"sea-view\", \"balcony\"] is stored in text[] in canonical order.",
+    "oracle": "claim",
+    "surfaces": [
+      "StringSet.From"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T14-walkthrough-overlap-rejected",
+    "source": "docs/walkthrough.md#try-to-book-the-same-nights-twice",
+    "quote": "PostgreSQL rejects the insert with `23P01`, and the handler returns 409 Conflict:",
+    "claim": "A second booking of the same room sharing a night is rejected by the exclusion constraint (23P01), which the sample returns as 409, and no row is added.",
+    "oracle": "exception",
+    "surfaces": [
+      "DateRange.Parse",
+      "RangeJsonConverter.Read"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T15-walkthrough-adjacent-accepted",
+    "source": "docs/walkthrough.md#try-to-book-the-same-nights-twice",
+    "quote": "That stay starts the night after Ada's ends, so the two are adjacent and don't overlap.",
+    "claim": "[2026-07-05,2026-07-07] after [2026-07-01,2026-07-04] for the same room passes the exclusion constraint.",
+    "oracle": "claim",
+    "surfaces": [
+      "DateRange.Parse",
+      "RangeJsonConverter.Read"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T16-walkthrough-range-agg",
+    "source": "docs/walkthrough.md#find-the-free-nights",
+    "quote": "`RangeAgg` runs in PostgreSQL as `range_agg`, and you get the room's bookings back as one `RangeSet`:",
+    "claim": "GroupBy(...).Select(g => g.Select(b => b.Period).RangeAgg()) translates to range_agg and loads as a RangeSet<DateRange, DateOnly>.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeAggregateExtensions.RangeAgg"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T17-walkthrough-adjacent-merge",
+    "source": "docs/walkthrough.md#find-the-free-nights",
+    "quote": "A `RangeSet` never holds two ranges that overlap or touch",
+    "claim": "The range_agg of two adjacent bookings loads as one range, and Except over a window leaves the remaining nights.",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeSet.Except",
+      "RangeSet.From",
+      "RangeExtensions.Intersect"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T18-walkthrough-no-rows-empty-set",
+    "source": "docs/walkthrough.md#find-the-free-nights",
+    "quote": "No bookings is an empty set, not `null`.",
+    "claim": "For a room with no bookings in the window, the availability response writes booked as \"{}\" and free as the whole window, never null.",
+    "oracle": "silent-default",
+    "surfaces": [
+      "RangeSet.Empty"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
+    ]
+  },
+  {
+    "id": "T19-walkthrough-open-window",
+    "source": "docs/walkthrough.md#find-the-free-nights",
+    "quote": "An open window gives an open answer.",
+    "claim": "Except over an UnboundedEnd window leaves an UnboundedEnd last range, written as [2026-07-08,).",
+    "oracle": "claim",
+    "surfaces": [
+      "RangeSet.Except"
+    ],
+    "heldBy": [
+      "WalkthroughSampleTests"
     ]
   },
   {

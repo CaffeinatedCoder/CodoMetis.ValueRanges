@@ -86,9 +86,9 @@ Good to know:
 - **A `LocalDate` in another calendar is read as its ISO day.** `LocalDateRange.Month` returns the
   ISO month that holds that day, as every bound of this type is ISO.
 - **In an EF Core query, pass values your code already has.** `b.Period.Overlaps(DateRange.Month(2026, 10))`
-  runs as SQL with the month as one constant. A factory that reads a column, such as
-  `DateRange.Month(b.Day)`, runs in memory only
-  ([What runs where](efcore.md#what-runs-where)).
+  runs as SQL with the month as one constant. On `DateRange`, a factory that reads a column, such as
+  `DateRange.Month(b.Day)`, runs as SQL too. On `LocalDateRange` and `YearMonthRange` it runs in
+  memory only ([What runs where](efcore.md#what-runs-where)).
 
 ## Pattern matching
 
@@ -147,6 +147,10 @@ Good to know:
 
 Every query method is an extension method on `IRange<T>`. Each one works for any combination of
 shapes.
+
+If the range you call it on, or the range or set you pass, is `null`, a query method returns
+`false`. That is what the same query returns for a NULL column in the database. The `RangeSet`
+methods return `false` for a `null` range or set you pass, too.
 
 ### Check containment
 
@@ -285,7 +289,8 @@ way with `float`.
 
 Good to know:
 
-- **`Length` runs in memory only.** It does not translate to SQL.
+- **`Length` runs as SQL on `Int32Range` and `Int64Range`.** On the other range types it runs in
+  memory ([What runs where](efcore.md#what-runs-where)).
 
 ### List the values of a discrete range
 
@@ -356,8 +361,8 @@ Good to know:
   so the error doesn't build up from piece to piece. Near the top of the domain, where `n × step`
   alone is too large for the type, a boundary is the one before it plus the step. A step too small to move the start at its
   magnitude, such as `1.0` near `1e17`, throws `ArgumentOutOfRangeException`.
-- **`Split` and `Values(step)` run in memory only.** PostgreSQL's `generate_series` returns rows, not
-  a value ([What runs where](efcore.md#what-runs-where)).
+- **`Split` and `Values(step)` run in memory only.** An EF Core query doesn't translate them. In
+  SQL, each would be `generate_series` collected into an array ([What runs where](efcore.md#what-runs-where)).
 
 ### Clamp a value into a range
 
@@ -376,6 +381,8 @@ Good to know:
 
 - **The empty range returns `null`.** There is no value to snap to.
 - **An unbounded side never constrains.** Clamping into `(-∞, 10]` only ever pulls a value down.
+- **`Clamp` runs as SQL on every range type.** The one exception is a `DateTimeRange` clamping a
+  `DateTime` stored with a time zone, which runs in memory ([What runs where](efcore.md#what-runs-where)).
 
 ### Compare positions
 
@@ -440,7 +447,9 @@ Good to know:
   `<= 0`, and with a non-null operand it compares lower, so it matches `< 0`, `<= 0` and `!= 0`. In
   memory, calling `CompareTo` on a null throws.
 - **PostgreSQL puts `NULL` last in an ascending `ORDER BY`.** In memory, `null` sorts first. On a
-  nullable column, the two orders differ only in where the nulls go.
+  nullable column, the two orders differ only in where the nulls go. An ordering by `LowerBound()` or
+  `UpperBound()` meets the same difference on any column, because the bound of an empty or unbounded
+  range is NULL ([Read bounds](efcore.md#read-bounds-merge-ranges-and-aggregate)).
 - **This is not the set's lower-bound order.** `RangeSet<TRange, T>.LowerBoundComparer` compares only
   the lower bound, so it ties `[1,5]` with `[1,9]` ([Sort ranges the way a set does](#sort-ranges-the-way-a-set-does)).
 
@@ -537,7 +546,8 @@ Good to know:
   2025-02-28 and would end the day before, so it is `Empty`. PostgreSQL gives the same answer for
   that `daterange`, and so does `LocalDateTimeRange` for `[2024-02-28,2024-02-29)`. It happens only
   for a range ending on the 28th to the 31st, a few days long at most. A whole month never empties.
-- **They run in memory only.** PostgreSQL has no range arithmetic. See
+- **They run in memory only.** Rebuilding the range in SQL answers differently for the empty range,
+  for `time` past midnight and for a bound moved past the last date .NET holds. See
   [What runs where](efcore.md#what-runs-where).
 
 ## Combine two ranges
@@ -680,6 +690,8 @@ new[] { Int32Range.CreateFinite(1, 10), Int32Range.CreateFinite(5, 15) }
 - **`RangeAgg()`** returns a normalized `RangeSet` with every value of every range.
 - **`RangeIntersectAgg()`** returns the intersection of all the ranges, or `null` when the
   sequence is empty.
+- **A `null` range is skipped**, as PostgreSQL skips a `NULL` row. So a group over a nullable
+  column aggregates the ranges it has, and a sequence of nothing but `null` counts as empty.
 
 Both also take a sequence of sets, as PostgreSQL's aggregates also take multiranges:
 
@@ -695,8 +707,8 @@ blocked.RangeIntersectAgg();  // { [3, 5], [20, 22] } — the values every set h
 ```
 
 Over sets, `RangeIntersectAgg()` returns a `RangeSet`, again `null` for an empty sequence. An empty
-set among the inputs makes it the empty set. These two are generic, so they work for every range
-type, the NodaTime ones included.
+set among the inputs makes it the empty set. A `null` set is skipped. These two are generic, so they
+work for every range type, the NodaTime ones included.
 
 In an EF Core query, all four run as the SQL aggregates inside a `GroupBy` projection. See
 [Entity Framework Core](efcore.md).
@@ -757,6 +769,9 @@ them overlap, and no two are adjacent. To keep those rules, creating a set:
 - **Drops empty ranges.**
 - **Merges ranges that overlap or are adjacent.**
 - **Collapses the set to `RangeSet<TRange, T>.Infinite` when any input is `Infinity`.**
+
+A `null` range is not an empty range, so it isn't dropped. Creating a set from one throws
+`ArgumentException`, wherever it stands among the inputs.
 
 What the example shows:
 
@@ -901,7 +916,8 @@ Good to know:
 ### Read and compare sets
 
 A set implements `IReadOnlyList<TRange>`. You can enumerate it in lower-bound order, and use
-`Count` and the indexer.
+`Count` and the indexer. In an EF Core query, `Count` runs as SQL and the indexer runs in memory
+([What runs where](efcore.md#what-runs-where)).
 
 Sets also have structural equality, including `==` and `!=`. Two sets built from different ranges
 are equal when they normalize to the same ranges:
@@ -944,6 +960,9 @@ The order follows two rules:
 
 The same instance is also available as `RangeLowerBoundComparer<Int32Range, int>.Instance`. Use it
 where you only have the comparer type, not the set type.
+
+The comparer sorts in memory. Inside an EF Core query it runs in memory only, so a filter or an
+ordering that calls it fails translation; see [What runs where](efcore.md#what-runs-where).
 
 ## Write generic code over any range
 

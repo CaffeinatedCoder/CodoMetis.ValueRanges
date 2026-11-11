@@ -37,6 +37,14 @@ internal interface ISetTypeDefinition
     /// </summary>
     RelationalTypeMapping? ElementTypeMapping => null;
 
+    /// <summary>
+    /// Whether PostgreSQL orders and compares the element store type as the set's canonical comparer
+    /// does, so that <c>Union</c>, <c>Add</c>, <c>Intersect</c> and <c>Except</c> can build canonical form
+    /// in SQL (#478). <see langword="false"/> for text, which <c>ORDER BY</c> sorts by the database
+    /// collation rather than ordinally (#479): those operations stay refused where order matters.
+    /// </summary>
+    bool CanonicalizesInSql { get; }
+
     /// <summary>The <c>TSet.Empty</c> singleton, untyped.</summary>
     object EmptySet { get; }
 }

@@ -23,40 +23,52 @@ public sealed class ParserResilienceTests
 
     // Each entry: a name, and the hostile text. Rejection is expected for most; a few are valid and
     // must simply not be slow (whitespace flood, huge but well-formed sets).
-    public static IEnumerable<object[]> HostileRangeLiterals() =>
-    [
-        ["digit run of a million characters",       $"[{new string('1', Size)},2]"],
-        ["a million opening brackets",              new string('[', Size)],
-        ["a million characters of garbage bound",   $"[{new string('x', Size)},1]"],
-        ["a million characters of whitespace",      $"{new string(' ', Size)}[1,2]"],
-        ["a million quotes inside the bound",       $"[\"{new string('"', Size)},2]"],
-        ["a million backslashes inside quotes",     $"[\"{new string('\\', Size)}\",2]"],
-        ["a million commas",                        $"[{new string(',', Size)}]"],
-    ];
+    //
+    // A row carries only the name, and the test builds its text from it. A row's arguments travel in
+    // every message the test host sends about that row, so with the text as an argument one results
+    // message was 20 MB, and vstest.console in SDK 11.0.100 did not get through it in ten minutes: `dotnet test`
+    // ran at full CPU after the last test had passed (#535). SDK 11.0.100-rc.2 read it in seconds.
+    private static readonly Dictionary<string, Func<string>> RangeLiterals = new()
+    {
+        ["digit run of a million characters"]       = () => $"[{new string('1', Size)},2]",
+        ["a million opening brackets"]              = () => new string('[', Size),
+        ["a million characters of garbage bound"]   = () => $"[{new string('x', Size)},1]",
+        ["a million characters of whitespace"]      = () => $"{new string(' ', Size)}[1,2]",
+        ["a million quotes inside the bound"]       = () => $"[\"{new string('"', Size)},2]",
+        ["a million backslashes inside quotes"]     = () => $"[\"{new string('\\', Size)}\",2]",
+        ["a million commas"]                        = () => $"[{new string(',', Size)}]",
+    };
 
-    public static IEnumerable<object[]> HostileSetLiterals() =>
-    [
-        ["two hundred thousand ranges",             "{" + string.Join(",", Enumerable.Range(0, 200_000).Select(i => $"[{i * 2},{i * 2 + 1}]")) + "}"],
-        ["two hundred thousand identical ranges",   "{" + string.Join(",", Enumerable.Repeat("[1,10]", 200_000)) + "}"],
-        ["a million nested brackets",               "{" + new string('[', Size) + "}"],
-        ["a million characters, never closed",      "{" + new string('[', Size)],
-    ];
+    public static IEnumerable<object[]> HostileRangeLiterals() => RangeLiterals.Keys.Select(name => new object[] { name });
 
-    public static IEnumerable<object[]> HostileArrayLiterals() =>
-    [
-        ["two hundred thousand elements",           "{" + string.Join(",", Enumerable.Range(0, 200_000).Select(i => $"e{i}")) + "}"],
-        ["a million escaped quotes in one element", "{\"" + string.Concat(Enumerable.Repeat("\\\"", Size / 2)) + "\"}"],
-        ["an unterminated quoted element",          "{\"" + new string('a', Size)],
-        ["an unterminated escape",                  "{\"" + new string('a', Size) + "\\"],
-        ["a million commas",                        "{" + new string(',', Size) + "}"],
-        ["one element of a million characters",     "{" + new string('a', Size) + "}"],
-    ];
+    private static readonly Dictionary<string, Func<string>> SetLiterals = new()
+    {
+        ["two hundred thousand ranges"]             = () => "{" + string.Join(",", Enumerable.Range(0, 200_000).Select(i => $"[{i * 2},{i * 2 + 1}]")) + "}",
+        ["two hundred thousand identical ranges"]   = () => "{" + string.Join(",", Enumerable.Repeat("[1,10]", 200_000)) + "}",
+        ["a million nested brackets"]               = () => "{" + new string('[', Size) + "}",
+        ["a million characters, never closed"]      = () => "{" + new string('[', Size),
+    };
+
+    public static IEnumerable<object[]> HostileSetLiterals() => SetLiterals.Keys.Select(name => new object[] { name });
+
+    private static readonly Dictionary<string, Func<string>> ArrayLiterals = new()
+    {
+        ["two hundred thousand elements"]           = () => "{" + string.Join(",", Enumerable.Range(0, 200_000).Select(i => $"e{i}")) + "}",
+        ["a million escaped quotes in one element"] = () => "{\"" + string.Concat(Enumerable.Repeat("\\\"", Size / 2)) + "\"}",
+        ["an unterminated quoted element"]          = () => "{\"" + new string('a', Size),
+        ["an unterminated escape"]                  = () => "{\"" + new string('a', Size) + "\\",
+        ["a million commas"]                        = () => "{" + new string(',', Size) + "}",
+        ["one element of a million characters"]     = () => "{" + new string('a', Size) + "}",
+    };
+
+    public static IEnumerable<object[]> HostileArrayLiterals() => ArrayLiterals.Keys.Select(name => new object[] { name });
 
     // ---- bounded time, documented failure modes ------------------------------------------------
 
     [TestMethod, DynamicData(nameof(HostileRangeLiterals)), Timeout(10_000)]
-    public void RangeParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name, string input)
+    public void RangeParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name)
     {
+        var input = RangeLiterals[name]();
         AssertRejectedOrParsed(() => Int32Range.Parse(input, null));
         AssertRejectedOrParsed(() => DecimalRange.Parse(input, null));
         AssertRejectedOrParsed(() => DateTimeRange.Parse(input, null));
@@ -65,15 +77,17 @@ public sealed class ParserResilienceTests
     }
 
     [TestMethod, DynamicData(nameof(HostileSetLiterals)), Timeout(10_000)]
-    public void RangeSetParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name, string input)
+    public void RangeSetParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name)
     {
+        var input = SetLiterals[name]();
         AssertRejectedOrParsed(() => RangeSet<Int32Range, int>.Parse(input, null));
         Assert.IsFalse(Throws(() => RangeSet<Int32Range, int>.TryParse(input, null, out _)), "RangeSet.TryParse threw on hostile input.");
     }
 
     [TestMethod, DynamicData(nameof(HostileArrayLiterals)), Timeout(10_000)]
-    public void SetParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name, string input)
+    public void SetParse_HostileInput_IsAcceptedOrRejectedInBoundedTime(string name)
     {
+        var input = ArrayLiterals[name]();
         AssertRejectedOrParsed(() => StringSet.Parse(input, null));
         AssertRejectedOrParsed(() => Int32Set.Parse(input, null));
         Assert.IsFalse(Throws(() => StringSet.TryParse(input, null, out _)), "StringSet.TryParse threw on hostile input.");
@@ -81,8 +95,9 @@ public sealed class ParserResilienceTests
     }
 
     [TestMethod, DynamicData(nameof(HostileRangeLiterals)), Timeout(10_000)]
-    public void JsonRead_HostileRangeString_IsAcceptedOrRejectedInBoundedTime(string name, string input)
+    public void JsonRead_HostileRangeString_IsAcceptedOrRejectedInBoundedTime(string name)
     {
+        var input = RangeLiterals[name]();
         var payload = JsonSerializer.Serialize(input);
         AssertRejectedOrParsed(() => JsonSerializer.Deserialize<Int32Range>(payload, Json), typeof(JsonException));
         AssertRejectedOrParsed(() => JsonSerializer.Deserialize<RangeSet<Int32Range, int>>(payload, Json), typeof(JsonException));

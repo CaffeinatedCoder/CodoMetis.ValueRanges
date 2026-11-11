@@ -1,19 +1,25 @@
 using System.Linq.Expressions;
+using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Query.Expressions;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Query.Expressions.Internal;
 
 namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 // PgBinaryExpression is Npgsql-internal (EF1001): it is the node Npgsql builds for @>, <@ and &&,
 // the only operators a server-computed Union may feed, and nothing public identifies them in the
-// SQL tree. Acknowledged here, at the usage, rather than suppressed repo-wide.
+// SQL tree. Building canonical form needs EF Core's immutable SelectExpression constructor and
+// Npgsql's PgUnnestExpression and PgNewArrayExpression, also internal: nothing public builds a
+// subquery once translation is over. Acknowledged here, at the usage, rather than suppressed
+// repo-wide.
 #pragma warning disable EF1001
 
 /// <summary>
 /// Refuses, on the final SQL tree, the two value set shapes that translate without error and then
-/// answer — or write — something different from what the LINQ said.
+/// answer — or write — something different from what the LINQ said, and builds the canonical form
+/// the other set operations need there (#478).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,28 +31,47 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// nodes.
 /// </para>
 /// <para>
-/// <b>A server-computed <c>Union</c> is not canonical.</b> It translates to <c>array_cat</c>,
-/// which concatenates: the result carries duplicates and keeps each operand's order. An
-/// expression <em>derived</em> from one — <c>array_cat</c> itself, <c>array_remove</c> over one
-/// (which preserves canonical form rather than establishing it), a <c>CASE</c> or
-/// <c>COALESCE</c> that may yield one, a subquery column projecting one — may only be
+/// <b>A server-computed text set operation is not canonical.</b> PostgreSQL sorts <c>text</c> by the
+/// database collation rather than ordinally (#479), so <c>Union</c>, <c>Add</c>, <c>Intersect</c> and
+/// <c>Except</c> on text arrive as <see cref="UnguardedUnion"/>, <see cref="UnguardedAdd"/>,
+/// <see cref="UnguardedIntersect"/> and <see cref="UnguardedExcept"/>, and the guard builds each unsorted:
+/// <c>array_cat</c>, which also repeats an element both operands hold, <c>array_cat</c> with a one-element
+/// array, or a filter of the first array. An expression <em>derived</em> from one — the operation itself,
+/// <c>array_remove</c> over one (which preserves canonical form rather than establishing it), a
+/// <c>CASE</c>, <c>COALESCE</c> or <c>NULLIF</c> that may yield one, a subquery column projecting one — may
+/// only be
 /// <list type="bullet">
 ///   <item>an operand of <c>@&gt;</c>, <c>&lt;@</c> or <c>&amp;&amp;</c>, which ignore order and
 ///   multiplicity (this includes the <c>&lt;@ AND NOT @&gt;</c> proper-containment form);</item>
-///   <item>the input of <c>array_remove</c>, <c>array_cat</c>, <c>CASE</c> or <c>COALESCE</c>,
+///   <item>the input of an operation, <c>array_remove</c>, <c>CASE</c> or <c>COALESCE</c>,
 ///   whose result is then derived in turn;</item>
 ///   <item>tested with <c>IS NULL</c>, or by <c>cardinality(…) = 0</c> — <c>IsEmpty</c>: a
 ///   concatenation is empty exactly when both operands are;</item>
+///   <item>counted, which the expander writes as <c>count(DISTINCT …)</c> over its elements, NULL for
+///   a NULL set (#485);</item>
+///   <item>compared with <c>=</c>, <c>&lt;&gt;</c> or <c>NULLIF</c>, which the expander writes as mutual
+///   containment, <c>a @&gt; b AND b @&gt; a</c> (#485). A string set column compares bytes (#483), so
+///   neither needs a collation, which would cost a GIN index its use;</item>
 ///   <item>a column of the outermost <c>SELECT</c>, which is materialized, and materialization
 ///   canonicalizes through the set's <c>From</c>.</item>
 /// </list>
-/// Everything else is refused: equality (<c>NULLIF</c> included, which EF Core 11 writes for
-/// <c>a == b ? null : a</c>), <c>cardinality</c>, <c>GROUP BY</c>, <c>DISTINCT</c>,
-/// <c>ORDER BY</c>, a deduplicating set operation, <c>IN</c>, and an <c>UPDATE</c> setter — which
-/// would store the concatenation, after which server-side equality and <c>Count</c> on that row are
-/// wrong for good. PostgreSQL has no array-distinct to canonicalize into, and sorting in SQL would
-/// order <c>text</c> by the database collation rather than ordinally, which is the same defect one
-/// layer down.
+/// Everything else is refused: <c>GROUP BY</c>, <c>DISTINCT</c>, <c>ORDER BY</c>, a deduplicating set
+/// operation, <c>IN</c>, and an <c>UPDATE</c> setter — which would store the unsorted array, after which
+/// <c>=</c> against that row is wrong for good. Sorting in SQL would order <c>text</c> by the database
+/// collation rather than ordinally, which is the same defect one layer down (#479).
+/// </para>
+/// <para>
+/// <b>Every other family gets canonical form instead.</b> Where PostgreSQL sorts the elements as
+/// memory does (<see cref="ISetTypeDefinition.CanonicalizesInSql"/>), <c>Union</c>, <c>Add</c>,
+/// <c>Intersect</c> and <c>Except</c> arrive as <see cref="CanonicalUnion"/>, <see cref="CanonicalAdd"/>,
+/// <see cref="CanonicalIntersect"/> and <see cref="CanonicalExcept"/>. They are canonical by
+/// construction, so the walker lets them reach any use, and <see cref="CanonicalExpander"/> builds
+/// each: <c>ARRAY((SELECT DISTINCT ON (vrN.x) vrN.x FROM unnest(…) WITH ORDINALITY AS vrN(x) WHERE
+/// vrN.x IS NOT NULL … ORDER BY vrN.x, vrN.ordinality))</c>. <c>ORDER BY x, ordinality</c> keeps the
+/// first copy of each value, as <c>ValueSetCore</c> does: <c>DecimalSet</c> keeps whichever of
+/// <c>1.0</c> and <c>1.00</c> came first, and the float sets whichever of <c>-0</c> and <c>0</c>. A
+/// NULL element another tool stored is dropped, as a set never holds one. Where the consumer ignores
+/// order and duplicates, the expander writes the cheaper form instead (see its remarks).
 /// </para>
 /// <para>
 /// <b>A value set inside a JSON column must not be written by <c>to_jsonb</c>.</b> Npgsql
@@ -64,9 +89,10 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// <c>ReplaceService</c> — or another extension replacing rather than decorating the same service —
 /// would drop it without a trace, after which every refused shape answers wrongly again. So
 /// <see cref="ValueSetsMethodCallTranslator"/> does not emit <c>array_cat</c>: it emits
-/// <see cref="UnguardedUnion"/>, a function PostgreSQL does not have, and only <see cref="Check"/>
-/// renames it. Without the guard a query over a server-side <c>Union</c> fails on the server, naming
-/// the placeholder; a decorator <em>around</em> the guard still reaches it and changes nothing.
+/// an unguarded or a canonical placeholder, functions PostgreSQL does not have, and only
+/// <see cref="Check"/> replaces them. Without the guard a query over a server-side set operation
+/// fails on the server, naming the placeholder; a decorator <em>around</em> the guard still reaches
+/// it and changes nothing.
 /// </para>
 /// </remarks>
 internal static class ValueSetSqlGuard
@@ -78,42 +104,68 @@ internal static class ValueSetSqlGuard
     /// </summary>
     public const string UnguardedUnion = "valueranges_union_without_sql_guard";
 
-    /// <summary>
-    /// Checks a query, update or delete expression and throws when it holds a refused shape; returns it
-    /// with every <see cref="UnguardedUnion"/> renamed to <c>array_cat</c>.
-    /// </summary>
-    public static Expression Check(Expression queryExpression)
-    {
-        new Walker().Root(queryExpression);
-        return UnionNamer.Instance.Visit(queryExpression);
-    }
+    /// <summary>The placeholder a text <c>Add(a, element)</c> carries until <see cref="Check"/> builds its unsorted form (#485).</summary>
+    public const string UnguardedAdd = "valueranges_add_without_sql_guard";
+
+    /// <summary>The placeholder a text <c>Intersect(a, b)</c> carries until <see cref="Check"/> builds its unsorted form (#485).</summary>
+    public const string UnguardedIntersect = "valueranges_intersect_without_sql_guard";
+
+    /// <summary>The placeholder a text <c>Except(a, b)</c> carries until <see cref="Check"/> builds its unsorted form (#485).</summary>
+    public const string UnguardedExcept = "valueranges_except_without_sql_guard";
+
+    private static bool IsUnguarded(string? name)
+        => name is UnguardedUnion or UnguardedAdd or UnguardedIntersect or UnguardedExcept;
+
+    /// <summary>The placeholder a canonical <c>Union(a, b)</c> carries until <see cref="Check"/> builds it.</summary>
+    public const string CanonicalUnion = "valueranges_canonical_union_without_sql_guard";
+
+    /// <summary>The placeholder a canonical <c>Add(a, element)</c> carries until <see cref="Check"/> builds it.</summary>
+    public const string CanonicalAdd = "valueranges_canonical_add_without_sql_guard";
+
+    /// <summary>The placeholder a canonical <c>Intersect(a, b)</c> carries until <see cref="Check"/> builds it.</summary>
+    public const string CanonicalIntersect = "valueranges_canonical_intersect_without_sql_guard";
+
+    /// <summary>The placeholder a canonical <c>Except(a, b)</c> carries until <see cref="Check"/> builds it.</summary>
+    public const string CanonicalExcept = "valueranges_canonical_except_without_sql_guard";
+
+    private static bool IsCanonical(string? name)
+        => name is CanonicalUnion or CanonicalAdd or CanonicalIntersect or CanonicalExcept;
 
     /// <summary>
-    /// Whether an expression may evaluate to a server-computed union, judged from the expression
-    /// alone. <see cref="ValueSetsMemberTranslator"/> asks this to decline <c>Count</c>, so that EF
-    /// falls back to client evaluation in a projection; it sees no enclosing query, so a column
-    /// projected by a subquery is left to <see cref="Check"/>, which follows it.
+    /// Checks a query, update or delete expression and throws when it holds a refused shape; returns it
+    /// with every unguarded placeholder built in its unsorted form, every canonical placeholder built, and
+    /// <c>Count</c> and equality over an unsorted text set written so they don't depend on its order.
     /// </summary>
-    public static bool MayBeConcatenation(SqlExpression? expression) => expression switch
+    public static Expression Check(Expression queryExpression, IRelationalTypeMappingSource typeMappingSource)
     {
-        SqlFunctionExpression { Name: UnguardedUnion } when IsSet(expression)                      => true,
-        SqlFunctionExpression { Name: "array_remove", Arguments: [var input, _] } when IsSet(expression) => MayBeConcatenation(input),
-        SqlFunctionExpression { Name: "COALESCE", Arguments: { } arguments }                       => arguments.Any(MayBeConcatenation),
-        SqlFunctionExpression { Name: "NULLIF", Arguments: [var kept, _] }                         => MayBeConcatenation(kept),
-        CaseExpression conditional => conditional.WhenClauses.Any(c => MayBeConcatenation(c.Result)) || MayBeConcatenation(conditional.ElseResult),
-        SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when IsSet(convert)    => MayBeConcatenation(convert.Operand),
-        _                                                                                          => false
-    };
+        var walker = new Walker();
+        walker.Root(queryExpression);
+        return new CanonicalExpander(typeMappingSource, walker.DerivedColumns).Root(queryExpression);
+    }
 
     private static bool IsSet(SqlExpression expression) => SetTypeRegistry.TryGetByClrType(expression.Type, out _);
 
+    private static SqlExpression? CardinalityComparedWithZero(SqlBinaryExpression comparison)
+        => (comparison.Left, comparison.Right) switch
+           {
+               (SqlFunctionExpression { Name: "cardinality", Arguments: [var operand] }, SqlConstantExpression { Value: 0 }) => operand,
+               (SqlConstantExpression { Value: 0 }, SqlFunctionExpression { Name: "cardinality", Arguments: [var operand] }) => operand,
+               _                                                                                                          => null
+           };
+
     /// <summary>The operations a derived value is refused under, each with its own message.</summary>
-    private enum Use { Other, Equality, Count, GroupBy, Distinct, OrderBy, SetOperation }
+    private enum Use { Other, Membership, GroupBy, Distinct, OrderBy, SetOperation }
 
     private sealed class Walker
     {
         /// <summary>Subquery and set-operation columns that project a derived value, by table alias and column name.</summary>
         private readonly HashSet<(string Table, string Column)> _derivedColumns = [];
+
+        /// <summary>The columns found to project a derived value, for <see cref="CanonicalExpander"/>.</summary>
+        public IReadOnlySet<(string Table, string Column)> DerivedColumns => _derivedColumns;
+
+        /// <summary>Subquery and set-operation columns that project a collated string, by table alias and column name.</summary>
+        private readonly Dictionary<(string Table, string Column), (string Name, bool Explicit)> _collatedColumns = [];
 
         public void Root(Expression expression)
         {
@@ -174,6 +226,7 @@ internal static class ValueSetSqlGuard
             {
                 case SelectExpression subquery:
                     Register(subquery.Alias, subquery, Select(subquery));
+                    RegisterCollations(subquery.Alias, subquery, subquery);
                     break;
 
                 case SetOperationBase setOperation:
@@ -181,6 +234,7 @@ internal static class ValueSetSqlGuard
                     if (setOperation.IsDistinct && either.Contains(true)) throw Refusal.For(Use.SetOperation);
 
                     Register(setOperation.Alias, setOperation.Source1, either);
+                    RegisterCollations(setOperation.Alias, setOperation.Source1, setOperation.Source2);
                     break;
 
                 case PredicateJoinExpressionBase join:
@@ -208,6 +262,14 @@ internal static class ValueSetSqlGuard
             if (alias is null) return;
             for (var i = 0; i < derived.Length; i++)
                 if (derived[i]) _derivedColumns.Add((alias, source.Projection[i].Alias));
+        }
+
+        private void RegisterCollations(string? alias, SelectExpression first, SelectExpression second)
+        {
+            if (alias is null) return;
+            for (var i = 0; i < first.Projection.Count; i++)
+                if (Collation([first.Projection[i].Expression, second.Projection[i].Expression]) is { } collation)
+                    _collatedColumns[(alias, first.Projection[i].Alias)] = collation;
         }
 
         /// <summary>Refuses a derived value in a position that does not tolerate one.</summary>
@@ -247,24 +309,33 @@ internal static class ValueSetSqlGuard
                 case ColumnExpression column:
                     return _derivedColumns.Contains((column.TableAlias, column.Name));
 
-                case SqlFunctionExpression { Name: UnguardedUnion, Arguments: { } arguments } when IsSet(expression):
+                // A text Union, Add, Intersect or Except: unsorted, and a Union or Add may repeat an element.
+                // Its operands need not be sorted either, since the result isn't.
+                case SqlFunctionExpression { Name: var unguarded, Arguments: { } arguments } when IsUnguarded(unguarded) && IsSet(expression):
+                    Compared([.. arguments]);
                     foreach (var argument in arguments) Derived(argument);
                     return true;
 
                 // array_remove preserves canonical form rather than establishing it.
                 case SqlFunctionExpression { Name: "array_remove", Arguments: [var input, var element] } when IsSet(expression):
+                    Compared(input, element);
                     Consume(element);
                     return Derived(input);
+
+                // A canonical placeholder establishes canonical form, so a derived operand inside it is
+                // harmless and its result is not derived.
+                case SqlFunctionExpression { Name: var name, Arguments: { } arguments } when IsCanonical(name):
+                    foreach (var argument in arguments) Derived(argument);
+                    return false;
 
                 case SqlFunctionExpression { Name: "COALESCE", Arguments: { } arguments }:
                     return arguments.Aggregate(false, (any, argument) => Derived(argument) | any);
 
-                // EF Core 11 writes `a == b ? null : a` as NULLIF(a, b), which compares the two: array
-                // equality over a concatenation, refused as the CASE it stands for was.
-                case SqlFunctionExpression { Name: "NULLIF", Arguments: [var kept, var compared] }:
-                    Consume(kept, Use.Equality);
-                    Consume(compared, Use.Equality);
-                    return false;
+                // EF Core 11 writes `a == b ? null : a` as NULLIF(a, b). Over a derived set the expander
+                // compares by mutual containment, as it does ==, and the result is derived when `a` is.
+                case SqlFunctionExpression { Name: "NULLIF", Arguments: [var kept, var compared] } when IsSet(kept):
+                    Derived(compared);
+                    return Derived(kept);
 
                 case CaseExpression conditional:
                     Consume(conditional.Operand);
@@ -280,6 +351,12 @@ internal static class ValueSetSqlGuard
                 case SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when IsSet(convert):
                     return Derived(convert.Operand);
 
+                // EF.Functions.Collate over a string set: the operators would compare its elements by that
+                // collation, where memory compares ordinally (#483).
+                case CollateExpression { Operand: var collated, Collation: var collation }
+                    when StringSetCollation.IsStringSet(collated.Type) && !StringSetCollation.ComparesBytes(collation):
+                    throw Refusal.Collation(collation);
+
                 // IS NULL / IS NOT NULL: a concatenation is NULL exactly when an operand is.
                 case SqlUnaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } nullTest:
                     Derived(nullTest.Operand);
@@ -291,18 +368,22 @@ internal static class ValueSetSqlGuard
                     Derived(counted);
                     return false;
 
+                // == and != over a derived set: the expander writes them as mutual containment (#485).
                 case SqlBinaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } equality:
-                    Consume(equality.Left, Use.Equality);
-                    Consume(equality.Right, Use.Equality);
+                    Compared(equality.Left, equality.Right);
+                    Derived(equality.Left);
+                    Derived(equality.Right);
                     return false;
 
+                // Count over a derived set: the expander counts its distinct elements (#485).
                 case SqlFunctionExpression { Name: "cardinality", Arguments: [var counted] }:
-                    Consume(counted, Use.Count);
+                    Derived(counted);
                     return false;
 
                 // @>, <@ and && ignore order and multiplicity: the reason array_cat is a valid
                 // translation of Union at all.
                 case PgBinaryExpression { OperatorType: PgExpressionType.Contains or PgExpressionType.ContainedBy or PgExpressionType.Overlaps } containment:
+                    Compared(containment.Left, containment.Right);
                     Derived(containment.Left);
                     Derived(containment.Right);
                     return false;
@@ -315,9 +396,9 @@ internal static class ValueSetSqlGuard
                     return false;
 
                 case InExpression membership:
-                    Consume(membership.Item, Use.Equality);
-                    Consume(membership.Subquery, Use.Equality);
-                    foreach (var value in membership.Values ?? []) Consume(value, Use.Equality);
+                    Consume(membership.Item, Use.Membership);
+                    Consume(membership.Subquery, Use.Membership);
+                    foreach (var value in membership.Values ?? []) Consume(value, Use.Membership);
                     return false;
 
                 default:
@@ -326,13 +407,88 @@ internal static class ValueSetSqlGuard
             }
         }
 
-        private static SqlExpression? CardinalityComparedWithZero(SqlBinaryExpression comparison)
-            => (comparison.Left, comparison.Right) switch
-               {
-                   (SqlFunctionExpression { Name: "cardinality", Arguments: [var operand] }, SqlConstantExpression { Value: 0 }) => operand,
-                   (SqlConstantExpression { Value: 0 }, SqlFunctionExpression { Name: "cardinality", Arguments: [var operand] }) => operand,
-                   _                                                                                                          => null
-               };
+        /// <summary>
+        /// Refuses a string set operator whose comparison PostgreSQL would make under a collation that may not compare
+        /// bytes (#507). It derives the operator's collation from both sides, so a value from a case-insensitive column,
+        /// or collated by <c>EF.Functions.Collate</c>, makes <c>@&gt;</c>, <c>&amp;&amp;</c> and <c>array_remove</c>
+        /// compare case-insensitively however the set column is collated (#483 rejects that one when the model is built).
+        /// </summary>
+        /// <remarks>
+        /// An explicit <c>COLLATE</c> wins over the implicit collations of columns, as PostgreSQL's rule is, so
+        /// <c>EF.Functions.Collate(value, "C")</c> is the way to compare such a value as memory does.
+        /// </remarks>
+        private void Compared(params SqlExpression?[] operands)
+        {
+            if (!operands.Any(operand => operand is not null && StringSetCollation.IsStringSet(operand.Type))) return;
+
+            // EF.Functions.Collate over the set itself keeps its own message (#483).
+            foreach (var operand in operands)
+                if (operand is CollateExpression { Operand: var collated, Collation: var own }
+                    && StringSetCollation.IsStringSet(collated.Type) && !StringSetCollation.ComparesBytes(own))
+                    throw Refusal.Collation(own);
+
+            if (Collation(operands) is { Name: var name } && !StringSetCollation.ComparesBytes(name))
+                throw Refusal.ElementCollation(name);
+        }
+
+        /// <summary>
+        /// The collation PostgreSQL derives for the operands of one operator: an explicit one if any operand has one,
+        /// otherwise an implicit one, one that may not compare bytes first. <see langword="null"/> for the default.
+        /// </summary>
+        private (string Name, bool Explicit)? Collation(IEnumerable<SqlExpression?> operands)
+        {
+            (string Name, bool Explicit)? result = null;
+            foreach (var operand in operands)
+            {
+                if (Collation(operand) is not { } found) continue;
+                if (result is null
+                 || found.Explicit && !result.Value.Explicit
+                 || found.Explicit == result.Value.Explicit && StringSetCollation.ComparesBytes(result.Value.Name) && !StringSetCollation.ComparesBytes(found.Name))
+                    result = found;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The collation an expression carries into a comparison: a <c>COLLATE</c>, a mapped column's, a subquery
+        /// column's, or what a string-typed function, operator or array takes from its string-typed inputs. A
+        /// <c>CASE</c> takes it from its results only, and a non-string expression has none.
+        /// </summary>
+        private (string Name, bool Explicit)? Collation(SqlExpression? expression) => expression switch
+        {
+            null                       => null,
+            CollateExpression collate  => (collate.Collation, true),
+            ColumnExpression column    => ColumnCollation(column),
+            CaseExpression conditional => Collation([.. conditional.WhenClauses.Select(clause => clause.Result), conditional.ElseResult]),
+            ScalarSubqueryExpression { Subquery.Projection: [var only] } => Collation(only.Expression),
+            PgNewArrayExpression array => Collation(array.Expressions),
+            _ when !Collatable(expression) => null,
+            SqlFunctionExpression { Arguments: { } arguments } => Collation(arguments.Where(Collatable)),
+            SqlBinaryExpression binary => Collation(new[] { binary.Left, binary.Right }.Where(Collatable)),
+            SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when Collatable(convert.Operand) => Collation(convert.Operand),
+            _ => null
+        };
+
+        private (string Name, bool Explicit)? ColumnCollation(ColumnExpression column)
+        {
+            // The read-optimized model keeps no collation; the convention that rejects a collated string set column
+            // names the others on their properties.
+            var mapped = column.Column?.PropertyMappings.Select(mapping => StringSetCollation.OfElement(mapping.Property))
+                                       .FirstOrDefault(name => name is not null);
+
+            return mapped is not null ? (mapped, false)
+                 : _collatedColumns.TryGetValue((column.TableAlias, column.Name), out var derived) ? derived
+                 : null;
+        }
+
+        /// <summary>Text, or a set or array of it: what carries a collation.</summary>
+        private static bool Collatable(SqlExpression? expression)
+            => expression is not null
+            && (expression.Type == typeof(string) || expression.Type == typeof(string[]) || StringSetCollation.IsStringSet(expression.Type)
+             || expression.TypeMapping?.StoreType is { } store
+                && (store.StartsWith("text", StringComparison.Ordinal) || store.StartsWith("character", StringComparison.Ordinal)
+                 || store.StartsWith("varchar", StringComparison.Ordinal)));
 
         /// <summary>
         /// Refuses <c>to_jsonb(set)</c> (or <c>to_json</c>) inside an <c>UPDATE</c> setter, naming the
@@ -369,22 +525,304 @@ internal static class ValueSetSqlGuard
             => expression is SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert ? Unwrap(convert.Operand) : expression;
     }
 
-    /// <summary>Gives every checked <see cref="UnguardedUnion"/> the name PostgreSQL knows.</summary>
-    private sealed class UnionNamer : ExpressionVisitor
+    /// <summary>
+    /// Builds every canonical placeholder: in canonical form where the consumer can see order or
+    /// duplicates, and in the cheaper multiset form where it cannot.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The multiset form is <c>array_cat(a, b)</c> for <c>Union</c> and <c>Add</c>, and the filter without
+    /// <c>DISTINCT ON</c> and <c>ORDER BY</c> for <c>Intersect</c> and <c>Except</c>. It is written for an
+    /// operand of <c>@&gt;</c>, <c>&lt;@</c> and <c>&amp;&amp;</c>, under <c>cardinality(…) = 0</c> and a null
+    /// test, for a column of the outermost <c>SELECT</c> unless that <c>SELECT</c> groups or deduplicates
+    /// (the read canonicalizes), and for the operands of a placeholder, which the form built around them
+    /// canonicalizes. A <c>CASE</c>, a <c>COALESCE</c> and <c>array_remove</c> pass it on to what they may
+    /// return. The canonical subquery costs about 1.5 µs a row over ten elements, roughly fifteen times a
+    /// bare <c>array_cat</c> (PostgreSQL 16, #478), which is what the multiset form saves.
+    /// </para>
+    /// <para>
+    /// It runs after EF Core's alias pass, which reads every alias as one letter and a number, so the
+    /// two-letter <c>vrN</c> aliases it chooses can neither break that pass nor collide with an alias EF
+    /// Core generated. Neither EF Core nor Npgsql has a node for <c>DISTINCT ON</c>, so that projection is
+    /// a <see cref="SqlFragmentExpression"/> naming its alias, which is final by now. Npgsql's <c>ANY</c>
+    /// node insists on an enumerable CLR type, which a value set deliberately is not, so the filters test
+    /// containment, <c>b @&gt; ARRAY[x]</c>, which also answers <c>false</c> rather than NULL against a
+    /// NULL element of <c>b</c>.
+    /// </para>
+    /// </remarks>
+    private sealed class CanonicalExpander(
+        IRelationalTypeMappingSource typeMappingSource, IReadOnlySet<(string Table, string Column)> derivedColumns) : ExpressionVisitor
     {
-        public static readonly UnionNamer Instance = new();
+        private readonly RelationalTypeMapping? _boolMapping = typeMappingSource.FindMapping(typeof(bool));
+
+        private int _aliases;
+
+        /// <summary>Visits a whole query, update or delete.</summary>
+        public Expression Root(Expression expression)
+        {
+            // The outermost SELECT's columns are read, and reading canonicalizes, unless the SELECT
+            // compares them first.
+            if (expression is not SelectExpression { IsDistinct: false, GroupBy.Count: 0 } select)
+                return Visit(expression);
+
+            return select.Update(
+                [.. select.Tables.Select(table => (TableExpressionBase)Visit(table))],
+                (SqlExpression?)Visit(select.Predicate),
+                select.GroupBy,
+                (SqlExpression?)Visit(select.Having),
+                [.. select.Projection.Select(projection => projection.Update(Multiset(projection.Expression)))],
+                [.. select.Orderings.Select(ordering => (OrderingExpression)Visit(ordering))],
+                (SqlExpression?)Visit(select.Offset),
+                (SqlExpression?)Visit(select.Limit));
+        }
 
         protected override Expression VisitExtension(Expression node)
         {
-            var visited = base.VisitExtension(node);
-            return visited is SqlFunctionExpression { Name: UnguardedUnion, Arguments: { } arguments } union
-                ? new SqlFunctionExpression(
-                    "array_cat", arguments, union.IsNullable, union.ArgumentsPropagateNullability!, union.Type, union.TypeMapping)
-                : visited;
+            switch (node)
+            {
+                case PgBinaryExpression { OperatorType: PgExpressionType.Contains or PgExpressionType.ContainedBy or PgExpressionType.Overlaps } containment:
+                    return containment.Update(Multiset(containment.Left), Multiset(containment.Right));
+
+                // IsEmpty: a multiset is empty exactly when its canonical form is.
+                case SqlBinaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } comparison
+                    when CardinalityComparedWithZero(comparison) is { } counted:
+                    return comparison.Update(Counted(comparison.Left, counted), Counted(comparison.Right, counted));
+
+                // IS NULL, IS NOT NULL: a multiset is NULL exactly when its canonical form is.
+                case SqlUnaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } nullTest:
+                    return nullTest.Update(Multiset(nullTest.Operand));
+
+                // == and != with an unsorted text set on a side: two sets are equal when each contains the
+                // other, whatever their order and repeats (#485). Two stored columns keep = and its index.
+                case SqlBinaryExpression { OperatorType: ExpressionType.Equal or ExpressionType.NotEqual } equality
+                    when (IsSet(equality.Left) || IsSet(equality.Right)) && (IsDerived(equality.Left) || IsDerived(equality.Right)):
+                    var same = MutualContainment(equality.Left, equality.Right);
+                    return equality.OperatorType == ExpressionType.Equal
+                        ? same
+                        : new SqlUnaryExpression(ExpressionType.Not, same, typeof(bool), _boolMapping);
+
+                // NULLIF(a, b), EF Core 11's `a == b ? null : a`, compares the same way.
+                case SqlFunctionExpression { Name: "NULLIF", Arguments: [var kept, var compared] } nullif
+                    when IsSet(kept) && (IsDerived(kept) || IsDerived(compared)):
+                    return new CaseExpression(
+                        [new CaseWhenClause(MutualContainment(kept, compared), new SqlConstantExpression(null, nullif.Type, nullif.TypeMapping))],
+                        Multiset(kept));
+
+                // Count of an unsorted text set: its distinct elements (#485).
+                case SqlFunctionExpression { Name: "cardinality", Arguments: [var counted] } cardinality when IsDerived(counted):
+                    return DistinctCount(counted, cardinality);
+
+                case SqlFunctionExpression { Name: var name } placeholder when IsCanonical(name):
+                    return Build(placeholder, canonical: true);
+
+                // A text operation has no canonical form in SQL; every use the walker let through ignores order and repeats.
+                case SqlFunctionExpression { Name: var name } placeholder when IsUnguarded(name):
+                    return Build(placeholder, canonical: false);
+
+                default:
+                    return base.VisitExtension(node);
+            }
         }
+
+        private SqlExpression Counted(SqlExpression side, SqlExpression counted)
+            => side is SqlFunctionExpression { Name: "cardinality" } cardinality
+                ? cardinality.Update(cardinality.Instance, [Multiset(counted)])
+                : (SqlExpression)Visit(side);
+
+        /// <summary>An expression whose consumer ignores order and duplicates.</summary>
+        private SqlExpression Multiset(SqlExpression expression) => expression switch
+        {
+            SqlFunctionExpression { Name: var name } placeholder when IsCanonical(name) || IsUnguarded(name) => Build(placeholder, canonical: false),
+
+            CaseExpression conditional => conditional.Update(
+                (SqlExpression?)Visit(conditional.Operand),
+                [.. conditional.WhenClauses.Select(clause => new CaseWhenClause((SqlExpression)Visit(clause.Test), Multiset(clause.Result)))],
+                conditional.ElseResult is null ? null : Multiset(conditional.ElseResult)),
+
+            SqlFunctionExpression { Name: "COALESCE", Arguments: { } arguments } coalesce
+                => coalesce.Update(coalesce.Instance, [.. arguments.Select(Multiset)]),
+
+            SqlFunctionExpression { Name: "array_remove", Arguments: [var input, var element] } remove when IsSet(remove)
+                => remove.Update(remove.Instance, [Multiset(input), (SqlExpression)Visit(element)]),
+
+            _ => (SqlExpression)Visit(expression)
+        };
+
+        private SqlExpression Build(SqlFunctionExpression placeholder, bool canonical)
+        {
+            var definition = SetTypeRegistry.TryGetByClrType(placeholder.Type, out var found)
+                ? found
+                : throw new InvalidOperationException($"No value set type is registered for '{placeholder.Type}'.");
+
+            // What is built around the operands canonicalizes them, so they need only be multisets.
+            var left  = Multiset(placeholder.Arguments![0]);
+            var right = Multiset(placeholder.Arguments[1]);
+
+            switch (placeholder.Name)
+            {
+                case CanonicalUnion or CanonicalAdd or UnguardedUnion or UnguardedAdd:
+                    var concatenation = new SqlFunctionExpression(
+                        "array_cat", [left, placeholder.Name is CanonicalAdd or UnguardedAdd ? Singleton(right, definition) : right],
+                        nullable: false, argumentsPropagateNullability: [false, false], placeholder.Type, placeholder.TypeMapping);
+                    return canonical ? Subquery(concatenation, filter: null, canonical: true, definition, placeholder) : concatenation;
+
+                case CanonicalIntersect or UnguardedIntersect:
+                    return Subquery(left, x => Contains(right, x, definition), canonical, definition, placeholder);
+
+                default:
+                    return Subquery(left, x => new SqlUnaryExpression(ExpressionType.Not, Contains(right, x, definition), typeof(bool), _boolMapping),
+                                    canonical, definition, placeholder);
+            }
+        }
+
+        /// <summary>
+        /// <c>ARRAY((SELECT DISTINCT ON (vrN.x) vrN.x FROM unnest(source) WITH ORDINALITY AS vrN(x)
+        /// WHERE vrN.x IS NOT NULL [AND filter] ORDER BY vrN.x, vrN.ordinality))</c>, or without the
+        /// <c>DISTINCT ON</c>, the ordinality and the <c>ORDER BY</c> as a multiset.
+        /// </summary>
+        private SqlExpression Subquery(
+            SqlExpression source, Func<ColumnExpression, SqlExpression>? filter, bool canonical, ISetTypeDefinition definition,
+            SqlFunctionExpression placeholder)
+        {
+            var alias          = "vr" + _aliases++;
+            var elementMapping = definition.ElementTypeMapping
+                              ?? typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType);
+            var x              = new ColumnExpression("x", alias, definition.ElementClrType, elementMapping, nullable: true);
+
+            // A set never holds NULL: one another tool stored is dropped, as the read would refuse it.
+            SqlExpression predicate = new SqlUnaryExpression(ExpressionType.NotEqual, x, typeof(bool), _boolMapping);
+            if (filter is not null)
+                predicate = new SqlBinaryExpression(ExpressionType.AndAlso, predicate, filter(x), typeof(bool), _boolMapping);
+
+            var select = canonical
+                ? new SelectExpression(
+                    alias: null,
+                    tables: [new PgUnnestExpression(alias, source, x.Name, withOrdinality: true)],
+                    predicate: predicate,
+                    groupBy: [],
+                    having: null,
+                    projections: [new ProjectionExpression(
+                        new SqlFragmentExpression($"DISTINCT ON ({alias}.{x.Name}) {alias}.{x.Name}", x.Type, elementMapping), "")],
+                    distinct: false,
+                    orderings:
+                    [
+                        new OrderingExpression(x, ascending: true),
+                        new OrderingExpression(
+                            new ColumnExpression("ordinality", alias, typeof(long), typeMappingSource.FindMapping(typeof(long)), nullable: false),
+                            ascending: true)
+                    ],
+                    offset: null,
+                    limit: null,
+                    sqlAliasManager: new SqlAliasManager())
+                : new SelectExpression(
+                    alias: null,
+                    tables: [new PgUnnestExpression(alias, source, x.Name, withOrdinality: false)],
+                    predicate: predicate,
+                    groupBy: [],
+                    having: null,
+                    projections: [new ProjectionExpression(x, x.Name)],
+                    distinct: false,
+                    orderings: [],
+                    offset: null,
+                    limit: null,
+                    sqlAliasManager: new SqlAliasManager());
+
+            return new SqlFunctionExpression(
+                "ARRAY", [new ScalarSubqueryExpression(select)], nullable: false, argumentsPropagateNullability: [false],
+                placeholder.Type, placeholder.TypeMapping);
+        }
+
+        /// <summary>
+        /// Whether an expression may be an unsorted text set, judged as <see cref="Walker"/> judges it: a text
+        /// operation, what passes one on, or a subquery column the walker found projecting one.
+        /// </summary>
+        private bool IsDerived(SqlExpression? expression) => expression switch
+        {
+            SqlFunctionExpression { Name: var name } when IsUnguarded(name) && IsSet(expression)              => true,
+            SqlFunctionExpression { Name: "array_remove", Arguments: [var input, _] } when IsSet(expression) => IsDerived(input),
+            SqlFunctionExpression { Name: "COALESCE", Arguments: { } arguments }                           => arguments.Any(IsDerived),
+            SqlFunctionExpression { Name: "NULLIF", Arguments: [var kept, _] }                             => IsDerived(kept),
+            CaseExpression conditional => conditional.WhenClauses.Any(clause => IsDerived(clause.Result)) || IsDerived(conditional.ElseResult),
+            SqlUnaryExpression { OperatorType: ExpressionType.Convert } convert when IsSet(convert)        => IsDerived(convert.Operand),
+            ColumnExpression column                                                                        => derivedColumns.Contains((column.TableAlias, column.Name)),
+
+            // The walker lets ==, != and Count through over a scalar subquery that projects one, so this
+            // must find it too, or the raw = and cardinality reach the server (#505).
+            ScalarSubqueryExpression { Subquery.Projection: [var only] }                                   => IsDerived(only.Expression),
+            _                                                                                              => false
+        };
+
+        /// <summary><c>a @&gt; b AND b @&gt; a</c>: set equality, which neither order nor repeats change.</summary>
+        private SqlExpression MutualContainment(SqlExpression left, SqlExpression right)
+        {
+            var (l, r) = (Multiset(left), Multiset(right));
+            return new SqlBinaryExpression(
+                ExpressionType.AndAlso,
+                new PgBinaryExpression(PgExpressionType.Contains, l, r, typeof(bool), _boolMapping),
+                new PgBinaryExpression(PgExpressionType.Contains, r, l, typeof(bool), _boolMapping),
+                typeof(bool),
+                _boolMapping);
+        }
+
+        /// <summary>
+        /// <c>(SELECT count(DISTINCT vrN.x)::int FROM unnest(set) AS vrN(x))</c>, NULL for a NULL set as
+        /// <c>cardinality</c> is: <c>count</c> over <c>unnest(NULL)</c> is 0. <c>count(DISTINCT)</c> skips a NULL
+        /// element another tool stored, as a set never holds one. A string set column compares bytes (#483),
+        /// so <c>DISTINCT</c> folds exactly the elements memory folds.
+        /// </summary>
+        private SqlExpression DistinctCount(SqlExpression counted, SqlFunctionExpression cardinality)
+        {
+            var definition = SetTypeRegistry.TryGetByClrType(counted.Type, out var found)
+                ? found
+                : throw new InvalidOperationException($"No value set type is registered for '{counted.Type}'.");
+
+            var set            = Multiset(counted);
+            var alias          = "vr" + _aliases++;
+            var elementMapping = definition.ElementTypeMapping
+                              ?? typeMappingSource.FindMapping(definition.ElementClrType, definition.ElementStoreType);
+            var x              = new ColumnExpression("x", alias, definition.ElementClrType, elementMapping, nullable: true);
+            var count          = new SqlFunctionExpression(
+                "count", [new DistinctExpression(x)], nullable: false, argumentsPropagateNullability: [false], typeof(long),
+                typeMappingSource.FindMapping(typeof(long)));
+
+            var select = new SelectExpression(
+                alias: null,
+                tables: [new PgUnnestExpression(alias, set, x.Name, withOrdinality: false)],
+                predicate: null,
+                groupBy: [],
+                having: null,
+                projections: [new ProjectionExpression(new SqlUnaryExpression(ExpressionType.Convert, count, cardinality.Type, cardinality.TypeMapping), "")],
+                distinct: false,
+                orderings: [],
+                offset: null,
+                limit: null,
+                sqlAliasManager: new SqlAliasManager());
+            var subquery = new ScalarSubqueryExpression(select);
+
+            return MayBeNull(set)
+                ? new CaseExpression(
+                    [new CaseWhenClause(new SqlUnaryExpression(ExpressionType.Equal, set, typeof(bool), _boolMapping),
+                                        new SqlConstantExpression(null, cardinality.Type, cardinality.TypeMapping))],
+                    subquery)
+                : subquery;
+        }
+
+        private static bool MayBeNull(SqlExpression expression) => expression switch
+        {
+            SqlFunctionExpression function => function.IsNullable,
+            ColumnExpression column        => column.IsNullable,
+            SqlConstantExpression constant => constant.Value is null,
+            _                              => true
+        };
+
+        /// <summary><c>set @&gt; ARRAY[x]</c>.</summary>
+        private SqlExpression Contains(SqlExpression set, ColumnExpression x, ISetTypeDefinition definition)
+            => new PgBinaryExpression(PgExpressionType.Contains, set, Singleton(x, definition), typeof(bool), _boolMapping);
+
+        private static PgNewArrayExpression Singleton(SqlExpression element, ISetTypeDefinition definition)
+            => new([element], definition.ElementClrType.MakeArrayType(), definition.SetTypeMapping);
     }
 
-    /// <summary>Collects an extension node's direct children without descending into them.</summary>
     private sealed class ChildCollector : ExpressionVisitor
     {
         private readonly List<Expression> _children = [];
@@ -408,18 +846,16 @@ internal static class ValueSetSqlGuard
     private static class Refusal
     {
         private const string Remedy =
-            "Compose a server-side Union only with Contains, Overlaps, IsSubsetOf/IsSupersetOf, "
-          + "IsProperSubsetOf/IsProperSupersetOf, Remove or IsEmpty, which ignore order and multiplicity, or materialize "
-          + "it first (project it, or switch to AsEnumerable()) and work with the value.";
+            "Compose a server-side text set operation only with Contains, Overlaps, IsSubsetOf/IsSupersetOf, "
+          + "IsProperSubsetOf/IsProperSupersetOf, Remove, IsEmpty, Count, == or !=, which don't depend on order or "
+          + "repeats, or materialize it first (project it, or switch to AsEnumerable()) and work with the value.";
 
         public static InvalidOperationException For(Use use) => use switch
         {
-            Use.Equality => Create(
-                "Value set equality ('==', '!=', 'Equals', or Contains over a sequence of sets)", "array equality",
-                "Compare with IsSubsetOf/IsSupersetOf, which mean the same thing for canonical sets and ignore order and "
-              + "multiplicity (a.IsSubsetOf(b) && a.IsSupersetOf(b) is set equality), or materialize the union first and "
-              + "compare the value."),
-            Use.Count        => Create("'Count'", "cardinality", Remedy),
+            Use.Membership => Create(
+                "Membership among value sets (Contains over a sequence of sets)", "array equality",
+                "Compare with == against each set, which compares the elements however they are ordered, or with "
+              + "IsSubsetOf/IsSupersetOf, or materialize the result first and compare the value."),
             Use.GroupBy      => Create("Grouping by it ('GroupBy')", "GROUP BY", Remedy),
             Use.Distinct     => Create("'Distinct' over it", "DISTINCT", Remedy),
             Use.OrderBy      => Create("Ordering by it ('OrderBy')", "ORDER BY", Remedy),
@@ -429,16 +865,17 @@ internal static class ValueSetSqlGuard
         };
 
         private static InvalidOperationException Create(string subject, string operation, string remedy)
-            => new($"{subject} cannot be translated over a value set Union computed on the server. Union translates to "
-                 + "array_cat, which concatenates rather than canonicalizes: the server-side result carries duplicates and "
-                 + $"keeps each operand's order, and {operation} is sensitive to both, so the query would answer differently "
-                 + $"from the same expression in memory. {remedy}");
+            => new($"{subject} cannot be translated over a text value set Union, Add, Intersect or Except computed on the "
+                 + "server. PostgreSQL sorts text by the database collation rather than ordinally, so the server-side result "
+                 + "is left unsorted, and a Union or Add may repeat an element. "
+                 + $"{operation} is sensitive to both, so the query would answer differently from the same expression in "
+                 + $"memory. {remedy}");
 
         public static InvalidOperationException Setter(string column) => new(
-            $"'ExecuteUpdate' cannot set the value set column '{column}' to a value set Union computed on the server. "
-          + "Union translates to array_cat, which concatenates rather than canonicalizes, so the row would store "
-          + "duplicates in operand order, and from then on server-side equality and Count on that row are wrong. "
-          + "Compute the union in memory and set the value, or load the entities and save them with SaveChanges.");
+            $"'ExecuteUpdate' cannot set the value set column '{column}' to a text Union, Add, Intersect or Except computed "
+          + "on the server. PostgreSQL sorts text by the database collation rather than ordinally, so the row would store "
+          + "the elements unsorted, and a Union or Add may repeat one, after which == against that row is wrong. "
+          + "Compute the result in memory and set the value, or load the entities and save them with SaveChanges.");
 
         // Until 10.0.0 a value that may be NULL on some row got a second reason: jsonb_set returned NULL
         // for a NULL value, so the UPDATE wrote NULL as the whole document. Npgsql 11 writes such a value
@@ -450,6 +887,18 @@ internal static class ValueSetSqlGuard
           + "set's literal string, so the row would no longer load and queries on the property would fail. "
           + $"Load the entity and save it with SaveChanges, or set the whole JSON property (SetProperty(e => e.{column}, …)) "
           + "or a whole complex property that contains the set.");
+
+        public static InvalidOperationException Collation(string collation) => new(
+            $"A string set cannot be compared under the collation '{collation}' (EF.Functions.Collate). A string set "
+          + "compares its elements ordinally in memory, and under a case- or accent-insensitive collation Contains, the "
+          + "subset operators, == and Remove would answer differently in the database. Use \"C\", or compare in memory.");
+
+        public static InvalidOperationException ElementCollation(string collation) => new(
+            $"A string set cannot be compared with a value under the collation '{collation}', which the value takes from its "
+          + "column or from EF.Functions.Collate. PostgreSQL compares under the collation of either side, so under a case- "
+          + "or accent-insensitive one Contains, the subset operators, == and Remove would answer differently from memory, "
+          + "which compares ordinally, and Remove in ExecuteUpdate would delete elements memory keeps. Collate the value "
+          + "with EF.Functions.Collate(value, \"C\"), or compare in memory.");
 
         public static InvalidOperationException NullJsonSetter(string column, string? path) => new(
             $"'ExecuteUpdate' cannot set the value set '{column}{(path is null ? "" : "." + path)}' inside a JSON column "

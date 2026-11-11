@@ -53,5 +53,8 @@ internal sealed class YearMonthSetTypeDefinition : ISetTypeDefinition
     /// </summary>
     public RelationalTypeMapping ElementTypeMapping { get; } = new YearMonthTypeMapping();
 
+    // First-of-month dates order as their months.
+    public bool CanonicalizesInSql => true;
+
     public object EmptySet => YearMonthSet.Empty;
 }

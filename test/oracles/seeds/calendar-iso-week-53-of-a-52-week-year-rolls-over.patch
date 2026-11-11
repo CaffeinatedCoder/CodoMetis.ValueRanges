@@ -1,0 +1,18 @@
+Seed: the ISO week check accepts one week more than the week-year has, so week 53 of a 52-week year rolls over to the next year's week 1 where memory throws
+Oracles: CalendarFactoryParityTests
+Fails: CalendarFactories_OverAnArgumentMemoryRefuses_RaiseInPostgres alone: IsoWeek(2025, 53) Select and Where, the server answered, where memory throws
+History: never shipped; the class of #191's to_date rollover, kept out by the week guard (#451)
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index a9a151d..e1dc3a0 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -841,7 +841,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+         var checkedWeek = sqlExpressionFactory.Case(
+             [
+                 new CaseWhenClause(
+-                    sqlExpressionFactory.AndAlso(sqlExpressionFactory.GreaterThanOrEqual(week, Int(1)), sqlExpressionFactory.LessThanOrEqual(week, weeks)),
++                    sqlExpressionFactory.AndAlso(sqlExpressionFactory.GreaterThanOrEqual(week, Int(1)), sqlExpressionFactory.LessThanOrEqual(week, sqlExpressionFactory.Add(weeks, Int(1)))),
+                     week)
+             ],
+             Raise([$"{name}: the week-year ", Text(year), " has no week ", Text(week)], typeof(int), IntMapping));

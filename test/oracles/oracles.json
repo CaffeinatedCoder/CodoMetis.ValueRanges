@@ -96,10 +96,28 @@
     "against": "the NormalizeElement, CanonicalOrder and ElementJsonConverter rules, behaviourally, for every discovered set type"
   },
   {
+    "class": "TranslatorDispatchSweepTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "silent-default",
+    "against": "each operand's declared type, for every public query member (QueryMembers) over every discovered range and value set type, handed to the translator providers of a real context: a translation maps each operand as that type and answers the member's own type"
+  },
+  {
     "class": "ValueSetNullContractTests",
     "project": "CodoMetis.ValueRanges.Conventions.Tests",
     "kind": "exception",
     "against": "a null element refused, never dropped, through every entry point of every reference-element set type"
+  },
+  {
+    "class": "RangeSetNullContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "exception",
+    "against": "a null range refused, never stored or dropped, through every way to build a range set of every range type"
+  },
+  {
+    "class": "RangeNullPredicateContractTests",
+    "project": "CodoMetis.ValueRanges.Conventions.Tests",
+    "kind": "claim",
+    "against": "every Boolean range and range-set predicate answers false with a null range or set on either side, for every range type"
   },
   {
     "class": "MappingParityTests",
@@ -166,6 +184,15 @@
     "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
     "kind": "differential",
     "against": "EF Core and PostgreSQL on the literals, over seeded random operands of every discovered range, multirange and value set type",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "CanonicalSetOperationParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "Union, Add, Intersect and Except over every pair of subsets of three probes, for every value set family but text, stored canonical, out of order and twice, and with a NULL element, asked under ==, Count, ExecuteUpdate, the projection, containment and IsEmpty, against the same expression in memory over the pairs as stored; and the copy of a value kept, for decimals by scale and floats by the sign of zero",
     "needs": [
       "docker"
     ]
@@ -346,5 +373,146 @@
     "needs": [
       "docker"
     ]
+  },
+  {
+    "class": "OuterJoinProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "rule (c) over the rows as loaded, with the missing child guarded explicitly (NullRule), for every discovered range, RangeSet and value set member over the child of a parent without one × a navigation, GroupJoin with DefaultIfEmpty and LeftJoin × a filter, a negated filter and a projection",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "NullableOperandPairProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "rule (c) over the rows as loaded (NullRule), for every discovered binary range, RangeSet and value set member over two nullable columns, a CASE and a COALESCE of them, on every (null, value) pair, with equality and CompareTo under their own documented rules",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "QuantifierProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "metamorphic",
+    "against": "rule (c) over the rows as loaded (NullRule), and inside the database All(P) against !Any(!P), Count(P) == 0 against !Any(P) and De Morgan's forms, for Any, All, Count and Contains over captured lists (empty, one, duplicate, holding NULL, every shape) and nullable columns, compound predicates and predicates over value-producing members",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "RepeatedExecutionProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "rule (c) over the rows as loaded (NullRule) on every execution, for every discovered binary member and quantifier with its captured operand or list walked through null, finite, empty and infinite and back, and as EF.CompileQuery and EF.CompileAsyncQuery delegates",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "FilteredAggregateProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "RangeAgg and RangeIntersectAgg in memory over the same inputs with E07 mapped, for groups that are ordinary, filtered empty, all NULL, holding empty or (,), and a key left-joined to no rows × every discovered consumption of the result in a projection, HAVING, HAVING NOT and an ordering by a bound",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "DeclaredNullabilityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "pg_proc.proisstrict and the server's answer over typed NULLs and samples, for every function the translators emit; and EF Core's null test against the projected value, for every translated value over nullable and required columns and a captured null",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "RangeSetCountParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for RangeSet.Count on every range type over stored multiranges built from ranges that include the element type's extremes, a NULL multirange column, and the server's Union, Except, Intersect, Complement() and Gaps() over operands away from the extremes, in a filter, its negation, a null test, a final projection and both orderings",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "ClampParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for Clamp on Int32Range, Int64Range and DecimalRange over every shape, exclusive numrange bounds and the element types' extremes, NULL range and value columns and a missing outer-join child, in a filter, its negation, a null test, a compound predicate, a coalesce, an ordering and a final projection",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "ClampDomainParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for Clamp on the other ten range types over every range their factories build from points that include the element type's extremes, every inclusiveness, a value column, a parameter, an inlined constant and NULL range and value columns, compared exactly and in both orderings; and a timestamptz value against a DateTimeRange in three session time zones",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "ValueSetNullOperandParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), and each call's filters against its projection, for value set Union and Remove over a NULL set or element column, a captured null and a missing outer-join child on either side, in a null test, its negation, a final projection and the predicates built on them",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "CalendarFactoryParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for DateRange.Month, Quarter, Year and IsoWeek over a date column and over integer columns, across every period boundary, a leap day, the ISO weeks of the neighbouring year and the first and last periods of DateOnly (stored as -infinity and infinity), NULL date and year columns and a missing outer-join child, in a filter, its negation, a null test, equality with a stored range, a compound predicate, an ordering and a final projection; and a PostgreSQL error wherever memory throws",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "IntegerLengthParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows (NullRule), for Length on Int32Range and Int64Range over every shape and the widest storable ranges, a NULL column and a missing outer-join child, in a filter, its negation, a null test, a compound predicate, an ordering and a final projection",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "TranslationSupportProbeTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "test/oracles/translation-support.json and memory over the rows as loaded, for every public query member (QueryMembers) over every discovered range and value set type it applies to, run where the server must evaluate it (a filter, a null test, an ordering, HAVING) with a column operand and in a final projection",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "ExclusiveInfinityBoundParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded row, for LowerBound(), UpperBound(), both inclusiveness accessors and Clamp at the extremes on DateRange, LocalDateRange and their multiranges, over every infinite form a daterange holds, written by raw SQL, and over the server's Except at the extremes, each run as a predicate",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "YearMonthBoundParityTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.IntegrationTests",
+    "kind": "differential",
+    "against": "memory over the loaded rows, for LowerBound() and UpperBound() of YearMonthRange and its RangeSet over every shape between five months (9999-12 among them), each compared with each month by ==, < and > in a filter",
+    "needs": [
+      "docker"
+    ]
+  },
+  {
+    "class": "StringSetCollationTests",
+    "project": "CodoMetis.ValueRanges.EFCore.PostgreSQL.Tests",
+    "kind": "exception",
+    "against": "the documented rejections of a collation that may not compare bytes on a string set comparison: on the set column when the model is built, EF.Functions.Collate over the set, and a value compared with the set under its column's collation or EF.Functions.Collate, directly, through a derived table's or a set operation's column, a concatenation or a CASE result, on the runtime model; a byte-order collation, an explicit \"C\" and a CASE that only tests the column translate"
   }
 ]

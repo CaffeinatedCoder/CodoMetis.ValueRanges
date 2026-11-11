@@ -81,6 +81,9 @@ internal sealed class SetTypeDefinition<TSet, T> : ISetTypeDefinition
 
     public RelationalTypeMapping? ElementTypeMapping { get; }
 
+    // Text is the one element type PostgreSQL orders by the database collation.
+    public bool CanonicalizesInSql => typeof(T) != typeof(string);
+
     public object EmptySet => TSet.Empty;
 }
 
@@ -141,6 +144,8 @@ internal sealed class StringBridgedSetTypeDefinition<TSet, TElement> : ISetTypeD
 
     public RelationalTypeMapping ElementTypeMapping { get; } = new BridgedElementTypeMapping<TElement, string>(
         "text", ToPrimitive, FromPrimitive);
+
+    public bool CanonicalizesInSql => false;
 
     public object EmptySet => TSet.Empty;
 }
@@ -316,6 +321,10 @@ internal sealed class BridgedSetTypeDefinition<TSet, TElement, TPrimitive> : ISe
     public RelationalTypeMapping SetTypeMapping { get; }
 
     public RelationalTypeMapping ElementTypeMapping { get; }
+
+    // The wrapper sorts by its own CompareTo, which docs/value-sets.md requires to order as the
+    // primitive does: PostgreSQL sorts the primitive.
+    public bool CanonicalizesInSql => true;
 
     public object EmptySet => TSet.Empty;
 }

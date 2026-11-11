@@ -1,0 +1,18 @@
+Seed: LowerBound(), UpperBound() and Clamp read an exclusive infinite date bound as the extreme PostgreSQL holds, one day outside the bound memory loads
+Oracles: ExclusiveInfinityBoundParityTests
+Fails: UpperBound() of [2026-01-01,infinity): server 9999-12-31, memory 9999-12-30; LowerBound() of (-infinity,2026-01-01): server 0001-01-01, memory 0001-01-02
+History: #489, read upper(x) - 1 and lower(x) as they are until 11.0.0 and 10.4.0
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+index ad8096a..4e52643 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueRangesMethodCallTranslator.cs
+@@ -1097,7 +1097,7 @@ internal sealed class ValueRangesMethodCallTranslator(
+                     sqlExpressionFactory.AndAlso(
+                         sqlExpressionFactory.Equal(bound, sqlExpressionFactory.Constant(extreme, type, mapping)),
+                         sqlExpressionFactory.Not(BoolFunction(inclusive, argument))),
+-                    sqlExpressionFactory.Constant(inside, type, mapping))
++                    sqlExpressionFactory.Constant(extreme, type, mapping))
+             ],
+             otherwise);
+     }

@@ -126,11 +126,11 @@ public sealed class EfCore11RetargetTests
     /// <summary>
     /// EF Core 11 writes <c>a == b ? null : a</c> as <c>NULLIF(a, b)</c> — shown on a plain column
     /// first, so the test is about that shape — and a <c>NULLIF</c> whose first operand is a
-    /// server-side <c>Union</c> compares the concatenation, which is refused as equality rather than
-    /// run or passed as a <c>CASE</c> with no equality in it.
+    /// server-side text <c>Union</c> compares the concatenation. The guard compares by mutual
+    /// containment instead, as it does <c>==</c> (#485), and the answer is memory's.
     /// </summary>
     [TestMethod]
-    public async Task ANullIfOverAServerSideUnion_IsRefusedAsEquality()
+    public async Task ANullIfOverAServerSideUnion_ComparesAsMemoryDoes()
     {
         ContainerLifecycle.RequireDatabase();
 
@@ -147,11 +147,12 @@ public sealed class EfCore11RetargetTests
 
         var operand = StringSet.From("a", "b");
         var target  = StringSet.From("a", "b", "c");
-        var refusal = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-            () => rows.Select(r => r.Tags.Union(operand) == target ? null : r.Tags.Union(operand)).ToListAsync());
+        var other   = StringSet.From("a", "b", "z");
+        Assert.AreEqual(target, StringSet.From("a", "c").Union(operand), "the union equals the target in memory");
 
-        StringAssert.Contains(refusal.Message, "Value set equality");
-        StringAssert.Contains(refusal.Message, "array_cat");
+        // {a,c,a,b} as the server concatenates it: = said false, so NULLIF returned the union.
+        Assert.IsNull(await rows.Select(r => r.Tags.Union(operand) == target ? null : r.Tags.Union(operand)).SingleAsync());
+        Assert.AreEqual(target, await rows.Select(r => r.Tags.Union(operand) == other ? null : r.Tags.Union(operand)).SingleAsync());
     }
 
     /// <summary>

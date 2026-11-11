@@ -37,12 +37,12 @@ public sealed class EfCore11ShapeTests
     }
 
     /// <summary>
-    /// EF Core 11 writes <c>a == b ? null : a</c> as <c>NULLIF(a, b)</c>. Over a server-side
-    /// <c>Union</c> that is array equality over a concatenation, refused as equality — the guard's
-    /// <c>CASE</c> arm no longer sees it, so <c>NULLIF</c> has an arm of its own (#103).
+    /// EF Core 11 writes <c>a == b ? null : a</c> as <c>NULLIF(a, b)</c>, which compares the two. Over a server-side
+    /// text <c>Union</c> the guard compares by mutual containment instead, as it does <c>==</c> (#485): the
+    /// guard's <c>CASE</c> arm doesn't see a <c>NULLIF</c>, so it has an arm of its own (#103).
     /// </summary>
     [TestMethod]
-    public void NullIf_OverAServerSideUnion_IsRefusedAsEquality()
+    public void NullIf_OverAServerSideUnion_ComparesByMutualContainment()
     {
         var operand = StringSet.From("a", "b");
         var target  = StringSet.From("a", "b", "c");
@@ -50,9 +50,9 @@ public sealed class EfCore11ShapeTests
         using var db = new TestDbContext();
         StringAssert.Contains(db.Bookings.Select(b => b.Id == 5 ? (int?)null : b.Id).ToQueryString(), "NULLIF(");
 
-        var refusal = Assert.ThrowsExactly<InvalidOperationException>(
-            () => db.Bookings.Select(b => b.Tags.Union(operand) == target ? null : b.Tags.Union(operand)).ToQueryString());
+        var sql = db.Bookings.Select(b => b.Tags.Union(operand) == target ? null : b.Tags.Union(operand)).ToQueryString();
 
-        StringAssert.Contains(refusal.Message, "Value set equality");
+        Assert.DoesNotContain("NULLIF(", sql);
+        StringAssert.Contains(sql, "WHEN array_cat(b.\"Tags\", @operand) @> @target AND @target @> array_cat(b.\"Tags\", @operand) THEN NULL");
     }
 }

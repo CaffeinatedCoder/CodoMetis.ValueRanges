@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
+using CodoMetis.ValueRanges.Core;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -33,15 +34,29 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 ///   than establishing it: a sorted, deduplicated array stays sorted and deduplicated once an
 ///   element is dropped, but a concatenation stays a concatenation. It therefore composes safely
 ///   with <c>Count</c> and equality only when its operand was already canonical — see the Union
-///   note below. <c>Add</c> has no counterpart: PostgreSQL cannot insert at a sorted
-///   position.</item>
-///   <item><c>Union</c> — <c>array_cat</c> (the function form of <c>||</c>).</item>
+///   note below.</item>
+///   <item><c>Union</c>, <c>Add</c>, <c>Intersect</c> and <c>Except</c> — for a family whose order
+///   PostgreSQL shares (<see cref="ISetTypeDefinition.CanonicalizesInSql"/>), a placeholder that
+///   <see cref="ValueSetSqlGuard"/> expands into one canonicalizing subquery (#478). For text,
+///   <c>Union</c> is <c>array_cat</c> (the function form of <c>||</c>) and the other three are not
+///   translated.</item>
 ///   <item><c>Count</c> / <c>IsEmpty</c> — <c>cardinality</c>.</item>
 /// </list>
 /// Set equality (<c>==</c>) needs no translator: EF translates scalar-mapped equality to
 /// <c>=</c> itself, which matches set equality exactly when all writers canonicalize.
 /// <para>
-/// <b>Composing on a translated <c>Union</c>.</b> <c>array_cat</c> concatenates rather than
+/// <b>Canonical form in SQL.</b> PostgreSQL has no array-distinct function, so canonical form is a
+/// subquery over <c>unnest … WITH ORDINALITY</c> that keeps the first copy of each value, sorted.
+/// It needs table aliases unique in the query, which a translator cannot choose: it is given no
+/// <c>SqlAliasManager</c>, and EF Core's alias pass, which runs after translation, reads every alias
+/// as one letter and a number. So the translator emits a placeholder function per operation, and the
+/// guard, which runs after that pass, builds the subquery. Without the guard the placeholder reaches
+/// PostgreSQL as a function it does not have, as <see cref="ValueSetSqlGuard.UnguardedUnion"/> does.
+/// <c>uuid</c> sorts as <see cref="Guid.CompareTo(Guid)"/> does: both compare the bytes in the
+/// order the text spells them (measured over every byte position).
+/// </para>
+/// <para>
+/// <b>Composing on a text <c>Union</c>.</b> <c>array_cat</c> concatenates rather than
 /// canonicalizing, which is invisible to the operators above (all order- and
 /// multiplicity-insensitive) and to materialization (reads route through <c>From</c>), but not
 /// to everything: equality, <c>Count</c>, grouping, ordering, <c>DISTINCT</c> and an
@@ -50,12 +65,9 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// emits several of those itself (the <c>=</c> of <c>Tags.Union(x) == y</c>, a <c>GROUP BY</c>
 /// key), so no translator can intercept them; <see cref="ValueSetSqlGuard"/> refuses them on the
 /// final SQL instead, and <c>ValueSetsMemberTranslator</c> declines <c>Count</c> so that a
-/// projection falls back to the client. Canonicalizing server-side is not an option: PostgreSQL
-/// has no array-distinct function (verified against 18.4), so it needs a
-/// <c>SELECT DISTINCT … ORDER BY</c> subquery, and the ordering could not match CLR canonical
-/// order anyway (<c>text</c> orders by database collation, not ordinal; <c>uuid</c> orders
-/// byte-wise where <see cref="Guid.CompareTo(Guid)"/> orders field-wise). Materialize the
-/// union and compare in memory.
+/// projection falls back to the client. Text cannot be canonicalized the same way: <c>ORDER BY</c>
+/// sorts it by the database collation, not ordinally (#479). Materialize the union and compare in
+/// memory.
 /// </para>
 /// </summary>
 internal sealed class ValueSetsMethodCallTranslator(
@@ -79,13 +91,64 @@ internal sealed class ValueSetsMethodCallTranslator(
         if (!TryResolveDefinition(arguments, out var definition))
             return null;
 
+        var translation = TranslateCall(method, arguments, definition);
+
+        return translation is not null && translation.Type == typeof(bool)
+            ? FalseOverNull(translation, arguments)
+            : translation;
+    }
+
+    /// <summary>
+    /// A predicate with a NULL value set on either side is <c>false</c>, as EF Core answers
+    /// <c>!names.Contains(x)</c> over a NULL <c>string[]</c> (#355): each set operand becomes
+    /// <c>x IS NOT NULL AND &lt;predicate&gt;</c>, which EF Core drops for a required column and turns
+    /// into <c>x IS NULL OR NOT (…)</c> under a negation. In memory the set predicates throw for a null
+    /// set, so the database answer is EF Core's convention rather than a copy of a client answer.
+    /// </summary>
+    private SqlExpression FalseOverNull(SqlExpression predicate, IReadOnlyList<SqlExpression> operands)
+    {
+        for (var index = operands.Count - 1; index >= 0; index--)
+        {
+            var operand = Unwrap(operands[index]);
+            if (!SetTypeRegistry.TryGetByClrType(operand.Type, out var definition))
+                continue;
+
+            var mapped = operand.TypeMapping is null
+                ? sqlExpressionFactory.ApplyTypeMapping(operand, definition.SetTypeMapping)
+                : operand;
+            predicate = sqlExpressionFactory.AndAlso(sqlExpressionFactory.IsNotNull(mapped), predicate);
+        }
+
+        return predicate;
+    }
+
+    private SqlExpression? TranslateCall(MethodInfo method, IReadOnlyList<SqlExpression> arguments, ISetTypeDefinition definition)
+    {
+        // An operand is mapped as the type its overload declares for it: the set (as itself, or as the
+        // IValueSet<T> or IValueSetFactory<TSet, T> an extension block receives) or the element. An overload
+        // with any other operand type has no arm here and is refused (#295).
+        var parameters = method.GetParameters();
+        Type[] setTypes =
+        [
+            definition.SetClrType,
+            typeof(IValueSet<>).MakeGenericType(definition.ElementClrType),
+            typeof(IValueSetFactory<,>).MakeGenericType(definition.SetClrType, definition.ElementClrType)
+        ];
+
         SqlExpression Set(int index)
-            => sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), definition.SetTypeMapping);
+            => setTypes.Contains(parameters[index].ParameterType)
+                   ? sqlExpressionFactory.ApplyTypeMapping(Unwrap(arguments[index]), definition.SetTypeMapping)
+                   : throw MissingArm.For(method, parameters[index].ParameterType);
+
+        SqlExpression Element(int index)
+            => parameters[index].ParameterType == definition.ElementClrType
+                   ? arguments[index]
+                   : throw MissingArm.For(method, parameters[index].ParameterType);
 
         switch (method.Name)
         {
             case nameof(ValueSetExtensions.Contains) when arguments.Count == 2:
-                return sqlExpressionFactory.Contains(Set(0), SingletonArray(arguments[1], definition));
+                return sqlExpressionFactory.Contains(Set(0), SingletonArray(Element(1), definition));
 
             case nameof(ValueSetExtensions.Overlaps) when arguments.Count == 2:
                 return sqlExpressionFactory.Overlaps(Set(0), Set(1));
@@ -113,31 +176,73 @@ internal sealed class ValueSetsMethodCallTranslator(
             // and deduplicated once an element is dropped — so unlike Union this composes
             // safely with Count and equality.
             case nameof(ValueSetExtensions.Remove) when arguments.Count == 2:
-                return sqlExpressionFactory.Function(
-                    "array_remove",
-                    [Set(0), ApplyElementMapping(arguments[1], definition)],
-                    nullable: true,
-                    argumentsPropagateNullability: [true, true],
-                    definition.SetClrType,
-                    definition.SetTypeMapping);
+                return NullOverNullOperand(definition, "array_remove", Set(0), ApplyElementMapping(Element(1), definition));
 
+            // Canonical in SQL wherever PostgreSQL sorts the elements as memory does: each a
+            // placeholder ValueSetSqlGuard expands, so the guard cannot be skipped silently.
+            case nameof(ValueSetExtensions.Union) when arguments.Count == 2 && definition.CanonicalizesInSql:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.CanonicalUnion, Set(0), Set(1));
+
+            case nameof(ValueSetExtensions.Add) when arguments.Count == 2 && definition.CanonicalizesInSql:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.CanonicalAdd, Set(0), ApplyElementMapping(Element(1), definition));
+
+            case nameof(ValueSetExtensions.Intersect) when arguments.Count == 2 && definition.CanonicalizesInSql:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.CanonicalIntersect, Set(0), Set(1));
+
+            case nameof(ValueSetExtensions.Except) when arguments.Count == 2 && definition.CanonicalizesInSql:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.CanonicalExcept, Set(0), Set(1));
+
+            // Text: PostgreSQL can't sort it as memory does (#479), so the server-side result stays unsorted,
+            // and a Union or Add may repeat an element — fine where order and repeats don't count, and a
+            // loaded result is sorted again on read (#485). Emitted under placeholder names only
+            // ValueSetSqlGuard builds, so the guard cannot be skipped silently.
             case nameof(ValueSetExtensions.Union) when arguments.Count == 2:
-                // The server-side result is unsorted and undeduplicated — fine inside
-                // predicates (the operators above ignore both), and a materialized result
-                // re-canonicalizes on read. Emitted under a placeholder name that only
-                // ValueSetSqlGuard renames to array_cat, so the guard cannot be skipped silently.
-                return sqlExpressionFactory.Function(
-                    ValueSetSqlGuard.UnguardedUnion,
-                    [Set(0), Set(1)],
-                    nullable: true,
-                    argumentsPropagateNullability: [true, true],
-                    definition.SetClrType,
-                    definition.SetTypeMapping);
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedUnion, Set(0), Set(1));
+
+            case nameof(ValueSetExtensions.Add) when arguments.Count == 2:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedAdd, Set(0), ApplyElementMapping(Element(1), definition));
+
+            case nameof(ValueSetExtensions.Intersect) when arguments.Count == 2:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedIntersect, Set(0), Set(1));
+
+            case nameof(ValueSetExtensions.Except) when arguments.Count == 2:
+                return NullOverNullOperand(definition, ValueSetSqlGuard.UnguardedExcept, Set(0), Set(1));
 
             default:
                 return null;
         }
     }
+
+    /// <summary>
+    /// <c>Union</c>, <c>Add</c>, <c>Intersect</c>, <c>Except</c> and <c>Remove</c> over a NULL operand are NULL, as EF Core's own value-producing
+    /// members are over NULL (#360): <c>CASE WHEN a IS NULL OR b IS NULL THEN NULL ELSE f(a, b) END</c>.
+    /// Neither function is strict, so the bare call answered with the other operand —
+    /// <c>array_cat(NULL, '{a}')</c> and <c>array_remove('{a}', NULL)</c> are both <c>{a}</c> — in a
+    /// projection, while a filter's <c>== null</c>, following the declaration, selected the row. An
+    /// operand is NULL in a nullable column, on the optional side of an outer join, or as a
+    /// <see langword="null"/> parameter. EF Core's nullability processing folds the test away for a
+    /// required column, a non-null parameter and a constant, so their SQL is the bare call.
+    /// </summary>
+    /// <remarks>
+    /// The function is reached only with both operands non-NULL, so it is declared as never NULL
+    /// and as propagating nothing: a non-strict function declared as propagating would let EF Core
+    /// rewrite <c>f(a, b) IS NULL</c> to <c>a IS NULL OR b IS NULL</c>, which is the disagreement
+    /// this fixes. <see cref="ValueSetSqlGuard"/> follows a union through the <c>CASE</c>.
+    /// </remarks>
+    private SqlExpression NullOverNullOperand(ISetTypeDefinition definition, string function, SqlExpression left, SqlExpression right)
+        => sqlExpressionFactory.Case(
+            [
+                new CaseWhenClause(
+                    sqlExpressionFactory.OrElse(sqlExpressionFactory.IsNull(left), sqlExpressionFactory.IsNull(right)),
+                    sqlExpressionFactory.Constant(null, definition.SetClrType, definition.SetTypeMapping))
+            ],
+            sqlExpressionFactory.Function(
+                function,
+                [left, right],
+                nullable: false,
+                argumentsPropagateNullability: [false, false],
+                definition.SetClrType,
+                definition.SetTypeMapping));
 
     /// <summary>
     /// Resolves the set type definition from the operands, by concrete set CLR type only.

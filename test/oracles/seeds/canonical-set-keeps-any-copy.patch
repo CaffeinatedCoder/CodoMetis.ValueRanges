@@ -1,0 +1,28 @@
+Seed: the canonical set subquery is a plain SELECT DISTINCT … ORDER BY x, so of two equal values written differently it keeps whichever the sort leaves first rather than the first in input order
+Oracles: CanonicalSetOperationParityTests
+Fails: DecimalSet 1.0 against 1.00 and the float sets -0 against 0, stored by ExecuteUpdate from a Union, an Add or an Intersect, wherever PostgreSQL's sort does not keep input order
+History: the form #478's issue warned against; caught before it shipped
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+@@ -560,16 +560,9 @@
+                     predicate: predicate,
+                     groupBy: [],
+                     having: null,
+-                    projections: [new ProjectionExpression(
+-                        new SqlFragmentExpression($"DISTINCT ON ({alias}.{x.Name}) {alias}.{x.Name}", x.Type, elementMapping), "")],
+-                    distinct: false,
+-                    orderings:
+-                    [
+-                        new OrderingExpression(x, ascending: true),
+-                        new OrderingExpression(
+-                            new ColumnExpression("ordinality", alias, typeof(long), typeMappingSource.FindMapping(typeof(long)), nullable: false),
+-                            ascending: true)
+-                    ],
++                    projections: [new ProjectionExpression(x, x.Name)],
++                    distinct: true,
++                    orderings: [new OrderingExpression(x, ascending: true)],
+                     offset: null,
+                     limit: null,
+                     sqlAliasManager: new SqlAliasManager())

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -26,6 +27,11 @@ namespace CodoMetis.ValueRanges.EntityFrameworkCore.PostgreSQL.Query;
 /// read-only collection — see <see cref="RangeSetContainsRewriter"/>.
 /// </para>
 /// <para>
+/// A sixth keeps a <c>Compare(x, y)</c> over ranges or sets, an <see cref="IComparer{T}"/>'s and
+/// <see cref="RangeLowerBoundComparer{TRange,T}"/>'s among them, out of SQL, where EF Core would read it as
+/// the natural order — see <see cref="RangeComparerRewriter"/>.
+/// </para>
+/// <para>
 /// The value set refusals — a server-computed <c>Union</c> consumed by an order- or
 /// multiplicity-sensitive operation, and <c>ExecuteUpdate</c> writing a value set into a JSON
 /// column — are not made here but on the translated SQL, by <see cref="ValueSetSqlGuard"/>: at the
@@ -40,7 +46,8 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
         => CollectionParameterExpander.Expand(
             RangeVariantConstantRetyper.Instance.Visit(
                 NullOperandCompareToRewriter.Instance.Visit(
-                    RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression)))),
+                    RangeComparerRewriter.Instance.Visit(
+                        RangeSetContainsRewriter.Instance.Visit(RangeSetOperatorRewriter.Instance.Visit(queryExpression))))),
             DefaultCollectionMode(eventData.Context));
 
     private static ParameterTranslationMode DefaultCollectionMode(DbContext? context)
@@ -353,6 +360,85 @@ public sealed class ValueRangesQueryExpressionInterceptor : IQueryExpressionInte
             => node is { Object: { } set, Arguments: [var operand] } && RangeSetContains.Equivalent(node.Method) is { } equivalent
                    ? Expression.Call(equivalent, Visit(set), Visit(operand))
                    : base.VisitMethodCall(node);
+    }
+
+    /// <summary>
+    /// Turns <c>comparer.Compare(x, y)</c> or a static <c>Compare(x, y)</c> over a range, a range set or a
+    /// value set into <see cref="RangeComparerCall.RunInMemory{TComparer,T}"/>, which EF Core cannot
+    /// translate: a filter or an ordering then fails translation, and a final projection runs the call in
+    /// memory (#385).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EF Core translates any method named <c>Compare</c> with two operands as the natural comparison of
+    /// the operands, whatever the comparer (dotnet/efcore#39402). For a range that is the range order, the
+    /// one <c>CompareTo</c> runs in. <see cref="RangeLowerBoundComparer{TRange,T}"/> orders by the lower
+    /// bound alone, so <c>[2026-03-01,)</c> and <c>[2026-03-01,2026-03-03]</c> compare equal to
+    /// <c>[2026-03-01,2026-03-10]</c> in memory and as 1 and -1 in SQL, and
+    /// <c>Where(… Compare(r.Period, p) == 0)</c> selected one row of the three without an error.
+    /// </para>
+    /// <para>
+    /// By the time a query compiles, the comparer is a query parameter. Typed as
+    /// <see cref="IComparer{T}"/>, as <see cref="RangeSet{TRange,T}.LowerBoundComparer"/> is, its value is
+    /// unknown, and one compiled query serves every comparer the same code passes. So every comparer over a
+    /// range or set type is kept out of SQL, <see cref="Comparer{T}.Default"/> included: <c>CompareTo</c>
+    /// is the call that runs in SQL in the range order.
+    /// </para>
+    /// <para>
+    /// The operands decide, not the type <c>Compare</c> declares. A comparer declared over
+    /// <see cref="Core.IRange{T}"/>, the non-generic <see cref="System.Collections.IComparer"/> (which
+    /// <see cref="Comparer{T}.Create"/> is, held as one) and a comparer of value sets each declare a type
+    /// <see cref="RangeTypeRegistry"/> does not hold, and each still compared in the range order in SQL
+    /// (#452). So a call is rewritten when either operand, under the conversions to the declared type, is a
+    /// range, a range set or a value set.
+    /// </para>
+    /// <para>
+    /// Nor does the declaring type decide whether a call is rewritten, or which method runs. EF Core
+    /// translates every <c>int Compare(T, T)</c>, static or not, a comparer's or not, and a class may
+    /// implement <see cref="IComparer{T}.Compare"/> explicitly and differently from its public
+    /// <c>Compare</c>. Calling <see cref="IComparer{T}.Compare"/> in place of the method the code called
+    /// answered the explicit implementation's 0 where memory answered 1, and a <c>Compare</c> on a class
+    /// that is no comparer, or a static one, was not rewritten and ran in SQL in the range order (#464). So
+    /// <see cref="RangeComparerCall.Of"/> runs the call as written.
+    /// </para>
+    /// </remarks>
+    private sealed class RangeComparerRewriter : ExpressionVisitor
+    {
+        public static readonly RangeComparerRewriter Instance = new();
+
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+            => node is { Method: { Name: nameof(IComparer<>.Compare) } method, Arguments: [var x, var y] }
+               && method.ReturnType == typeof(int)
+               && method.GetParameters() is [{ ParameterType: var compared }, { ParameterType: var other }]
+               && compared == other
+               && (IsRangeOrSet(x) || IsRangeOrSet(y))
+                   ? RangeComparerCall.Of(method, node.Object is { } comparer ? Visit(comparer) : null, Visit(x), Visit(y))
+                   : base.VisitMethodCall(node);
+
+        // The operand and every conversion it passes through on its way to the declared parameter type:
+        // a column converted to IRange<T>, object or IComparable is still a range.
+        private static bool IsRangeOrSet(Expression operand)
+        {
+            while (!IsRangeOrSetType(operand.Type))
+            {
+                if (operand is not UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs } conversion)
+                    return false;
+
+                operand = conversion.Operand;
+            }
+
+            return true;
+        }
+
+        // A sealed variant is a range through its union.
+        private static bool IsRangeOrSetType(Type type)
+        {
+            for (var current = Nullable.GetUnderlyingType(type) ?? type; current is not null; current = current.BaseType)
+                if (RangeTypeRegistry.TryGetByClrType(current, out _, out _) || SetTypeRegistry.TryGetByClrType(current, out _))
+                    return true;
+
+            return false;
+        }
     }
 
     private sealed class RangeSetOperatorRewriter : ExpressionVisitor

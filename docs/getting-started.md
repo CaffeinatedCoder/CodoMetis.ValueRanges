@@ -193,7 +193,7 @@ var colliding = context.Bookings.Where(b => b.Period.Overlaps(request)).ToList()
 // WHERE b."Tags" @> ARRAY[@tag]::text[]        — a plain GIN index serves this
 var tagged = context.Bookings.Where(b => b.Tags.Contains("vip")).ToList();
 
-// ORDER BY lower(b."Period")
+// ORDER BY lower(b."Period"); a booking with no start, or an empty period, sorts last
 var chronological = context.Bookings.OrderBy(b => b.Period.LowerBound()).ToList();
 ```
 
@@ -212,12 +212,12 @@ shows how to declare either on a column this package maps.
 
 ## What runs in memory only
 
-Most operations run in the database. A few run in memory only, such as `Intersect`, `Except` and
-`Add` on *value sets*. PostgreSQL's array type has no intersection, difference or sorted insert.
+Most operations run in the database. A few run in memory only, such as `Shift` and `Expand` on a
+range. [What runs where](efcore.md#what-runs-where) lists them all and says why for each.
 
-Some queries over a `Union` of sets that the database computes throw instead of running as SQL,
-because the database would return a wrong result. An equality check on such a union is one.
-[Combine sets with `Union`](efcore.md#combine-sets-with-union) lists the rest.
+Some queries over a set operation on *text sets* (`StringSet`) that the database computes throw
+instead of running as SQL, because the database would return a wrong result. Ordering by such a
+union is one. [Combine sets with `Union`](efcore.md#combine-sets-with-union) lists the rest.
 
 When an in-memory-only operation appears in a `Where`, EF Core **throws**. It does not quietly
 fetch the whole table. This is intended, because a loud failure is the right outcome. Call
@@ -228,6 +228,7 @@ fetch the whole table. This is intended, because a loud failure is the right out
 
 | If you want | Read |
 |---|---|
+| One application that uses all of it, from request to response | [Walkthrough: a booking service](walkthrough.md) |
 | The complete in-memory algebra | [Ranges and range sets](ranges.md) |
 | Canonical scalar sets and validated wrapper elements | [Value sets](value-sets.md) |
 | Every translation, and what runs where | [Entity Framework Core](efcore.md) |

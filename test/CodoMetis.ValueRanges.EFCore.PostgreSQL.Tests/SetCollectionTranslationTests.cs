@@ -69,7 +69,7 @@ public sealed class SetCollectionTranslationTests
         var wanted = new List<StringSet> { StringSet.From("a"), StringSet.From("b") };
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" && b.\"Tags\")",
+            "WHERE EXISTS (     SELECT 1     FROM (VALUES (@wanted1), (@wanted2)) AS w(\"Value\")     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Tags\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
     }
 
@@ -86,7 +86,7 @@ public sealed class SetCollectionTranslationTests
         var wanted = new List<StringSet>();
 
         Assert.AreEqual(
-            "WHERE EXISTS (     SELECT 1     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" && b.\"Tags\")",
+            "WHERE EXISTS (     SELECT 1     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" && b.\"Tags\")",
             Where(db => db.Bookings.Where(b => wanted.Any(w => w.Overlaps(b.Tags)))));
     }
 
@@ -97,7 +97,7 @@ public sealed class SetCollectionTranslationTests
 
         StringAssert.Contains(
             Where(db => db.Bookings.Where(b => wanted.Count(w => w.IsSubsetOf(b.Tags)) == 0)),
-            "WHERE (     SELECT count(*)::int     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" <@ b.\"Tags\") = 0");
+            "WHERE (     SELECT count(*)::int     FROM (         SELECT NULL::text[] AS \"Value\"         WHERE FALSE     ) AS w     WHERE w.\"Value\" IS NOT NULL AND w.\"Value\" <@ b.\"Tags\") = 0");
     }
 
     [TestMethod]
@@ -134,16 +134,25 @@ public sealed class SetCollectionTranslationTests
             WhereOf(context.Bookings.Where(b => wanted.Contains(b.Tags))));
     }
 
+    /// <summary>
+    /// Membership among several sets is an <c>IN</c>, which compares arrays as written, so it stays refused over a
+    /// server-side text <c>Union</c>. EF Core writes a single candidate as <c>==</c>, which compares by mutual
+    /// containment (#485).
+    /// </summary>
     [TestMethod]
-    public void Contains_OfAServerSideUnion_IsStillRefused()
+    public void Contains_OfAServerSideUnion_IsRefusedAmongSeveral_AndComparedAsEqualityForOne()
     {
-        var wanted = new List<StringSet> { StringSet.From("a", "b") };
+        var several = new List<StringSet> { StringSet.From("a", "b"), StringSet.From("c") };
+        var one     = new List<StringSet> { StringSet.From("a", "b") };
         using var context = new TestDbContext();
 
         var refusal = Assert.ThrowsExactly<InvalidOperationException>(
-            () => context.Bookings.Where(b => wanted.Contains(b.Tags.Union(b.Tags))).ToQueryString());
-
+            () => context.Bookings.Where(b => several.Contains(b.Tags.Union(b.Tags))).ToQueryString());
         StringAssert.Contains(refusal.Message, "Contains over a sequence of sets");
+
+        StringAssert.Contains(
+            context.Bookings.Where(b => one.Contains(b.Tags.Union(b.Tags))).ToQueryString(),
+            "array_cat(b.\"Tags\", b.\"Tags\") @> ");
     }
 
     [TestMethod]

@@ -1,0 +1,17 @@
+Seed: Count over a text Union, Add, Intersect or Except counts the unsorted array with cardinality, repeats included, instead of its distinct elements
+Oracles: CanonicalSetOperationParityTests, UnionCanonicalityTests
+Fails: Union.Count and Add.Count on the rows whose operands share an element: the database counts the shared element twice; CountOverAUnion_CountsTheDistinctElements_AsMemoryDoes
+
+diff --git a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+index 640c468..e5bc834 100644
+--- a/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
++++ b/src/CodoMetis.ValueRanges.EFCore.PostgreSQL/Query/ValueSetSqlGuard.cs
+@@ -503,7 +503,7 @@ internal static class ValueSetSqlGuard
+ 
+                 // Count of an unsorted text set: its distinct elements (#485).
+                 case SqlFunctionExpression { Name: "cardinality", Arguments: [var counted] } cardinality when IsDerived(counted):
+-                    return DistinctCount(counted, cardinality);
++                    return cardinality.Update(cardinality.Instance, [Multiset(counted)]);
+ 
+                 case SqlFunctionExpression { Name: var name } placeholder when IsCanonical(name):
+                     return Build(placeholder, canonical: true);
