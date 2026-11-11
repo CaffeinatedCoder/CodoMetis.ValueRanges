@@ -45,6 +45,9 @@ on:
     branches: [ "main", "release/**" ]
   pull_request:
   workflow_dispatch:
+  # The release workflow calls this file, so a tag publishes only after every lane here has passed
+  # on that exact commit (release.yml, job `ci`; #342).
+  workflow_call:
 
 permissions:
   contents: read
@@ -54,8 +57,14 @@ defaults:
     shell: bash
 
 # A new push to a PR makes the in-flight run pointless; main is never cancelled.
+#
+# The `dotnet-` prefix is there for the release workflow's call (#342). In a called workflow
+# `github.workflow` is the caller's name, so without the prefix this group would be
+# `Release-<ref>`, and group names are compared without case: it would be the group release.yml
+# itself holds (`release-<ref>`), and the called jobs would wait for their own caller for ever.
+# ReleaseWiringConventionTests evaluates both groups and fails when they can be equal.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: dotnet-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
