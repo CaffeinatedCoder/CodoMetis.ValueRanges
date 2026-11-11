@@ -384,7 +384,7 @@ Good to know:
 - **Migrations and `EnsureCreated()` both create the key.** It is part of EF Core's own model, so no
   extra registration is needed.
 
-Everything in this section was run against PostgreSQL 18 with Npgsql 11.0.0-rc.2, over a `DateRange`,
+Everything in this section was run against PostgreSQL 18 with Npgsql 11.0.0-rc.3, over a `DateRange`,
 a `RangeSet<DateRange, DateOnly>`, a `TimeRange` and a `YearMonthRange` column for the key, and a
 `DateRange` column for the foreign key.
 

@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="MSTest" Version="4.5.1" />
+        <PackageReference Include="MSTest" Version="4.5.2" />
         <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
         <!--
             Test-only, and only here: ComplexIndexesCrossTests proves that this package's columns work
@@ -28,7 +28,7 @@
             the EF Core version the provider resolves, and the Roslyn they bring, which compiles the generated
             model in-process (CompiledModelJsonTests). Test-only: the shipping package never references it.
         -->
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.2.26504.105" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.3.26522.148" />
     </ItemGroup>
 
     <ItemGroup>
@@ -82,7 +82,7 @@
     -->
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
-        <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="11.0.0-rc.2.26504.105" />
+        <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="11.0.0" />
         <Compile Include="..\..\samples\Bookings\**\*.cs" Exclude="..\..\samples\Bookings\Program.cs;..\..\samples\Bookings\obj\**;..\..\samples\Bookings\bin\**"
                  Link="Walkthrough\%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
