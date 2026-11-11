@@ -1,0 +1,118 @@
+<Project>
+    <!--
+        The package's release notes are its version's section of its own CHANGELOG.md (#346).
+
+        nuget.org's Release Notes tab and Visual Studio's Updates tab show PackageReleaseNotes. A
+        link there sent a reader of any version to today's file. The section under
+        `## [$(Version)]`, up to the next `##`, is exactly the notes for the version they are
+        looking at, so pack writes that, and one footer line links the whole changelog at the
+        version's tag. The tag is immutable and is pushed before anything is published
+        (release.yml), so the link resolves for every version on nuget.org, on either line.
+
+        nuget.org shows release notes as plain text, not Markdown (measured on a package page, see
+        #346): it HTML-encodes them, turns each newline into <br />, and links only bare http(s)
+        URLs, stopping before a closing parenthesis. So a link `[text](url)` is written
+        `text (url)`, which still links, and the inline-code backticks, the bold markers and the
+        `### ` of a section heading are dropped, so a line reads as a sentence.
+
+        Pack fails, naming the file, when the section is missing or empty, or when the notes are
+        longer than the 35,000 characters nuget.org accepts. A package whose section does not
+        exist would otherwise ship with no notes, or with some other version's.
+        PackagingConventionTests packs every package's nuspec and compares its releaseNotes with
+        the section, transformed independently of this task, and the consumer smoke test checks
+        the packed .nupkg.
+    -->
+    <PropertyGroup>
+        <ReleaseNotesChangelog>$(MSBuildProjectDirectory)/CHANGELOG.md</ReleaseNotesChangelog>
+    </PropertyGroup>
+
+    <!-- Runs before the nuspec is generated, after GenerateNuspec's own dependencies, on every pack;
+         the changelog is a pack input, so an edit to it alone repacks. -->
+    <Target Name="SetPackageReleaseNotesFromChangelog"
+            BeforeTargets="GenerateNuspec"
+            Condition="'$(IsPackable)' == 'true'">
+        <PropertyGroup>
+            <_ReleaseNotesChangelogPath>$([System.IO.Path]::GetRelativePath('$(MSBuildThisFileDirectory)', '$(ReleaseNotesChangelog)').Replace('\', '/'))</_ReleaseNotesChangelogPath>
+        </PropertyGroup>
+
+        <ChangelogReleaseNotes
+            Changelog="$(ReleaseNotesChangelog)"
+            Version="$(Version)"
+            FullChangelogUrl="$(RepositoryUrl)/blob/v$(Version)/$(_ReleaseNotesChangelogPath)">
+            <Output TaskParameter="ReleaseNotes" PropertyName="PackageReleaseNotes" />
+        </ChangelogReleaseNotes>
+
+        <ItemGroup>
+            <NuGetPackInput Include="$(ReleaseNotesChangelog)" />
+        </ItemGroup>
+    </Target>
+
+    <UsingTask TaskName="ChangelogReleaseNotes"
+               TaskFactory="RoslynCodeTaskFactory"
+               AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <Changelog ParameterType="System.String" Required="true" />
+            <Version ParameterType="System.String" Required="true" />
+            <FullChangelogUrl ParameterType="System.String" Required="true" />
+            <ReleaseNotes ParameterType="System.String" Output="true" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System" />
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.Linq" />
+            <Using Namespace="System.Text.RegularExpressions" />
+            <Code Type="Fragment" Language="cs"><![CDATA[
+                const int NuGetLimit = 35000;
+
+                if (!File.Exists(Changelog))
+                {
+                    Log.LogError("{0} does not exist, so the package has no release notes. Every package keeps its own CHANGELOG.md.", Changelog);
+                    return false;
+                }
+
+                var lines   = File.ReadAllText(Changelog).Replace("\r\n", "\n").Split('\n');
+                var heading = new Regex(@"^## \[" + Regex.Escape(Version) + @"\](\s|$)");
+                var starts  = Enumerable.Range(0, lines.Length).Where(index => heading.IsMatch(lines[index])).ToList();
+
+                if (starts.Count != 1)
+                {
+                    Log.LogError(
+                        starts.Count == 0
+                            ? "{0} has no '## [{1}]' section, so the package has no release notes for {1}. Add the section, or \"No change in this package.\" under it."
+                            : "{0} has more than one '## [{1}]' section; the release notes would be ambiguous.",
+                        Changelog, Version);
+                    return false;
+                }
+
+                var section = lines.Skip(starts[0] + 1)
+                                   .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
+                                   .Select(line => line.TrimEnd())
+                                   .SkipWhile(line => line.Length == 0)
+                                   .Reverse().SkipWhile(line => line.Length == 0).Reverse()
+                                   .ToList();
+
+                if (section.Count == 0)
+                {
+                    Log.LogError("{0}'s '## [{1}]' section is empty, so the package would ship with no release notes. Say \"No change in this package.\" if that is the case.", Changelog, Version);
+                    return false;
+                }
+
+                var link = new Regex(@"\[(?<text>[^\[\]]+)\]\((?<url>https?://[^\s()]+)\)");
+
+                ReleaseNotes = string.Join("\n", section.Select(line =>
+                {
+                    if (line.StartsWith("### ", StringComparison.Ordinal)) line = line.Substring(4);
+                    line = link.Replace(line, "${text} (${url})");
+                    return line.Replace("`", "").Replace("**", "");
+                }))
+                + "\n\nFull changelog: " + FullChangelogUrl;
+
+                if (ReleaseNotes.Length > NuGetLimit)
+                {
+                    Log.LogError("The release notes from {0}'s '## [{1}]' section are {2} characters; nuget.org accepts at most {3}.", Changelog, Version, ReleaseNotes.Length, NuGetLimit);
+                    return false;
+                }
+            ]]></Code>
+        </Task>
+    </UsingTask>
+</Project>
