@@ -138,7 +138,8 @@ public interface IValueSetFactory<TSet, T> : ISpanParsable<TSet>, IFormattable
     // NoInlining: ILCompiler 11 inlines this default into the instantiating thunk of the shared-generic
     // interface, where the receiver is typed as the thunk's module type, so the cast of `this` fails and
     // the thunk is compiled to a trap (SIGTRAP, exit 133) in a net11.0 Native AOT consumer — measured on
-    // 11.0.100-rc.2.26504.105 (#291, #299, #315, dotnet/runtime#136073). Every set family also overrides
+    // 11.0.100-rc.2.26504.105, and again on 11.0.100: the fix is in dotnet/runtime's main, and its backport
+    // (dotnet/runtime#136148) is not in 11.0.0 (#291, #299, #315, #532, dotnet/runtime#136073). Every set family also overrides
     // IFormattable.ToString itself, which is what keeps the trap out of a compiled consumer today; the
     // attribute keeps a family that forgets the override from trapping. The range default (IRangeFactory) did not trap in
     // the same publish, which prints range text through it, so it is left alone.
