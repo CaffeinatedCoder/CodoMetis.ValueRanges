@@ -255,6 +255,83 @@ public sealed class ReleaseWiringConventionTests
     }
 
     /// <summary>
+    /// A tag publishes only after every lane of the .NET workflow has passed on the tagged commit
+    /// (#342). The release workflow used to run the suite once, on PostgreSQL 16, and rely on the
+    /// commit's pull request for PostgreSQL 18, the own-feed smoke test and the 10.x float legs.
+    /// Nothing ties a tag to a commit whose pull request, or whose push run, was green.
+    /// </summary>
+    /// <remarks>
+    /// Three parts, and each one alone leaves the release unguarded without an error: the .NET
+    /// workflow must be callable, the release workflow must call it, and the job that packs must
+    /// wait for the call.
+    /// </remarks>
+    [TestMethod]
+    public void TheReleaseWorkflow_RunsEveryLaneBeforeItPacks()
+    {
+        Assert.IsNotNull(
+            TriggerSettings(BuildWorkflowText(), "workflow_call"),
+            "dotnet.yml has no workflow_call trigger, so the release workflow cannot run its lanes.");
+
+        var caller = Regex.Match(
+            ReleaseWorkflowText,
+            @"(?ms)^  (?<job>[A-Za-z0-9_-]+):\n(?:(?!^  \S).)*?^    uses:\s*\./\.github/workflows/dotnet\.yml\s*$");
+
+        Assert.IsTrue(caller.Success, "No job in release.yml uses ./.github/workflows/dotnet.yml.");
+
+        var verifyJob = Regex.Match(ReleaseWorkflowText, @"(?ms)^  verify:.*?(?=^  \S)").Value;
+        var needs     = Regex.Match(verifyJob, @"(?m)^    needs:\s*(?<jobs>.+?)\s*$").Groups["jobs"].Value;
+
+        Assert.IsTrue(
+            Regex.IsMatch(needs, $@"(^|[\[\s,]){Regex.Escape(caller.Groups["job"].Value)}($|[\]\s,])"),
+            $"The verify job (needs: {(needs.Length == 0 ? "nothing" : needs)}) does not wait for "
+          + $"'{caller.Groups["job"].Value}', the job that runs dotnet.yml. The packages would be packed "
+          + "and offered for approval whatever the lanes did.");
+    }
+
+    /// <summary>
+    /// The called .NET workflow must not share a concurrency group with the release run that calls it.
+    /// </summary>
+    /// <remarks>
+    /// In a called workflow <c>github.workflow</c> is the caller's name, and GitHub compares group
+    /// names without case. A group of <c>${{ github.workflow }}-${{ github.ref }}</c> in dotnet.yml
+    /// is therefore <c>Release-&lt;ref&gt;</c> under the release workflow, the very group release.yml
+    /// holds as <c>release-&lt;ref&gt;</c>: the called jobs queue behind their own caller and the run
+    /// never ends. Both groups are evaluated here for the release workflow's name and one ref.
+    /// </remarks>
+    [TestMethod]
+    public void TheCalledBuildWorkflow_NeverSharesTheReleaseWorkflowsConcurrencyGroup()
+    {
+        const string reference = "refs/tags/v1.2.3";
+
+        var releaseName = Regex.Match(ReleaseWorkflowText, @"(?m)^name:\s*(?<name>.+?)\s*$").Groups["name"].Value;
+        Assert.AreNotEqual(0, releaseName.Length, "release.yml has no name.");
+
+        string GroupOf(string workflow, string file)
+        {
+            var group = Regex.Match(workflow, @"(?m)^concurrency:\s*\n(?:\s*#.*\n)*\s+group:\s*(?<group>.+?)\s*$").Groups["group"].Value;
+            Assert.AreNotEqual(0, group.Length, $"{file} has no workflow-level concurrency group.");
+
+            var evaluated = group.Replace("${{ github.workflow }}", releaseName, StringComparison.Ordinal)
+                                 .Replace("${{ github.ref }}", reference, StringComparison.Ordinal);
+
+            Assert.IsFalse(
+                evaluated.Contains("${{", StringComparison.Ordinal),
+                $"{file}'s concurrency group ({group}) uses an expression this test does not evaluate; teach it.");
+
+            return evaluated;
+        }
+
+        var called  = GroupOf(BuildWorkflowText(), "dotnet.yml");
+        var calling = GroupOf(ReleaseWorkflowText, "release.yml");
+
+        Assert.IsFalse(
+            string.Equals(called, calling, StringComparison.OrdinalIgnoreCase),
+            $"Called from the release workflow, dotnet.yml's concurrency group is '{called}', and release.yml "
+          + $"holds '{calling}'. GitHub compares group names without case, so the called jobs would wait for "
+          + "the run that is waiting for them.");
+    }
+
+    /// <summary>
     /// The settings of one trigger under <c>on:</c>, comments removed: whatever follows its colon on
     /// the same line (a flow mapping such as <c>{ branches: [ main ] }</c>), and every following line
     /// that is blank or indented deeper than the key, up to the next key at the key's indentation or
